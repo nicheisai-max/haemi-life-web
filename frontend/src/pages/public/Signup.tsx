@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { Card } from '../../components/ui/Card';
 import { Logo } from '../../components/ui/Logo';
+import loginBg from '../../assets/images/login_bg_premium.png';
 import type { UserRole } from '../../types/auth.types';
 import './Signup.css';
 
@@ -97,41 +97,57 @@ export const Signup: React.FC = () => {
 
     if (step === 'role') {
         return (
-            <div className="signup-container">
-                <div className="signup-content">
-                    <div className="signup-header">
-                        <Logo size="lg" />
-                        <h1>Create Account</h1>
-                        <p>Choose your account type to get started</p>
+            <div className="signup-page">
+                {/* Visual Section (Left) - Matching Login */}
+                <div className="signup-visual">
+                    <img src={loginBg} alt="Healthcare Background" className="signup-bg-image" />
+                    <div className="visual-content">
+                        <h2>Join the <br />Healthcare Revolution.</h2>
+                        <p>Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you.</p>
                     </div>
+                </div>
 
-                    <div className="role-grid">
-                        <Card padding="lg" className="role-card" onClick={() => handleRoleSelect('patient')}>
-                            <div className="role-icon">👤</div>
-                            <h3>Patient</h3>
-                            <p>Book appointments and manage your health records</p>
-                        </Card>
+                {/* Form Section (Right) - Full Bleed White */}
+                <div className="signup-form-container">
+                    <div className="signup-form-wrapper">
+                        <div className="signup-header">
+                            <Logo size="xxl" className="mx-auto mb-8" />
+                            <h1>Create Account</h1>
+                            <p>Choose your account type to get started</p>
+                        </div>
 
-                        <Card padding="lg" className="role-card" onClick={() => handleRoleSelect('doctor')}>
-                            <div className="role-icon">👨‍⚕️</div>
-                            <h3>Doctor</h3>
-                            <p>Manage appointments and patient consultations</p>
-                        </Card>
+                        <div className="role-grid">
+                            <div className="role-option" onClick={() => handleRoleSelect('patient')}>
+                                <div className="role-icon">👤</div>
+                                <h3>Patient</h3>
+                                <p>Book appointments and manage your health records</p>
+                            </div>
 
-                        <Card padding="lg" className="role-card" onClick={() => handleRoleSelect('pharmacist')}>
-                            <div className="role-icon">💊</div>
-                            <h3>Pharmacist</h3>
-                            <p>Manage prescriptions and pharmacy inventory</p>
-                        </Card>
-                    </div>
+                            <div className="role-option" onClick={() => handleRoleSelect('doctor')}>
+                                <div className="role-icon">👨‍⚕️</div>
+                                <h3>Doctor</h3>
+                                <p>Manage appointments and patient consultations</p>
+                            </div>
 
-                    <div className="signup-footer">
-                        <p>
-                            Already have an account?{' '}
-                            <a href="/login" className="link">
-                                Sign in
-                            </a>
-                        </p>
+                            <div className="role-option" onClick={() => handleRoleSelect('pharmacist')}>
+                                <div className="role-icon">💊</div>
+                                <h3>Pharmacist</h3>
+                                <p>Manage prescriptions and pharmacy inventory</p>
+                            </div>
+                        </div>
+
+                        <div className="signup-footer mt-12">
+                            <p>Already have an account?</p>
+                            <Button
+                                variant="ghost"
+                                fullWidth
+                                onClick={() => navigate('/login')}
+                                className="mt-4"
+                                size="lg"
+                            >
+                                Sign In
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -139,19 +155,27 @@ export const Signup: React.FC = () => {
     }
 
     return (
-        <div className="signup-container">
-            <div className="signup-content">
-                <div className="signup-header">
-                    <Logo size="lg" />
-                    <h1>
-                        Sign up as {selectedRole === 'patient' ? 'Patient' : selectedRole === 'doctor' ? 'Doctor' : 'Pharmacist'}
-                    </h1>
-                    <button onClick={() => setStep('role')} className="back-button">
-                        ← Change role
-                    </button>
+        <div className="signup-page">
+            <div className="signup-visual">
+                <img src={loginBg} alt="Healthcare Background" className="signup-bg-image" />
+                <div className="visual-content">
+                    <h2>Your Journey <br />Starts Here.</h2>
+                    <p>Secure, efficient, and centered around you.</p>
                 </div>
+            </div>
 
-                <Card>
+            <div className="signup-form-container">
+                <div className="signup-form-wrapper">
+                    <div className="signup-header">
+                        <Logo size="xxl" className="mx-auto mb-8" />
+                        <h1>
+                            Sign up as {selectedRole === 'patient' ? 'Patient' : selectedRole === 'doctor' ? 'Doctor' : 'Pharmacist'}
+                        </h1>
+                        <Button variant="ghost" size="sm" onClick={() => setStep('role')} className="mt-2">
+                            ← Change role
+                        </Button>
+                    </div>
+
                     <form onSubmit={handleSubmit} className="signup-form">
                         {errors.general && (
                             <div className="alert alert-error">
@@ -159,27 +183,29 @@ export const Signup: React.FC = () => {
                             </div>
                         )}
 
-                        <Input
-                            label="Full Name"
-                            name="name"
-                            type="text"
-                            placeholder="Enter your full name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            error={errors.name}
-                            fullWidth
-                        />
+                        <div className="signup-grid">
+                            <Input
+                                label="Full Name"
+                                name="name"
+                                type="text"
+                                placeholder="Enter your full name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                error={errors.name}
+                                fullWidth
+                            />
 
-                        <Input
-                            label="Phone Number"
-                            name="phone_number"
-                            type="tel"
-                            placeholder="+267 1234 5678"
-                            value={formData.phone_number}
-                            onChange={handleChange}
-                            error={errors.phone_number}
-                            fullWidth
-                        />
+                            <Input
+                                label="Phone Number"
+                                name="phone_number"
+                                type="tel"
+                                placeholder="+267 1234 5678"
+                                value={formData.phone_number}
+                                onChange={handleChange}
+                                error={errors.phone_number}
+                                fullWidth
+                            />
+                        </div>
 
                         <Input
                             label="Email (Optional)"
@@ -205,38 +231,42 @@ export const Signup: React.FC = () => {
                             />
                         )}
 
-                        <Input
-                            label="Password"
-                            name="password"
-                            type="password"
-                            placeholder="Create a strong password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            error={errors.password}
-                            fullWidth
-                        />
+                        <div className="signup-grid">
+                            <Input
+                                label="Password"
+                                name="password"
+                                type="password"
+                                placeholder="Create a strong password"
+                                value={formData.password}
+                                onChange={handleChange}
+                                error={errors.password}
+                                fullWidth
+                            />
 
-                        <Input
-                            label="Confirm Password"
-                            name="confirmPassword"
-                            type="password"
-                            placeholder="Re-enter your password"
-                            value={formData.confirmPassword}
-                            onChange={handleChange}
-                            error={errors.confirmPassword}
-                            fullWidth
-                        />
+                            <Input
+                                label="Confirm Password"
+                                name="confirmPassword"
+                                type="password"
+                                placeholder="Re-enter your password"
+                                value={formData.confirmPassword}
+                                onChange={handleChange}
+                                error={errors.confirmPassword}
+                                fullWidth
+                            />
+                        </div>
 
                         <Button
                             type="submit"
                             fullWidth
                             size="lg"
                             isLoading={isLoading}
+                            variant="primary"
+                            className="mt-4"
                         >
                             Create Account
                         </Button>
                     </form>
-                </Card>
+                </div>
             </div>
         </div>
     );
