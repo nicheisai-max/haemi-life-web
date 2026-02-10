@@ -28,3 +28,31 @@ yarn-error.log*
 *.tmp
 *.temp
 check-db.ts
+
+# VS Code
+.vscode/
+
+# Environment Variables
+.env
+.env.local
+.env.production
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary/Trash folders
+frontend_trash/
+frontend_backup/
+
+# Test credentials (sensitive)
+TEST_CREDENTIALS.md
+
+# Package lock files (use npm ci in CI/CD)
+package-lock.json
