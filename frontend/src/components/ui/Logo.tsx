@@ -2,7 +2,7 @@ import React from 'react';
 import logoImg from '../../assets/images/haemi_life_logo.png';
 
 interface LogoProps {
-    size?: 'sm' | 'md' | 'lg';
+    size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl';
     className?: string;
 }
 
