@@ -1,0 +1,21 @@
+/* =====================================================
+   TERMS OF SERVICE PAGE STYLES
+   ===================================================== */
+
+/* Reuse most styles from PrivacyPolicy.css */
+@import './PrivacyPolicy.css';
+
+/* Additional specific styles for Terms of Service */
+.important-notice {
+    background: var(--color-error-bg);
+    border-left: 4px solid var(--color-error);
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius-md);
+    margin: 1rem 0;
+}
+
+.important-notice strong {
+    color: var(--color-error);
+    display: block;
+    margin-bottom: 0.5rem;
+}

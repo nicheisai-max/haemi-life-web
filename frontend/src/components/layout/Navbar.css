@@ -1,0 +1,201 @@
+.navbar {
+    background-color: var(--bg-surface);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-subtle);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    padding: 0 var(--space-4);
+    height: 70px;
+    box-shadow: var(--shadow-sm);
+}
+
+.navbar-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.navbar-brand {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.navbar-logo {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+}
+
+.navbar-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+}
+
+.navbar-item {
+    position: relative;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: var(--space-2);
+    border-radius: 50%;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn:hover {
+    background-color: var(--bg-surface-hover);
+    color: var(--brand-primary);
+}
+
+.badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background-color: var(--color-error);
+    color: white;
+    font-size: 0.7rem;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg-surface);
+}
+
+.profile-widget {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    cursor: pointer;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-full);
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.profile-widget:hover {
+    background-color: var(--bg-surface-hover);
+    border-color: var(--border-subtle);
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.user-role {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: capitalize;
+}
+
+/* Dropdown Menu */
+.dropdown-menu {
+    position: absolute;
+    top: 120%;
+    right: 0;
+    width: 280px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-subtle);
+    padding: var(--space-2) 0;
+    animation: slideDown 0.2s ease-out;
+    overflow: hidden;
+    z-index: 1010;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-header {
+    padding: var(--space-3) var(--space-4);
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: var(--space-2);
+}
+
+.dropdown-item {
+    padding: var(--space-3) var(--space-4);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+
+.dropdown-item:hover {
+    background-color: var(--bg-surface-hover);
+    color: var(--brand-primary);
+}
+
+.dropdown-item.unread {
+    background-color: var(--brand-primary-light);
+    border-left: 3px solid var(--brand-primary);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background-color: var(--border-subtle);
+    margin: var(--space-2) 0;
+}
+
+.text-danger {
+    color: var(--color-error);
+}
+
+.text-danger:hover {
+    background-color: var(--color-error-bg);
+    color: var(--color-error-text);
+}
+
+/* Material Icons Helper */
+.material-icons-outlined {
+    font-family: 'Material Icons Outlined', sans-serif;
+    font-size: 1.25rem;
+}

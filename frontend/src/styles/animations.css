@@ -1,0 +1,104 @@
+/* Micro-interactions & Keyframes */
+
+/* Fade In */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.fade-in {
+    animation: fadeIn var(--duration-normal) var(--ease-out) forwards;
+}
+
+/* Slide Up & Fade */
+@keyframes slideUpFade {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-up {
+    animation: slideUpFade var(--duration-normal) var(--ease-out) forwards;
+}
+
+/* Scale In (Pop) */
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.scale-in {
+    animation: scaleIn var(--duration-fast) var(--ease-spring) forwards;
+}
+
+/* Shimmer (Skeleton Loading) */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.skeleton {
+    background: linear-gradient(90deg,
+            var(--bg-surface-hover) 25%,
+            var(--border-subtle) 50%,
+            var(--bg-surface-hover) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+    border-radius: var(--radius-sm);
+}
+
+/* Hover Lift */
+.hover-lift {
+    transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Focus Ring (Accessible) */
+.focus-ring:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg-body), 0 0 0 4px var(--brand-primary);
+}
+
+/* Staggered Delays for Lists */
+.stagger-1 {
+    animation-delay: 50ms;
+}
+
+.stagger-2 {
+    animation-delay: 100ms;
+}
+
+.stagger-3 {
+    animation-delay: 150ms;
+}
+
+.stagger-4 {
+    animation-delay: 200ms;
+}

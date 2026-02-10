@@ -1,15 +1,273 @@
 :root {
-  /* Brand Colors - Medical/Healthcare Theme (Premium Blue & Teal) */
-  --color-primary: #0ea5e9; /* Sky 500 */
-  --color-primary-dark: #0284c7; /* Sky 600 */
-  --color-primary-light: #e0f2fe; /* Sky 100 */
-  
-  --color-secondary: #14b8a6; /* Teal 500 */
-  --color-secondary-dark: #0f766e; /* Teal 700 */
-  
-  --color-accent: #6366f1; /* Indigo 500 */
-  
-  /* Neutral Colors */
+  /* -------------------------------------------------- */
+  /* PHASE 1: BRAND PALETTE (Single Source of Truth)    */
+  /* -------------------------------------------------- */
+
+  /* Primary Brand Color: Trust Blue (Derived from Logo) */
+  /* Used for: Primary buttons, active states, key headers */
+  --brand-primary: #0284C7;
+  /* Sky 600 - Clear, Trustworthy */
+  --brand-primary-dark: #0369A1;
+  /* Sky 700 - Hover states, contrast */
+  --brand-primary-light: #E0F2FE;
+  /* Sky 100 - Backgrounds, tints */
+
+  /* Secondary Brand Color: Vitality Teal */
+  /* Used for: Highlights, health indicators, call-to-actions */
+  --brand-secondary: #0D9488;
+  /* Teal 600 */
+  --brand-secondary-dark: #0F766E;
+  /* Teal 700 */
+  --brand-secondary-light: #F0FDFA;
+  /* Teal 50 */
+
+  /* Accent Color: Focus Indigo */
+  /* Used for: Focus rings, subtle highlights */
+  --brand-accent: #6366F1;
+
+  /* -------------------------------------------------- */
+  /* PHASE 2: NEUTRAL SYSTEM (Typography & Surfaces)  */
+  /* -------------------------------------------------- */
+
+  /* Text Colors */
+  --text-primary: #0F172A;
+  /* Slate 900 - High contrast reading */
+  --text-secondary: #475569;
+  /* Slate 600 - Supporting text */
+  --text-muted: #94A3B8;
+  /* Slate 400 - Disabled / placeholders */
+  --text-inverse: #FFFFFF;
+  /* White text on dark backgrounds */
+
+  /* Surface / Background Colors */
+  --bg-body: #F8FAFC;
+  /* Slate 50 - Authentic page background */
+  --bg-surface: #FFFFFF;
+  /* Pure White - Cards, Modals */
+  --bg-surface-hover: #F1F5F9;
+  /* Slate 100 */
+
+  /* Borders */
+  --border-subtle: #E2E8F0;
+  /* Slate 200 */
+  --border-default: #CBD5E1;
+  /* Slate 300 */
+  --border-focus: var(--brand-primary);
+
+  /* -------------------------------------------------- */
+  /* PHASE 3: SEMANTIC / STATUS COLORS (Harmonized)     */
+  /* -------------------------------------------------- */
+
+  /* Success: Growth & Safety */
+  --color-success: #10B981;
+  /* Emerald 500 */
+  --color-success-bg: #ECFDF5;
+  /* Emerald 50 */
+  --color-success-text: #065F46;
+  /* Emerald 800 */
+
+  /* Warning: Attention */
+  --color-warning: #F59E0B;
+  /* Amber 500 */
+  --color-warning-bg: #FFFBEB;
+  /* Amber 50 */
+  --color-warning-text: #92400E;
+  /* Amber 800 */
+
+  /* Error: Critical State */
+  --color-error: #EF4444;
+  /* Red 500 */
+  --color-error-bg: #FEF2F2;
+  /* Red 50 */
+  --color-error-text: #991B1B;
+  /* Red 800 */
+
+  /* Info: Neutral Information */
+  --color-info: #3B82F6;
+  /* Blue 500 */
+  --color-info-bg: #EFF6FF;
+  /* Blue 50 */
+  --color-info-text: #1E40AF;
+  /* Blue 800 */
+
+  /* -------------------------------------------------- */
+  /* SPACING & LAYOUT SYSTEM                            */
+  /* -------------------------------------------------- */
+  --space-1: 0.25rem;
+  /* 4px */
+  --space-2: 0.5rem;
+  /* 8px */
+  --space-3: 0.75rem;
+  /* 12px */
+  --space-4: 1rem;
+  /* 16px */
+  --space-5: 1.25rem;
+  /* 20px */
+  --space-6: 1.5rem;
+  /* 24px */
+  --space-8: 2rem;
+  /* 32px */
+  --space-10: 2.5rem;
+  /* 40px */
+  --space-12: 3rem;
+  /* 48px */
+  --space-16: 4rem;
+  /* 64px */
+
+  /* -------------------------------------------------- */
+  /* TYPOGRAPHY                                         */
+  /* -------------------------------------------------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Outfit', sans-serif;
+  /* For Headers */
+
+  /* -------------------------------------------------- */
+  /* PHASE 4: PREMIUM GRADIENTS & EFFECTS               */
+  /* -------------------------------------------------- */
+
+  /* Brand Gradients */
+  --gradient-primary: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
+  --gradient-secondary: linear-gradient(135deg, var(--brand-secondary) 0%, var(--brand-secondary-dark) 100%);
+  --gradient-accent: linear-gradient(135deg, var(--brand-accent) 0%, #818CF8 100%);
+  --gradient-surface: linear-gradient(to bottom, var(--bg-surface) 0%, var(--bg-body) 100%);
+  --gradient-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%);
+
+  /* -------------------------------------------------- */
+  /* PHASE 5: EFFECTS (Shadows & Radius)                */
+  /* -------------------------------------------------- */
+
+  /* Soft, layered shadows for depth (Premium Feel) */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+
+  /* Modern Radius */
+  --radius-sm: 0.375rem;
+  /* 6px */
+  --radius-md: 0.5rem;
+  /* 8px */
+  --radius-lg: 0.75rem;
+  /* 12px */
+  --radius-xl: 1rem;
+  /* 16px */
+  --radius-2xl: 1.5rem;
+  /* 24px */
+  --radius-full: 9999px;
+
+  /* -------------------------------------------------- */
+  /* PHASE 6: ANIMATION TOKENS                          */
+  /* -------------------------------------------------- */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);
+
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-slowing: 700ms;
+}
+
+/* -------------------------------------------------- */
+/* DARK THEME MAPPINGS                                */
+/* -------------------------------------------------- */
+.dark {
+  /* Brand Adjustments for Dark Mode */
+  --brand-primary: #38BDF8;
+  /* Sky 400 - Brighter for dark bg */
+  --brand-primary-dark: #0EA5E9;
+  /* Sky 500 */
+  --brand-primary-light: #0C4A6E;
+  /* Sky 900 */
+
+  /* Secondary & Accent */
+  --brand-secondary: #2DD4BF;
+  /* Teal 400 */
+  --brand-secondary-dark: #14B8A6;
+  /* Teal 500 */
+  --brand-secondary-light: #134E4A;
+  /* Teal 900 */
+  --brand-accent: #818CF8;
+  /* Indigo 400 */
+
+  /* Surfaces */
+  --bg-body: #0F172A;
+  /* Slate 900 */
+  --bg-surface: #1E293B;
+  /* Slate 800 */
+  --bg-surface-hover: #334155;
+  /* Slate 700 */
+
+  /* Text */
+  --text-primary: #F8FAFC;
+  /* Slate 50 */
+  --text-secondary: #CBD5E1;
+  /* Slate 300 */
+  --text-muted: #94A3B8;
+  /* Slate 400 */
+  --text-inverse: #0F172A;
+  /* Slate 900 */
+
+  /* Borders */
+  --border-subtle: #334155;
+  /* Slate 700 */
+  --border-default: #475569;
+  /* Slate 600 */
+  --border-focus: var(--brand-primary);
+
+  /* Status Colors (Adjusted for Dark Mode) */
+  --color-success: #34D399;
+  /* Emerald 400 */
+  --color-success-bg: #064E3B;
+  /* Emerald 900 */
+  --color-success-text: #D1FAE5;
+  /* Emerald 50 */
+
+  --color-warning: #FBBF24;
+  /* Amber 400 */
+  --color-warning-bg: #78350F;
+  /* Amber 900 */
+  --color-warning-text: #FEF3C7;
+  /* Amber 50 */
+
+  --color-error: #F87171;
+  /* Red 400 */
+  --color-error-bg: #7F1D1D;
+  /* Red 900 */
+  --color-error-text: #FEE2E2;
+  /* Red 50 */
+
+  --color-info: #60A5FA;
+  /* Blue 400 */
+  --color-info-bg: #1E3A8A;
+  /* Blue 900 */
+  --color-info-text: #DBEAFE;
+  /* Blue 50 */
+
+  /* Shadows (Adjusted for Dark Mode - lighter but subtle) */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+  --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.3);
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #38BDF8 0%, #0284C7 100%);
+  --gradient-surface: linear-gradient(to bottom, var(--bg-surface) 0%, var(--bg-body) 100%);
+  --gradient-glass: linear-gradient(180deg, rgba(30, 41, 59, 0.8) 0%, rgba(30, 41, 59, 0.4) 100%);
+}
+
+/* -------------------------------------------------- */
+/* COMPATIBILITY ALIASES (Mapping old to new)         */
+/* -------------------------------------------------- */
+:root {
+  --color-primary: var(--brand-primary);
+  --color-primary-dark: var(--brand-primary-dark);
+  --color-primary-light: var(--brand-primary-light);
+
   --color-slate-50: #f8fafc;
   --color-slate-100: #f1f5f9;
   --color-slate-200: #e2e8f0;
@@ -17,54 +275,8 @@
   --color-slate-400: #94a3b8;
   --color-slate-500: #64748b;
   --color-slate-600: #475569;
-  --color-slate-700: #334155;
-  --color-slate-800: #1e293b;
   --color-slate-900: #0f172a;
 
-  /* Semantic Colors */
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #3b82f6;
-
-  /* Backgrounds & Surfaces */
-  --bg-body: var(--color-slate-50);
-  --bg-card: #ffffff;
-  --bg-overlay: rgba(15, 23, 42, 0.5);
-
-  /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-serif: 'Merriweather', serif;
-  
-  /* Spacing */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-12: 3rem;
-
-  /* Shadows (Premium feel) */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-
-  /* Border Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-full: 9999px;
-
-  /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.dark {
-  /* Dark Mode Overrides */
-  --bg-body: var(--color-slate-900);
-  --bg-card: var(--color-slate-800);
-  --color-slate-50: #0f172a; /* Inverted logic for specific needs if necessary */
+  /* Map old background names to new semantic ones if needed */
+  --bg-card: var(--bg-surface);
 }

@@ -1,0 +1,308 @@
+/* =====================================================
+   USER MANAGEMENT PAGE STYLES
+   ===================================================== */
+
+.user-management-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.page-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.stats-row {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--brand-primary);
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* Filters Card */
+.filters-card {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.search-box {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--bg-surface-hover);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    margin-bottom: 1rem;
+    transition: all 0.2s ease;
+}
+
+.search-box:focus-within {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px var(--brand-primary-alpha-10);
+}
+
+.search-box .material-icons-outlined {
+    color: var(--text-muted);
+    font-size: 1.5rem;
+}
+
+.search-input {
+    flex: 1;
+    border: none;
+    background: none;
+    color: var(--text-primary);
+    font-size: 1rem;
+    outline: none;
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.role-filters {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.role-filter-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.role-filter-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+}
+
+.role-filter-btn.active {
+    background: var(--brand-primary);
+    color: white;
+    border-color: var(--brand-primary);
+}
+
+/* Users Table */
+.users-table-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+}
+
+.users-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.users-table thead {
+    background: var(--bg-surface-hover);
+    border-bottom: 2px solid var(--border-default);
+}
+
+.users-table th {
+    text-align: left;
+    padding: 1rem 1.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.users-table tbody tr {
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.2s ease;
+}
+
+.users-table tbody tr:hover {
+    background: var(--bg-surface-hover);
+}
+
+.users-table td {
+    padding: 1rem 1.5rem;
+    color: var(--text-primary);
+}
+
+.user-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.user-avatar {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--brand-primary-alpha-10);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand-primary);
+}
+
+.user-avatar .material-icons-outlined {
+    font-size: 1.25rem;
+}
+
+.user-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.user-email {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.role-badge {
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.role-patient {
+    background: var(--color-info-bg);
+    color: var(--color-info);
+}
+
+.role-doctor {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.role-admin {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+}
+
+.role-pharmacist {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+}
+
+.contact-cell,
+.date-cell {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.status-badge {
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.status-active {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.status-inactive {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+}
+
+/* Alerts */
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.95rem;
+    position: relative;
+}
+
+.alert-error {
+    background: var(--color-error-bg);
+    border: 1px solid var(--color-error);
+    color: var(--color-error-text);
+}
+
+. .material-icons-outlined {
+    font-size: 1.5rem;
+}
+
+.alert-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+    transition: background 0.2s ease;
+}
+
+.alert-close:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* Loading */
+.loading-spinner {
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+@media (max-width: 768px) {
+
+    .users-table th,
+    .users-table td {
+        padding: 0.75rem 1rem;
+    }
+}

@@ -1,0 +1,172 @@
+/* =====================================================
+   MEDICAL RECORDS PAGE STYLES
+   ===================================================== */
+
+.medical-records-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.page-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+/* Upload Area */
+.upload-area {
+    margin-bottom: 2.5rem;
+    padding: 3rem 2rem;
+    background: var(--bg-surface-hover);
+    border: 2px dashed var(--border-default);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover {
+    border-color: var(--brand-primary);
+    background: var(--brand-primary-alpha-10);
+}
+
+.upload-content {
+    text-align: center;
+}
+
+.upload-icon {
+    font-size: 4rem;
+    color: var(--brand-primary);
+    opacity: 0.5;
+    margin-bottom: 1rem;
+}
+
+.upload-content h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.upload-content p {
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.supported-formats {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Records Section */
+.records-section h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1.5rem;
+}
+
+.records-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+@media (max-width: 768px) {
+    .records-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Record Card */
+.record-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    transition: all 0.3s ease;
+}
+
+.record-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--brand-primary-alpha-10);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand-primary);
+}
+
+.record-icon .material-icons-outlined {
+    font-size: 1.75rem;
+}
+
+.record-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.record-info h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.35rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.record-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.record-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--bg-surface-hover);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    background: var(--brand-primary-alpha-10);
+    color: var(--brand-primary);
+}
+
+.action-btn.delete-btn:hover {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+}
+
+.action-btn .material-icons-outlined {
+    font-size: 1.25rem;
+}

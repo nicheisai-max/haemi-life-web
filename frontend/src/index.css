@@ -1,6 +1,7 @@
 @import './styles/variables.css';
+@import './styles/animations.css';
 
-/* Modern Reset */
+/* Modern Reset & Base Styles */
 *,
 *::before,
 *::after {
@@ -12,58 +13,68 @@
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-body);
-  color: var(--color-slate-800);
+  color: var(--text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
+/* Typography Headers - Using Display Font */
 h1,
 h2,
 h3,
 h4,
 h5,
 h6 {
-  line-height: 1.1;
+  font-family: var(--font-display);
   font-weight: 700;
-  color: var(--color-slate-900);
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin-bottom: var(--space-4);
 }
 
 h1 {
   font-size: 2.5rem;
+  letter-spacing: -0.025em;
 }
 
 h2 {
   font-size: 2rem;
+  letter-spacing: -0.025em;
 }
 
 h3 {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
 }
 
+h4 {
+  font-size: 1.25rem;
+}
+
+p {
+  margin-bottom: var(--space-4);
+  color: var(--text-secondary);
+}
+
+/* Links */
 a {
-  color: var(--color-primary);
+  color: var(--brand-primary);
   text-decoration: none;
   transition: color var(--transition-fast);
+  font-weight: 500;
 }
 
 a:hover {
-  color: var(--color-primary-dark);
+  color: var(--brand-primary-dark);
 }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-}
-
-/* Utility Utilities (Mini-Tailwind like classes for common needs) */
+/* Utility Classes conforming to Brand System */
 .container {
   width: 100%;
-  max-width: 1280px;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: var(--space-4);
-  padding-right: var(--space-4);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
 }
 
 .text-center {
@@ -74,16 +85,8 @@ button {
   display: flex;
 }
 
-.flex-col {
-  flex-direction: column;
-}
-
 .items-center {
   align-items: center;
-}
-
-.justify-center {
-  justify-content: center;
 }
 
 .justify-between {
@@ -94,25 +97,26 @@ button {
   gap: var(--space-4);
 }
 
-.w-full {
-  width: 100%;
+/* Status Utilities */
+.text-success {
+  color: var(--color-success-text);
 }
 
-.h-screen {
-  height: 100vh;
+.bg-success {
+  background-color: var(--color-success-bg);
 }
 
-.p-4 {
-  padding: var(--space-4);
+.text-error {
+  color: var(--color-error-text);
 }
 
-.mt-4 {
-  margin-top: var(--space-4);
+.bg-error {
+  background-color: var(--color-error-bg);
 }
 
-/* Animation Utils */
+/* Animation */
 .fade-in {
-  animation: fadeIn 0.5s ease-in-out;
+  animation: fadeIn 0.4s ease-out;
 }
 
 @keyframes fadeIn {

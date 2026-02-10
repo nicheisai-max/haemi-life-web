@@ -7,6 +7,7 @@
     "dev": "nodemon src/app.ts",
     "build": "tsc",
     "seed": "ts-node src/utils/seed.ts",
+    "seed-data": "ts-node src/utils/seed-data.ts",
     "update-constraint": "ts-node src/utils/update-constraint.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

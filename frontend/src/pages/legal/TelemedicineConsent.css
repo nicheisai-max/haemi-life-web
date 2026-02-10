@@ -1,0 +1,110 @@
+/* =====================================================
+   TELEMEDICINE CONSENT PAGE STYLES
+   ===================================================== */
+
+/* Reuse legal page base styles */
+@import './PrivacyPolicy.css';
+
+.consent-page-container {
+    min-height: 100vh;
+    background: var(--bg-base);
+    padding: 2rem 1rem;
+}
+
+.consent-page-content {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Header with Icon */
+.consent-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.consent-icon {
+    font-size: 4rem;
+    color: var(--brand-primary);
+    margin-bottom: 1rem;
+}
+
+.consent-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.consent-header p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+}
+
+/* Consent Card */
+.consent-card {
+    padding: 2.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Consent Declaration */
+.consent-declaration {
+    background: var(--brand-primary-alpha-10);
+    padding: 2rem;
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--brand-primary-alpha-20);
+    margin-top: 2rem;
+}
+
+.consent-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    cursor: pointer;
+    padding: 1.5rem;
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-default);
+    transition: all 0.2s ease;
+}
+
+.consent-checkbox:hover {
+    border-color: var(--brand-primary);
+}
+
+.consent-checkbox input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-top: 0.25rem;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.checkbox-label {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+/* Actions */
+.consent-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+@media (max-width: 640px) {
+    .consent-actions {
+        flex-direction: column-reverse;
+    }
+
+    .consent-card {
+        padding: 1.5rem;
+    }
+
+    .consent-header h1 {
+        font-size: 1.5rem;
+    }
+}

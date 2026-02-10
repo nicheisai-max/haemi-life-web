@@ -1,0 +1,43 @@
+/* =====================================================
+   NETWORK STATUS INDICATOR STYLES
+   ===================================================== */
+
+.network-status {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    animation: slideDown 0.3s ease-out;
+}
+
+.network-status.offline {
+    background: var(--color-error);
+    color: white;
+}
+
+.network-status.slow {
+    background: var(--color-warning);
+    color: var(--text-primary);
+}
+
+.network-status .material-icons-outlined {
+    font-size: 1.25rem;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}

@@ -3,7 +3,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-slate-50) 100%);
+    background: linear-gradient(135deg, var(--brand-primary-light) 0%, var(--bg-body) 100%);
     padding: var(--space-4);
 }
 
@@ -22,11 +22,11 @@
     margin-top: var(--space-4);
     margin-bottom: var(--space-2);
     font-size: 2rem;
-    color: var(--color-slate-900);
+    color: var(--text-primary);
 }
 
 .signup-header p {
-    color: var(--color-slate-600);
+    color: var(--text-secondary);
     font-size: 0.9375rem;
 }
 
@@ -34,7 +34,7 @@
     margin-top: var(--space-3);
     background: none;
     border: none;
-    color: var(--color-primary);
+    color: var(--brand-primary);
     font-size: 0.875rem;
     cursor: pointer;
     padding: var(--space-2) var(--space-4);
@@ -43,7 +43,7 @@
 }
 
 .back-button:hover {
-    background-color: var(--color-primary-light);
+    background-color: var(--brand-primary-light);
 }
 
 .role-grid {
@@ -71,7 +71,7 @@
 }
 
 .role-card:hover {
-    border-color: var(--color-primary);
+    border-color: var(--brand-primary);
     transform: translateY(-4px);
     box-shadow: var(--shadow-lg);
 }
@@ -83,12 +83,12 @@
 
 .role-card h3 {
     margin-bottom: var(--space-2);
-    color: var(--color-slate-900);
+    color: var(--text-primary);
     font-size: 1.25rem;
 }
 
 .role-card p {
-    color: var(--color-slate-600);
+    color: var(--text-secondary);
     font-size: 0.875rem;
     line-height: 1.5;
 }
@@ -105,19 +105,19 @@
 }
 
 .signup-footer p {
-    color: var(--color-slate-600);
+    color: var(--text-secondary);
     font-size: 0.875rem;
 }
 
 .link {
-    color: var(--color-primary);
+    color: var(--brand-primary);
     font-weight: 500;
     text-decoration: none;
     transition: color var(--transition-fast);
 }
 
 .link:hover {
-    color: var(--color-primary-dark);
+    color: var(--brand-primary-dark);
     text-decoration: underline;
 }
 
@@ -129,7 +129,7 @@
 }
 
 .alert-error {
-    background-color: #fee;
-    color: var(--color-danger);
-    border: 1px solid var(--color-danger);
+    background-color: var(--color-error-bg);
+    color: var(--color-error-text);
+    border: 1px solid var(--color-error);
 }

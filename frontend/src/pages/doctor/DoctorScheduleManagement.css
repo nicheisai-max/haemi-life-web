@@ -1,0 +1,264 @@
+/* =====================================================
+   DOCTOR SCHEDULE MANAGEMENT PAGE STYLES
+   ===================================================== */
+
+.schedule-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.page-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+/* Schedule Card */
+.schedule-card {
+    margin-bottom: 1.5rem;
+}
+
+.schedule-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.day-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem;
+    background: var(--bg-surface-hover);
+    border-radius: var(--radius-lg);
+    gap: 1.5rem;
+}
+
+.day-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-width: 150px;
+}
+
+.day-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+}
+
+.day-name.active {
+    color: var(--text-primary);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-disabled);
+    transition: 0.3s;
+    border-radius: 26px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked+.toggle-slider {
+    background-color: var(--brand-primary);
+}
+
+.toggle-switch input:checked+.toggle-slider:before {
+    transform: translateX(22px);
+}
+
+.toggle-switch input:focus+.toggle-slider {
+    box-shadow: 0 0 0 3px var(--brand-primary-alpha-10);
+}
+
+/* Time Inputs */
+.time-inputs {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+}
+
+.time-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.time-group label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.time-input {
+    padding: 0.65rem 1rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    min-width: 120px;
+    transition: all 0.2s ease;
+}
+
+.time-input:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px var(--brand-primary-alpha-10);
+}
+
+.time-separator {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 1.25rem;
+}
+
+.unavailable-text {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-style: italic;
+}
+
+/* Info Card */
+.info-card {
+    background: var(--brand-primary-alpha-10);
+    border: 1px solid var(--brand-primary-alpha-20);
+}
+
+.info-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    color: var(--brand-primary);
+}
+
+.info-header .material-icons-outlined {
+    font-size: 1.5rem;
+}
+
+.info-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.info-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.info-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.info-list li:before {
+    content: "•";
+    color: var(--brand-primary);
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+/* Alerts */
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.95rem;
+}
+
+.alert-error {
+    background: var(--color-error-bg);
+    border: 1px solid var(--color-error);
+    color: var(--color-error-text);
+}
+
+.alert-success {
+    background: var(--color-success-bg);
+    border: 1px solid var(--color-success);
+    color: var(--color-success-text);
+}
+
+.alert .material-icons-outlined {
+    font-size: 1.5rem;
+}
+
+/* Loading */
+.loading-spinner {
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+@media (max-width: 768px) {
+    .day-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .time-inputs {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .time-group {
+        flex: 1;
+        min-width: 120px;
+    }
+}
