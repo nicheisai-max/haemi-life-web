@@ -116,34 +116,46 @@ export const Signup: React.FC = () => {
                             <p>Choose your account type to get started</p>
                         </div>
 
-                        <div className="role-grid">
-                            <div className="role-option" onClick={() => handleRoleSelect('patient')}>
-                                <div className="role-icon">👤</div>
-                                <h3>Patient</h3>
-                                <p>Book appointments and manage your health records</p>
+                        <div className="role-selection-container">
+                            <div className="role-card" onClick={() => handleRoleSelect('patient')}>
+                                <div className="role-icon-wrapper">
+                                    <span className="material-icons-outlined">person_outline</span>
+                                </div>
+                                <div className="role-info">
+                                    <h3>Member</h3>
+                                    <p>Personal Health</p>
+                                </div>
                             </div>
 
-                            <div className="role-option" onClick={() => handleRoleSelect('doctor')}>
-                                <div className="role-icon">👨‍⚕️</div>
-                                <h3>Doctor</h3>
-                                <p>Manage appointments and patient consultations</p>
+                            <div className="role-card" onClick={() => handleRoleSelect('doctor')}>
+                                <div className="role-icon-wrapper">
+                                    <span className="material-icons-outlined">medical_services</span>
+                                </div>
+                                <div className="role-info">
+                                    <h3>Doctor</h3>
+                                    <p>Practice Admin</p>
+                                </div>
                             </div>
 
-                            <div className="role-option" onClick={() => handleRoleSelect('pharmacist')}>
-                                <div className="role-icon">💊</div>
-                                <h3>Pharmacist</h3>
-                                <p>Manage prescriptions and pharmacy inventory</p>
+                            <div className="role-card" onClick={() => handleRoleSelect('pharmacist')}>
+                                <div className="role-icon-wrapper">
+                                    <span className="material-icons-outlined">local_pharmacy</span>
+                                </div>
+                                <div className="role-info">
+                                    <h3>Pharmacist</h3>
+                                    <p>Dispensary</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="signup-footer mt-12">
+                        <div className="signup-footer">
                             <p>Already have an account?</p>
                             <Button
                                 variant="ghost"
                                 fullWidth
                                 onClick={() => navigate('/login')}
-                                className="create-account-btn"
-                                size="md"
+                                className="signin-link-btn"
+                                size="sm"
                             >
                                 Sign In
                             </Button>

@@ -2,6 +2,10 @@ import axios, { AxiosError, type AxiosRequestConfig, type AxiosResponse } from '
 
 const API_URL = 'http://localhost:5000'; // Adjust if backend runs on different port
 
+// DEMO MODE FLAG
+// @ts-ignore
+const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+
 // Cache for successful GET responses
 const CACHE_KEY_PREFIX = 'haemi_api_cache_';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -14,6 +18,12 @@ const api = axios.create({
     baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
+        // Force no-cache headers in Demo Mode
+        ...(IS_DEMO_MODE ? {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        } : {}),
     },
     timeout: 10000, // 10 second timeout
 });
@@ -40,6 +50,9 @@ function getCacheKey(config: AxiosRequestConfig): string {
 
 // Check cache for valid response
 function getFromCache(cacheKey: string): any | null {
+    // BYPASS CACHE IN DEMO MODE
+    if (IS_DEMO_MODE) return null;
+
     const storageKey = CACHE_KEY_PREFIX + btoa(cacheKey);
     const cachedStr = localStorage.getItem(storageKey);
 
@@ -61,6 +74,9 @@ function getFromCache(cacheKey: string): any | null {
 
 // Save response to cache
 function saveToCache(cacheKey: string, data: any): void {
+    // DISABLE CACHE WRITE IN DEMO MODE
+    if (IS_DEMO_MODE) return;
+
     const storageKey = CACHE_KEY_PREFIX + btoa(cacheKey);
     const cacheData = {
         data,

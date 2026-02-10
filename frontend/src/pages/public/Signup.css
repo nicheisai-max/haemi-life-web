@@ -1,19 +1,34 @@
-.signup-container {
-    min-height: 100vh;
+/* Premium Glassmorphism Signup Design */
+.signup-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, var(--brand-primary-light) 0%, var(--bg-body) 100%);
-    padding: var(--space-4);
+    background-color: var(--bg-body);
 }
 
+/* Full Screen Background with Overlay */
 .signup-visual {
-    flex: 1;
-    position: relative;
-    background-color: #ffffff;
-    overflow: hidden;
-    display: none;
-    /* Hide on smaller/medium screens */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block !important;
+    /* Force display unlike previous version */
+    z-index: 0;
+}
+
+.signup-bg-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
 }
 
 .signup-visual::after {
@@ -24,144 +39,240 @@
     right: 0;
     bottom: 0;
     background: linear-gradient(135deg,
-            rgba(0, 0, 0, 0.6) 0%,
-            rgba(0, 0, 0, 0.3) 50%,
-            rgba(0, 0, 0, 0.1) 100%);
+            rgba(15, 23, 42, 0.85) 0%,
+            rgba(30, 41, 59, 0.70) 50%,
+            rgba(51, 65, 85, 0.40) 100%);
+    backdrop-filter: blur(4px);
     z-index: 1;
 }
 
-.signup-content {
+/* Glass Form Container - Centered */
+.signup-form-container {
+    position: relative;
+    z-index: 2;
     width: 100%;
-    max-width: 500px;
-    animation: fadeIn 0.5s ease-in-out;
+    max-width: 520px;
+    padding: var(--space-4);
+    animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.signup-form-wrapper {
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    padding: 3rem 2.5rem;
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.25),
+        0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Header Typography */
 .signup-header {
     text-align: center;
-    margin-bottom: var(--space-8);
+    margin-bottom: 2rem;
 }
 
 .signup-header h1 {
-    margin-top: var(--space-4);
-    margin-bottom: var(--space-2);
+    font-family: 'Outfit', 'Inter', system-ui, sans-serif;
     font-size: 2rem;
+    font-weight: 700;
     color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--text-primary) 0%, #475569 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .signup-header p {
     color: var(--text-secondary);
-    font-size: 0.9375rem;
+    font-size: 1rem;
+    font-weight: 400;
 }
 
-.signup-visual {
-    flex: 1;
-    position: relative;
-    background-color: #ffffff;
-    overflow: hidden;
-    display: none;
-    /* Hide on smaller/medium screens */
-}
-
-.back-button {
-    margin-top: var(--space-3);
-    background: none;
-    border: none;
-    color: var(--brand-primary);
-    font-size: 0.875rem;
-    cursor: pointer;
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-md);
-    transition: background-color var(--transition-fast);
-}
-
-.back-button:hover {
-    background-color: var(--brand-primary-light);
-}
-
-.role-grid {
+/* Role Selection - Premium Cards */
+.role-selection-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: var(--space-2);
-    margin-bottom: var(--space-4);
-}
-
-@media (min-width: 640px) {
-    .role-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .signup-content {
-        max-width: 700px;
-    }
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
 }
 
 .role-card {
+    background: #fff;
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 1.25rem 0.75rem;
     cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
-    transition: all var(--transition-normal);
-    border: 2px solid transparent;
+    position: relative;
 }
 
 .role-card:hover {
     border-color: var(--brand-primary);
     transform: translateY(-4px);
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 12px 20px -8px rgba(var(--brand-primary-rgb), 0.15);
 }
 
-.role-icon {
-    font-size: 3rem;
-    margin-bottom: var(--space-3);
+.role-card:active {
+    transform: scale(0.98);
 }
 
-.role-card h3 {
-    margin-bottom: var(--space-2);
-    color: var(--text-primary);
-    font-size: 1.25rem;
-}
-
-.role-card p {
+/* Icon Styling */
+.role-icon-wrapper {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--bg-surface-secondary);
     color: var(--text-secondary);
-    font-size: 0.875rem;
-    line-height: 1.5;
-}
-
-.signup-form {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+    transition: all 0.3s ease;
 }
 
+.role-card:hover .role-icon-wrapper {
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
+    color: white;
+    box-shadow: 0 8px 16px -4px rgba(var(--brand-primary-rgb), 0.3);
+}
+
+.role-icon-wrapper .material-icons-outlined {
+    font-size: 28px;
+}
+
+.role-info h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.role-info p {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* Form Styling */
+.signup-form {
+    margin-top: 1.5rem;
+}
+
+.signup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* Alert Styling */
+.alert {
+    padding: 1rem;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    animation: shake 0.4s ease-in-out;
+}
+
+.alert-error {
+    background-color: #FEF2F2;
+    color: #991B1B;
+    border: 1px solid #FECACA;
+}
+
+/* Footer & Link */
 .signup-footer {
-    margin-top: var(--space-6);
+    margin-top: 2rem;
     text-align: center;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 1.5rem;
 }
 
 .signup-footer p {
     color: var(--text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
 }
 
-.link {
-    color: var(--brand-primary);
-    font-weight: 500;
-    text-decoration: none;
-    transition: color var(--transition-fast);
+.signin-link-btn {
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    letter-spacing: 0.01em;
+    transition: color 0.2s ease;
 }
 
-.link:hover {
-    color: var(--brand-primary-dark);
-    text-decoration: underline;
+/* Animations */
+@keyframes slideUpFade {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.alert {
-    padding: var(--space-3);
-    border-radius: var(--radius-md);
-    font-size: 0.875rem;
-    margin-bottom: var(--space-4);
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-4px);
+    }
+
+    75% {
+        transform: translateX(4px);
+    }
 }
 
-.alert-error {
-    background-color: var(--color-error-bg);
-    color: var(--color-error-text);
-    border: 1px solid var(--color-error);
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+    .signup-form-wrapper {
+        padding: 2rem 1.5rem;
+        border-radius: 20px;
+    }
+
+    .role-selection-container {
+        grid-template-columns: 1fr;
+    }
+
+    .role-card {
+        flex-direction: row;
+        padding: 1rem;
+        text-align: left;
+    }
+
+    .role-icon-wrapper {
+        margin-bottom: 0;
+        margin-right: 1rem;
+        width: 48px;
+        height: 48px;
+    }
+
+    .role-icon-wrapper .material-icons-outlined {
+        font-size: 24px;
+    }
+
+    .role-info {
+        flex: 1;
+    }
+
+    .signup-grid {
+        grid-template-columns: 1fr;
+    }
 }
