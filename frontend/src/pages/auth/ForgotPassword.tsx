@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import logo from '../../assets/logo.svg';
+import { Logo } from '../../components/ui/Logo';
 import './ForgotPassword.css';
 
 type Step = 'request' | 'verify' | 'reset' | 'success';
@@ -120,7 +120,7 @@ export const ForgotPassword: React.FC = () => {
         <div className="forgot-password-container">
             <div className="forgot-password-content">
                 <div className="forgot-password-header">
-                    <img src={logo} alt="Haemi Life" className="logo" />
+                    <Logo size="xl" className="mx-auto" />
                 </div>
 
                 <Card className="forgot-password-card">
