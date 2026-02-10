@@ -1,30 +1,25 @@
 import React from 'react';
+import logoImg from '../../assets/images/haemi_life_logo.png';
 
-export const Logo: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }) => {
-    const sizes = {
-        sm: { fontSize: '1.25rem' },
-        md: { fontSize: '1.5rem' },
-        lg: { fontSize: '2rem' },
+interface LogoProps {
+    size?: 'sm' | 'md' | 'lg';
+    className?: string;
+}
+
+export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '' }) => {
+    const heightMap = {
+        sm: '24px',
+        md: '32px',
+        lg: '48px',
     };
 
     return (
-        <div style={{ ...sizes[size], fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <div style={{
-                width: '1em',
-                height: '1em',
-                backgroundColor: 'var(--color-primary)',
-                borderRadius: 'var(--radius-sm)',
-                display: 'grid',
-                placeItems: 'center',
-                color: 'white',
-                fontSize: '0.6em',
-                lineHeight: 1
-            }}>
-                +
-            </div>
-            <span style={{ color: 'var(--color-slate-900)' }}>
-                Haemi<span style={{ color: 'var(--color-primary)' }}>Life</span>
-            </span>
+        <div className={`logo-container ${className}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <img
+                src={logoImg}
+                alt="Haemi Life"
+                style={{ height: heightMap[size], width: 'auto', objectFit: 'contain' }}
+            />
         </div>
     );
 };

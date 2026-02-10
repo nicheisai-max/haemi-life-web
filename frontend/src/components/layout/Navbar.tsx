@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import logo from '../../assets/images/haemi_life_logo.png';
+import { Logo } from '../ui/Logo';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import './Navbar.css';
 
@@ -55,7 +55,7 @@ export const Navbar: React.FC = () => {
                     tabIndex={0}
                     onKeyPress={(e) => e.key === 'Enter' && navigate('/')}
                 >
-                    <img src={logo} alt="Haemi Life" className="navbar-logo" />
+                    <Logo size="md" />
                 </div>
 
                 <div className="navbar-actions">

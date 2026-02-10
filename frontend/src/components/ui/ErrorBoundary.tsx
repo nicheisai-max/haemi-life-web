@@ -1,6 +1,7 @@
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from './Button';
 import { Card } from './Card';
+import { Logo } from './Logo';
 
 interface Props {
     children?: ReactNode;
@@ -41,6 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     padding: '2rem'
                 }}>
                     <Card style={{ maxWidth: '500px', textAlign: 'center', padding: '3rem' }}>
+                        <Logo size="lg" className="mb-6 mx-auto" />
                         <span className="material-icons-outlined" style={{
                             fontSize: '4rem',
                             color: 'var(--color-error)',

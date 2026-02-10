@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
+import { Logo } from '../../components/ui/Logo';
 import './NotFound.css';
 
 export const NotFound: React.FC = () => {
@@ -9,6 +10,7 @@ export const NotFound: React.FC = () => {
     return (
         <div className="not-found-container">
             <div className="not-found-content">
+                <Logo size="lg" className="mb-6 mx-auto" />
                 <div className="not-found-illustration">
                     <span className="material-icons-outlined large-icon">explore_off</span>
                     <div className="pulse-ring"></div>
