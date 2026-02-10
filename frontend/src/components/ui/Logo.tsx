@@ -10,7 +10,9 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '' }) => {
     const heightMap = {
         sm: '24px',
         md: '32px',
-        lg: '48px',
+        lg: '64px',
+        xl: '96px',
+        xxl: '128px'
     };
 
     return (
