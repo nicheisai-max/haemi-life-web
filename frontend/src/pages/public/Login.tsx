@@ -88,7 +88,7 @@ export const Login: React.FC = () => {
             <div className="login-form-container">
                 <div className="login-form-wrapper">
                     <div className="login-header">
-                        <Logo size="xxl" className="mx-auto mb-8" />
+                        <Logo size="lg" className="mx-auto mb-2" />
                         <h1>Welcome Back</h1>
                         <p>Sign in to access your dashboard</p>
                     </div>
@@ -135,8 +135,8 @@ export const Login: React.FC = () => {
                             Sign In
                         </Button>
 
-                        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-                            <Link to="/forgot-password" style={{ color: 'var(--brand-primary)', textDecoration: 'none', fontSize: '1rem', fontWeight: '500' }}>
+                        <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
+                            <Link to="/forgot-password" style={{ color: 'var(--brand-primary)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: '500' }}>
                                 Forgot password?
                             </Link>
                         </div>
@@ -148,8 +148,8 @@ export const Login: React.FC = () => {
                             variant="ghost"
                             fullWidth
                             onClick={() => navigate('/signup')}
-                            className="mt-4"
-                            size="lg"
+                            className="mt-1"
+                            size="md"
                         >
                             Create Account
                         </Button>

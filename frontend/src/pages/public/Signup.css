@@ -30,6 +30,15 @@
     font-size: 0.9375rem;
 }
 
+.signup-visual {
+    flex: 1;
+    position: relative;
+    background-color: #ffffff;
+    overflow: hidden;
+    display: none;
+    /* Hide on smaller/medium screens */
+}
+
 .back-button {
     margin-top: var(--space-3);
     background: none;
@@ -48,9 +57,9 @@
 
 .role-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
-    margin-bottom: var(--space-8);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
 }
 
 @media (min-width: 640px) {
