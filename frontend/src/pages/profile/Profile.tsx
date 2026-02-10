@@ -3,6 +3,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { getProfile, updateProfile } from '../../services/user.service';
 import type { UserProfile, UpdateProfileData } from '../../services/user.service';
+import { CardSkeleton } from '../../components/loaders/SkeletonLoader';
 import './Profile.css';
 
 export const Profile: React.FC = () => {
@@ -75,9 +76,10 @@ export const Profile: React.FC = () => {
     if (loading) {
         return (
             <div className="profile-container">
-                <Card style={{ padding: '2rem', textAlign: 'center' }}>
-                    <div className="loading-spinner">Loading profile...</div>
-                </Card>
+                <div className="profile-grid">
+                    <CardSkeleton />
+                    <CardSkeleton />
+                </div>
             </div>
         );
     }

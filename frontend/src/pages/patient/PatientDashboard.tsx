@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -6,10 +7,12 @@ import { getMyAppointments } from '../../services/appointment.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import type { Appointment } from '../../services/appointment.service';
 import type { Prescription } from '../../services/prescription.service';
+import { SkeletonLoader } from '../../components/loaders/SkeletonLoader';
 import './PatientDashboard.css';
 
 export const PatientDashboard: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [loading, setLoading] = useState(true);
@@ -180,9 +183,10 @@ export const PatientDashboard: React.FC = () => {
                         </div>
                         <div className="appointment-list">
                             {loading ? (
-                                <Card style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                    Loading appointments...
-                                </Card>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <SkeletonLoader variant="card" />
+                                    <SkeletonLoader variant="card" />
+                                </div>
                             ) : upcomingAppointments.length === 0 ? (
                                 <Card style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                                     <span className="material-icons-outlined" style={{ fontSize: '48px', opacity: 0.5 }}>event_busy</span>
@@ -201,9 +205,18 @@ export const PatientDashboard: React.FC = () => {
                                                 <h3>{appointment.other_party_name || 'Doctor'}</h3>
                                                 <p>{appointment.reason} • {formatTime(appointment.appointment_time)}</p>
                                             </div>
-                                            <Button variant="outline" size="sm" className="action-btn">
-                                                Details
-                                            </Button>
+                                            <div className="appointment-actions" style={{ display: 'flex', gap: '8px' }}>
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    onClick={() => navigate(`/consultation/${appointment.id}`)}
+                                                >
+                                                    Join
+                                                </Button>
+                                                <Button variant="outline" size="sm">
+                                                    Details
+                                                </Button>
+                                            </div>
                                         </Card>
                                     );
                                 })

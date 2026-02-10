@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import logo from '../../assets/images/haemi_life_logo.png';
@@ -10,6 +10,25 @@ export const Navbar: React.FC = () => {
     const navigate = useNavigate();
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [notifications] = useState([
+        { text: 'Appointment confirmed with Dr. Smith', unread: true },
+        { text: 'Prescription ready for pickup', unread: false },
+        { text: 'Welcome to Haemi Life!', unread: false }
+    ]);
+
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     const handleLogout = () => {
         logout();
@@ -28,11 +47,24 @@ export const Navbar: React.FC = () => {
     return (
         <nav className="navbar">
             <div className="navbar-container">
-                <div className="navbar-brand" onClick={() => navigate('/')}>
+                <div
+                    className="navbar-brand"
+                    onClick={() => navigate('/')}
+                    role="button"
+                    aria-label="Haemi Life Home"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === 'Enter' && navigate('/')}
+                >
                     <img src={logo} alt="Haemi Life" className="navbar-logo" />
                 </div>
 
                 <div className="navbar-actions">
+                    {!isOnline && (
+                        <div className="offline-indicator" role="status" aria-label="Offline Mode Active">
+                            <span className="offline-dot"></span>
+                            <span>OFFLINE MODE</span>
+                        </div>
+                    )}
                     <ThemeToggle />
 
                     {/* Notifications */}
@@ -40,16 +72,21 @@ export const Navbar: React.FC = () => {
                         <button
                             className="icon-btn"
                             onClick={() => setShowNotifications(!showNotifications)}
+                            aria-label={`${notifications.length} notifications`}
+                            aria-haspopup="true"
+                            aria-expanded={showNotifications}
                         >
                             <span className="material-icons-outlined">notifications</span>
-                            <span className="badge">3</span>
+                            <span className="badge">{notifications.length}</span>
                         </button>
                         {showNotifications && (
-                            <div className="dropdown-menu notifications-menu">
+                            <div className="dropdown-menu notifications-menu" role="menu">
                                 <div className="dropdown-header">Notifications</div>
-                                <div className="dropdown-item unread">Appointment confirmed with Dr. Smith</div>
-                                <div className="dropdown-item">Prescription ready for pickup</div>
-                                <div className="dropdown-item">Welcome to Haemi Life!</div>
+                                {notifications.map((notif, idx) => (
+                                    <div key={idx} className={`dropdown-item ${notif.unread ? 'unread' : ''}`} role="menuitem">
+                                        {notif.text}
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -59,6 +96,12 @@ export const Navbar: React.FC = () => {
                         <div
                             className="profile-widget"
                             onClick={() => setShowProfileMenu(!showProfileMenu)}
+                            role="button"
+                            aria-label="User profile and settings"
+                            aria-haspopup="true"
+                            aria-expanded={showProfileMenu}
+                            tabIndex={0}
+                            onKeyPress={(e) => e.key === 'Enter' && setShowProfileMenu(!showProfileMenu)}
                         >
                             <div className="avatar">
                                 {user?.name ? getInitials(user.name) : 'U'}

@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import pool from '../config/database';
+import demoConfig from '../config/demo.config';
 
 const router = Router();
 
@@ -54,7 +55,16 @@ router.post(
             // Store OTP
             otpStore.set(identifier, { otp, expiresAt, identifier });
 
-            // In production: Send OTP via email/SMS
+            // Demo mode: log OTP to console, don't send email/SMS
+            if (demoConfig.isDemoMode()) {
+                demoConfig.log(`OTP for ${identifier}`, otp);
+                return res.status(200).json({
+                    message: 'OTP sent successfully',
+                    dev_otp: otp, // Always show in demo mode
+                });
+            }
+
+            // Production: Send OTP via email/SMS
             console.log(`[OTP] ${identifier}: ${otp}`);
 
             // TODO: Integrate with email/SMS service
@@ -91,6 +101,20 @@ router.post(
         const { identifier, otp } = req.body;
 
         try {
+            // Demo mode: Accept demo OTP without validation
+            if (demoConfig.isDemoMode() && otp === demoConfig.DEMO_OTP) {
+                demoConfig.log('Demo OTP accepted', identifier);
+                const resetToken = jwt.sign(
+                    { identifier },
+                    process.env.JWT_SECRET || 'your-secret-key',
+                    { expiresIn: '30m' }
+                );
+                return res.status(200).json({
+                    message: 'OTP verified successfully',
+                    resetToken,
+                });
+            }
+
             const storedData = otpStore.get(identifier);
 
             if (!storedData) {
@@ -234,6 +258,15 @@ router.post(
 
             // Update OTP
             otpStore.set(identifier, { otp, expiresAt, identifier });
+
+            // Demo mode: log OTP
+            if (demoConfig.isDemoMode()) {
+                demoConfig.log(`OTP resent for ${identifier}`, otp);
+                return res.status(200).json({
+                    message: 'OTP resent successfully',
+                    dev_otp: otp,
+                });
+            }
 
             console.log(`[OTP RESEND] ${identifier}: ${otp}`);
 

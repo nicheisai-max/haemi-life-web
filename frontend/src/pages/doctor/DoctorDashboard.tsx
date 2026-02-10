@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -9,6 +10,7 @@ import '../patient/PatientDashboard.css';
 
 export const DoctorDashboard: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [patientCount, setPatientCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -195,7 +197,12 @@ export const DoctorDashboard: React.FC = () => {
                                             <h3>{appointment.other_party_name || 'Patient'}</h3>
                                             <p>{appointment.reason}</p>
                                         </div>
-                                        <Button variant="primary" size="sm" className="action-btn">
+                                        <Button
+                                            variant="primary"
+                                            size="sm"
+                                            className="action-btn"
+                                            onClick={() => navigate(`/consultation/${appointment.id}`)}
+                                        >
                                             Start
                                         </Button>
                                     </Card>

@@ -8,6 +8,7 @@
     "build": "tsc",
     "seed": "ts-node src/utils/seed.ts",
     "seed-data": "ts-node src/utils/seed-data.ts",
+    "seed:demo": "ts-node scripts/seed-demo.ts",
     "update-constraint": "ts-node src/utils/update-constraint.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -16,12 +17,14 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@types/socket.io": "^3.0.1",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.18.0"
+    "pg": "^8.18.0",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

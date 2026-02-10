@@ -1,0 +1,148 @@
+{
+    "imageCategories": {
+        "patients": {
+            "description": "Botswana people for patient profiles",
+            "sources": [
+                {
+                    "id": "patient_01",
+                    "url": "https://unsplash.com/photos/botswana-people",
+                    "alt": "Professional Botswana woman",
+                    "license": "Unsplash License (Free to use)",
+                    "suggested_filename": "patient_01.jpg",
+                    "attribution": "Unsplash"
+                },
+                {
+                    "id": "patient_02",
+                    "url": "https://unsplash.com/search/photos/african-person",
+                    "alt": "Botswana man in casual setting",
+                    "license": "Unsplash License (Free to use)",
+                    "suggested_filename": "patient_02.jpg",
+                    "attribution": "Unsplash"
+                },
+                {
+                    "id": "patient_03",
+                    "url": "https://www.pexels.com/search/african%20person/",
+                    "alt": "Young adult from Botswana",
+                    "license": "Pexels License (Free to use)",
+                    "suggested_filename": "patient_03.jpg",
+                    "attribution": "Pexels"
+                }
+            ],
+            "targetCount": 10,
+            "searchTerms": [
+                "botswana people",
+                "african person",
+                "african portrait",
+                "african professional"
+            ]
+        },
+        "doctors": {
+            "description": "African healthcare professionals for doctor profiles",
+            "sources": [
+                {
+                    "id": "doctor_01",
+                    "url": "https://unsplash.com/s/photos/african-doctor",
+                    "alt": "African female doctor with stethoscope",
+                    "license": "Unsplash License (Free to use)",
+                    "suggested_filename": "doctor_01.jpg",
+                    "attribution": "Unsplash"
+                },
+                {
+                    "id": "doctor_02",
+                    "url": "https://unsplash.com/s/photos/black-doctor",
+                    "alt": "African male doctor in consultation",
+                    "license": "Unsplash License (Free to use)",
+                    "suggested_filename": "doctor_02.jpg",
+                    "attribution": "Unsplash"
+                },
+                {
+                    "id": "doctor_03",
+                    "url": "https://www.pexels.com/search/african%20doctor/",
+                    "alt": "Healthcare professional examining patient",
+                    "license": "Pexels License (Free to use)",
+                    "suggested_filename": "doctor_03.jpg",
+                    "attribution": "Pexels"
+                }
+            ],
+            "targetCount": 8,
+            "searchTerms": [
+                "african doctor",
+                "black doctor",
+                "african healthcare professional",
+                "african surgeon"
+            ]
+        },
+        "pharmacies": {
+            "description": "Pharmacy and medicine-related images",
+            "sources": [
+                {
+                    "id": "pharmacy_01",
+                    "url": "https://unsplash.com/s/photos/pharmacy",
+                    "alt": "Modern pharmacy counter",
+                    "license": "Unsplash License (Free to use)",
+                    "suggested_filename": "pharmacy_01.jpg",
+                    "attribution": "Unsplash"
+                },
+                {
+                    "id": "pharmacy_02",
+                    "url": "https://www.pexels.com/search/pharmacy/",
+                    "alt": "Medicine shelves in pharmacy",
+                    "license": "Pexels License (Free to use)",
+                    "suggested_filename": "pharmacy_02.jpg",
+                    "attribution": "Pexels"
+                }
+            ],
+            "targetCount": 4,
+            "searchTerms": [
+                "pharmacy",
+                "medicine",
+                "pharmacy counter",
+                "pharmacist"
+            ]
+        },
+        "general": {
+            "description": "General healthcare and clinical settings",
+            "sources": [
+                {
+                    "id": "clinic_interior_01",
+                    "url": "https://unsplash.com/s/photos/clinic",
+                    "alt": "Modern clinic waiting room",
+                    "license": "Unsplash License (Free to use)",
+                    "suggested_filename": "clinic_interior.jpg",
+                    "attribution": "Unsplash"
+                },
+                {
+                    "id": "consultation_room_01",
+                    "url": "https://www.pexels.com/search/consultation%20room/",
+                    "alt": "Doctor consultation room",
+                    "license": "Pexels License (Free to use)",
+                    "suggested_filename": "consultation_room.jpg",
+                    "attribution": "Pexels"
+                }
+            ],
+            "targetCount": 6,
+            "searchTerms": [
+                "clinic",
+                "hospital",
+                "medical consultation",
+                "healthcare facility"
+            ]
+        }
+    },
+    "downloadInstructions": {
+        "manual": "1. Visit Unsplash.com and Pexels.com\n2. Search for the terms listed in searchTerms\n3. Download high-resolution images (min 1200x800)\n4. Rename files according to suggested_filename\n5. Place in appropriate subdirectory under assets/images/",
+        "automated": "Use the image-downloader.js script to batch download from Unsplash API (requires API key)"
+    },
+    "usageMapping": {
+        "patient_01.jpg": "Tebogo Motswana (patient-demo-001)",
+        "patient_02.jpg": "Lesego Kgosidintsi (patient-demo-002)",
+        "patient_03.jpg": "Kagiso Moalusi (patient-demo-003)",
+        "patient_04.jpg": "Neo Seretse (patient-demo-004)",
+        "patient_05.jpg": "Tshepo Mabote (patient-demo-005)",
+        "doctor_01.jpg": "Dr. Mpho Modise (doctor-demo-001)",
+        "doctor_02.jpg": "Dr. Naledi Tsheko (doctor-demo-002)",
+        "doctor_03.jpg": "Dr. Thabo Molefe (doctor-demo-003)",
+        "doctor_04.jpg": "Dr. Keitumetse Dube (doctor-demo-004)",
+        "doctor_05.jpg": "Dr. Gorata Sekgoma (doctor-demo-005)"
+    }
+}

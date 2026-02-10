@@ -3,6 +3,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
+import { ListSkeleton } from '../../components/loaders/SkeletonLoader';
 import './Prescriptions.css';
 
 export const Prescriptions: React.FC = () => {
@@ -39,8 +40,8 @@ export const Prescriptions: React.FC = () => {
     if (loading) {
         return (
             <div className="prescriptions-container">
-                <Card style={{ padding: '2rem', textAlign: 'center' }}>
-                    <div className="loading-spinner">Loading prescriptions...</div>
+                <Card style={{ padding: '2rem' }}>
+                    <ListSkeleton items={5} />
                 </Card>
             </div>
         );
