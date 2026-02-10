@@ -1,0 +1,18 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# React
+build/
+dist/
+
+# Environment
+.env
+.env.local
+
+# Database
+*.sql.bak
+
+# OS
+.DS_Store
+Thumbs.db
