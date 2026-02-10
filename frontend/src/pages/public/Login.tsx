@@ -143,12 +143,16 @@ export const Login: React.FC = () => {
                     </form>
 
                     <div className="login-footer">
-                        <p>
-                            Don't have an account?{' '}
-                            <button onClick={() => navigate('/signup')} className="link bg-transparent border-0 p-0 cursor-pointer text-sm">
-                                Create Account
-                            </button>
-                        </p>
+                        <p>Don't have an account?</p>
+                        <Button
+                            variant="ghost"
+                            fullWidth
+                            onClick={() => navigate('/signup')}
+                            className="mt-2"
+                            size="md"
+                        >
+                            Create Account
+                        </Button>
                     </div>
                 </div>
             </div>

@@ -1,25 +1,31 @@
 /* Login Split Screen Layout */
 .login-page {
     display: flex;
-    height: 100vh;
-    width: 100%;
+    height: 100vh !important;
+    width: 100vw !important;
     background-color: var(--bg-body);
-    overflow: hidden;
+    overflow: hidden !important;
+    position: fixed;
+    top: 0;
+    left: 0;
 }
 
 .login-visual {
     flex: 1.4;
     position: relative;
+    background: radial-gradient(at 0% 0%, var(--brand-primary) 0, transparent 50%),
+        radial-gradient(at 50% 0%, var(--brand-secondary) 0, transparent 50%),
+        radial-gradient(at 100% 0%, var(--brand-primary-dark) 0, transparent 50%),
+        radial-gradient(at 0% 100%, var(--brand-secondary-dark) 0, transparent 50%),
+        radial-gradient(at 50% 100%, var(--brand-primary) 0, transparent 50%),
+        radial-gradient(at 100% 100%, var(--brand-primary-dark) 0, transparent 50%);
     background-color: var(--brand-primary-dark);
     overflow: hidden;
     display: block;
 }
 
 .login-bg-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    opacity: 0.9;
+    display: none;
 }
 
 .visual-content {
