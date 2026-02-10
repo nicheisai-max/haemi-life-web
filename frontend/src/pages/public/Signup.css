@@ -1,0 +1,135 @@
+.signup-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-slate-50) 100%);
+    padding: var(--space-4);
+}
+
+.signup-content {
+    width: 100%;
+    max-width: 500px;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.signup-header {
+    text-align: center;
+    margin-bottom: var(--space-8);
+}
+
+.signup-header h1 {
+    margin-top: var(--space-4);
+    margin-bottom: var(--space-2);
+    font-size: 2rem;
+    color: var(--color-slate-900);
+}
+
+.signup-header p {
+    color: var(--color-slate-600);
+    font-size: 0.9375rem;
+}
+
+.back-button {
+    margin-top: var(--space-3);
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    transition: background-color var(--transition-fast);
+}
+
+.back-button:hover {
+    background-color: var(--color-primary-light);
+}
+
+.role-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+}
+
+@media (min-width: 640px) {
+    .role-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .signup-content {
+        max-width: 700px;
+    }
+}
+
+.role-card {
+    cursor: pointer;
+    text-align: center;
+    transition: all var(--transition-normal);
+    border: 2px solid transparent;
+}
+
+.role-card:hover {
+    border-color: var(--color-primary);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+.role-icon {
+    font-size: 3rem;
+    margin-bottom: var(--space-3);
+}
+
+.role-card h3 {
+    margin-bottom: var(--space-2);
+    color: var(--color-slate-900);
+    font-size: 1.25rem;
+}
+
+.role-card p {
+    color: var(--color-slate-600);
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.signup-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.signup-footer {
+    margin-top: var(--space-6);
+    text-align: center;
+}
+
+.signup-footer p {
+    color: var(--color-slate-600);
+    font-size: 0.875rem;
+}
+
+.link {
+    color: var(--color-primary);
+    font-weight: 500;
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.link:hover {
+    color: var(--color-primary-dark);
+    text-decoration: underline;
+}
+
+.alert {
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    margin-bottom: var(--space-4);
+}
+
+.alert-error {
+    background-color: #fee;
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
+}

@@ -1,18 +1,30 @@
-# Node
+# Dependencies
 node_modules/
-npm-debug.log*
 
-# React
-build/
-dist/
-
-# Environment
+# Environment variables
 .env
 .env.local
+.env.*.local
 
-# Database
-*.sql.bak
+# Build outputs
+dist/
+build/
+out/
 
-# OS
+# IDEs
+.vscode/
+.idea/
+
+# System
 .DS_Store
 Thumbs.db
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.temp
+check-db.ts
