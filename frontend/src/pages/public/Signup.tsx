@@ -111,7 +111,7 @@ export const Signup: React.FC = () => {
                 <div className="signup-form-container">
                     <div className="signup-form-wrapper">
                         <div className="signup-header">
-                            <Logo size="md" className="mx-auto mb-4" />
+                            <Logo size="md" className="mx-auto mb-6" />
                             <h1>Create Account</h1>
                             <p>Choose your account type to get started</p>
                         </div>
@@ -142,8 +142,8 @@ export const Signup: React.FC = () => {
                                 variant="ghost"
                                 fullWidth
                                 onClick={() => navigate('/login')}
-                                className="mt-4"
-                                size="lg"
+                                className="create-account-btn"
+                                size="md"
                             >
                                 Sign In
                             </Button>
@@ -167,7 +167,7 @@ export const Signup: React.FC = () => {
             <div className="signup-form-container">
                 <div className="signup-form-wrapper">
                     <div className="signup-header">
-                        <Logo size="md" className="mx-auto mb-4" />
+                        <Logo size="md" className="mx-auto mb-6" />
                         <h1>
                             Sign up as {selectedRole === 'patient' ? 'Patient' : selectedRole === 'doctor' ? 'Doctor' : 'Pharmacist'}
                         </h1>

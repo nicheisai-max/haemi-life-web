@@ -7,6 +7,29 @@
     padding: var(--space-4);
 }
 
+.signup-visual {
+    flex: 1;
+    position: relative;
+    background-color: #ffffff;
+    overflow: hidden;
+    display: none;
+    /* Hide on smaller/medium screens */
+}
+
+.signup-visual::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg,
+            rgba(0, 0, 0, 0.6) 0%,
+            rgba(0, 0, 0, 0.3) 50%,
+            rgba(0, 0, 0, 0.1) 100%);
+    z-index: 1;
+}
+
 .signup-content {
     width: 100%;
     max-width: 500px;

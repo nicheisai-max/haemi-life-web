@@ -88,7 +88,7 @@ export const Login: React.FC = () => {
             <div className="login-form-container">
                 <div className="login-form-wrapper">
                     <div className="login-header">
-                        <Logo size="md" className="mx-auto mb-4" />
+                        <Logo size="md" className="mx-auto mb-6" />
                         <h1>Welcome Back</h1>
                         <p>Sign in to access your dashboard</p>
                     </div>
