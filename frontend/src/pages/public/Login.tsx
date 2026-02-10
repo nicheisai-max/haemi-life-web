@@ -88,7 +88,7 @@ export const Login: React.FC = () => {
             <div className="login-form-container">
                 <div className="login-form-wrapper">
                     <div className="login-header">
-                        <Logo size="lg" className="mx-auto mb-2" />
+                        <Logo size="md" className="mx-auto mb-4" />
                         <h1>Welcome Back</h1>
                         <p>Sign in to access your dashboard</p>
                     </div>
@@ -148,7 +148,7 @@ export const Login: React.FC = () => {
                             variant="ghost"
                             fullWidth
                             onClick={() => navigate('/signup')}
-                            className="mt-1"
+                            className="create-account-btn"
                             size="md"
                         >
                             Create Account

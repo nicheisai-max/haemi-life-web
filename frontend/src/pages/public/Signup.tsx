@@ -111,7 +111,7 @@ export const Signup: React.FC = () => {
                 <div className="signup-form-container">
                     <div className="signup-form-wrapper">
                         <div className="signup-header">
-                            <Logo size="lg" className="mx-auto mb-2" />
+                            <Logo size="md" className="mx-auto mb-4" />
                             <h1>Create Account</h1>
                             <p>Choose your account type to get started</p>
                         </div>
@@ -167,7 +167,7 @@ export const Signup: React.FC = () => {
             <div className="signup-form-container">
                 <div className="signup-form-wrapper">
                     <div className="signup-header">
-                        <Logo size="lg" className="mx-auto mb-2" />
+                        <Logo size="md" className="mx-auto mb-4" />
                         <h1>
                             Sign up as {selectedRole === 'patient' ? 'Patient' : selectedRole === 'doctor' ? 'Doctor' : 'Pharmacist'}
                         </h1>
