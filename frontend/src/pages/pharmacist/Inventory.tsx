@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle } from 'lucide-react';
-import { inventorySchema, type InventoryFormData } from '../../lib/validation/inventory.schema';
+import { inventorySchema } from '../../lib/validation/inventory.schema';
 
 interface InventoryItem {
     id: string;
@@ -148,7 +148,7 @@ export const Inventory: React.FC = () => {
                                             <FormItem>
                                                 <FormLabel>Initial Stock</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} />
+                                                    <Input type="number" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -161,7 +161,7 @@ export const Inventory: React.FC = () => {
                                             <FormItem>
                                                 <FormLabel>Min. Stock Level</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} />
+                                                    <Input type="number" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -175,7 +175,7 @@ export const Inventory: React.FC = () => {
                                         <FormItem>
                                             <FormLabel>Price (BWP)</FormLabel>
                                             <FormControl>
-                                                <Input type="number" step="0.01" {...field} />
+                                                <Input type="number" step="0.01" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>

@@ -72,7 +72,7 @@ export const DoctorScheduleManagement: React.FC = () => {
         }
     };
 
-    const onSubmit = async (data: { schedule: FullDoctorScheduleFormData }) => {
+    const onSubmit = async (data: FullDoctorScheduleFormData) => {
         try {
             setError(null);
             setSuccess(null);

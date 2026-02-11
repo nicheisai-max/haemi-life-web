@@ -25,7 +25,7 @@ export const BookAppointment: React.FC = () => {
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
-    const form = useForm<z.input<typeof bookAppointmentSchema>>({
+    const form = useForm<z.input<typeof bookAppointmentSchema>, any, BookAppointmentFormData>({
         resolver: zodResolver(bookAppointmentSchema),
         defaultValues: {
             doctor_id: '' as any,

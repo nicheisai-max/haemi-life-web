@@ -3,7 +3,7 @@ import { Button } from './button';
 import { GlassCard } from './GlassCard';
 import {
     MessageSquare, Send, X, Minus,
-    User, MoreVertical, Paperclip, Smile,
+    User, Paperclip, Smile,
     CheckCheck, ShieldCheck, Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

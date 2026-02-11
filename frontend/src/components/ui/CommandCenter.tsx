@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Badge } from './badge';
-import { motion } from 'framer-motion';
 
 export const CommandCenter: React.FC = () => {
     const [open, setOpen] = useState(false);

@@ -9,6 +9,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Video, ShieldCheck, AlertTriangle, MonitorPlay, Wifi, Lock, CheckCircle2, X } from 'lucide-react';
 import { telemedicineConsentSchema, type TelemedicineConsentFormData } from '../../lib/validation/legal.schema';
 
+import { SignaturePad } from '@/components/ui/SignaturePad';
+
 export const TelemedicineConsent: React.FC = () => {
     const navigate = useNavigate();
 
@@ -16,13 +18,18 @@ export const TelemedicineConsent: React.FC = () => {
         resolver: zodResolver(telemedicineConsentSchema),
         defaultValues: {
             accepted: false,
+            signature: '',
         },
     });
 
     const onSubmit = (data: TelemedicineConsentFormData) => {
-        if (data.accepted) {
+        if (data.accepted && data.signature) {
             // Store consent in localStorage
-            localStorage.setItem('telemedicine_consent', 'accepted');
+            localStorage.setItem('telemedicine_consent', JSON.stringify({
+                status: 'accepted',
+                signature: data.signature,
+                timestamp: new Date().toISOString()
+            }));
             // Navigate to video call or wherever needed
             navigate(-1);
         }
@@ -144,14 +151,14 @@ export const TelemedicineConsent: React.FC = () => {
                     </section>
 
                     <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                             <section className="bg-primary/5 border border-primary/20 rounded-lg p-6 md:p-8 space-y-6">
                                 <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
                                     <ShieldCheck className="h-5 w-5 text-primary" />
                                     Consent Declaration
                                 </h2>
                                 <p className="text-muted-foreground">
-                                    By checking the box below, I acknowledge that:
+                                    By checking the box below and providing your signature, I acknowledge that:
                                 </p>
                                 <ul className="list-disc pl-6 space-y-2 text-muted-foreground text-sm">
                                     <li>I have read and understood this consent form</li>
@@ -176,11 +183,30 @@ export const TelemedicineConsent: React.FC = () => {
                                                 <FormLabel className="text-sm font-medium leading-none cursor-pointer">
                                                     I have read, understood, and agree to the telemedicine consent terms
                                                 </FormLabel>
-                                                <p className="text-xs text-muted-foreground">
-                                                    You must accept these terms to proceed with the video consultation.
-                                                </p>
                                                 <FormMessage />
                                             </div>
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="signature"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Digital Signature</FormLabel>
+                                            <FormControl>
+                                                <SignaturePad
+                                                    onSave={(signature) => field.onChange(signature)}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                            {field.value && (
+                                                <p className="text-xs text-green-600 font-medium flex items-center gap-1 mt-2">
+                                                    <CheckCircle2 className="h-3 w-3" />
+                                                    Signature captured successfully
+                                                </p>
+                                            )}
                                         </FormItem>
                                     )}
                                 />
@@ -199,7 +225,7 @@ export const TelemedicineConsent: React.FC = () => {
                                 <Button
                                     type="submit"
                                     variant="default"
-                                    disabled={!form.watch('accepted')}
+                                    disabled={!form.watch('accepted') || !form.watch('signature')}
                                     className="flex items-center gap-2 sm:min-w-[200px]"
                                 >
                                     <CheckCircle2 className="h-4 w-4" />

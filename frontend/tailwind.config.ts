@@ -18,6 +18,9 @@ export default {
             },
         },
         extend: {
+            fontFamily: {
+                sans: ["Roboto", "sans-serif"],
+            },
             colors: {
                 border: "var(--border)",
                 input: "var(--input)",

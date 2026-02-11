@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getMyPrescriptions, type Prescription } from '../../services/prescription.service';
-import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, Eye } from 'lucide-react';
+import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2 } from 'lucide-react';
 
 export const Prescriptions: React.FC = () => {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
@@ -167,7 +167,7 @@ export const Prescriptions: React.FC = () => {
                                                 <div className="text-xs text-muted-foreground mb-1">Status</div>
                                                 <div className="flex items-center gap-1.5">
                                                     <BadgeCheck className={`h-3.5 w-3.5 ${selectedPrescription.status === 'filled' ? 'text-green-600' :
-                                                            selectedPrescription.status === 'pending' ? 'text-yellow-600' : 'text-red-600'
+                                                        selectedPrescription.status === 'pending' ? 'text-yellow-600' : 'text-red-600'
                                                         }`} />
                                                     <span className="text-sm font-medium capitalize">{selectedPrescription.status}</span>
                                                 </div>

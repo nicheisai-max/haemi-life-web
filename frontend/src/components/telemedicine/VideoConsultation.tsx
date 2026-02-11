@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
-import type { Socket } from 'socket.io-client';
 import Peer from 'simple-peer';
-import type { Instance } from 'simple-peer';
+import type { Instance, SignalData } from 'simple-peer';
 import { useAuth } from '../../context/AuthContext';
 import { CheckCircle2, Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
 
 const SOCKET_URL = 'http://localhost:5000';
+
+// Derive the socket type from the io function return type
+type SocketType = ReturnType<typeof io>;
 
 export const VideoConsultation: React.FC = () => {
     const { id: appointmentId } = useParams<{ id: string }>();
@@ -19,7 +21,7 @@ export const VideoConsultation: React.FC = () => {
     const [isVideoOff, setIsVideoOff] = useState(false);
     const [status, setStatus] = useState<'lobby' | 'connecting' | 'active' | 'ended'>('lobby');
 
-    const socketRef = useRef<any>(null);
+    const socketRef = useRef<SocketType | null>(null);
     const myVideo = useRef<HTMLVideoElement>(null);
     const userVideo = useRef<HTMLVideoElement>(null);
     const peerRef = useRef<Instance | null>(null);
@@ -53,25 +55,25 @@ export const VideoConsultation: React.FC = () => {
 
     const joinConsultation = () => {
         setStatus('connecting');
-        socketRef.current.emit('join-consultation', appointmentId);
+        socketRef.current?.emit('join-consultation', appointmentId);
 
-        socketRef.current.on('participant-joined', (participantId: string) => {
+        socketRef.current?.on('participant-joined', (participantId: string) => {
             // console.log("Other participant joined:", participantId);
             initiateCall(participantId);
         });
 
-        socketRef.current?.on('call-made', async ({ offer, socket: from }: { offer: any, socket: string }) => {
+        socketRef.current?.on('call-made', async ({ offer, socket: from }: { offer: SignalData, socket: string }) => {
             // console.log("Receiving call from:", from);
             answerCall(offer, from);
         });
 
-        socketRef.current?.on('answer-made', async ({ answer }: { answer: any }) => {
+        socketRef.current?.on('answer-made', async ({ answer }: { answer: SignalData }) => {
             // console.log("Call answered");
             await peerRef.current?.signal(answer);
             setStatus('active');
         });
 
-        socketRef.current?.on('ice-candidate', ({ candidate }: { candidate: any }) => {
+        socketRef.current?.on('ice-candidate', ({ candidate }: { candidate: SignalData }) => {
             if (peerRef.current) {
                 peerRef.current.signal(candidate);
             }
@@ -86,7 +88,7 @@ export const VideoConsultation: React.FC = () => {
         });
 
         peer.on('signal', (data) => {
-            socketRef.current.emit('call-user', { offer: data, to: participantId });
+            socketRef.current?.emit('call-user', { offer: data, to: participantId });
         });
 
         peer.on('stream', (remoteStream) => {
@@ -99,7 +101,7 @@ export const VideoConsultation: React.FC = () => {
         peerRef.current = peer;
     };
 
-    const answerCall = (offer: any, from: string) => {
+    const answerCall = (offer: SignalData, from: string) => {
         const peer = new Peer({
             initiator: false,
             trickle: false,
@@ -107,7 +109,7 @@ export const VideoConsultation: React.FC = () => {
         });
 
         peer.on('signal', (data) => {
-            socketRef.current.emit('make-answer', { answer: data, to: from });
+            socketRef.current?.emit('make-answer', { answer: data, to: from });
         });
 
         peer.on('stream', (remoteStream) => {
@@ -188,7 +190,7 @@ export const VideoConsultation: React.FC = () => {
                 {/* Local Video (PiP) */}
                 <div className="absolute top-4 right-4 md:top-6 md:right-6 w-32 h-24 md:w-60 md:h-40 rounded-lg overflow-hidden shadow-xl border-2 border-white/10 bg-slate-800 z-10">
                     <video playsInline muted ref={myVideo} autoPlay className="w-full h-full object-cover transform scale-x-[-1]" />
-                    <span className="absolute bottom-2 left-2 bg-black/50 px-2 py-0.5 rounded textxs font-medium backdrop-blur-sm">
+                    <span className="absolute bottom-2 left-2 bg-black/50 px-2 py-0.5 rounded text-xs font-medium backdrop-blur-sm">
                         {user?.name} (You)
                     </span>
                 </div>
