@@ -1,161 +1,151 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../context/AuthContext';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Logo } from '../../components/ui/Logo';
+import { AuthLayout } from '../../components/layout/AuthLayout';
+import { loginSchema, type LoginFormData } from '../../lib/validation/auth.schema';
 import loginBg from '../../assets/images/login_bg_premium.png';
-import './Login.css';
 
 export const Login: React.FC = () => {
     const navigate = useNavigate();
     const { login } = useAuth();
+    const [generalError, setGeneralError] = useState<string>('');
 
-    const [formData, setFormData] = useState({
-        emailOrPhone: '',
-        password: '',
+    const form = useForm<LoginFormData>({
+        resolver: zodResolver(loginSchema),
+        defaultValues: {
+            emailOrPhone: '',
+            password: '',
+        },
     });
 
-    const [errors, setErrors] = useState<{ emailOrPhone?: string; password?: string; general?: string }>({});
-    const [isLoading, setIsLoading] = useState(false);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        if (errors[name as keyof typeof errors]) {
-            setErrors(prev => ({ ...prev, [name]: undefined }));
-        }
-    };
-
-    const validateForm = () => {
-        const newErrors: typeof errors = {};
-
-        if (!formData.emailOrPhone.trim()) {
-            newErrors.emailOrPhone = 'Email or phone number is required';
-        }
-
-        if (!formData.password) {
-            newErrors.password = 'Password is required';
-        } else if (formData.password.length < 6) {
-            newErrors.password = 'Password must be at least 6 characters';
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!validateForm()) return;
-
-        setIsLoading(true);
-        setErrors({});
+    const onSubmit = async (data: LoginFormData) => {
+        setGeneralError('');
 
         try {
-            const isEmail = formData.emailOrPhone.includes('@');
+            const isEmail = data.emailOrPhone.includes('@');
             const credentials = {
                 ...(isEmail
-                    ? { email: formData.emailOrPhone }
-                    : { phone_number: formData.emailOrPhone }
+                    ? { email: data.emailOrPhone }
+                    : { phone_number: data.emailOrPhone }
                 ),
-                password: formData.password,
+                password: data.password,
             };
 
             await login(credentials);
             navigate('/dashboard');
         } catch (error: any) {
             console.error('Login failed:', error);
-            setErrors({
-                general: error.response?.data?.message || 'Login failed. Please check your credentials.',
-            });
-        } finally {
-            setIsLoading(false);
+            setGeneralError(
+                error.response?.data?.message || 'Login failed. Please check your credentials.'
+            );
         }
     };
 
     return (
-        <div className="login-page">
-            {/* Visual Section (Left) */}
-            <div className="login-visual">
-                <img src={loginBg} alt="Healthcare Background" className="login-bg-image" />
-                <div className="visual-content">
-                    <h2>Your Health, <br />Reimagined.</h2>
-                    <p>Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you.</p>
+        <AuthLayout
+            title={<>Your Health, <br />Reimagined.</>}
+            subtitle="Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you."
+            image={loginBg}
+        >
+            <div className="flex flex-col space-y-2 text-center">
+                <div className="flex justify-center mb-6">
+                    <Logo size="md" />
                 </div>
+                <h1 className="text-2xl font-semibold tracking-tight">Welcome Back</h1>
+                <p className="text-sm text-muted-foreground">Sign in to access your dashboard</p>
             </div>
 
-            {/* Form Section (Right) */}
-            <div className="login-form-container">
-                <div className="login-form-wrapper">
-                    <div className="login-header">
-                        <Logo size="md" className="mx-auto mb-6" />
-                        <h1>Welcome Back</h1>
-                        <p>Sign in to access your dashboard</p>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="login-form">
-                        {errors.general && (
-                            <div className="alert alert-error fade-in">
-                                {errors.general}
-                            </div>
+            <Form {...form}>
+                {generalError && (
+                    <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{generalError}</AlertDescription>
+                    </Alert>
+                )}
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                        control={form.control}
+                        name="emailOrPhone"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Email or Phone</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        placeholder="user@example.com"
+                                        className="bg-background h-11"
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
                         )}
+                    />
 
-                        <Input
-                            label="Email or Phone"
-                            name="emailOrPhone"
-                            type="text"
-                            placeholder="user@example.com"
-                            value={formData.emailOrPhone}
-                            onChange={handleChange}
-                            error={errors.emailOrPhone}
-                            fullWidth
-                            startIcon={<span className="material-icons-outlined">email</span>}
-                        />
+                    <FormField
+                        control={form.control}
+                        name="password"
+                        render={({ field }) => (
+                            <FormItem>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel>Password</FormLabel>
+                                    <Link
+                                        to="/forgot-password"
+                                        className="text-sm font-medium text-primary hover:text-primary/80 hover:underline px-0"
+                                    >
+                                        Forgot password?
+                                    </Link>
+                                </div>
+                                <FormControl>
+                                    <Input
+                                        type="password"
+                                        placeholder="Enter your password"
+                                        className="bg-background h-11"
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
 
-                        <Input
-                            label="Password"
-                            name="password"
-                            type="password"
-                            placeholder="Enter your password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            error={errors.password}
-                            fullWidth
-                            startIcon={<span className="material-icons-outlined">lock</span>}
-                        />
+                    <Button
+                        type="submit"
+                        className="w-full h-11 mt-2"
+                        size="lg"
+                        disabled={form.formState.isSubmitting}
+                    >
+                        {form.formState.isSubmitting ? 'Signing in...' : 'Sign In'}
+                    </Button>
+                </form>
+            </Form>
 
-                        <Button
-                            type="submit"
-                            fullWidth
-                            size="lg"
-                            isLoading={isLoading}
-                            variant="primary"
-                            rightIcon={<span className="material-icons-outlined">arrow_forward</span>}
-                        >
-                            Sign In
-                        </Button>
-
-                        <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
-                            <Link to="/forgot-password" style={{ color: 'var(--brand-primary)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: '500' }}>
-                                Forgot password?
-                            </Link>
-                        </div>
-                    </form>
-
-                    <div className="login-footer">
-                        <p>Don't have an account?</p>
-                        <Button
-                            variant="ghost"
-                            fullWidth
-                            onClick={() => navigate('/signup')}
-                            className="create-account-btn"
-                            size="md"
-                        >
-                            Create Account
-                        </Button>
-                    </div>
+            <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-muted" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or</span>
                 </div>
             </div>
-        </div>
+
+            <div className="text-center text-sm">
+                <span className="text-muted-foreground">Don't have an account? </span>
+                <Button
+                    variant="link"
+                    className="p-0 h-auto font-semibold text-primary hover:text-primary/80 hover:no-underline"
+                    onClick={() => navigate('/signup')}
+                >
+                    Create Account
+                </Button>
+            </div>
+        </AuthLayout>
     );
 };

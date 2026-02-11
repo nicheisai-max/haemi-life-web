@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../context/AuthContext';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { User, Stethoscope, Building2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Logo } from '../../components/ui/Logo';
+import { AuthLayout } from '../../components/layout/AuthLayout';
+import { signupSchema, type SignupFormData } from '../../lib/validation/auth.schema';
 import loginBg from '../../assets/images/login_bg_premium.png';
 import type { UserRole } from '../../types/auth.types';
-import './Signup.css';
 
 export const Signup: React.FC = () => {
     const navigate = useNavigate();
@@ -14,272 +20,277 @@ export const Signup: React.FC = () => {
 
     const [step, setStep] = useState<'role' | 'form'>('role');
     const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+    const [generalError, setGeneralError] = useState<string>('');
 
-    const [formData, setFormData] = useState({
-        name: '',
-        phone_number: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-        id_number: '', // Omang ID for patients
+    const form = useForm<SignupFormData>({
+        resolver: zodResolver(signupSchema),
+        defaultValues: {
+            name: '',
+            email: '',
+            phone_number: '',
+            omang_id: '',
+            password: '',
+            confirmPassword: '',
+            role: 'patient',
+        },
     });
-
-    const [errors, setErrors] = useState<Record<string, string>>({});
-    const [isLoading, setIsLoading] = useState(false);
 
     const handleRoleSelect = (role: UserRole) => {
         setSelectedRole(role);
+        form.setValue('role', role as any);
         setStep('form');
     };
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: '' }));
-        }
-    };
-
-    const validateForm = () => {
-        const newErrors: Record<string, string> = {};
-
-        if (!formData.name.trim()) newErrors.name = 'Name is required';
-        if (!formData.phone_number.trim()) newErrors.phone_number = 'Phone number is required';
-
-        if (!formData.password) {
-            newErrors.password = 'Password is required';
-        } else if (formData.password.length < 6) {
-            newErrors.password = 'Password must be at least 6 characters';
-        }
-
-        if (formData.password !== formData.confirmPassword) {
-            newErrors.confirmPassword = 'Passwords do not match';
-        }
-
-        // Role-specific validation
-        if (selectedRole === 'patient' && !formData.id_number.trim()) {
-            newErrors.id_number = 'Omang ID is required for patients';
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!validateForm() || !selectedRole) return;
-
-        setIsLoading(true);
-        setErrors({});
+    const onSubmit = async (data: SignupFormData) => {
+        setGeneralError('');
 
         try {
             await signup({
-                name: formData.name,
-                phone_number: formData.phone_number,
-                email: formData.email || undefined,
-                password: formData.password,
-                role: selectedRole,
-                id_number: formData.id_number || undefined,
+                name: data.name,
+                phone_number: data.phone_number,
+                email: data.email || undefined,
+                password: data.password,
+                role: data.role,
+                id_number: data.omang_id || undefined,
             });
 
-            // Auto-redirects after signup via AuthContext
             navigate('/dashboard');
         } catch (error: any) {
             console.error('Signup failed:', error);
-            setErrors({
-                general: error.response?.data?.message || 'Signup failed. Please try again.',
-            });
-        } finally {
-            setIsLoading(false);
+            setGeneralError(
+                error.response?.data?.message || 'Signup failed. Please try again.'
+            );
         }
     };
 
-    if (step === 'role') {
-        return (
-            <div className="signup-page">
-                {/* Visual Section (Left) - Matching Login */}
-                <div className="signup-visual">
-                    <img src={loginBg} alt="Healthcare Background" className="signup-bg-image" />
-                    <div className="visual-content">
-                        <h2>Join the <br />Healthcare Revolution.</h2>
-                        <p>Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you.</p>
-                    </div>
+    const content = step === 'role' ? (
+        <>
+            <div className="flex flex-col space-y-2 text-center">
+                <div className="flex justify-center mb-6">
+                    <Logo size="md" />
                 </div>
-
-                {/* Form Section (Right) - Full Bleed White */}
-                <div className="signup-form-container">
-                    <div className="signup-form-wrapper">
-                        <div className="signup-header">
-                            <Logo size="md" className="mx-auto mb-6" />
-                            <h1>Create Account</h1>
-                            <p>Choose your account type to get started</p>
-                        </div>
-
-                        <div className="role-selection-container">
-                            <div className="role-card" onClick={() => handleRoleSelect('patient')}>
-                                <div className="role-icon-wrapper">
-                                    <span className="material-icons-outlined">person_outline</span>
-                                </div>
-                                <div className="role-info">
-                                    <h3>Member</h3>
-                                    <p>Personal Health</p>
-                                </div>
-                            </div>
-
-                            <div className="role-card" onClick={() => handleRoleSelect('doctor')}>
-                                <div className="role-icon-wrapper">
-                                    <span className="material-icons-outlined">medical_services</span>
-                                </div>
-                                <div className="role-info">
-                                    <h3>Doctor</h3>
-                                    <p>Practice Admin</p>
-                                </div>
-                            </div>
-
-                            <div className="role-card" onClick={() => handleRoleSelect('pharmacist')}>
-                                <div className="role-icon-wrapper">
-                                    <span className="material-icons-outlined">local_pharmacy</span>
-                                </div>
-                                <div className="role-info">
-                                    <h3>Pharmacist</h3>
-                                    <p>Dispensary</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="signup-footer">
-                            <p>Already have an account?</p>
-                            <Button
-                                variant="ghost"
-                                fullWidth
-                                onClick={() => navigate('/login')}
-                                className="signin-link-btn"
-                                size="sm"
-                            >
-                                Sign In
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="signup-page">
-            <div className="signup-visual">
-                <img src={loginBg} alt="Healthcare Background" className="signup-bg-image" />
-                <div className="visual-content">
-                    <h2>Your Journey <br />Starts Here.</h2>
-                    <p>Secure, efficient, and centered around you.</p>
-                </div>
+                <h1 className="text-2xl font-semibold tracking-tight">Create Account</h1>
+                <p className="text-sm text-muted-foreground">Choose your account type to get started</p>
             </div>
 
-            <div className="signup-form-container">
-                <div className="signup-form-wrapper">
-                    <div className="signup-header">
-                        <Logo size="md" className="mx-auto mb-6" />
-                        <h1>
-                            Sign up as {selectedRole === 'patient' ? 'Patient' : selectedRole === 'doctor' ? 'Doctor' : 'Pharmacist'}
-                        </h1>
-                        <Button variant="ghost" size="sm" onClick={() => setStep('role')} className="mt-2">
-                            ← Change role
-                        </Button>
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <RoleCard
+                    icon={<User className="h-6 w-6" />}
+                    title="Member"
+                    description="Personal Health"
+                    onClick={() => handleRoleSelect('patient')}
+                />
+                <RoleCard
+                    icon={<Stethoscope className="h-6 w-6" />}
+                    title="Doctor"
+                    description="Practice Admin"
+                    onClick={() => handleRoleSelect('doctor')}
+                />
+                <RoleCard
+                    icon={<Building2 className="h-6 w-6" />}
+                    title="Pharmacist"
+                    description="Dispensary"
+                    onClick={() => handleRoleSelect('pharmacist')}
+                />
+            </div>
 
-                    <form onSubmit={handleSubmit} className="signup-form">
-                        {errors.general && (
-                            <div className="alert alert-error">
-                                {errors.general}
-                            </div>
-                        )}
+            <div className="text-center text-sm">
+                <span className="text-muted-foreground">Already have an account? </span>
+                <Button
+                    variant="link"
+                    className="p-0 h-auto font-semibold text-primary hover:text-primary/80 hover:no-underline"
+                    onClick={() => navigate('/login')}
+                >
+                    Sign In
+                </Button>
+            </div>
+        </>
+    ) : (
+        <>
+            <div className="flex flex-col space-y-2 text-center relative">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-0 top-0 -mt-2 h-8 w-8"
+                    onClick={() => setStep('role')}
+                >
+                    <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div className="flex justify-center mb-4">
+                    <Logo size="md" />
+                </div>
+                <h1 className="text-2xl font-semibold tracking-tight">
+                    Sign up as {selectedRole === 'patient' ? 'Patient' : selectedRole === 'doctor' ? 'Doctor' : 'Pharmacist'}
+                </h1>
+                <p className="text-sm text-muted-foreground">Create your account to continue</p>
+            </div>
 
-                        <div className="signup-grid">
-                            <Input
-                                label="Full Name"
-                                name="name"
-                                type="text"
-                                placeholder="Enter your full name"
-                                value={formData.name}
-                                onChange={handleChange}
-                                error={errors.name}
-                                fullWidth
-                            />
-
-                            <Input
-                                label="Phone Number"
-                                name="phone_number"
-                                type="tel"
-                                placeholder="+267 1234 5678"
-                                value={formData.phone_number}
-                                onChange={handleChange}
-                                error={errors.phone_number}
-                                fullWidth
-                            />
-                        </div>
-
-                        <Input
-                            label="Email (Optional)"
-                            name="email"
-                            type="email"
-                            placeholder="your.email@example.com"
-                            value={formData.email}
-                            onChange={handleChange}
-                            error={errors.email}
-                            fullWidth
+            <Form {...form}>
+                {generalError && (
+                    <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{generalError}</AlertDescription>
+                    </Alert>
+                )}
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                            control={form.control}
+                            name="name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Full Name</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            placeholder="Enter your full name"
+                                            className="bg-background h-10"
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
                         />
 
-                        {selectedRole === 'patient' && (
-                            <Input
-                                label="Omang ID"
-                                name="id_number"
-                                type="text"
-                                placeholder="Enter your Omang ID"
-                                value={formData.id_number}
-                                onChange={handleChange}
-                                error={errors.id_number}
-                                fullWidth
-                            />
+                        <FormField
+                            control={form.control}
+                            name="phone_number"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Phone Number</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="tel"
+                                            placeholder="+267 1234 5678"
+                                            className="bg-background h-10"
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+
+                    <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Email</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        type="email"
+                                        placeholder="your.email@example.com"
+                                        className="bg-background h-10"
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
                         )}
+                    />
 
-                        <div className="signup-grid">
-                            <Input
-                                label="Password"
-                                name="password"
-                                type="password"
-                                placeholder="Create a strong password"
-                                value={formData.password}
-                                onChange={handleChange}
-                                error={errors.password}
-                                fullWidth
-                            />
+                    {selectedRole === 'patient' && (
+                        <FormField
+                            control={form.control}
+                            name="omang_id"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Omang ID (Optional)</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            placeholder="Enter your Omang ID"
+                                            className="bg-background h-10"
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    )}
 
-                            <Input
-                                label="Confirm Password"
-                                name="confirmPassword"
-                                type="password"
-                                placeholder="Re-enter your password"
-                                value={formData.confirmPassword}
-                                onChange={handleChange}
-                                error={errors.confirmPassword}
-                                fullWidth
-                            />
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                            control={form.control}
+                            name="password"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Password</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="password"
+                                            placeholder="Create a strong password"
+                                            className="bg-background h-10"
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
-                        <Button
-                            type="submit"
-                            fullWidth
-                            size="lg"
-                            isLoading={isLoading}
-                            variant="primary"
-                            className="mt-4"
-                        >
-                            Create Account
-                        </Button>
-                    </form>
-                </div>
-            </div>
-        </div>
+                        <FormField
+                            control={form.control}
+                            name="confirmPassword"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Confirm Password</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="password"
+                                            placeholder="Re-enter your password"
+                                            className="bg-background h-10"
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+
+                    <Button
+                        type="submit"
+                        className="w-full h-11 mt-4"
+                        size="lg"
+                        disabled={form.formState.isSubmitting}
+                    >
+                        {form.formState.isSubmitting ? 'Creating account...' : 'Create Account'}
+                    </Button>
+                </form>
+            </Form>
+        </>
+    );
+
+    return (
+        <AuthLayout
+            title={<>{step === 'role' ? 'Join the Health Revolution.' : 'Your Journey Starts Here.'}</>}
+            subtitle="Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you."
+            image={loginBg}
+        >
+            {content}
+        </AuthLayout>
     );
 };
+
+interface RoleCardProps {
+    icon: React.ReactNode;
+    title: string;
+    description: string;
+    onClick: () => void;
+}
+
+const RoleCard: React.FC<RoleCardProps> = ({ icon, title, description, onClick }) => (
+    <div
+        onClick={onClick}
+        className="group relative flex flex-col items-start p-4 rounded-xl border border-input bg-background hover:bg-accent/5 hover:border-primary/50 transition-all cursor-pointer hover:shadow-md"
+    >
+        <div className="mb-3 p-2.5 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+            {icon}
+        </div>
+        <h3 className="font-semibold text-sm mb-1">{title}</h3>
+        <p className="text-xs text-muted-foreground">{description}</p>
+    </div>
+);

@@ -1,312 +1,351 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CheckCircle2, AlertCircle, ArrowLeft, KeyRound, Mail, ShieldCheck } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Logo } from '../../components/ui/Logo';
-import './ForgotPassword.css';
+import { AuthLayout } from '../../components/layout/AuthLayout';
+import { forgotPasswordSchema, type ForgotPasswordFormData } from '../../lib/validation/auth.schema';
+import loginBg from '../../assets/images/login_bg_premium.png';
 
 type Step = 'request' | 'verify' | 'reset' | 'success';
+
+// OTP schema for step 2
+const otpSchema = z.object({
+    otp: z.string().length(6, { message: 'Please enter a valid 6-digit code' }),
+});
+
+// Reset password schema for step 3
+const resetPasswordSchema = z.object({
+    password: z.string().min(8, { message: 'Password must be at least 8 characters' }),
+    confirmPassword: z.string().min(8, { message: 'Please confirm your password' }),
+}).refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+});
+
+type OtpFormData = z.infer<typeof otpSchema>;
+type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 export const ForgotPassword: React.FC = () => {
     const navigate = useNavigate();
     const [step, setStep] = useState<Step>('request');
-    const [identifier, setIdentifier] = useState('');
-    const [otp, setOtp] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [email, setEmail] = useState('');
     const [error, setError] = useState<string | null>(null);
-    const [otpResendTimer, setOtpResendTimer] = useState(0);
+    const [otpTimer, setOtpTimer] = useState(60);
+    const [canResend, setCanResend] = useState(false);
 
-    // Start OTP timer
-    const startOtpTimer = () => {
-        setOtpResendTimer(60);
-        const interval = setInterval(() => {
-            setOtpResendTimer((prev) => {
-                if (prev <= 1) {
-                    clearInterval(interval);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-    };
+    // Form for step 1: request password reset
+    const requestForm = useForm<ForgotPasswordFormData>({
+        resolver: zodResolver(forgotPasswordSchema),
+        defaultValues: { email: '' },
+    });
 
-    const handleRequestReset = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
-        setLoading(true);
+    // Form for step 2: verify OTP
+    const otpForm = useForm<OtpFormData>({
+        resolver: zodResolver(otpSchema),
+        defaultValues: { otp: '' },
+    });
 
+    // Form for step 3: reset password
+    const resetForm = useForm<ResetPasswordFormData>({
+        resolver: zodResolver(resetPasswordSchema),
+        defaultValues: { password: '', confirmPassword: '' },
+    });
+
+    // OTP timer countdown
+    useEffect(() => {
+        if (step === 'verify' && otpTimer > 0) {
+            const timer = setTimeout(() => setOtpTimer(otpTimer - 1), 1000);
+            return () => clearTimeout(timer);
+        } else if (otpTimer === 0) {
+            setCanResend(true);
+        }
+    }, [step, otpTimer]);
+
+    const handleRequestSubmit = async (data: ForgotPasswordFormData) => {
         try {
-            // TODO: Replace with actual API call
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            setError(null);
+            // TODO: Call API to send reset email/OTP
+            // await forgotPassword(data.email);
 
-            // Simulate API success
+            setEmail(data.email);
             setStep('verify');
-            startOtpTimer();
+            setOtpTimer(60);
+            setCanResend(false);
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to send reset code');
-        } finally {
-            setLoading(false);
         }
     };
 
-    const handleVerifyOtp = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
-
-        if (otp.length !== 6) {
-            setError('Please enter a valid 6-digit code');
-            return;
-        }
-
-        setLoading(true);
+    const handleOtpSubmit = async (_data: OtpFormData) => {
         try {
-            // TODO: Replace with actual API call
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            setError(null);
+            // TODO: Call API to verify OTP
+            // await verifyOTP(email, data.otp);
 
             setStep('reset');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Invalid verification code');
-        } finally {
-            setLoading(false);
         }
     };
 
-    const handleResetPassword = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
-
-        if (password.length < 8) {
-            setError('Password must be at least 8 characters');
-            return;
-        }
-
-        if (password !== confirmPassword) {
-            setError('Passwords do not match');
-            return;
-        }
-
-        setLoading(true);
+    const handleResetSubmit = async (_data: ResetPasswordFormData) => {
         try {
-            // TODO: Replace with actual API call
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            setError(null);
+            // TODO: Call API to reset password
+            // await resetPassword(email, data.password);
 
             setStep('success');
+            setTimeout(() => navigate('/login'), 3000);
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to reset password');
-        } finally {
-            setLoading(false);
         }
     };
 
     const handleResendOtp = async () => {
-        if (otpResendTimer > 0) return;
-
-        setLoading(true);
         try {
-            // TODO: Replace with actual API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            setError(null);
+            // TODO: Call API to resend OTP
+            // await forgotPassword(email);
 
-            startOtpTimer();
+            setOtpTimer(60);
+            setCanResend(false);
         } catch (err: any) {
-            setError('Failed to resend code');
-        } finally {
-            setLoading(false);
+            setError(err.response?.data?.message || 'Failed to resend code');
         }
     };
 
-    return (
-        <div className="forgot-password-container">
-            <div className="forgot-password-content">
-                <div className="forgot-password-header">
-                    <Logo size="xl" className="mx-auto" />
+    const renderContent = () => {
+        if (step === 'success') {
+            return (
+                <div className="flex flex-col items-center text-center space-y-6 animate-in fade-in zoom-in-95 duration-500">
+                    <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center text-green-600 dark:text-green-400 mb-2">
+                        <CheckCircle2 className="h-10 w-10" />
+                    </div>
+                    <div className="space-y-2">
+                        <h2 className="text-2xl font-bold tracking-tight">Password Reset Successful!</h2>
+                        <p className="text-muted-foreground">Your password has been successfully reset.</p>
+                    </div>
+                    <div className="p-4 bg-muted/30 rounded-lg w-full max-w-sm border border-muted">
+                        <p className="text-sm font-medium animate-pulse">Redirecting to login...</p>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <>
+                <div className="flex flex-col space-y-2 text-center relative">
+                    {step !== 'request' && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute left-0 top-0 -mt-2 h-8 w-8"
+                            onClick={() => setStep(step === 'verify' ? 'request' : 'verify')}
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                    )}
+                    <div className="flex justify-center mb-6">
+                        <Logo size="md" />
+                    </div>
+                    <h1 className="text-2xl font-semibold tracking-tight">
+                        {step === 'request' && 'Forgot Password'}
+                        {step === 'verify' && 'Verify Your Identity'}
+                        {step === 'reset' && 'Reset Password'}
+                    </h1>
+                    <p className="text-sm text-muted-foreground">
+                        {step === 'request' && "Enter your email address and we'll send you a verification code"}
+                        {step === 'verify' && `We sent a 6-digit code to ${email}`}
+                        {step === 'reset' && 'Create a new secure password for your account'}
+                    </p>
                 </div>
 
-                <Card className="forgot-password-card">
-                    {/* Request Reset */}
-                    {step === 'request' && (
-                        <div className="step-content fade-in">
-                            <div className="step-header">
-                                <h1>Reset Password</h1>
-                                <p>Enter your email or phone number to receive a verification code</p>
-                            </div>
+                {error && (
+                    <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                )}
 
-                            {error && (
-                                <div className="alert alert-error">
-                                    <span className="material-icons-outlined">error</span>
-                                    {error}
-                                </div>
-                            )}
-
-                            <form onSubmit={handleRequestReset}>
-                                <div className="form-group">
-                                    <label htmlFor="identifier">Email or Phone Number</label>
-                                    <input
-                                        id="identifier"
-                                        type="text"
-                                        value={identifier}
-                                        onChange={(e) => setIdentifier(e.target.value)}
-                                        placeholder="Enter your email or phone"
-                                        required
-                                        className="form-input"
-                                    />
-                                </div>
-
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    fullWidth
-                                    disabled={loading}
-                                >
-                                    {loading ? 'Sending...' : 'Send Verification Code'}
-                                </Button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/login')}
-                                    className="back-to-login"
-                                >
-                                    <span className="material-icons-outlined">arrow_back</span>
-                                    Back to Login
-                                </button>
-                            </form>
-                        </div>
-                    )}
-
-                    {/* Verify OTP */}
-                    {step === 'verify' && (
-                        <div className="step-content fade-in">
-                            <div className="step-header">
-                                <h1>Enter Verification Code</h1>
-                                <p>We sent a 6-digit code to <strong>{identifier}</strong></p>
-                            </div>
-
-                            {error && (
-                                <div className="alert alert-error">
-                                    <span className="material-icons-outlined">error</span>
-                                    {error}
-                                </div>
-                            )}
-
-                            <form onSubmit={handleVerifyOtp}>
-                                <div className="form-group">
-                                    <label htmlFor="otp">Verification Code</label>
-                                    <input
-                                        id="otp"
-                                        type="text"
-                                        value={otp}
-                                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                        placeholder="000000"
-                                        required
-                                        className="form-input otp-input"
-                                        maxLength={6}
-                                    />
-                                </div>
-
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    fullWidth
-                                    disabled={loading || otp.length !== 6}
-                                >
-                                    {loading ? 'Verifying...' : 'Verify Code'}
-                                </Button>
-
-                                <div className="resend-section">
-                                    {otpResendTimer > 0 ? (
-                                        <p className="resend-timer">Resend code in {otpResendTimer}s</p>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={handleResendOtp}
-                                            className="resend-btn"
-                                            disabled={loading}
-                                        >
-                                            Resend Code
-                                        </button>
-                                    )}
-                                </div>
-                            </form>
-                        </div>
-                    )}
-
-                    {/* Reset Password */}
-                    {step === 'reset' && (
-                        <div className="step-content fade-in">
-                            <div className="step-header">
-                                <h1>Create New Password</h1>
-                                <p>Choose a strong password for your account</p>
-                            </div>
-
-                            {error && (
-                                <div className="alert alert-error">
-                                    <span className="material-icons-outlined">error</span>
-                                    {error}
-                                </div>
-                            )}
-
-                            <form onSubmit={handleResetPassword}>
-                                <div className="form-group">
-                                    <label htmlFor="password">New Password</label>
-                                    <input
-                                        id="password"
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="Enter new password"
-                                        required
-                                        className="form-input"
-                                    />
-                                    <span className="field-hint">Minimum 8 characters</span>
-                                </div>
-
-                                <div className="form-group">
-                                    <label htmlFor="confirmPassword">Confirm Password</label>
-                                    <input
-                                        id="confirmPassword"
-                                        type="password"
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        placeholder="Confirm new password"
-                                        required
-                                        className="form-input"
-                                    />
-                                </div>
-
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    fullWidth
-                                    disabled={loading}
-                                >
-                                    {loading ? 'Resetting...' : 'Reset Password'}
-                                </Button>
-                            </form>
-                        </div>
-                    )}
-
-                    {/* Success */}
-                    {step === 'success' && (
-                        <div className="step-content success-content fade-in">
-                            <div className="success-icon">
-                                <span className="material-icons-outlined">check_circle</span>
-                            </div>
-                            <h1>Password Reset Successful!</h1>
-                            <p>Your password has been reset successfully. You can now log in with your new password.</p>
+                {step === 'request' && (
+                    <Form {...requestForm}>
+                        <form onSubmit={requestForm.handleSubmit(handleRequestSubmit)} className="space-y-4">
+                            <FormField
+                                control={requestForm.control}
+                                name="email"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Email Address</FormLabel>
+                                        <FormControl>
+                                            <div className="relative">
+                                                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    type="email"
+                                                    placeholder="Enter your email"
+                                                    className="pl-9 bg-background h-11"
+                                                    {...field}
+                                                />
+                                            </div>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
 
                             <Button
-                                variant="primary"
-                                fullWidth
-                                onClick={() => navigate('/login')}
-                                leftIcon={<span className="material-icons-outlined">login</span>}
+                                type="submit"
+                                className="w-full h-11 mt-2"
+                                size="lg"
+                                disabled={requestForm.formState.isSubmitting}
                             >
-                                Go to Login
+                                {requestForm.formState.isSubmitting ? 'Sending...' : 'Send Verification Code'}
                             </Button>
-                        </div>
-                    )}
-                </Card>
-            </div>
-        </div>
+
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className="w-full"
+                                onClick={() => navigate('/login')}
+                            >
+                                Back to Login
+                            </Button>
+                        </form>
+                    </Form>
+                )}
+
+                {step === 'verify' && (
+                    <Form {...otpForm}>
+                        <form onSubmit={otpForm.handleSubmit(handleOtpSubmit)} className="space-y-6">
+                            <FormField
+                                control={otpForm.control}
+                                name="otp"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormControl>
+                                            <div className="relative flex justify-center">
+                                                <Input
+                                                    type="text"
+                                                    placeholder="000000"
+                                                    maxLength={6}
+                                                    className="text-center text-3xl tracking-[1em] font-mono h-16 w-full max-w-[300px] bg-background"
+                                                    {...field}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value.replace(/\D/g, '');
+                                                        field.onChange(value);
+                                                    }}
+                                                />
+                                            </div>
+                                        </FormControl>
+                                        <FormMessage className="text-center" />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <div className="text-center text-sm">
+                                {canResend ? (
+                                    <Button
+                                        type="button"
+                                        variant="link"
+                                        onClick={handleResendOtp}
+                                        className="p-0 h-auto font-semibold text-primary"
+                                    >
+                                        Resend Code
+                                    </Button>
+                                ) : (
+                                    <span className="text-muted-foreground">
+                                        Resend code in <span className="font-mono font-medium text-foreground">{otpTimer}s</span>
+                                    </span>
+                                )}
+                            </div>
+
+                            <Button
+                                type="submit"
+                                className="w-full h-11"
+                                size="lg"
+                                disabled={otpForm.formState.isSubmitting}
+                            >
+                                {otpForm.formState.isSubmitting ? 'Verifying...' : 'Verify Code'}
+                            </Button>
+                        </form>
+                    </Form>
+                )}
+
+                {step === 'reset' && (
+                    <Form {...resetForm}>
+                        <form onSubmit={resetForm.handleSubmit(handleResetSubmit)} className="space-y-4">
+                            <FormField
+                                control={resetForm.control}
+                                name="password"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>New Password</FormLabel>
+                                        <FormControl>
+                                            <div className="relative">
+                                                <KeyRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    type="password"
+                                                    placeholder="Create new password"
+                                                    className="pl-9 bg-background h-11"
+                                                    {...field}
+                                                />
+                                            </div>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={resetForm.control}
+                                name="confirmPassword"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Confirm Password</FormLabel>
+                                        <FormControl>
+                                            <div className="relative">
+                                                <ShieldCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    type="password"
+                                                    placeholder="Confirm new password"
+                                                    className="pl-9 bg-background h-11"
+                                                    {...field}
+                                                />
+                                            </div>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <Button
+                                type="submit"
+                                className="w-full h-11 mt-2"
+                                size="lg"
+                                disabled={resetForm.formState.isSubmitting}
+                            >
+                                {resetForm.formState.isSubmitting ? 'Resetting...' : 'Reset Password'}
+                            </Button>
+                        </form>
+                    </Form>
+                )}
+            </>
+        );
+    };
+
+    return (
+        <AuthLayout
+            title={<>Secure Account <br />Recovery</>}
+            subtitle="We'll help you get back into your account securely."
+            image={loginBg}
+        >
+            {renderContent()}
+        </AuthLayout>
     );
 };

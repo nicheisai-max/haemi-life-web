@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { getDoctors, getSpecializations } from '../../services/doctor.service';
 import type { DoctorProfile } from '../../services/doctor.service';
-import './FindDoctors.css';
+import { AlertCircle, Search, SearchX, User, BadgeCheck, BadgeInfo, Briefcase, Info, Calendar, Loader2 } from 'lucide-react';
 
 export const FindDoctors: React.FC = () => {
     const navigate = useNavigate();
@@ -61,128 +65,144 @@ export const FindDoctors: React.FC = () => {
         setFilteredDoctors(filtered);
     };
 
-    const handleBookAppointment = (doctorId: string) => {
-        navigate(`/book-appointment?doctorId=${doctorId}`);
+    const handleBookAppointment = (doctorId: number) => {
+        navigate('/appointments/book', { state: { doctorId: doctorId.toString() } });
     };
 
     if (loading) {
         return (
-            <div className="find-doctors-container">
-                <Card style={{ padding: '2rem', textAlign: 'center' }}>
-                    <div className="loading-spinner">Finding doctors...</div>
-                </Card>
+            <div className="max-w-7xl mx-auto p-8 flex justify-center items-center min-h-[400px]">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-muted-foreground">Finding doctors...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="find-doctors-container fade-in">
-            <div className="page-header">
-                <h1>Find Doctors</h1>
-                <p>Search for verified healthcare professionals</p>
+        <div className="max-w-7xl mx-auto p-6 md:p-8 animate-in fade-in duration-500">
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Find Doctors</h1>
+                <p className="text-muted-foreground">Search for verified healthcare professionals and book appointments</p>
             </div>
 
             {error && (
-                <Card className="alert alert-error">
-                    <span className="material-icons-outlined">error</span>
-                    {error}
-                </Card>
+                <Alert variant="destructive" className="mb-6">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
             )}
 
             {/* Search and Filters */}
-            <Card className="search-card">
-                <div className="search-box">
-                    <span className="material-icons-outlined search-icon">search</span>
-                    <input
-                        type="text"
-                        placeholder="Search by name or specialization..."
-                        className="search-input"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
+            <Card className="mb-8">
+                <CardContent className="p-6">
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                type="text"
+                                placeholder="Search by name or specialization..."
+                                className="pl-10"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
 
-                <div className="filters">
-                    <select
-                        className="filter-select"
-                        value={selectedSpecialization}
-                        onChange={(e) => setSelectedSpecialization(e.target.value)}
-                    >
-                        <option value="all">All Specializations</option>
-                        {specializations.map(spec => (
-                            <option key={spec} value={spec}>{spec}</option>
-                        ))}
-                    </select>
-                </div>
+                        <div className="w-full md:w-[250px]">
+                            <Select
+                                value={selectedSpecialization}
+                                onValueChange={setSelectedSpecialization}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All Specializations" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Specializations</SelectItem>
+                                    {specializations.map(spec => (
+                                        <SelectItem key={spec} value={spec}>{spec}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </CardContent>
             </Card>
 
             {/* Results Count */}
-            <div className="results-header">
-                <p>{filteredDoctors.length} doctor{filteredDoctors.length !== 1 ? 's' : ''} found</p>
+            <div className="mb-6">
+                <p className="text-muted-foreground font-medium">{filteredDoctors.length} doctor{filteredDoctors.length !== 1 ? 's' : ''} found</p>
             </div>
 
             {/* Doctors Grid */}
-            <div className="doctors-grid">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredDoctors.length === 0 ? (
-                    <Card style={{ padding: '3rem', textAlign: 'center', gridColumn: '1 / -1' }}>
-                        <span className="material-icons-outlined" style={{ fontSize: '64px', opacity: 0.3 }}>search_off</span>
-                        <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>
-                            No doctors match your search criteria
+                    <Card className="col-span-full p-12 text-center flex flex-col items-center justify-center bg-muted/30 border-dashed">
+                        <div className="bg-muted p-4 rounded-full mb-4">
+                            <SearchX className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground">No doctors found</h3>
+                        <p className="text-muted-foreground mt-1 max-w-sm">
+                            We couldn't find any doctors matching your search criteria. Try adjusting your filters.
                         </p>
                     </Card>
                 ) : (
                     filteredDoctors.map((doctor) => (
-                        <Card key={doctor.id} className="doctor-card hover-lift">
-                            <div className="doctor-header">
-                                <div className="doctor-avatar">
-                                    <span className="material-icons-outlined">person</span>
+                        <Card key={doctor.id} className="group hover:shadow-lg transition-all duration-300 border-border/60 hover:border-primary/20">
+                            <CardHeader className="flex flex-row justify-between items-start pb-2">
+                                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary ring-4 ring-background shadow-sm">
+                                    <User className="h-8 w-8" />
                                 </div>
-                                <div className="doctor-badge">
-                                    <span className="material-icons-outlined">verified</span>
+                                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 gap-1.5 px-2.5 py-1">
+                                    <BadgeCheck className="h-3.5 w-3.5" />
                                     Verified
+                                </Badge>
+                            </CardHeader>
+
+                            <CardContent className="space-y-4">
+                                <div>
+                                    <h3 className="text-xl font-bold text-foreground mb-1 group-hover:text-primary transition-colors">{doctor.name}</h3>
+                                    <p className="text-sm font-medium text-primary">{doctor.specialization}</p>
                                 </div>
-                            </div>
 
-                            <div className="doctor-info">
-                                <h3>{doctor.name}</h3>
-                                <p className="specialization">{doctor.specialization}</p>
                                 {doctor.bio && (
-                                    <p className="bio">{doctor.bio.slice(0, 100)}{doctor.bio.length > 100 ? '...' : ''}</p>
+                                    <p className="text-sm text-muted-foreground line-clamp-2 min-h-[2.5rem]">
+                                        {doctor.bio}
+                                    </p>
                                 )}
-                            </div>
 
-                            <div className="doctor-details">
-                                {doctor.license_number && (
-                                    <div className="detail-item">
-                                        <span className="material-icons-outlined">badge</span>
-                                        <span>License {doctor.license_number}</span>
-                                    </div>
-                                )}
-                                {doctor.years_of_experience && (
-                                    <div className="detail-item">
-                                        <span className="material-icons-outlined">work</span>
-                                        <span>{doctor.years_of_experience} years exp.</span>
-                                    </div>
-                                )}
-                            </div>
+                                <div className="pt-4 border-t border-border/50 grid gap-3">
+                                    {doctor.license_number && (
+                                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                            <BadgeInfo className="h-4 w-4 shrink-0" />
+                                            <span>License: <span className="font-medium text-foreground">{doctor.license_number}</span></span>
+                                        </div>
+                                    )}
+                                    {doctor.years_of_experience && (
+                                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                            <Briefcase className="h-4 w-4 shrink-0" />
+                                            <span>Experience: <span className="font-medium text-foreground">{doctor.years_of_experience} years</span></span>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
 
-                            <div className="doctor-actions">
+                            <CardFooter className="flex flex-col gap-3 pt-2">
                                 <Button
                                     variant="outline"
-                                    fullWidth
-                                    leftIcon={<span className="material-icons-outlined">info</span>}
+                                    className="w-full justify-center group-hover:bg-primary/5 group-hover:text-primary group-hover:border-primary/20"
                                 >
+                                    <Info className="h-4 w-4 mr-2" />
                                     View Profile
                                 </Button>
                                 <Button
-                                    variant="primary"
-                                    fullWidth
-                                    leftIcon={<span className="material-icons-outlined">event</span>}
+                                    className="w-full justify-center shadow-sm group-hover:shadow-md transition-all"
                                     onClick={() => handleBookAppointment(doctor.id)}
                                 >
+                                    <Calendar className="h-4 w-4 mr-2" />
                                     Book Appointment
                                 </Button>
-                            </div>
+                            </CardFooter>
                         </Card>
                     ))
                 )}

@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { getDoctors, getAvailableSlots } from '../../services/doctor.service';
-import { bookAppointment } from '../../services/appointment.service';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { getDoctors } from '../../services/doctor.service';
+import { bookAppointment, getAvailableSlots } from '../../services/appointment.service';
+import { bookAppointmentSchema, type BookAppointmentFormData } from '../../lib/validation/appointment.schema';
 import type { DoctorProfile } from '../../services/doctor.service';
-import type { AvailableSlots } from '../../services/doctor.service';
-import './BookAppointment.css';
+import type { AvailableSlots } from '../../services/appointment.service';
+import { CheckCircle, AlertTriangle, User, Calendar, Clock, Loader2 } from 'lucide-react';
 
 export const BookAppointment: React.FC = () => {
     const navigate = useNavigate();
@@ -14,32 +20,39 @@ export const BookAppointment: React.FC = () => {
     const preselectedDoctorId = searchParams.get('doctorId');
 
     const [doctors, setDoctors] = useState<DoctorProfile[]>([]);
-    const [selectedDoctor, setSelectedDoctor] = useState<string>('');
-    const [appointmentDate, setAppointmentDate] = useState('');
-    const [appointmentTime, setAppointmentTime] = useState('');
-    const [reason, setReason] = useState('');
     const [availableSlots, setAvailableSlots] = useState<AvailableSlots | null>(null);
-
     const [loading, setLoading] = useState(true);
-    const [booking, setBooking] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+
+    const form = useForm<z.input<typeof bookAppointmentSchema>>({
+        resolver: zodResolver(bookAppointmentSchema),
+        defaultValues: {
+            doctor_id: '' as any,
+            appointment_date: '',
+            appointment_time: '',
+            reason: '',
+        },
+    });
+
+    const watchedDoctorId = form.watch('doctor_id');
+    const watchedDate = form.watch('appointment_date');
 
     useEffect(() => {
         fetchDoctors();
     }, []);
 
     useEffect(() => {
-        if (preselectedDoctorId) {
-            setSelectedDoctor(preselectedDoctorId);
+        if (preselectedDoctorId && doctors.length > 0) {
+            form.setValue('doctor_id', preselectedDoctorId);
         }
     }, [preselectedDoctorId, doctors]);
 
     useEffect(() => {
-        if (selectedDoctor && appointmentDate) {
+        if (watchedDoctorId && watchedDate) {
             fetchAvailableSlots();
         }
-    }, [selectedDoctor, appointmentDate]);
+    }, [watchedDoctorId, watchedDate]);
 
     const fetchDoctors = async () => {
         try {
@@ -47,7 +60,7 @@ export const BookAppointment: React.FC = () => {
             const data = await getDoctors();
             setDoctors(data);
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load doctors');
+            setGeneralError(err.response?.data?.message || 'Failed to load doctors');
         } finally {
             setLoading(false);
         }
@@ -55,7 +68,10 @@ export const BookAppointment: React.FC = () => {
 
     const fetchAvailableSlots = async () => {
         try {
-            const slots = await getAvailableSlots(selectedDoctor, appointmentDate);
+            const doctorId = parseInt(watchedDoctorId as unknown as string, 10);
+            if (isNaN(doctorId)) return;
+
+            const slots = await getAvailableSlots(doctorId, watchedDate);
             setAvailableSlots(slots);
         } catch (err: any) {
             console.error('Failed to fetch slots:', err);
@@ -63,37 +79,20 @@ export const BookAppointment: React.FC = () => {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!selectedDoctor || !appointmentDate || !appointmentTime || !reason) {
-            setError('Please fill in all fields');
-            return;
-        }
-
+    const onSubmit = async (data: BookAppointmentFormData) => {
         try {
-            setBooking(true);
-            setError(null);
-
-            await bookAppointment({
-                doctor_id: selectedDoctor,
-                appointment_date: appointmentDate,
-                appointment_time: appointmentTime,
-                reason: reason
-            });
-
+            setGeneralError(null);
+            await bookAppointment(data);
             setSuccess(true);
             setTimeout(() => {
                 navigate('/appointments');
             }, 2000);
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to book appointment');
-        } finally {
-            setBooking(false);
+            setGeneralError(err.response?.data?.message || 'Failed to book appointment');
         }
     };
 
-    const selectedDoctorData = doctors.find(d => d.id === selectedDoctor);
+    const selectedDoctorData = doctors.find(d => d.id === parseInt(watchedDoctorId?.toString() || '0', 10));
 
     // Generate next 14 days for date picker
     const getAvailableDates = () => {
@@ -109,179 +108,221 @@ export const BookAppointment: React.FC = () => {
 
     if (success) {
         return (
-            <div className="book-appointment-container">
-                <Card className="success-card">
-                    <span className="material-icons-outlined success-icon">check_circle</span>
-                    <h2>Appointment Booked!</h2>
-                    <p>Your appointment has been successfully scheduled.</p>
-                    <p className="redirect-text">Redirecting to appointments...</p>
+            <div className="container mx-auto p-4 md:p-8 max-w-7xl flex items-center justify-center min-h-[50vh]">
+                <Card className="p-12 text-center max-w-lg w-full">
+                    <CheckCircle className="h-20 w-20 text-green-500 mx-auto mb-6" />
+                    <h2 className="text-2xl font-bold text-foreground mb-2">Appointment Booked!</h2>
+                    <p className="text-muted-foreground mb-4">Your appointment has been successfully scheduled.</p>
+                    <p className="text-sm text-muted-foreground">Redirecting to appointments...</p>
                 </Card>
             </div>
         );
     }
 
     return (
-        <div className="book-appointment-container fade-in">
-            <div className="page-header">
-                <h1>Book Appointment</h1>
-                <p>Schedule a consultation with a healthcare professional</p>
+        <div className="container mx-auto p-4 md:p-8 max-w-7xl animate-in fade-in duration-500">
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold text-foreground mb-2">Book Appointment</h1>
+                <p className="text-muted-foreground text-lg">Schedule a consultation with a healthcare professional</p>
             </div>
 
-            {error && (
-                <Card className="alert alert-error">
-                    <span className="material-icons-outlined">error</span>
-                    {error}
-                </Card>
+            {generalError && (
+                <div className="bg-destructive/15 border border-destructive text-destructive p-4 rounded-lg flex items-center gap-3 mb-6">
+                    <AlertTriangle className="h-5 w-5" />
+                    {generalError}
+                </div>
             )}
 
-            <div className="booking-grid">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
                 {/* Booking Form */}
-                <Card className="booking-form-card">
-                    <h2>Appointment Details</h2>
+                <Card className="p-6 h-fit">
+                    <h2 className="text-xl font-semibold text-foreground mb-6 pb-4 border-b">Appointment Details</h2>
 
-                    <form onSubmit={handleSubmit} className="booking-form">
-                        <div className="form-group">
-                            <label htmlFor="doctor">Select Doctor *</label>
-                            <select
-                                id="doctor"
-                                className="form-select"
-                                value={selectedDoctor}
-                                onChange={(e) => setSelectedDoctor(e.target.value)}
-                                required
-                                disabled={loading}
-                            >
-                                <option value="">Choose a doctor...</option>
-                                {doctors.map(doctor => (
-                                    <option key={doctor.id} value={doctor.id}>
-                                        {doctor.name} - {doctor.specialization}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="date">Appointment Date *</label>
-                            <select
-                                id="date"
-                                className="form-select"
-                                value={appointmentDate}
-                                onChange={(e) => setAppointmentDate(e.target.value)}
-                                required
-                                disabled={!selectedDoctor}
-                            >
-                                <option value="">Select a date...</option>
-                                {getAvailableDates().map(date => (
-                                    <option key={date} value={date}>
-                                        {new Date(date).toLocaleDateString('en-US', {
-                                            weekday: 'long',
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric'
-                                        })}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="time">Appointment Time *</label>
-                            <select
-                                id="time"
-                                className="form-select"
-                                value={appointmentTime}
-                                onChange={(e) => setAppointmentTime(e.target.value)}
-                                required
-                                disabled={!appointmentDate}
-                            >
-                                <option value="">Select a time...</option>
-                                {availableSlots?.slots.map(slot => (
-                                    <option key={slot} value={slot}>
-                                        {new Date(`2000-01-01T${slot}`).toLocaleTimeString('en-US', {
-                                            hour: 'numeric',
-                                            minute: '2-digit',
-                                            hour12: true
-                                        })}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="reason">Reason for Visit *</label>
-                            <textarea
-                                id="reason"
-                                className="form-textarea"
-                                rows={4}
-                                placeholder="Describe your symptoms or reason for visit..."
-                                value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                                required
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                            <FormField
+                                control={form.control}
+                                name="doctor_id"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Select Doctor</FormLabel>
+                                        <Select
+                                            onValueChange={(value) => field.onChange(parseInt(value, 10))}
+                                            value={field.value?.toString() || ''}
+                                            disabled={loading}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Choose a doctor..." />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {doctors.map(doctor => (
+                                                    <SelectItem key={doctor.id} value={doctor.id.toString()}>
+                                                        {doctor.name} - {doctor.specialization}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
 
-                        <Button
-                            type="submit"
-                            variant="primary"
-                            fullWidth
-                            size="lg"
-                            disabled={booking}
-                            leftIcon={booking ? undefined : <span className="material-icons-outlined">event</span>}
-                        >
-                            {booking ? 'Booking...' : 'Book Appointment'}
-                        </Button>
-                    </form>
+                            <FormField
+                                control={form.control}
+                                name="appointment_date"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Appointment Date</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={!watchedDoctorId}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select a date..." />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {getAvailableDates().map(date => (
+                                                    <SelectItem key={date} value={date}>
+                                                        {new Date(date).toLocaleDateString('en-US', {
+                                                            weekday: 'long',
+                                                            year: 'numeric',
+                                                            month: 'long',
+                                                            day: 'numeric'
+                                                        })}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="appointment_time"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Appointment Time</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={!watchedDate}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select a time..." />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {availableSlots?.slots.map(slot => (
+                                                    <SelectItem key={slot} value={slot}>
+                                                        {new Date(`2000-01-01T${slot}`).toLocaleTimeString('en-US', {
+                                                            hour: 'numeric',
+                                                            minute: '2-digit',
+                                                            hour12: true
+                                                        })}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="reason"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Reason for Visit</FormLabel>
+                                        <FormControl>
+                                            <textarea
+                                                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                rows={4}
+                                                placeholder="Describe your symptoms or reason for visit..."
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <Button
+                                type="submit"
+                                className="w-full"
+                                size="lg"
+                                disabled={form.formState.isSubmitting}
+                            >
+                                {form.formState.isSubmitting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Booking...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Calendar className="mr-2 h-4 w-4" />
+                                        Book Appointment
+                                    </>
+                                )}
+                            </Button>
+                        </form>
+                    </Form>
                 </Card>
 
                 {/* Appointment Summary */}
                 {selectedDoctorData && (
-                    <Card className="summary-card">
-                        <h2>Appointment Summary</h2>
+                    <div className="space-y-6">
+                        <Card className="p-6 sticky top-24">
+                            <h2 className="text-lg font-semibold text-foreground mb-6 pb-4 border-b">Appointment Summary</h2>
 
-                        <div className="summary-section">
-                            <h3>Doctor</h3>
-                            <div className="doctor-summary">
-                                <div className="doctor-avatar-small">
-                                    <span className="material-icons-outlined">person</span>
-                                </div>
-                                <div>
-                                    <div className="doctor-name">{selectedDoctorData.name}</div>
-                                    <div className="doctor-spec">{selectedDoctorData.specialization}</div>
+                            <div className="mb-6 pb-6 border-b last:border-0 last:pb-0 last:mb-0">
+                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Doctor</h3>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                        <User className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <div className="font-semibold text-foreground">{selectedDoctorData.name}</div>
+                                        <div className="text-sm text-primary">{selectedDoctorData.specialization}</div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {appointmentDate && (
-                            <div className="summary-section">
-                                <h3>Date & Time</h3>
-                                <div className="summary-item">
-                                    <span className="material-icons-outlined">event</span>
-                                    <span>{new Date(appointmentDate).toLocaleDateString('en-US', {
-                                        weekday: 'short',
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                    })}</span>
-                                </div>
-                                {appointmentTime && (
-                                    <div className="summary-item">
-                                        <span className="material-icons-outlined">schedule</span>
-                                        <span>{new Date(`2000-01-01T${appointmentTime}`).toLocaleTimeString('en-US', {
-                                            hour: 'numeric',
-                                            minute: '2-digit',
-                                            hour12: true
+                            {watchedDate && (
+                                <div className="mb-6 pb-6 border-b last:border-0 last:pb-0 last:mb-0">
+                                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Date & Time</h3>
+                                    <div className="flex items-center gap-3 text-sm text-foreground mb-2">
+                                        <Calendar className="h-5 w-5 text-muted-foreground" />
+                                        <span>{new Date(watchedDate).toLocaleDateString('en-US', {
+                                            weekday: 'short',
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric'
                                         })}</span>
                                     </div>
-                                )}
-                            </div>
-                        )}
+                                    {form.watch('appointment_time') && (
+                                        <div className="flex items-center gap-3 text-sm text-foreground">
+                                            <Clock className="h-5 w-5 text-muted-foreground" />
+                                            <span>{new Date(`2000-01-01T${form.watch('appointment_time')}`).toLocaleTimeString('en-US', {
+                                                hour: 'numeric',
+                                                minute: '2-digit',
+                                                hour12: true
+                                            })}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
-                        {reason && (
-                            <div className="summary-section">
-                                <h3>Reason</h3>
-                                <p className="reason-text">{reason}</p>
-                            </div>
-                        )}
-                    </Card>
+                            {form.watch('reason') && (
+                                <div className="pt-2">
+                                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Reason</h3>
+                                    <p className="text-sm text-muted-foreground line-clamp-3">
+                                        {form.watch('reason')}
+                                    </p>
+                                </div>
+                            )}
+                        </Card>
+                    </div>
                 )}
             </div>
         </div>

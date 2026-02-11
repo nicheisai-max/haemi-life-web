@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { getMyPrescriptions } from '../../services/prescription.service';
-import type { Prescription } from '../../services/prescription.service';
-import { ListSkeleton } from '../../components/loaders/SkeletonLoader';
-import './Prescriptions.css';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { getMyPrescriptions, type Prescription } from '../../services/prescription.service';
+import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, Eye } from 'lucide-react';
 
 export const Prescriptions: React.FC = () => {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
@@ -28,78 +28,85 @@ export const Prescriptions: React.FC = () => {
         }
     };
 
-    const getStatusColor = (status: string) => {
+    const getStatusStyles = (status: string) => {
         switch (status) {
-            case 'pending': return 'status-pending';
-            case 'filled': return 'status-filled';
-            case 'cancelled': return 'status-cancelled';
-            default: return '';
+            case 'pending': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-900';
+            case 'filled': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-900';
+            case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-900';
+            default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
         }
     };
 
     if (loading) {
         return (
-            <div className="prescriptions-container">
-                <Card style={{ padding: '2rem' }}>
-                    <ListSkeleton items={5} />
-                </Card>
+            <div className="container mx-auto p-4 md:p-8 max-w-[1400px]">
+                <div className="mb-8">
+                    <Skeleton className="h-10 w-64 mb-2" />
+                    <Skeleton className="h-4 w-96" />
+                </div>
+                <div className="space-y-4">
+                    <Skeleton className="h-32 w-full" />
+                    <Skeleton className="h-32 w-full" />
+                    <Skeleton className="h-32 w-full" />
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="prescriptions-container fade-in">
-            <div className="page-header">
-                <div>
-                    <h1>My Prescriptions</h1>
-                    <p>View your prescription history and details</p>
-                </div>
+        <div className="container mx-auto p-4 md:p-8 max-w-[1400px] animate-in fade-in duration-500">
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold text-foreground mb-2">My Prescriptions</h1>
+                <p className="text-muted-foreground text-lg">View your prescription history and details</p>
             </div>
 
             {error && (
-                <Card className="alert alert-error">
-                    <span className="material-icons-outlined">error</span>
-                    {error}
-                </Card>
+                <Alert variant="destructive" className="mb-6">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
             )}
 
-            <div className="prescriptions-grid">
+            <div className={`grid grid-cols-1 ${selectedPrescription ? 'lg:grid-cols-[1fr_400px]' : ''} gap-8 transition-all duration-300`}>
                 {/* Prescriptions List */}
-                <div className="prescriptions-list">
+                <div className="space-y-4">
                     {prescriptions.length === 0 ? (
-                        <Card style={{ padding: '3rem', textAlign: 'center' }}>
-                            <span className="material-icons-outlined" style={{ fontSize: '64px', opacity: 0.3 }}>receipt_long</span>
-                            <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>
-                                No prescriptions found
-                            </p>
+                        <Card className="p-12 text-center flex flex-col items-center justify-center text-muted-foreground">
+                            <FileText className="h-16 w-16 opacity-30 mb-4" />
+                            <p>No prescriptions found</p>
                         </Card>
                     ) : (
                         prescriptions.map((prescription) => (
                             <Card
                                 key={prescription.id}
-                                className={`prescription-card hover-lift ${selectedPrescription?.id === prescription.id ? 'selected' : ''}`}
+                                className={`group p-0 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md border-2 ${selectedPrescription?.id === prescription.id ? 'border-primary ring-1 ring-primary/20' : 'border-transparent hover:border-border'}`}
                                 onClick={() => setSelectedPrescription(prescription)}
                             >
-                                <div className="prescription-header">
-                                    <div className="prescription-icon">
-                                        <span className="material-icons-outlined">medication</span>
+                                <div className="p-5 flex gap-5 items-start">
+                                    <div className="shrink-0 w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300">
+                                        <Pill className="h-7 w-7" />
                                     </div>
-                                    <div className="prescription-info">
-                                        <div className="prescription-title">
-                                            <h3>Dr. {prescription.doctor_name || 'Unknown'}</h3>
-                                            <span className={`status-badge ${getStatusColor(prescription.status)}`}>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                            <h3 className="text-lg font-semibold text-foreground truncate">
+                                                Dr. {prescription.doctor_name || 'Unknown'}
+                                            </h3>
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide border ${getStatusStyles(prescription.status)}`}>
                                                 {prescription.status}
                                             </span>
                                         </div>
-                                        <p className="prescription-date">
-                                            {new Date(prescription.created_at).toLocaleDateString('en-US', {
-                                                month: 'long',
-                                                day: 'numeric',
-                                                year: 'numeric'
-                                            })}
-                                        </p>
-                                        <div className="prescription-meta">
-                                            <span className="material-icons-outlined">medical_services</span>
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                                            <Calendar className="h-3.5 w-3.5" />
+                                            <span>
+                                                {new Date(prescription.created_at).toLocaleDateString('en-US', {
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                })}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-sm font-medium text-foreground/80">
+                                            <Stethoscope className="h-4 w-4 text-primary/70" />
                                             <span>{prescription.medication_count || 0} medication{(prescription.medication_count || 0) !== 1 ? 's' : ''}</span>
                                         </div>
                                     </div>
@@ -111,83 +118,99 @@ export const Prescriptions: React.FC = () => {
 
                 {/* Details Panel */}
                 {selectedPrescription && (
-                    <Card className="details-panel">
-                        <div className="details-header">
-                            <h2>Prescription Details</h2>
-                            <button className="close-btn" onClick={() => setSelectedPrescription(null)}>
-                                <span className="material-icons-outlined">close</span>
-                            </button>
-                        </div>
+                    <div className="relative">
+                        <div className="lg:sticky lg:top-24 h-fit bg-background lg:bg-transparent">
+                            {/* Mobile Overlay Background (Fixed) */}
+                            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSelectedPrescription(null)} />
 
-                        <div className="details-section">
-                            <h3>Doctor Information</h3>
-                            <div className="info-item">
-                                <span className="material-icons-outlined">person</span>
-                                <div>
-                                    <div className="info-label">Prescribing Doctor</div>
-                                    <div className="info-value">Dr. {selectedPrescription.doctor_name || 'Unknown'}</div>
+                            {/* Panel Content */}
+                            <Card className="fixed inset-x-0 bottom-0 z-50 rounded-t-xl border-t shadow-2xl lg:shadow-sm lg:border lg:rounded-xl lg:relative lg:inset-auto max-h-[85vh] lg:max-h-[calc(100vh-8rem)] flex flex-col overflow-hidden animate-in slide-in-from-bottom-full lg:slide-in-from-bottom-0 lg:fade-in duration-300">
+                                <div className="p-4 border-b flex items-center justify-between shrink-0 bg-muted/30">
+                                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-primary" />
+                                        Prescription Details
+                                    </h2>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setSelectedPrescription(null)}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
                                 </div>
-                            </div>
-                        </div>
 
-                        <div className="details-section">
-                            <h3>Prescription Details</h3>
-                            <div className="info-item">
-                                <span className="material-icons-outlined">event</span>
-                                <div>
-                                    <div className="info-label">Prescribed On</div>
-                                    <div className="info-value">
-                                        {new Date(selectedPrescription.created_at).toLocaleDateString('en-US', {
-                                            weekday: 'long',
-                                            month: 'long',
-                                            day: 'numeric',
-                                            year: 'numeric'
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="info-item">
-                                <span className="material-icons-outlined">verified</span>
-                                <div>
-                                    <div className="info-label">Status</div>
-                                    <div className="info-value" style={{ textTransform: 'capitalize' }}>
-                                        {selectedPrescription.status}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="details-section">
-                            <h3>Medications</h3>
-                            {selectedPrescription.medication_count && selectedPrescription.medication_count > 0 ? (
-                                <div className="medications-list">
-                                    <div className="medication-item">
-                                        <div className="medication-icon">
-                                            <span className="material-icons-outlined">local_pharmacy</span>
-                                        </div>
-                                        <div>
-                                            <div className="medication-name">{selectedPrescription.medication_count} medication(s) prescribed</div>
-                                            <div className="medication-note">View full details at pharmacy</div>
+                                <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+                                    <div className="space-y-3">
+                                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                            <User className="h-3.5 w-3.5" />
+                                            Doctor Information
+                                        </h3>
+                                        <div className="bg-muted/30 p-3 rounded-lg border">
+                                            <div className="text-sm font-medium text-foreground">Dr. {selectedPrescription.doctor_name || 'Unknown'}</div>
+                                            <div className="text-xs text-muted-foreground">Prescribing Physician</div>
                                         </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <p style={{ color: 'var(--text-muted)' }}>No medication details available</p>
-                            )}
-                        </div>
 
-                        {selectedPrescription.status === 'pending' && (
-                            <div className="details-actions">
-                                <Button
-                                    variant="primary"
-                                    fullWidth
-                                    leftIcon={<span className="material-icons-outlined">local_pharmacy</span>}
-                                >
-                                    Fill at Pharmacy
-                                </Button>
-                            </div>
-                        )}
-                    </Card>
+                                    <div className="space-y-3">
+                                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                            <Calendar className="h-3.5 w-3.5" />
+                                            Prescription Info
+                                        </h3>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="bg-muted/30 p-3 rounded-lg border">
+                                                <div className="text-xs text-muted-foreground mb-1">Prescribed On</div>
+                                                <div className="text-sm font-medium">
+                                                    {new Date(selectedPrescription.created_at).toLocaleDateString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        year: 'numeric'
+                                                    })}
+                                                </div>
+                                            </div>
+                                            <div className="bg-muted/30 p-3 rounded-lg border">
+                                                <div className="text-xs text-muted-foreground mb-1">Status</div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <BadgeCheck className={`h-3.5 w-3.5 ${selectedPrescription.status === 'filled' ? 'text-green-600' :
+                                                            selectedPrescription.status === 'pending' ? 'text-yellow-600' : 'text-red-600'
+                                                        }`} />
+                                                    <span className="text-sm font-medium capitalize">{selectedPrescription.status}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                            <Pill className="h-3.5 w-3.5" />
+                                            Medications
+                                        </h3>
+                                        {selectedPrescription.medication_count && selectedPrescription.medication_count > 0 ? (
+                                            <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 flex gap-3 items-start">
+                                                <div className="shrink-0 w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary mt-0.5">
+                                                    <Building2 className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-foreground">
+                                                        {selectedPrescription.medication_count} medication{(selectedPrescription.medication_count || 0) !== 1 ? 's' : ''} prescribed
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground mt-1">
+                                                        Full formulation details available at pharmacy
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">No medication details available</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {selectedPrescription.status === 'pending' && (
+                                    <div className="p-4 border-t bg-muted/10">
+                                        <Button className="w-full gap-2" size="lg">
+                                            <Building2 className="h-4 w-4" />
+                                            Fill at Pharmacy
+                                        </Button>
+                                    </div>
+                                )}
+                            </Card>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

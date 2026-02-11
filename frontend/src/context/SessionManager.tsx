@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { Button } from '../components/ui/Button';
-import './SessionManager.css';
+import { Button } from '../components/ui/button';
+import { Clock, RotateCw } from 'lucide-react';
+
 
 interface SessionManagerContextValue {
     extendSession: () => void;
@@ -19,7 +20,8 @@ interface SessionManagerProviderProps {
 
 const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 const WARNING_TIME = 2 * 60 * 1000; // Show warning 2 minutes before expiry
-const SESSION_DURATION = 60 * 60 * 1000; // 1 hour total session
+// Session duration constant moved or unused
+// const SESSION_DURATION = 60 * 60 * 1000; // 1 hour total session
 
 export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ children }) => {
     const { isAuthenticated, logout } = useAuth();
@@ -112,29 +114,33 @@ export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ 
             {children}
 
             {showWarning && (
-                <div className="session-warning-overlay">
-                    <div className="session-warning-modal">
-                        <span className="material-icons-outlined warning-icon">schedule</span>
-                        <h2>Session Expiring Soon</h2>
-                        <p>
-                            Your session will expire in <strong>{formatTime(countdown)}</strong> due to inactivity.
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-[90%] max-w-[400px] bg-background rounded-xl shadow-2xl p-6 text-center animate-in zoom-in-95 duration-200 border border-border">
+                        <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+                            <Clock className="h-8 w-8 text-amber-600 dark:text-amber-500" />
+                        </div>
+                        <h2 className="text-xl font-semibold mb-2 text-foreground">Session Expiring Soon</h2>
+                        <p className="text-muted-foreground mb-4">
+                            Your session will expire in <strong className="text-foreground">{formatTime(countdown)}</strong> due to inactivity.
                         </p>
-                        <p className="warning-subtext">
+                        <p className="text-sm text-muted-foreground/80 mb-6">
                             You will be automatically logged out for security reasons.
                         </p>
-                        <div className="warning-actions">
+                        <div className="flex flex-col sm:flex-row gap-3 justify-center">
                             <Button
                                 variant="outline"
                                 onClick={handleLogout}
+                                className="w-full sm:w-auto"
                             >
                                 Logout Now
                             </Button>
                             <Button
-                                variant="primary"
+                                variant="default"
                                 onClick={extendSession}
-                                leftIcon={<span className="material-icons-outlined">refresh</span>}
+                                className="w-full sm:w-auto flex items-center gap-2"
                             >
-                                Stay Logged In
+                                <RotateCw className="h-4 w-4" />
+                                Extend Session
                             </Button>
                         </div>
                     </div>

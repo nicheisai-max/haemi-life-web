@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { getPendingPrescriptions, updatePrescriptionStatus } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
-import './PrescriptionQueue.css';
+import { AlertCircle, X, CheckCircle2, AlertTriangle, Clock, Calendar, Pill, Check, Loader2 } from 'lucide-react';
 
 export const PrescriptionQueue: React.FC = () => {
-    const navigate = useNavigate();
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -29,10 +29,10 @@ export const PrescriptionQueue: React.FC = () => {
         }
     };
 
-    const handleFill = async (prescriptionId: string) => {
+    const handleFill = async (prescriptionId: number) => {
         try {
-            setProcessing(prescriptionId);
-            await updatePrescriptionStatus(prescriptionId, { status: 'filled' });
+            setProcessing(prescriptionId.toString());
+            await updatePrescriptionStatus(prescriptionId, 'filled');
             await fetchPrescriptions();
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to fill prescription');
@@ -41,12 +41,12 @@ export const PrescriptionQueue: React.FC = () => {
         }
     };
 
-    const handleReject = async (prescriptionId: string) => {
+    const handleReject = async (prescriptionId: number) => {
         if (!confirm('Are you sure you want to reject this prescription?')) return;
 
         try {
-            setProcessing(prescriptionId);
-            await updatePrescriptionStatus(prescriptionId, { status: 'cancelled' });
+            setProcessing(prescriptionId.toString());
+            await updatePrescriptionStatus(prescriptionId, 'cancelled');
             await fetchPrescriptions();
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to reject prescription');
@@ -57,103 +57,124 @@ export const PrescriptionQueue: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="queue-container">
-                <Card style={{ padding: '2rem', textAlign: 'center' }}>
-                    <div className="loading-spinner">Loading queue...</div>
-                </Card>
+            <div className="max-w-7xl mx-auto p-8 flex justify-center items-center min-h-[400px]">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-muted-foreground">Loading queue...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="queue-container fade-in">
-            <div className="page-header">
+        <div className="max-w-7xl mx-auto p-6 md:p-8 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
                 <div>
-                    <h1>Prescription Queue</h1>
-                    <p>Process pending prescription orders</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Prescription Queue</h1>
+                    <p className="text-muted-foreground">Process pending prescription orders</p>
                 </div>
-                <div className="queue-stats">
-                    <div className="stat-badge">
-                        <span className="stat-value">{prescriptions.length}</span>
-                        <span className="stat-label">Pending</span>
-                    </div>
+                <div className="flex bg-primary/10 rounded-lg p-4 items-center gap-3">
+                    <div className="text-2xl font-bold text-primary leading-none">{prescriptions.length}</div>
+                    <div className="text-sm font-medium text-muted-foreground">Pending Orders</div>
                 </div>
             </div>
 
             {error && (
-                <Card className="alert alert-error">
-                    <span className="material-icons-outlined">error</span>
-                    {error}
-                    <button className="alert-close" onClick={() => setError(null)}>
-                        <span className="material-icons-outlined">close</span>
-                    </button>
-                </Card>
+                <Alert variant="destructive" className="mb-6 relative">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-2 top-2 h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setError(null)}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                </Alert>
             )}
 
-            <div className="queue-list">
+            <div className="grid gap-4">
                 {prescriptions.length === 0 ? (
-                    <Card style={{ padding: '3rem', textAlign: 'center' }}>
-                        <span className="material-icons-outlined" style={{ fontSize: '64px', opacity: 0.3, color: 'var(--color-success)' }}>check_circle</span>
-                        <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>
-                            All caught up! No pending prescriptions.
+                    <Card className="p-12 text-center flex flex-col items-center justify-center bg-muted/30 border-dashed">
+                        <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-full mb-4 text-green-600 dark:text-green-400">
+                            <CheckCircle2 className="h-8 w-8" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground">All caught up!</h3>
+                        <p className="text-muted-foreground mt-1">
+                            No pending prescriptions to process.
                         </p>
                     </Card>
                 ) : (
                     prescriptions.map((prescription) => (
-                        <Card key={prescription.id} className="queue-card hover-lift">
-                            <div className="queue-header">
-                                <div className="priority-indicator">
-                                    <span className="material-icons-outlined">priority_high</span>
-                                </div>
-                                <div className="queue-info">
-                                    <div className="queue-title">
-                                        <h3>Patient: {prescription.patient_name || 'Unknown'}</h3>
-                                        <span className="time-badge">
-                                            <span className="material-icons-outlined">schedule</span>
-                                            {new Date(prescription.created_at).toLocaleTimeString('en-US', {
-                                                hour: 'numeric',
-                                                minute: '2-digit',
-                                                hour12: true
-                                            })}
-                                        </span>
+                        <Card key={prescription.id} className="group hover:shadow-lg transition-all duration-300 border-border/60 hover:border-primary/20">
+                            <CardContent className="p-6">
+                                <div className="flex flex-col md:flex-row gap-5 items-start">
+                                    <div className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-lg bg-orange-100 dark:bg-orange-900/30 items-center justify-center text-orange-600 dark:text-orange-400">
+                                        <AlertTriangle className="h-6 w-6" />
                                     </div>
-                                    <p className="queue-doctor">Prescribed by: Dr. {prescription.doctor_name || 'Unknown'}</p>
-                                    <div className="queue-meta">
-                                        <div className="meta-item">
-                                            <span className="material-icons-outlined">event</span>
-                                            <span>{new Date(prescription.created_at).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                year: 'numeric'
-                                            })}</span>
+
+                                    <div className="flex-1 space-y-3 w-full">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <div className="flex md:hidden flex-shrink-0 w-8 h-8 rounded-md bg-orange-100 dark:bg-orange-900/30 items-center justify-center text-orange-600 dark:text-orange-400">
+                                                <AlertTriangle className="h-4 w-4" />
+                                            </div>
+                                            <h3 className="text-lg font-semibold text-foreground">Patient: {prescription.patient_name || 'Unknown'}</h3>
+                                            <Badge variant="secondary" className="flex items-center gap-1.5 font-normal ml-auto md:ml-0">
+                                                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                                {new Date(prescription.created_at).toLocaleTimeString('en-US', {
+                                                    hour: 'numeric',
+                                                    minute: '2-digit',
+                                                    hour12: true
+                                                })}
+                                            </Badge>
                                         </div>
-                                        <div className="meta-item">
-                                            <span className="material-icons-outlined">medication</span>
-                                            <span>{prescription.medication_count || 0} item(s)</span>
+
+                                        <p className="text-sm text-muted-foreground">Prescribed by: <span className="font-medium text-foreground">Dr. {prescription.doctor_name || 'Unknown'}</span></p>
+
+                                        <div className="flex flex-wrap gap-4 pt-1">
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
+                                                <Calendar className="h-4 w-4 text-primary" />
+                                                <span>{new Date(prescription.created_at).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                })}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
+                                                <Pill className="h-4 w-4 text-primary" />
+                                                <span>{prescription.medication_count || 0} item(s)</span>
+                                            </div>
                                         </div>
                                     </div>
+
+                                    <div className="flex md:flex-col gap-3 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-0 border-border/50">
+                                        <Button
+                                            size="sm"
+                                            onClick={() => handleFill(prescription.id)}
+                                            disabled={processing === prescription.id.toString()}
+                                            className="flex-1 md:w-full justify-center shadow-sm"
+                                        >
+                                            {processing === prescription.id.toString() ? (
+                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            ) : (
+                                                <Check className="h-4 w-4 mr-2" />
+                                            )}
+                                            Fill
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleReject(prescription.id)}
+                                            disabled={processing === prescription.id.toString()}
+                                            className="flex-1 md:w-full justify-center hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                                        >
+                                            <X className="h-4 w-4 mr-2" />
+                                            Reject
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="queue-actions">
-                                    <Button
-                                        variant="primary"
-                                        size="sm"
-                                        onClick={() => handleFill(prescription.id)}
-                                        disabled={processing === prescription.id}
-                                        leftIcon={<span className="material-icons-outlined">check</span>}
-                                    >
-                                        Fill
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleReject(prescription.id)}
-                                        disabled={processing === prescription.id}
-                                        leftIcon={<span className="material-icons-outlined">close</span>}
-                                    >
-                                        Reject
-                                    </Button>
-                                </div>
-                            </div>
+                            </CardContent>
                         </Card>
                     ))
                 )}

@@ -6,7 +6,7 @@ import { ToastProvider } from './context/ToastContext';
 import { NetworkStatusProvider } from './context/NetworkStatus';
 import { SessionManagerProvider } from './context/SessionManager';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
-import { SkeletonLoader } from './components/loaders/SkeletonLoader';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 
 // Lazy loaded pages
@@ -39,8 +39,12 @@ const VideoConsultation = lazy(() => import('./components/telemedicine/VideoCons
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound })));
 
 const LoadingFallback = () => (
-  <div style={{ height: '100vh', padding: '2rem' }}>
-    <SkeletonLoader variant="card" />
+  <div className="h-screen p-8 space-y-4">
+    <Skeleton className="h-48 w-full rounded-xl" />
+    <div className="space-y-2">
+      <Skeleton className="h-4 w-[250px]" />
+      <Skeleton className="h-4 w-[200px]" />
+    </div>
   </div>
 );
 
@@ -77,165 +81,205 @@ const RoleBasedDashboard: React.FC = () => {
   }
 };
 
+import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
+
+const pageVariants = {
+  initial: { opacity: 0, x: 10 },
+  animate: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -10 },
+};
+
 const AppRoutes = () => {
+  const location = useLocation();
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <Routes>
-        <Route path="/style-guide" element={<StyleGuide />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<TermsOfService />} />
-        <Route path="/help" element={<Help />} />
-        <Route path="/consent" element={<TelemedicineConsent />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route
-          path="/dashboard/*"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <RoleBasedDashboard />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Profile />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Settings />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/find-doctors"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <FindDoctors />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/book-appointment"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <BookAppointment />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/appointments"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Appointments />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/prescriptions"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Prescriptions />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/records"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <MedicalRecords />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/doctor/schedule"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <DoctorScheduleManagement />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/pharmacist/queue"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <PrescriptionQueue />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/pharmacist/inventory"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Inventory />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/verify-doctors"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <VerifyDoctors />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/users"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <UserManagement />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultation/:id"
-          element={
-            <ProtectedRoute>
-              <Suspense fallback={<LoadingFallback />}>
-                <VideoConsultation />
-              </Suspense>
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route path="/style-guide" element={<StyleGuide />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/help" element={<Help />} />
+          <Route path="/consent" element={<TelemedicineConsent />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route
+            path="/dashboard/*"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <RoleBasedDashboard />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <Profile />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <Settings />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/find-doctors"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <FindDoctors />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/book-appointment"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <BookAppointment />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/appointments"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <Appointments />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/prescriptions"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <Prescriptions />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/records"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <MedicalRecords />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/schedule"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <DoctorScheduleManagement />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pharmacist/queue"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PrescriptionQueue />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pharmacist/inventory"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <Inventory />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/verify-doctors"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <VerifyDoctors />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <UserManagement />
+                  </motion.div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/consultation/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<LoadingFallback />}>
+                  <VideoConsultation />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}><NotFound /></motion.div>} />
+        </Routes>
+      </AnimatePresence>
     </Suspense>
   );
 };
+
+import { LanguageProvider } from './context/LanguageContext';
 
 const App: React.FC = () => {
   return (
@@ -245,9 +289,11 @@ const App: React.FC = () => {
           <ToastProvider>
             <NetworkStatusProvider>
               <SessionManagerProvider>
-                <Router>
-                  <AppRoutes />
-                </Router>
+                <LanguageProvider>
+                  <Router>
+                    <AppRoutes />
+                  </Router>
+                </LanguageProvider>
               </SessionManagerProvider>
             </NetworkStatusProvider>
           </ToastProvider>

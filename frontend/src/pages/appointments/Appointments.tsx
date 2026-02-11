@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getMyAppointments, cancelAppointment, updateAppointmentStatus } from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
-import './Appointments.css';
+import { Plus, AlertCircle, CalendarX, Clock, Calendar } from 'lucide-react';
 
 export const Appointments: React.FC = () => {
     const { user } = useAuth();
@@ -53,7 +54,7 @@ export const Appointments: React.FC = () => {
         setFilteredAppointments(filtered);
     };
 
-    const handleCancel = async (appointmentId: string) => {
+    const handleCancel = async (appointmentId: number) => {
         if (!confirm('Are you sure you want to cancel this appointment?')) return;
 
         try {
@@ -64,9 +65,9 @@ export const Appointments: React.FC = () => {
         }
     };
 
-    const handleComplete = async (appointmentId: string) => {
+    const handleComplete = async (appointmentId: number) => {
         try {
-            await updateAppointmentStatus(appointmentId, { status: 'completed' });
+            await updateAppointmentStatus(appointmentId, 'completed');
             await fetchAppointments();
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to update appointment');
@@ -75,66 +76,73 @@ export const Appointments: React.FC = () => {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'scheduled': return 'status-scheduled';
-            case 'completed': return 'status-completed';
-            case 'cancelled': return 'status-cancelled';
-            case 'no-show': return 'status-noshow';
-            default: return '';
+            case 'scheduled': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+            case 'completed': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+            case 'cancelled': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+            case 'no-show': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+            default: return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
         }
     };
 
     if (loading) {
         return (
-            <div className="appointments-container">
-                <Card style={{ padding: '2rem', textAlign: 'center' }}>
-                    <div className="loading-spinner">Loading appointments...</div>
+            <div className="max-w-7xl mx-auto p-6 md:p-8">
+                <Card className="p-8 text-center">
+                    <div className="text-muted-foreground animate-pulse">Loading appointments...</div>
                 </Card>
             </div>
         );
     }
 
     return (
-        <div className="appointments-container fade-in">
-            <div className="page-header">
+        <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1>My Appointments</h1>
-                    <p>View and manage your appointments</p>
+                    <h1 className="text-3xl font-bold tracking-tight">My Appointments</h1>
+                    <p className="text-muted-foreground mt-1">View and manage your appointments</p>
                 </div>
                 <Button
-                    variant="primary"
-                    leftIcon={<span className="material-icons-outlined">add</span>}
+                    variant="default"
+                    className="flex items-center gap-2"
                     onClick={() => window.location.href = '/book-appointment'}
                 >
+                    <Plus className="h-5 w-5" />
                     Book New
                 </Button>
             </div>
 
             {error && (
-                <Card className="alert alert-error">
-                    <span className="material-icons-outlined">error</span>
-                    {error}
-                    <button className="alert-close" onClick={() => setError(null)}>
-                        <span className="material-icons-outlined">close</span>
-                    </button>
-                </Card>
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
             )}
 
             {/* Filters */}
-            <div className="filters-bar">
+            <div className="flex flex-wrap gap-3 p-2 bg-muted/50 rounded-lg border">
                 <button
-                    className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'all'
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        }`}
                     onClick={() => setFilter('all')}
                 >
                     All ({appointments.length})
                 </button>
                 <button
-                    className={`filter-btn ${filter === 'upcoming' ? 'active' : ''}`}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'upcoming'
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        }`}
                     onClick={() => setFilter('upcoming')}
                 >
                     Upcoming ({appointments.filter(a => new Date(a.appointment_date) >= new Date() && a.status !== 'cancelled').length})
                 </button>
                 <button
-                    className={`filter-btn ${filter === 'past' ? 'active' : ''}`}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'past'
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        }`}
                     onClick={() => setFilter('past')}
                 >
                     Past ({appointments.filter(a => new Date(a.appointment_date) < new Date() || a.status === 'completed' || a.status === 'cancelled').length})
@@ -142,82 +150,92 @@ export const Appointments: React.FC = () => {
             </div>
 
             {/* Appointments List */}
-            <div className="appointments-list">
+            <div className="grid gap-4">
                 {filteredAppointments.length === 0 ? (
-                    <Card style={{ padding: '3rem', textAlign: 'center' }}>
-                        <span className="material-icons-outlined" style={{ fontSize: '64px', opacity: 0.3 }}>event_busy</span>
-                        <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>
+                    <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                        <CalendarX className="h-16 w-16 text-muted-foreground/30" />
+                        <p className="text-muted-foreground text-lg">
                             No {filter === 'all' ? '' : filter} appointments found
                         </p>
                         <Button
-                            variant="primary"
+                            variant="default"
                             onClick={() => window.location.href = '/book-appointment'}
-                            style={{ marginTop: '1rem' }}
+                            className="mt-4"
                         >
                             Book Your First Appointment
                         </Button>
                     </Card>
                 ) : (
                     filteredAppointments.map((appointment) => (
-                        <Card key={appointment.id} className="appointment-card hover-lift">
-                            <div className="appointment-header">
-                                <div className="appointment-date-badge">
-                                    <div className="date-day">
+                        <Card key={appointment.id} className="group hover:shadow-md transition-all duration-200">
+                            <div className="p-6 flex flex-col md:flex-row gap-6">
+                                {/* Date Badge */}
+                                <div className="flex-shrink-0 w-16 h-16 bg-primary/10 rounded-xl flex flex-col items-center justify-center text-primary border border-primary/20">
+                                    <span className="text-2xl font-bold leading-none">
                                         {new Date(appointment.appointment_date).getDate()}
-                                    </div>
-                                    <div className="date-month">
+                                    </span>
+                                    <span className="text-xs font-semibold uppercase mt-1">
                                         {new Date(appointment.appointment_date).toLocaleDateString('en-US', { month: 'short' })}
-                                    </div>
+                                    </span>
                                 </div>
 
-                                <div className="appointment-main">
-                                    <div className="appointment-title">
-                                        <h3>{user?.role === 'doctor' ? appointment.other_party_name || 'Patient' : `Dr. ${appointment.other_party_name}` || 'Doctor'}</h3>
-                                        <span className={`status-badge ${getStatusColor(appointment.status)}`}>
-                                            {appointment.status}
-                                        </span>
+                                {/* Main Content */}
+                                <div className="flex-1 space-y-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div className="space-y-1">
+                                            <h3 className="font-semibold text-lg flex items-center gap-3">
+                                                {user?.role === 'doctor' ? appointment.other_party_name || 'Patient' : `Dr. ${appointment.other_party_name}` || 'Doctor'}
+                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getStatusColor(appointment.status)}`}>
+                                                    {appointment.status}
+                                                </span>
+                                            </h3>
+                                            <p className="text-muted-foreground">{appointment.reason}</p>
+                                        </div>
+
+                                        {/* Actions for Desktop (and Mobile wrapped) */}
+                                        <div className="flex flex-row sm:flex-col md:flex-row gap-3">
+                                            {appointment.status === 'scheduled' && user?.role === 'doctor' && (
+                                                <Button
+                                                    variant="default"
+                                                    size="sm"
+                                                    onClick={() => handleComplete(appointment.id)}
+                                                >
+                                                    Mark Complete
+                                                </Button>
+                                            )}
+                                            {appointment.status === 'scheduled' && new Date(appointment.appointment_date) > new Date() && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleCancel(appointment.id)}
+                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <p className="appointment-reason">{appointment.reason}</p>
-                                    <div className="appointment-details">
-                                        <div className="detail-item">
-                                            <span className="material-icons-outlined">schedule</span>
+
+                                    {/* Details Grid */}
+                                    <div className="flex flex-wrap gap-6 text-sm text-muted-foreground pt-2 border-t border-border/50">
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-4 w-4 text-primary/60" />
                                             <span>{new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', {
                                                 hour: 'numeric',
                                                 minute: '2-digit',
                                                 hour12: true
                                             })}</span>
                                         </div>
-                                        <div className="detail-item">
-                                            <span className="material-icons-outlined">event</span>
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="h-4 w-4 text-primary/60" />
                                             <span>{new Date(appointment.appointment_date).toLocaleDateString('en-US', {
-                                                weekday: 'short',
-                                                month: 'short',
+                                                weekday: 'long',
+                                                month: 'long',
                                                 day: 'numeric',
                                                 year: 'numeric'
                                             })}</span>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div className="appointment-actions">
-                                    {appointment.status === 'scheduled' && user?.role === 'doctor' && (
-                                        <Button
-                                            variant="primary"
-                                            size="sm"
-                                            onClick={() => handleComplete(appointment.id)}
-                                        >
-                                            Mark Complete
-                                        </Button>
-                                    )}
-                                    {appointment.status === 'scheduled' && new Date(appointment.appointment_date) > new Date() && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleCancel(appointment.id)}
-                                        >
-                                            Cancel
-                                        </Button>
-                                    )}
                                 </div>
                             </div>
                         </Card>

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import './Help.css';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ArrowLeft, Search, ChevronDown, ChevronUp, Headphones, Mail, Phone, MessageCircle } from 'lucide-react';
 
 interface FAQItem {
     id: number;
@@ -120,37 +121,45 @@ export const Help: React.FC = () => {
     });
 
     return (
-        <div className="help-container">
-            <div className="help-content fade-in">
-                <div className="help-header">
-                    <button className="back-btn" onClick={() => navigate(-1)}>
-                        <span className="material-icons-outlined">arrow_back</span>
+        <div className="min-h-screen bg-background py-8 px-4">
+            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+                <div className="space-y-4">
+                    <button
+                        className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
+                        onClick={() => navigate(-1)}
+                    >
+                        <ArrowLeft className="h-4 w-4" />
                         Back
                     </button>
-                    <h1>Help & Support</h1>
-                    <p>Find answers to common questions or contact our support team</p>
+                    <div>
+                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-2">Help & Support</h1>
+                        <p className="text-muted-foreground">Find answers to common questions or contact our support team</p>
+                    </div>
                 </div>
 
                 {/* Search Bar */}
-                <Card className="search-card">
-                    <div className="search-box">
-                        <span className="material-icons-outlined">search</span>
-                        <input
+                <Card className="p-6">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
                             type="text"
                             placeholder="Search for help..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="search-input"
+                            className="pl-9 h-10 w-full"
                         />
                     </div>
                 </Card>
 
                 {/* Category Filters */}
-                <div className="category-filters">
+                <div className="flex flex-wrap gap-2">
                     {CATEGORIES.map(category => (
                         <button
                             key={category}
-                            className={`category-btn ${selectedCategory === category ? 'active' : ''}`}
+                            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${selectedCategory === category
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                                }`}
                             onClick={() => setSelectedCategory(category)}
                         >
                             {category}
@@ -159,71 +168,84 @@ export const Help: React.FC = () => {
                 </div>
 
                 {/* FAQ List */}
-                <div className="faq-list">
+                <div className="space-y-4">
                     {filteredFAQs.length === 0 ? (
-                        <Card style={{ padding: '3rem', textAlign: 'center' }}>
-                            <span className="material-icons-outlined" style={{ fontSize: '64px', opacity: 0.3 }}>
-                                search_off
-                            </span>
-                            <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>
-                                No results found for "{searchTerm}"
-                            </p>
+                        <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4 text-muted-foreground">
+                            <Search className="h-12 w-12 opacity-20" />
+                            <p>No results found for "{searchTerm}"</p>
                         </Card>
                     ) : (
                         filteredFAQs.map((faq) => (
                             <Card
                                 key={faq.id}
-                                className={`faq-item ${expandedId === faq.id ? 'expanded' : ''}`}
+                                className={`transition-all duration-200 cursor-pointer hover:shadow-md ${expandedId === faq.id ? 'ring-1 ring-primary/20' : ''}`}
                                 onClick={() => setExpandedId(expandedId === faq.id ? null : faq.id)}
                             >
-                                <div className="faq-question">
-                                    <span className="category-tag">{faq.category}</span>
-                                    <h3>{faq.question}</h3>
-                                    <span className="material-icons-outlined expand-icon">
-                                        {expandedId === faq.id ? 'expand_less' : 'expand_more'}
-                                    </span>
-                                </div>
-                                {expandedId === faq.id && (
-                                    <div className="faq-answer">
-                                        <p>{faq.answer}</p>
+                                <div className="p-4 md:p-6">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="space-y-1">
+                                            <span className="inline-block px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wide mb-1">
+                                                {faq.category}
+                                            </span>
+                                            <h3 className="text-lg font-semibold text-foreground leading-tight">
+                                                {faq.question}
+                                            </h3>
+                                        </div>
+                                        {expandedId === faq.id ? (
+                                            <ChevronUp className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                                        ) : (
+                                            <ChevronDown className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                                        )}
                                     </div>
-                                )}
+
+                                    <div
+                                        className={`grid transition-all duration-200 ease-in-out ${expandedId === faq.id ? 'grid-rows-[1fr] opacity-100 mt-4 pt-4 border-t' : 'grid-rows-[0fr] opacity-0'
+                                            }`}
+                                    >
+                                        <div className="overflow-hidden">
+                                            <p className="text-muted-foreground leading-relaxed">
+                                                {faq.answer}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
                             </Card>
                         ))
                     )}
                 </div>
 
                 {/* Contact Support */}
-                <Card className="contact-card">
-                    <div className="contact-header">
-                        <span className="material-icons-outlined">support_agent</span>
+                <Card className="p-6 md:p-8 bg-primary/5 border-primary/20">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <Headphones className="h-6 w-6" />
+                        </div>
                         <div>
-                            <h2>Still need help?</h2>
-                            <p>Our support team is here to assist you</p>
+                            <h2 className="text-xl font-semibold text-foreground">Still need help?</h2>
+                            <p className="text-muted-foreground">Our support team is here to assist you</p>
                         </div>
                     </div>
-                    <div className="contact-methods">
-                        <div className="contact-method">
-                            <span className="material-icons-outlined">email</span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div className="flex items-start gap-3 p-4 bg-background rounded-lg border shadow-sm">
+                            <Mail className="h-5 w-5 text-primary mt-0.5" />
                             <div>
-                                <h4>Email Support</h4>
-                                <a href="mailto:support@haemi.life">support@haemi.life</a>
+                                <h4 className="font-medium text-foreground">Email Support</h4>
+                                <a href="mailto:support@haemi.life" className="text-sm text-primary hover:underline block mt-1">support@haemi.life</a>
                             </div>
                         </div>
-                        <div className="contact-method">
-                            <span className="material-icons-outlined">phone</span>
+                        <div className="flex items-start gap-3 p-4 bg-background rounded-lg border shadow-sm">
+                            <Phone className="h-5 w-5 text-primary mt-0.5" />
                             <div>
-                                <h4>Phone Support</h4>
-                                <a href="tel:+267XXXXXXX">+267 XXX XXXX</a>
-                                <span className="hours">Mon-Fri, 8:00 AM - 6:00 PM</span>
+                                <h4 className="font-medium text-foreground">Phone Support</h4>
+                                <a href="tel:+267XXXXXXX" className="text-sm text-primary hover:underline block mt-1">+267 XXX XXXX</a>
+                                <span className="text-xs text-muted-foreground block mt-0.5">Mon-Fri, 8:00 AM - 6:00 PM</span>
                             </div>
                         </div>
                     </div>
-                    <Button
-                        variant="primary"
-                        fullWidth
-                        leftIcon={<span className="material-icons-outlined">chat</span>}
-                    >
+
+                    <Button className="w-full h-12 text-base shadow-sm">
+                        <MessageCircle className="h-5 w-5 mr-2" />
                         Start Live Chat
                     </Button>
                 </Card>

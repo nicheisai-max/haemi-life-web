@@ -1,6 +1,7 @@
-import React, { Component, type ErrorInfo, type ReactNode } from 'react';
-import { Button } from './Button';
-import { Card } from './Card';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { AlertTriangle } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface Props {
@@ -43,19 +44,17 @@ export class ErrorBoundary extends Component<Props, State> {
                 }}>
                     <Card style={{ maxWidth: '500px', textAlign: 'center', padding: '3rem' }}>
                         <Logo size="lg" className="mb-6 mx-auto" />
-                        <span className="material-icons-outlined" style={{
+                        <AlertTriangle style={{
                             fontSize: '4rem',
                             color: 'var(--color-error)',
                             marginBottom: '1.5rem'
-                        }}>
-                            report_problem
-                        </span>
+                        }} />
                         <h1 style={{ marginBottom: '1rem' }}>Something went wrong</h1>
                         <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
                             We've encountered an unexpected error. Don't worry, your data is safe.
                         </p>
                         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                            <Button variant="primary" onClick={this.handleReset}>
+                            <Button variant="default" onClick={this.handleReset}>
                                 Back to Safety
                             </Button>
                             <Button variant="outline" onClick={() => window.location.reload()}>

@@ -1,18 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import React, { useEffect, useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { getDoctorSchedule, updateDoctorSchedule } from '../../services/doctor.service';
-import type { DoctorSchedule } from '../../services/doctor.service';
-import './DoctorScheduleManagement.css';
+import { Save, AlertCircle, CheckCircle2, Info, Loader2 } from 'lucide-react';
+import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const DoctorScheduleManagement: React.FC = () => {
-    const [schedule, setSchedule] = useState<DoctorSchedule[]>([]);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState(false);
+    const [success, setSuccess] = useState<string | null>(null);
+
+    const form = useForm<FullDoctorScheduleFormData>({
+        resolver: zodResolver(doctorScheduleSchema),
+        defaultValues: {
+            schedule: DAYS_OF_WEEK.map((_, index) => ({
+                day_of_week: index,
+                start_time: '09:00',
+                end_time: '17:00',
+                is_available: false,
+            })),
+        },
+    });
+
+    // Re-wrapping with a single schema for the array if needed, but let's see.
+    // The previous schema was just the array. useForm expects an object.
+    // I'll wrap it in an object for useForm.
+
+    const { fields } = useFieldArray({
+        control: form.control,
+        name: "schedule",
+    });
 
     useEffect(() => {
         fetchSchedule();
@@ -22,7 +47,24 @@ export const DoctorScheduleManagement: React.FC = () => {
         try {
             setLoading(true);
             const data = await getDoctorSchedule();
-            setSchedule(data);
+
+            // Map data to ensure all days are present
+            const fullSchedule = DAYS_OF_WEEK.map((_, index) => {
+                const existing = data.find(s => s.day_of_week === index);
+                return existing ? {
+                    day_of_week: existing.day_of_week,
+                    start_time: existing.start_time.substring(0, 5), // Ensure HH:mm format
+                    end_time: existing.end_time.substring(0, 5),
+                    is_available: existing.is_available
+                } : {
+                    day_of_week: index,
+                    start_time: '09:00',
+                    end_time: '17:00',
+                    is_available: false
+                };
+            });
+
+            form.reset({ schedule: fullSchedule });
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to load schedule');
         } finally {
@@ -30,166 +72,171 @@ export const DoctorScheduleManagement: React.FC = () => {
         }
     };
 
-    const handleScheduleChange = (dayOfWeek: number, field: string, value: any) => {
-        const existing = schedule.find(s => s.day_of_week === dayOfWeek);
-
-        if (existing) {
-            setSchedule(schedule.map(s =>
-                s.day_of_week === dayOfWeek ? { ...s, [field]: value } : s
-            ));
-        } else {
-            setSchedule([...schedule, {
-                id: 0,
-                doctor_id: 0,
-                day_of_week: dayOfWeek,
-                start_time: '09:00',
-                end_time: '17:00',
-                is_available: field === 'is_available' ? value : false,
-                [field]: value
-            }]);
-        }
-    };
-
-    const handleSave = async () => {
+    const onSubmit = async (data: { schedule: FullDoctorScheduleFormData }) => {
         try {
-            setSaving(true);
             setError(null);
-            setSuccess(false);
+            setSuccess(null);
 
-            const scheduleData = schedule.map(s => ({
-                day_of_week: s.day_of_week,
-                start_time: s.start_time,
-                end_time: s.end_time,
-                is_available: s.is_available
-            }));
-
-            await updateDoctorSchedule(scheduleData);
-            setSuccess(true);
-            setTimeout(() => setSuccess(false), 3000);
+            await updateDoctorSchedule(data.schedule);
+            setSuccess('Schedule updated successfully!');
+            setTimeout(() => setSuccess(null), 3000);
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to update schedule');
-        } finally {
-            setSaving(false);
         }
-    };
-
-    const getScheduleForDay = (dayOfWeek: number) => {
-        return schedule.find(s => s.day_of_week === dayOfWeek) || {
-            id: 0,
-            doctor_id: 0,
-            day_of_week: dayOfWeek,
-            start_time: '09:00',
-            end_time: '17:00',
-            is_available: false
-        };
     };
 
     if (loading) {
         return (
-            <div className="schedule-container">
-                <Card style={{ padding: '2rem', textAlign: 'center' }}>
-                    <div className="loading-spinner">Loading schedule...</div>
-                </Card>
+            <div className="max-w-5xl mx-auto p-8 flex justify-center items-center min-h-[400px]">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-muted-foreground">Loading schedule...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="schedule-container fade-in">
-            <div className="page-header">
-                <div>
-                    <h1>Schedule Management</h1>
-                    <p>Configure your weekly availability</p>
-                </div>
-                <Button
-                    variant="primary"
-                    onClick={handleSave}
-                    disabled={saving}
-                    leftIcon={saving ? undefined : <span className="material-icons-outlined">save</span>}
-                >
-                    {saving ? 'Saving...' : 'Save Schedule'}
-                </Button>
-            </div>
+        <div className="max-w-5xl mx-auto p-6 md:p-8 animate-in fade-in duration-500">
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Schedule Management</h1>
+                            <p className="text-muted-foreground">Configure your weekly availability for patient appointments</p>
+                        </div>
+                        <Button
+                            type="submit"
+                            disabled={form.formState.isSubmitting}
+                            className="min-w-[140px]"
+                        >
+                            {form.formState.isSubmitting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    Save Schedule
+                                </>
+                            )}
+                        </Button>
+                    </div>
 
-            {error && (
-                <Card className="alert alert-error">
-                    <span className="material-icons-outlined">error</span>
-                    {error}
-                </Card>
-            )}
+                    {error && (
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
 
-            {success && (
-                <Card className="alert alert-success">
-                    <span className="material-icons-outlined">check_circle</span>
-                    Schedule updated successfully!
-                </Card>
-            )}
+                    {success && (
+                        <Alert className="border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300">
+                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            <AlertDescription>{success}</AlertDescription>
+                        </Alert>
+                    )}
 
-            <Card className="schedule-card">
-                <div className="schedule-list">
-                    {DAYS_OF_WEEK.map((day, index) => {
-                        const daySchedule = getScheduleForDay(index);
-                        return (
-                            <div key={index} className="day-row">
-                                <div className="day-info">
-                                    <label className="toggle-switch">
-                                        <input
-                                            type="checkbox"
-                                            checked={daySchedule.is_available}
-                                            onChange={(e) => handleScheduleChange(index, 'is_available', e.target.checked)}
-                                        />
-                                        <span className="toggle-slider"></span>
-                                    </label>
-                                    <span className={`day-name ${daySchedule.is_available ? 'active' : ''}`}>
-                                        {day}
-                                    </span>
-                                </div>
+                    <Card className="p-6">
+                        <div className="space-y-4">
+                            {fields.map((field, index) => {
+                                const isAvailable = form.watch(`schedule.${index}.is_available`);
 
-                                {daySchedule.is_available && (
-                                    <div className="time-inputs">
-                                        <div className="time-group">
-                                            <label>Start Time</label>
-                                            <input
-                                                type="time"
-                                                value={daySchedule.start_time}
-                                                onChange={(e) => handleScheduleChange(index, 'start_time', e.target.value)}
-                                                className="time-input"
+                                return (
+                                    <div
+                                        key={field.id}
+                                        className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border transition-all duration-200 ${isAvailable
+                                            ? 'bg-card border-border shadow-sm'
+                                            : 'bg-muted/30 border-transparent opacity-80 hover:opacity-100'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-4 w-full md:w-48 mb-4 md:mb-0">
+                                            <FormField
+                                                control={form.control}
+                                                name={`schedule.${index}.is_available`}
+                                                render={({ field }) => (
+                                                    <FormItem className="flex items-center space-x-3 space-y-0">
+                                                        <FormControl>
+                                                            <Switch
+                                                                checked={field.value}
+                                                                onCheckedChange={field.onChange}
+                                                            />
+                                                        </FormControl>
+                                                        <FormLabel className={`text-base font-medium cursor-pointer ${field.value ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                            {DAYS_OF_WEEK[index]}
+                                                        </FormLabel>
+                                                    </FormItem>
+                                                )}
                                             />
                                         </div>
-                                        <span className="time-separator">to</span>
-                                        <div className="time-group">
-                                            <label>End Time</label>
-                                            <input
-                                                type="time"
-                                                value={daySchedule.end_time}
-                                                onChange={(e) => handleScheduleChange(index, 'end_time', e.target.value)}
-                                                className="time-input"
-                                            />
-                                        </div>
+
+                                        {isAvailable ? (
+                                            <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
+                                                <div className="grid grid-cols-2 gap-3 w-full md:w-auto md:flex md:items-center">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`schedule.${index}.start_time`}
+                                                        render={({ field }) => (
+                                                            <FormItem className="space-y-1">
+                                                                <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">Start</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="time" {...field} className="w-full md:w-36 cursor-pointer" />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <div className="flex items-center justify-center md:hidden">
+                                                        <span className="text-muted-foreground text-sm">to</span>
+                                                    </div>
+                                                    <span className="hidden md:block text-muted-foreground text-sm px-2">to</span>
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`schedule.${index}.end_time`}
+                                                        render={({ field }) => (
+                                                            <FormItem className="space-y-1">
+                                                                <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">End</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="time" {...field} className="w-full md:w-36 cursor-pointer" />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex-1 text-center md:text-left md:pl-4">
+                                                <span className="text-sm text-muted-foreground italic">Unavailable</span>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                );
+                            })}
+                        </div>
+                    </Card>
 
-                                {!daySchedule.is_available && (
-                                    <span className="unavailable-text">Unavailable</span>
-                                )}
+                    <Card className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800">
+                        <div className="p-6 flex flex-col sm:flex-row gap-4">
+                            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 h-fit">
+                                <Info className="h-5 w-5" />
                             </div>
-                        );
-                    })}
-                </div>
-            </Card>
-
-            <Card className="info-card">
-                <div className="info-header">
-                    <span className="material-icons-outlined">info</span>
-                    <h3>Schedule Guidelines</h3>
-                </div>
-                <ul className="info-list">
-                    <li>Toggle days on/off to set your availability</li>
-                    <li>Set start and end times for each available day</li>
-                    <li>Appointments will only be bookable during these hours</li>
-                    <li>Changes take effect immediately after saving</li>
-                </ul>
-            </Card>
+                            <div className="space-y-1">
+                                <h3 className="font-semibold text-blue-900 dark:text-blue-100">Schedule Guidelines</h3>
+                                <ul className="text-sm text-blue-800/80 dark:text-blue-200/80 space-y-1.5 list-disc pl-4 pt-2">
+                                    <li>Toggle days on/off to set your availability for that specific day of the week.</li>
+                                    <li>Set start and end times for each available day in 24-hour format.</li>
+                                    <li>Appointments will only be bookable by patients during these hours.</li>
+                                    <li>Changes take effect immediately after clicking "Save Schedule".</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </Card>
+                </form>
+            </Form>
         </div>
     );
 };

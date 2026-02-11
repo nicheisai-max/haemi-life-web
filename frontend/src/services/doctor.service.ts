@@ -90,20 +90,6 @@ export const getDoctorPatients = async () => {
 // Alias for listDoctors (used by some components)
 export const getDoctors = listDoctors;
 
-// Available slots interface
-export interface AvailableSlots {
-    date: string;
-    slots: string[];
-}
-
-// Get available appointment slots for a doctor on specific date
-export const getAvailableSlots = async (doctorId: string, date: string) => {
-    const response = await api.get(`/appointments/available-slots`, {
-        params: { doctor_id: doctorId, date }
-    });
-    return response.data as AvailableSlots;
-};
-
 export default {
     listDoctors,
     getDoctors,
@@ -112,6 +98,5 @@ export default {
     updateDoctorProfile,
     getDoctorSchedule,
     updateDoctorSchedule,
-    getDoctorPatients,
-    getAvailableSlots
+    getDoctorPatients
 };

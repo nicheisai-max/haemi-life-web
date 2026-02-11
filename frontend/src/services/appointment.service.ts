@@ -26,11 +26,14 @@ export interface Appointment {
 }
 
 export interface AvailableSlots {
-    schedule: Array<{
-        start_time: string;
-        end_time: string;
-    }>;
-    booked: string[];
+    date: string;
+    slots: string[];
+    // Legacy/Old definition (commented out in case backend actually returns this)
+    // schedule: Array<{
+    //     start_time: string;
+    //     end_time: string;
+    // }>;
+    // booked: string[];
 }
 
 // Book a new appointment (Patient only)

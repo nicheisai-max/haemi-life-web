@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import './ImageLoader.css';
+import { ImageOff } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface ImageLoaderProps {
     src: string;
@@ -41,7 +43,7 @@ export const ImageLoader: React.FC<ImageLoaderProps> = ({
             { rootMargin: '50px' }
         );
 
-        const element = document.getElementById(`img-${src}`);
+        const element = document.getElementById(`img-wrapper-${src.replace(/[^a-zA-Z0-9]/g, '-')}`);
         if (element) {
             observer.observe(element);
         }
@@ -60,15 +62,23 @@ export const ImageLoader: React.FC<ImageLoaderProps> = ({
 
     return (
         <div
-            id={`img-${src}`}
-            className={`image-loader-container ${circle ? 'image-loader-circle' : ''} ${className}`}
+            id={`img-wrapper-${src.replace(/[^a-zA-Z0-9]/g, '-')}`}
+            className={cn(
+                "relative inline-block overflow-hidden bg-muted",
+                circle ? "rounded-full" : "",
+                className
+            )}
             style={{ width, height }}
         >
             {/* Skeleton Loader */}
-            {!loaded && (
-                <div className={`image-skeleton ${circle ? 'skeleton-circle' : ''} ${skeletonClassName}`}>
-                    <div className="skeleton-shimmer"></div>
-                </div>
+            {!loaded && !error && (
+                <Skeleton
+                    className={cn(
+                        "absolute inset-0 w-full h-full",
+                        circle ? "rounded-full" : "rounded-none",
+                        skeletonClassName
+                    )}
+                />
             )}
 
             {/* Actual Image */}
@@ -76,17 +86,23 @@ export const ImageLoader: React.FC<ImageLoaderProps> = ({
                 <img
                     src={src}
                     alt={alt}
-                    className={`loaded-image ${loaded ? 'image-loaded' : 'image-loading'} ${error ? 'image-error' : ''}`}
+                    className={cn(
+                        "w-full h-full object-cover transition-opacity duration-300",
+                        loaded ? "opacity-100" : "opacity-0",
+                        circle ? "rounded-full" : ""
+                    )}
                     onLoad={handleLoad}
                     onError={handleError}
-                    style={{ display: loaded ? 'block' : 'none' }}
                 />
             )}
 
             {/* Error Fallback */}
             {error && (
-                <div className="image-error-fallback">
-                    <span className="material-icons-outlined">broken_image</span>
+                <div className={cn(
+                    "absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground",
+                    circle ? "rounded-full" : ""
+                )}>
+                    <ImageOff className="h-8 w-8 opacity-50" />
                 </div>
             )}
         </div>

@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import { getAllUsers, updateUserStatus } from '../../services/admin.service';
-import type { UserManagement } from '../../services/admin.service';
-import './UserManagement.css';
+import type { UserListItem } from '../../services/admin.service';
+import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail } from 'lucide-react';
 
 export const UserManagement: React.FC = () => {
-    const [users, setUsers] = useState<UserManagement[]>([]);
-    const [filteredUsers, setFilteredUsers] = useState<UserManagement[]>([]);
+    const [users, setUsers] = useState<UserListItem[]>([]);
+    const [filteredUsers, setFilteredUsers] = useState<UserListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [processing, setProcessing] = useState<string | null>(null);
+    const [processing, setProcessing] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
 
@@ -41,7 +44,7 @@ export const UserManagement: React.FC = () => {
         if (searchTerm) {
             filtered = filtered.filter(user =>
                 user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
                 user.phone_number.includes(searchTerm)
             );
         }
@@ -54,10 +57,11 @@ export const UserManagement: React.FC = () => {
         setFilteredUsers(filtered);
     };
 
-    const handleToggleStatus = async (userId: string, currentStatus: boolean) => {
+    const handleToggleStatus = async (userId: number, currentStatus: boolean) => {
         try {
             setProcessing(userId);
-            await updateUserStatus(userId, { is_active: !currentStatus });
+            // Service expects (id, is_active)
+            await updateUserStatus(userId, !currentStatus);
             await fetchUsers();
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to update user status');
@@ -66,63 +70,87 @@ export const UserManagement: React.FC = () => {
         }
     };
 
+    const getRoleIcon = (role: string) => {
+        switch (role) {
+            case 'doctor': return <Stethoscope className="h-4 w-4 mr-2" />;
+            case 'patient': return <Heart className="h-4 w-4 mr-2" />;
+            case 'pharmacist': return <Briefcase className="h-4 w-4 mr-2" />;
+            case 'admin': return <Shield className="h-4 w-4 mr-2" />;
+            default: return <Users className="h-4 w-4 mr-2" />;
+        }
+    };
+
+    const getRoleBadgeVariant = (role: string): "default" | "secondary" | "destructive" | "outline" | null | undefined => {
+        switch (role) {
+            case 'admin': return 'destructive';
+            case 'doctor': return 'default';
+            case 'pharmacist': return 'secondary';
+            default: return 'outline';
+        }
+    };
+
     if (loading) {
         return (
-            <div className="user-management-container">
-                <Card style={{ padding: '2rem', textAlign: 'center' }}>
-                    <div className="loading-spinner">Loading users...</div>
+            <div className="max-w-[1400px] mx-auto p-8">
+                <Card className="p-8 text-center">
+                    <div className="animate-pulse text-muted-foreground">Loading users...</div>
                 </Card>
             </div>
         );
     }
 
     return (
-        <div className="user-management-container fade-in">
-            <div className="page-header">
+        <div className="max-w-[1400px] mx-auto p-6 md:p-8 space-y-8 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1>User Management</h1>
-                    <p>Manage user accounts and permissions</p>
+                    <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
+                    <p className="text-muted-foreground mt-1">Manage user accounts and permissions</p>
                 </div>
-                <div className="stats-row">
-                    <div className="stat-item">
-                        <span className="stat-value">{users.length}</span>
-                        <span className="stat-label">Total Users</span>
-                    </div>
-                    <div className="stat-item">
-                        <span className="stat-value">{users.filter(u => u.is_active).length}</span>
-                        <span className="stat-label">Active</span>
-                    </div>
+
+                {/* Stats */}
+                <div className="flex gap-4">
+                    <Card className="px-4 py-2 flex flex-col items-center justify-center min-w-[100px]">
+                        <span className="text-2xl font-bold text-primary leading-none">{users.length}</span>
+                        <span className="text-xs text-muted-foreground font-medium mt-1">Total Users</span>
+                    </Card>
+                    <Card className="px-4 py-2 flex flex-col items-center justify-center min-w-[100px]">
+                        <span className="text-2xl font-bold text-green-600 leading-none">{users.filter(u => u.is_active).length}</span>
+                        <span className="text-xs text-muted-foreground font-medium mt-1">Active</span>
+                    </Card>
                 </div>
             </div>
 
             {error && (
-                <Card className="alert alert-error">
-                    <span className="material-icons-outlined">error</span>
-                    {error}
-                    <button className="alert-close" onClick={() => setError(null)}>
-                        <span className="material-icons-outlined">close</span>
+                <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md flex items-center gap-2 border border-destructive/20">
+                    <AlertCircle className="h-5 w-5" />
+                    <span className="flex-1">{error}</span>
+                    <button onClick={() => setError(null)} className="hover:bg-destructive/10 p-1 rounded">
+                        <X className="h-4 w-4" />
                     </button>
-                </Card>
+                </div>
             )}
 
             {/* Filters */}
-            <Card className="filters-card">
-                <div className="search-box">
-                    <span className="material-icons-outlined">search</span>
-                    <input
+            <Card className="p-4 space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
                         type="text"
                         placeholder="Search by name, email, or phone..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="search-input"
+                        className="pl-9 h-10"
                     />
                 </div>
-                <div className="role-filters">
+                <div className="flex flex-wrap gap-2">
                     {['all', 'patient', 'doctor', 'admin', 'pharmacist'].map(role => (
                         <button
                             key={role}
-                            className={`role-filter-btn ${roleFilter === role ? 'active' : ''}`}
                             onClick={() => setRoleFilter(role)}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors border ${roleFilter === role
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                                }`}
                         >
                             {role.charAt(0).toUpperCase() + role.slice(1)}
                         </button>
@@ -131,78 +159,83 @@ export const UserManagement: React.FC = () => {
             </Card>
 
             {/* Users Table */}
-            <Card className="users-table-card">
-                <div className="table-wrapper">
-                    <table className="users-table">
-                        <thead>
-                            <tr>
-                                <th>User</th>
-                                <th>Role</th>
-                                <th>Contact</th>
-                                <th>Joined</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+            <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-muted/50">
+                                <TableHead className="w-[300px]">User</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead className="hidden md:table-cell">Contact</TableHead>
+                                <TableHead className="hidden md:table-cell">Joined</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {filteredUsers.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', padding: '2rem' }}>
-                                        <span className="material-icons-outlined" style={{ fontSize: '48px', opacity: 0.3 }}>
-                                            people_off
-                                        </span>
-                                        <p style={{ marginTop: '0.5rem', color: 'var(--text-muted)' }}>
-                                            No users match your filters
-                                        </p>
-                                    </td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                        No users found matching your filters
+                                    </TableCell>
+                                </TableRow>
                             ) : (
-                                filteredUsers.map((user) => (
-                                    <tr key={user.id}>
-                                        <td>
-                                            <div className="user-cell">
-                                                <div className="user-avatar">
-                                                    <span className="material-icons-outlined">person</span>
+                                filteredUsers.map(user => (
+                                    <TableRow key={user.id} className="hover:bg-muted/50">
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm">
+                                                    {user.name?.charAt(0).toUpperCase() || 'U'}
                                                 </div>
-                                                <div>
-                                                    <div className="user-name">{user.name}</div>
-                                                    <div className="user-email">{user.email}</div>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-foreground">{user.name || 'Unknown'}</span>
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                        <Mail className="h-3 w-3" />
+                                                        {user.email || 'No email'}
+                                                    </span>
                                                 </div>
                                             </div>
-                                        </td>
-                                        <td>
-                                            <span className={`role-badge role-${user.role}`}>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={getRoleBadgeVariant(user.role)} className="capitalize pl-2 pr-3 py-1">
+                                                {getRoleIcon(user.role)}
                                                 {user.role}
-                                            </span>
-                                        </td>
-                                        <td className="contact-cell">{user.phone_number}</td>
-                                        <td className="date-cell">
-                                            {new Date(user.created_at).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                year: 'numeric'
-                                            })}
-                                        </td>
-                                        <td>
-                                            <span className={`status-badge ${user.is_active ? 'status-active' : 'status-inactive'}`}>
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-sm">
+                                            {user.phone_number}
+                                        </TableCell>
+                                        <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+                                            {new Date(user.created_at).toLocaleDateString()}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={user.is_active ? "outline" : "destructive"} className={user.is_active ? "text-green-600 border-green-600 bg-green-50 dark:bg-green-900/20" : ""}>
                                                 {user.is_active ? 'Active' : 'Inactive'}
-                                            </span>
-                                        </td>
-                                        <td>
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
                                             <Button
-                                                variant={user.is_active ? "outline" : "primary"}
                                                 size="sm"
+                                                variant={user.is_active ? "ghost" : "default"}
+                                                className={user.is_active ? "text-destructive hover:text-destructive hover:bg-destructive/10" : "bg-green-600 hover:bg-green-700"}
                                                 onClick={() => handleToggleStatus(user.id, user.is_active)}
                                                 disabled={processing === user.id}
                                             >
+                                                {processing === user.id ? (
+                                                    <span className="animate-spin mr-2">⏳</span>
+                                                ) : user.is_active ? (
+                                                    <ShieldAlert className="h-4 w-4 mr-2" />
+                                                ) : (
+                                                    <Shield className="h-4 w-4 mr-2" />
+                                                )}
                                                 {user.is_active ? 'Deactivate' : 'Activate'}
                                             </Button>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 ))
                             )}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
             </Card>
         </div>

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import './NetworkStatus.css';
+import { WifiOff, SignalLow } from 'lucide-react';
+
 
 interface NetworkStatusContextValue {
     isOnline: boolean;
@@ -58,14 +59,14 @@ export const NetworkStatusProvider: React.FC<NetworkStatusProviderProps> = ({ ch
         <NetworkStatusContext.Provider value={{ isOnline, isSlowConnection }}>
             {children}
             {!isOnline && (
-                <div className="network-status offline">
-                    <span className="material-icons-outlined">wifi_off</span>
+                <div className="fixed top-0 left-0 right-0 z-[10000] flex items-center justify-center gap-3 p-3 text-sm font-medium bg-red-600 text-white animate-in slide-in-from-top-full duration-300">
+                    <WifiOff className="h-5 w-5" />
                     <span>You are offline. Some features may not work.</span>
                 </div>
             )}
             {isOnline && isSlowConnection && (
-                <div className="network-status slow">
-                    <span className="material-icons-outlined">signal_cellular_alt_1_bar</span>
+                <div className="fixed top-0 left-0 right-0 z-[10000] flex items-center justify-center gap-3 p-3 text-sm font-medium bg-amber-500 text-black animate-in slide-in-from-top-full duration-300">
+                    <SignalLow className="h-5 w-5" />
                     <span>Slow connection detected. Low data mode recommended.</span>
                 </div>
             )}
