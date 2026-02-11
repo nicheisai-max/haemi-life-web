@@ -1,6 +1,6 @@
 import axios, { AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 
-const API_URL = 'http://localhost:5000'; // Adjust if backend runs on different port
+const API_URL = 'http://localhost:5000/api'; // Adjust if backend runs on different port
 
 // DEMO MODE FLAG
 // @ts-ignore
@@ -140,7 +140,8 @@ api.interceptors.response.use(
         if (error.response && error.response.status === 401) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            window.location.href = '/login';
+            // Dispatch event for AuthContext to handle SPA redirect
+            window.dispatchEvent(new CustomEvent('auth:unauthorized'));
             return Promise.reject(error);
         }
 

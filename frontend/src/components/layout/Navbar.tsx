@@ -56,7 +56,7 @@ export const Navbar: React.FC = () => {
     };
 
     return (
-        <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm h-[70px] flex items-center px-4">
+        <nav className="sticky top-0 z-50 w-full border-b bg-background/95 dark:bg-[#0B1214]/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm h-[70px] flex items-center px-4">
             <div className="container flex h-14 items-center justify-between max-w-7xl mx-auto">
                 <div className="flex items-center gap-8">
                     <Link
@@ -95,7 +95,7 @@ export const Navbar: React.FC = () => {
                                 <span className="sr-only">Notifications</span>
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-80">
+                        <DropdownMenuContent align="end" className="w-[calc(100vw-32px)] sm:w-80">
                             <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             {notifications.length === 0 ? (

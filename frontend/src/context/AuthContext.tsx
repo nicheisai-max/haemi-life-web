@@ -20,6 +20,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
     useEffect(() => {
+        const handleUnauthorized = () => {
+            setUser(null);
+            setToken(null);
+        };
+
+        window.addEventListener('auth:unauthorized', handleUnauthorized);
+        return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    }, []);
+
+    useEffect(() => {
         const storedUser = localStorage.getItem('user');
         const storedToken = localStorage.getItem('token');
 
@@ -33,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const login = async (credentials: LoginCredentials) => {
         setIsLoading(true);
         try {
-            const response = await api.post<AuthResponse>('/api/auth/login', credentials);
+            const response = await api.post<AuthResponse>('/auth/login', credentials);
             const { token, user } = response.data;
 
             localStorage.setItem('token', token);
@@ -52,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const signup = async (credentials: SignupCredentials) => {
         setIsLoading(true);
         try {
-            const response = await api.post<AuthResponse>('/api/auth/signup', credentials);
+            const response = await api.post<AuthResponse>('/auth/signup', credentials);
             const { token, user } = response.data;
 
             // Auto-login after signup
@@ -74,7 +84,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('user');
         setToken(null);
         setUser(null);
-        window.location.href = '/login';
     };
 
     return (

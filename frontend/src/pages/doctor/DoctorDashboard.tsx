@@ -145,7 +145,7 @@ export const DoctorDashboard: React.FC = () => {
             {/* Hero Section */}
             <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-2xl">
                 <GradientMesh variant="secondary" className="opacity-40" />
-                <div className="relative z-10 p-8 md:p-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
+                <div className="relative z-10 p-6 md:p-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
                     <div className="space-y-4 max-w-2xl">
                         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-teal-500/20 text-teal-400 text-sm font-bold border border-teal-500/30">
                             <span className="relative flex h-2 w-2">

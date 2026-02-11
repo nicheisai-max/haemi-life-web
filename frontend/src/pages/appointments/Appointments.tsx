@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import type { Appointment } from '../../services/appointment.service';
 import { Plus, AlertCircle, CalendarX, Clock, Calendar } from 'lucide-react';
 
 export const Appointments: React.FC = () => {
+    const navigate = useNavigate();
     const { user } = useAuth();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
@@ -104,7 +106,7 @@ export const Appointments: React.FC = () => {
                 <Button
                     variant="default"
                     className="flex items-center gap-2"
-                    onClick={() => window.location.href = '/book-appointment'}
+                    onClick={() => navigate('/book-appointment')}
                 >
                     <Plus className="h-5 w-5" />
                     Book New
@@ -122,8 +124,8 @@ export const Appointments: React.FC = () => {
             <div className="flex flex-wrap gap-3 p-2 bg-muted/50 rounded-lg border">
                 <button
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'all'
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:bg-background hover:text-foreground'
                         }`}
                     onClick={() => setFilter('all')}
                 >
@@ -131,8 +133,8 @@ export const Appointments: React.FC = () => {
                 </button>
                 <button
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'upcoming'
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:bg-background hover:text-foreground'
                         }`}
                     onClick={() => setFilter('upcoming')}
                 >
@@ -140,8 +142,8 @@ export const Appointments: React.FC = () => {
                 </button>
                 <button
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'past'
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:bg-background hover:text-foreground'
                         }`}
                     onClick={() => setFilter('past')}
                 >
@@ -159,7 +161,7 @@ export const Appointments: React.FC = () => {
                         </p>
                         <Button
                             variant="default"
-                            onClick={() => window.location.href = '/book-appointment'}
+                            onClick={() => navigate('/book-appointment')}
                             className="mt-4"
                         >
                             Book Your First Appointment

@@ -65,9 +65,9 @@ export const Signup: React.FC = () => {
 
     const content = step === 'role' ? (
         <>
-            <div className="flex flex-col space-y-2 text-center">
+            <div className="hidden lg:flex flex-col space-y-2 text-center">
                 <div className="flex justify-center mb-6">
-                    <Logo size="md" />
+                    <Logo size="auth" />
                 </div>
                 <h1 className="text-2xl font-semibold tracking-tight">Create Account</h1>
                 <p className="text-sm text-muted-foreground">Choose your account type to get started</p>
@@ -107,7 +107,7 @@ export const Signup: React.FC = () => {
         </>
     ) : (
         <>
-            <div className="flex flex-col space-y-2 text-center relative">
+            <div className="hidden lg:flex flex-col space-y-2 text-center relative">
                 <Button
                     variant="ghost"
                     size="icon"
@@ -117,12 +117,25 @@ export const Signup: React.FC = () => {
                     <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="flex justify-center mb-4">
-                    <Logo size="md" />
+                    <Logo size="auth" />
                 </div>
                 <h1 className="text-2xl font-semibold tracking-tight">
                     Sign up as {selectedRole === 'patient' ? 'Patient' : selectedRole === 'doctor' ? 'Doctor' : 'Pharmacist'}
                 </h1>
                 <p className="text-sm text-muted-foreground">Create your account to continue</p>
+            </div>
+
+            {/* Mobile Back Button (Visible only on small screens since header is hidden) */}
+            <div className="lg:hidden flex items-center mb-4">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setStep('role')}
+                >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                </Button>
             </div>
 
             <Form {...form}>
@@ -266,8 +279,8 @@ export const Signup: React.FC = () => {
 
     return (
         <AuthLayout
-            title={<>{step === 'role' ? 'Join the Health Revolution.' : 'Your Journey Starts Here.'}</>}
-            subtitle="Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you."
+            title={step === 'role' ? 'Join the Health Revolution.' : `Sign up as ${selectedRole === 'patient' ? 'Patient' : selectedRole === 'doctor' ? 'Doctor' : 'Pharmacist'}`}
+            subtitle={step === 'role' ? 'Choose your account type to get started' : 'Create your account to continue'}
             image={loginBg}
         >
             {content}

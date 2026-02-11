@@ -102,7 +102,7 @@ export const AdminDashboard: React.FC = () => {
             {/* Header / Hero */}
             <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl bg-slate-950 border border-slate-800 shadow-2xl">
                 <GradientMesh variant="primary" className="opacity-40" />
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8 p-10 md:p-14">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8 p-6 md:p-14">
                     <div className="space-y-4">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-bold tracking-wider uppercase border border-primary/30">
                             <ShieldCheck className="h-4 w-4" />

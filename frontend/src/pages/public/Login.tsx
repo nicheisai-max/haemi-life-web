@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../context/AuthContext';
@@ -15,8 +15,12 @@ import loginBg from '../../assets/images/login_bg_premium.png';
 
 export const Login: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { login } = useAuth();
     const [generalError, setGeneralError] = useState<string>('');
+
+    // Get the destination the user was trying to reach
+    const from = (location.state as any)?.from?.pathname || '/dashboard';
 
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),
@@ -40,7 +44,8 @@ export const Login: React.FC = () => {
             };
 
             await login(credentials);
-            navigate('/dashboard');
+            // Redirect to intended destination or dashboard
+            navigate(from, { replace: true });
         } catch (error: any) {
             console.error('Login failed:', error);
             setGeneralError(
@@ -49,15 +54,16 @@ export const Login: React.FC = () => {
         }
     };
 
+
     return (
         <AuthLayout
             title={<>Your Health, <br />Reimagined.</>}
             subtitle="Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you."
             image={loginBg}
         >
-            <div className="flex flex-col space-y-2 text-center">
+            <div className="hidden lg:flex flex-col space-y-2 text-center">
                 <div className="flex justify-center mb-6">
-                    <Logo size="md" />
+                    <Logo size="auth" />
                 </div>
                 <h1 className="text-2xl font-semibold tracking-tight">Welcome Back</h1>
                 <p className="text-sm text-muted-foreground">Sign in to access your dashboard</p>

@@ -6,6 +6,7 @@ import { Logo } from './Logo';
 
 interface Props {
     children?: ReactNode;
+    onReset?: () => void;
 }
 
 interface State {
@@ -28,7 +29,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
     private handleReset = () => {
         this.setState({ hasError: false });
-        window.location.href = '/dashboard';
+        if (this.props.onReset) {
+            this.props.onReset();
+        } else {
+            window.location.href = '/dashboard';
+        }
     };
 
     public render() {

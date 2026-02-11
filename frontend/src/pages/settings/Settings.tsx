@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../context/AuthContext';
@@ -14,6 +15,7 @@ import { changePasswordSchema, type ChangePasswordFormData } from '../../lib/val
 import { preferencesSchema, type PreferencesFormData } from '../../lib/validation/preferences.schema';
 
 export const Settings: React.FC = () => {
+    const navigate = useNavigate();
     const { user } = useAuth();
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -140,7 +142,7 @@ export const Settings: React.FC = () => {
                     <Button
                         variant="outline"
                         className="w-full mt-8 gap-2"
-                        onClick={() => window.location.href = '/profile'}
+                        onClick={() => navigate('/profile')}
                     >
                         <Pencil className="h-4 w-4" />
                         Edit Profile

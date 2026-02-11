@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card } from '@/components/ui/card';
@@ -13,6 +14,7 @@ import type { UserProfile } from '../../services/user.service';
 import { profileUpdateSchema, type ProfileUpdateFormData } from '../../lib/validation/profile.schema';
 
 export const Profile: React.FC = () => {
+    const navigate = useNavigate();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
@@ -260,7 +262,7 @@ export const Profile: React.FC = () => {
                         <Button
                             variant="ghost"
                             className="w-full justify-start gap-2 h-auto py-2"
-                            onClick={() => window.location.href = '/settings'}
+                            onClick={() => navigate('/settings')}
                         >
                             <SettingsIcon className="h-4 w-4 text-muted-foreground" />
                             Account Settings
@@ -268,7 +270,7 @@ export const Profile: React.FC = () => {
                         <Button
                             variant="ghost"
                             className="w-full justify-start gap-2 h-auto py-2"
-                            onClick={() => window.location.href = '/settings'}
+                            onClick={() => navigate('/settings')}
                         >
                             <Lock className="h-4 w-4 text-muted-foreground" />
                             Change Password

@@ -117,8 +117,8 @@
   /* -------------------------------------------------- */
   /* TYPOGRAPHY                                         */
   /* -------------------------------------------------- */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: 'Outfit', sans-serif;
+  --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Roboto', sans-serif;
   /* For Headers */
 
   /* -------------------------------------------------- */

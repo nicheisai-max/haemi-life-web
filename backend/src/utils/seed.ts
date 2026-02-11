@@ -57,30 +57,61 @@ async function seedDatabase() {
                 [user.email, user.phone_number]
             );
 
+            let userId;
             if (existingUser.rows.length > 0) {
                 console.log(`⚠️  User already exists: ${user.email}`);
-                continue;
+                userId = existingUser.rows[0].id;
+            } else {
+                // Hash password
+                const hashedPassword = await bcrypt.hash(user.password, 10);
+
+                // Insert user
+                const result = await pool.query(
+                    `INSERT INTO users (
+              name, phone_number, email, password, role, id_number, created_at, updated_at, is_active
+            ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true) RETURNING id, email, role`,
+                    [
+                        user.name,
+                        user.phone_number,
+                        user.email,
+                        hashedPassword,
+                        user.role,
+                        user.id_number || null,
+                    ]
+                );
+                userId = result.rows[0].id;
+                console.log(`✅ Created user: ${user.email} (${user.role}) - ID: ${userId}`);
             }
 
-            // Hash password
-            const hashedPassword = await bcrypt.hash(user.password, 10);
+            // If user is a doctor, ensure a profile exists
+            if (user.role === 'doctor') {
+                const existingProfile = await pool.query(
+                    'SELECT id FROM doctor_profiles WHERE user_id = $1',
+                    [userId]
+                );
 
-            // Insert user
-            const result = await pool.query(
-                `INSERT INTO users (
-          name, phone_number, email, password, role, id_number, created_at, updated_at, is_active
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true) RETURNING id, email, role`,
-                [
-                    user.name,
-                    user.phone_number,
-                    user.email,
-                    hashedPassword,
-                    user.role,
-                    user.id_number || null,
-                ]
-            );
+                if (existingProfile.rows.length === 0) {
+                    await pool.query(
+                        `INSERT INTO doctor_profiles (
+                user_id, specialization, years_of_experience, bio, consultation_fee, is_verified, created_at, updated_at
+              ) VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())`,
+                        [userId, 'General Physician', 5, 'Dedicated healthcare professional with 5 years of experience.', 500]
+                    );
+                    console.log(`   ✨ Created missing doctor profile for ${user.email}`);
+                }
 
-            console.log(`✅ Created user: ${user.email} (${user.role}) - ID: ${result.rows[0].id}`);
+                // Ensure schedule exists (wipe and re-add for simplicity in seeding)
+                await pool.query('DELETE FROM doctor_schedules WHERE doctor_id = $1', [userId]);
+                const days = [1, 2, 3, 4, 5]; // Mon-Fri
+                for (const day of days) {
+                    await pool.query(
+                        `INSERT INTO doctor_schedules (doctor_id, day_of_week, start_time, end_time, is_available)
+               VALUES ($1, $2, '09:00:00', '17:00:00', true)`,
+                        [userId, day]
+                    );
+                }
+                console.log(`   📅 Updated/Added default schedule for ${user.email}`);
+            }
         }
 
         console.log('\n✨ Database seeding completed!\n');
@@ -96,6 +127,8 @@ async function seedDatabase() {
     } catch (error) {
         console.error('❌ Error seeding database:', error);
     } finally {
+        // Use a local pool for seeding if necessary, but here we use the imported pool.
+        // If we close it here, subsequent calls might fail if not handled.
         await pool.end();
     }
 }

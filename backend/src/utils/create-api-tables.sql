@@ -5,7 +5,7 @@
 -- Doctor Profiles (extends users table)
 CREATE TABLE IF NOT EXISTS doctor_profiles (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
     specialization VARCHAR(100),
     license_number VARCHAR(50) UNIQUE,
     years_of_experience INTEGER,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
 -- Doctor Schedules
 CREATE TABLE IF NOT EXISTS doctor_schedules (
     id SERIAL PRIMARY KEY,
-    doctor_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
     day_of_week INTEGER CHECK (day_of_week >= 0 AND day_of_week <= 6), -- 0=Sunday, 6=Saturday
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS doctor_schedules (
 -- Appointments
 CREATE TABLE IF NOT EXISTS appointments (
     id SERIAL PRIMARY KEY,
-    patient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    doctor_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
     appointment_date DATE NOT NULL,
     appointment_time TIME NOT NULL,
     duration_minutes INTEGER DEFAULT 30,
@@ -46,8 +46,8 @@ CREATE TABLE IF NOT EXISTS appointments (
 -- Prescriptions
 CREATE TABLE IF NOT EXISTS prescriptions (
     id SERIAL PRIMARY KEY,
-    patient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    doctor_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
     appointment_id INTEGER REFERENCES appointments(id),
     prescription_date DATE NOT NULL DEFAULT CURRENT_DATE,
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'filled', 'cancelled')),
@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS prescriptions (
 CREATE TABLE IF NOT EXISTS prescription_items (
     id SERIAL PRIMARY KEY,
     prescription_id INTEGER REFERENCES prescriptions(id) ON DELETE CASCADE,
-    medicine_id UUID REFERENCES medicines(id),
+    -- medicine_id UUID REFERENCES medicines(id),
+    medicine_id INTEGER, -- For demo/simulated data
     dosage VARCHAR(100),
     frequency VARCHAR(100), -- e.g., "3 times daily", "Once daily"
     duration_days INTEGER,
@@ -72,7 +73,7 @@ CREATE TABLE IF NOT EXISTS prescription_items (
 -- Audit Logs (for admin tracking)
 CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
+    user_id UUID REFERENCES users(id),
     action VARCHAR(100) NOT NULL,
     entity_type VARCHAR(50),
     entity_id INTEGER,

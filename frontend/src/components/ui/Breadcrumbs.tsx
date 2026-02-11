@@ -7,27 +7,34 @@ export const Breadcrumbs: React.FC = () => {
     const location = useLocation();
     const pathnames = location.pathname.split('/').filter((x) => x);
 
-    if (pathnames.length === 0) return null;
+    // Check if current page is a landing/dashboard page for any role
+    const isLandingPage = pathnames.length === 1 && pathnames[0] === 'dashboard' ||
+        (pathnames.length === 2 && pathnames[1] === 'dashboard');
 
     return (
         <nav className="flex items-center space-y-0 text-sm font-medium text-muted-foreground mb-6" aria-label="Breadcrumb">
             <ol className="flex items-center space-x-2">
-                <li>
-                    <Link
-                        to="/dashboard"
-                        className="flex items-center hover:text-primary transition-colors gap-1.5"
-                    >
-                        <Home className="h-4 w-4" />
-                        <span className="sr-only">Home</span>
-                    </Link>
-                </li>
+                {!isLandingPage && (
+                    <li>
+                        <Link
+                            to="/dashboard"
+                            className="flex items-center hover:text-primary transition-colors gap-1.5"
+                        >
+                            <Home className="h-4 w-4" />
+                            <span className="sr-only">Home</span>
+                        </Link>
+                    </li>
+                )}
                 {pathnames.map((value, index) => {
                     const last = index === pathnames.length - 1;
                     const to = `/${pathnames.slice(0, index + 1).join('/')}`;
                     const label = value.charAt(0).toUpperCase() + value.slice(1).replace(/-/g, ' ');
 
-                    // Skip the generic "dashboard" if it's the first element as we have the Home icon
-                    if (value.toLowerCase() === 'dashboard' && index === 0) return null;
+                    // Skip the generic "dashboard" if it's the first element AND we're showing the Home icon
+                    if (!isLandingPage && value.toLowerCase() === 'dashboard' && index === 0) return null;
+                    // If we're on a subpage of a role dashboard (e.g. /patient/dashboard/something), 
+                    // we might want to skip "patient" if the Home icon handles the landing.
+                    // But for now let's keep it simple as per user request.
 
                     return (
                         <motion.li

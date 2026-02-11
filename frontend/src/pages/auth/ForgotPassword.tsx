@@ -141,7 +141,7 @@ export const ForgotPassword: React.FC = () => {
 
         return (
             <>
-                <div className="flex flex-col space-y-2 text-center relative">
+                <div className="hidden lg:flex flex-col space-y-2 text-center relative">
                     {step !== 'request' && (
                         <Button
                             variant="ghost"
@@ -153,7 +153,7 @@ export const ForgotPassword: React.FC = () => {
                         </Button>
                     )}
                     <div className="flex justify-center mb-6">
-                        <Logo size="md" />
+                        <Logo size="auth" />
                     </div>
                     <h1 className="text-2xl font-semibold tracking-tight">
                         {step === 'request' && 'Forgot Password'}
@@ -166,6 +166,21 @@ export const ForgotPassword: React.FC = () => {
                         {step === 'reset' && 'Create a new secure password for your account'}
                     </p>
                 </div>
+
+                {/* Mobile Navigation Header (Visible only on mobile) */}
+                {step !== 'request' && (
+                    <div className="lg:hidden flex items-center mb-6">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setStep(step === 'verify' ? 'request' : 'verify')}
+                        >
+                            <ArrowLeft className="h-4 w-4 mr-2" />
+                            Back
+                        </Button>
+                    </div>
+                )}
 
                 {error && (
                     <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
@@ -339,10 +354,24 @@ export const ForgotPassword: React.FC = () => {
         );
     };
 
+    const getTitle = () => {
+        if (step === 'success') return 'Success!';
+        if (step === 'verify') return 'Verify Identity';
+        if (step === 'reset') return 'Reset Password';
+        return 'Forgot Password';
+    };
+
+    const getSubtitle = () => {
+        if (step === 'success') return 'Your password has been successfully reset.';
+        if (step === 'verify') return `We sent a code to ${email}`;
+        if (step === 'reset') return 'Create a new secure password';
+        return "We'll help you get back into your account.";
+    };
+
     return (
         <AuthLayout
-            title={<>Secure Account <br />Recovery</>}
-            subtitle="We'll help you get back into your account securely."
+            title={getTitle()}
+            subtitle={getSubtitle()}
             image={loginBg}
         >
             {renderContent()}
