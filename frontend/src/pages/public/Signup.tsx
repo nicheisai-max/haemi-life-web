@@ -172,12 +172,21 @@ export const Signup: React.FC = () => {
                                 <FormItem>
                                     <FormLabel>Phone Number</FormLabel>
                                     <FormControl>
-                                        <Input
-                                            type="tel"
-                                            placeholder="+267 1234 5678"
-                                            className="bg-background h-10"
-                                            {...field}
-                                        />
+                                        <div className="relative">
+                                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                                <span className="text-muted-foreground font-medium">+267</span>
+                                            </div>
+                                            <Input
+                                                type="tel"
+                                                placeholder="71 234 567"
+                                                className="bg-background h-10 pl-14"
+                                                {...field}
+                                                onChange={(e) => {
+                                                    const value = e.target.value.replace(/[^0-9]/g, '');
+                                                    field.onChange(value);
+                                                }}
+                                            />
+                                        </div>
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
