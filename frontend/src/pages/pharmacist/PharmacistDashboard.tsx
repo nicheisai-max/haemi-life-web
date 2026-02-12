@@ -166,7 +166,7 @@ export const PharmacistDashboard: React.FC = () => {
                             <h2 className="text-2xl font-bold tracking-tight">Warehouse Pulse</h2>
                             <p className="text-muted-foreground">Medication stock levels and availability metrics</p>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => navigate('/inventory')}>
+                        <Button variant="outline" size="sm" onClick={() => navigate('/pharmacist/inventory')}>
                             Manage Stock
                         </Button>
                     </div>
@@ -214,7 +214,7 @@ export const PharmacistDashboard: React.FC = () => {
                                 </div>
                                 <span className="font-medium">Validate</span>
                             </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/inventory')}>
+                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/pharmacist/inventory')}>
                                 <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                                     <Box className="h-6 w-6" />
                                 </div>

@@ -21,6 +21,8 @@ import { NotificationMenu } from '../ui/NotificationMenu';
 // Import Real Assets
 import doctorImg from '../../assets/images/doctors/doctor_01.jpg';
 import patientImg from '../../assets/images/patients/patient_01.jpg';
+import adminImg from '../../assets/images/admin/admin.png';
+import pharmacistImg from '../../assets/images/pharmacies/pharmacy_01.jpg';
 
 export const Navbar: React.FC = () => {
     const { user, logout } = useAuth();
@@ -57,10 +59,19 @@ export const Navbar: React.FC = () => {
     // Determine User Image
     const getUserImage = () => {
         if (!user) return '';
-        // Hardcoded mapping for demo personas
-        if (user.role === 'doctor' && user.name.includes('Mpho')) return doctorImg;
-        if (user.role === 'patient' && user.name.includes('Tebogo')) return patientImg;
-        return ''; // Fallback to initials
+
+        switch (user.role) {
+            case 'admin':
+                return adminImg;
+            case 'doctor':
+                return doctorImg;
+            case 'patient':
+                return patientImg;
+            case 'pharmacist':
+                return pharmacistImg;
+            default:
+                return ''; // Fallback to initials
+        }
     };
 
     return (
@@ -120,8 +131,14 @@ export const Navbar: React.FC = () => {
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => navigate(`/${user?.role}/dashboard`)}>
+                            <DropdownMenuItem onClick={() => navigate('/profile')}>
                                 <UserIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                                <span className="cursor-pointer">Profile</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                                <div className="mr-2 h-4 w-4 flex items-center justify-center">
+                                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4"><path d="M0 3.5C0 2.67157 0.671573 2 1.5 2H6.5C7.32843 2 8 2.67157 8 3.5V6.5C8 7.32843 7.32843 8 6.5 8H1.5C0.671573 8 0 7.32843 0 6.5V3.5ZM9 3.5C9 2.67157 9.67157 2 10.5 2H13.5C14.3284 2 15 2.67157 15 3.5V6.5C15 7.32843 14.3284 8 13.5 8H10.5C9.67157 8 9 7.32843 9 6.5V3.5ZM0 10.5C0 9.67157 0.671573 9 1.5 9H6.5C7.32843 9 8 9.67157 8 10.5V13.5C8 14.3284 7.32843 15 6.5 15H1.5C0.671573 15 0 14.3284 0 13.5V10.5ZM9 10.5C9 9.67157 9.67157 9 10.5 9H13.5C14.3284 9 15 9.67157 15 10.5V13.5C15 14.3284 14.3284 15 13.5 15H10.5C9.67157 15 9 14.3284 9 13.5V10.5Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+                                </div>
                                 <span className="cursor-pointer">Dashboard</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => navigate('/settings')}>

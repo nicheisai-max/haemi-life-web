@@ -54,9 +54,10 @@ export const NotificationSimulator: React.FC = () => {
             else info(msg);
         };
 
-        // Initial delay so it doesn't pop up immediately on login
-        const initialTimer = setTimeout(triggerRandom, 5000);
-        const interval = setInterval(triggerRandom, 25000);
+        // Initial delay so it doesn't pop up immediately on login (1 minute)
+        const initialTimer = setTimeout(triggerRandom, 60000);
+        // Interval every 1.5 minutes
+        const interval = setInterval(triggerRandom, 90000);
 
         return () => {
             clearTimeout(initialTimer);

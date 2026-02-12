@@ -3,17 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getMyAppointments } from '../../services/appointment.service';
 import { getDoctorPatients } from '../../services/doctor.service';
 import type { Appointment } from '../../services/appointment.service';
 import {
     CalendarCheck, Users, ClipboardCheck, Contact, AlertCircle,
     UserPlus, ClipboardList, Pill, BarChart3, Calendar as CalendarIcon,
-    ArrowRight, Play, CalendarX, TrendingUp, BrainCircuit, Activity, Zap
+    ArrowRight, Play, CalendarX, BrainCircuit, Activity, Zap
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { motion } from 'framer-motion';
 import { ClinicalCopilot } from '@/components/ui/ClinicalCopilot';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
@@ -240,59 +241,15 @@ export const DoctorDashboard: React.FC = () => {
 
             {/* Clinical Analytics Visualization */}
             <motion.div variants={itemVariants}>
-                <GlassCard className="p-8 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <h2 className="text-2xl font-bold tracking-tight">Clinical Load Analysis</h2>
-                            <p className="text-muted-foreground">Hourly patient flow and consultation density</p>
-                        </div>
-                        <div className="flex items-center gap-2 px-4 py-2 bg-teal-500/10 rounded-xl text-teal-600 font-bold text-sm">
-                            <TrendingUp className="h-4 w-4" />
-                            Optimal Flow
-                        </div>
-                    </div>
-
-                    <div className="h-[250px] w-full mt-4">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={MOCK_VOLUME_DATA}>
-                                <defs>
-                                    <linearGradient id="colorPatients" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground))" opacity={0.1} />
-                                <XAxis
-                                    dataKey="name"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontWeight: 500 }}
-                                />
-                                <YAxis
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontWeight: 500 }}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: 'hsl(var(--background))',
-                                        border: '1px solid hsl(var(--border))',
-                                        borderRadius: '12px',
-                                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
-                                    }}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="patients"
-                                    stroke="hsl(var(--primary))"
-                                    strokeWidth={4}
-                                    fillOpacity={1}
-                                    fill="url(#colorPatients)"
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                </GlassCard>
+                <PremiumAreaChart
+                    title="Clinical Load Analysis"
+                    description="Hourly patient flow and consultation density"
+                    data={MOCK_VOLUME_DATA}
+                    dataKey="patients"
+                    categoryKey="name"
+                    color="#0E6B74" // Primary-800
+                    valueSuffix=" pts"
+                />
             </motion.div>
 
             {/* Main Content Split */}
@@ -302,25 +259,25 @@ export const DoctorDashboard: React.FC = () => {
                     <section>
                         <h2 className="text-xl font-semibold mb-4 text-foreground">Quick Actions</h2>
                         <div className="grid grid-cols-2 gap-4">
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/patients/new')}>
+                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 transition-all border border-transparent hover:border-primary/20 hover:bg-muted/50 group opacity-50 cursor-not-allowed">
                                 <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                                     <UserPlus className="h-6 w-6" />
                                 </div>
                                 <span className="font-medium">Add Patient</span>
                             </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/notes')}>
+                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 transition-all border border-transparent hover:border-primary/20 hover:bg-muted/50 group opacity-50 cursor-not-allowed">
                                 <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                                     <ClipboardList className="h-6 w-6" />
                                 </div>
                                 <span className="font-medium">SOAP Notes</span>
                             </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/prescriptions/new')}>
+                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 transition-all border border-transparent hover:border-primary/20 hover:bg-muted/50 group opacity-50 cursor-not-allowed">
                                 <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                                     <Pill className="h-6 w-6" />
                                 </div>
                                 <span className="font-medium">Prescribe</span>
                             </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/reports')}>
+                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 transition-all border border-transparent hover:border-primary/20 hover:bg-muted/50 group opacity-50 cursor-not-allowed">
                                 <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                                     <BarChart3 className="h-6 w-6" />
                                 </div>
@@ -382,6 +339,19 @@ export const DoctorDashboard: React.FC = () => {
                                             <span className="block text-lg font-bold leading-none">{time.split(' ')[0]}</span>
                                             <span className="block text-xs font-bold uppercase mt-0.5">{time.split(' ')[1]}</span>
                                         </div>
+
+                                        <div className="shrink-0">
+                                            <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                                                <AvatarImage
+                                                    src={`/images/patients/${appointment.other_party_name?.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`}
+                                                    alt={appointment.other_party_name || 'Patient'}
+                                                />
+                                                <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                    {appointment.other_party_name?.slice(0, 2).toUpperCase() || 'PT'}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        </div>
+
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between mb-1">
                                                 <h3 className="font-semibold truncate text-foreground">{appointment.other_party_name || 'Patient'}</h3>

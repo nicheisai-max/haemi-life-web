@@ -1,0 +1,261 @@
+-- =====================================================
+-- HAEMI LIFE DATABASE INITIALIZATION (v2.0)
+-- "Gateway to Persistence"
+-- =====================================================
+
+BEGIN;
+
+-- 1. Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 1.5 Clean Start (Prevent Schema Drift)
+DROP TABLE IF EXISTS prescription_items CASCADE;
+DROP TABLE IF EXISTS prescriptions CASCADE;
+DROP TABLE IF EXISTS appointments CASCADE;
+DROP TABLE IF EXISTS pharmacies CASCADE;
+DROP TABLE IF EXISTS locations CASCADE;
+DROP TABLE IF EXISTS medicines CASCADE;
+DROP TABLE IF EXISTS doctor_schedules CASCADE;
+DROP TABLE IF EXISTS doctor_profiles CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+-- 2. Schema Definitions (Tables)
+
+-- Users Table
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone_number VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL, -- Will be renamed to password_hash in v3
+    role VARCHAR(50) NOT NULL CHECK (role IN ('patient', 'doctor', 'admin', 'pharmacist')),
+    id_number VARCHAR(50),
+    is_active BOOLEAN DEFAULT true,
+    is_verified BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Doctor Profiles
+CREATE TABLE IF NOT EXISTS doctor_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    specialization VARCHAR(100),
+    license_number VARCHAR(50) UNIQUE,
+    years_of_experience INTEGER,
+    bio TEXT,
+    consultation_fee DECIMAL(10,2),
+    is_verified BOOLEAN DEFAULT false,
+    profile_image VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Doctor Schedules
+CREATE TABLE IF NOT EXISTS doctor_schedules (
+    id SERIAL PRIMARY KEY,
+    doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    day_of_week VARCHAR(20) NOT NULL, -- Changed from INTEGER to VARCHAR to match seed data ('monday', etc.)
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    is_available BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Medications (Master List)
+CREATE TABLE IF NOT EXISTS medicines (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    generic_name VARCHAR(255),
+    common_uses TEXT,
+    price_per_unit DECIMAL(10,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Pharmacies
+CREATE TABLE IF NOT EXISTS locations (
+    id SERIAL PRIMARY KEY,
+    city VARCHAR(100),
+    district VARCHAR(100),
+    gps_latitude DECIMAL(10,8),
+    gps_longitude DECIMAL(11,8),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pharmacies (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    location_id INTEGER REFERENCES locations(id),
+    address TEXT,
+    phone_number VARCHAR(50),
+    email VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Appointments
+CREATE TABLE IF NOT EXISTS appointments (
+    id SERIAL PRIMARY KEY,
+    patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    appointment_date DATE NOT NULL,
+    appointment_time TIME NOT NULL,
+    duration_minutes INTEGER DEFAULT 30,
+    status VARCHAR(20) DEFAULT 'scheduled',
+    consultation_type VARCHAR(50), -- 'video', 'in-person'
+    reason TEXT,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Prescriptions
+CREATE TABLE IF NOT EXISTS prescriptions (
+    id SERIAL PRIMARY KEY,
+    patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    appointment_id INTEGER REFERENCES appointments(id),
+    prescription_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    status VARCHAR(20) DEFAULT 'pending',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Prescription Items
+CREATE TABLE IF NOT EXISTS prescription_items (
+    id SERIAL PRIMARY KEY,
+    prescription_id INTEGER REFERENCES prescriptions(id) ON DELETE CASCADE,
+    medicine_id INTEGER REFERENCES medicines(id),
+    dosage VARCHAR(100),
+    frequency VARCHAR(100),
+    duration_days INTEGER,
+    quantity INTEGER,
+    instructions TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Analytics: Daily Visits (Apple Health Style Data)
+CREATE TABLE IF NOT EXISTS analytics_daily_visits (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    date DATE NOT NULL UNIQUE,
+    visits INT NOT NULL,
+    new_users INT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Analytics: Revenue Stats
+CREATE TABLE IF NOT EXISTS revenue_stats (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    month VARCHAR(20) NOT NULL, -- e.g., 'Jan 2026'
+    revenue DECIMAL(10, 2) NOT NULL,
+    expenses DECIMAL(10, 2) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 3. Stored Procedures (The "Golden Path" Logic)
+
+-- Procedure: Create User (Safe & Idempotent)
+CREATE OR REPLACE PROCEDURE sp_create_user(
+    p_name VARCHAR,
+    p_email VARCHAR,
+    p_phone VARCHAR,
+    p_password_hash VARCHAR,
+    p_role VARCHAR,
+    p_id_number VARCHAR DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO users (name, email, phone_number, password, role, id_number, is_verified)
+    VALUES (p_name, p_email, p_phone, p_password_hash, p_role, p_id_number, true)
+    ON CONFLICT (email) DO NOTHING; -- Emails must be unique
+END;
+$$;
+
+-- Procedure: Seed Demo Data (The Master Switch)
+CREATE OR REPLACE PROCEDURE sp_seed_demo_data(p_password_hash VARCHAR)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_doctor_id UUID;
+    v_patient_id UUID;
+    v_pharmacy_loc_id INTEGER;
+BEGIN
+    -- 1. Create Core Locations (if empty)
+    IF NOT EXISTS (SELECT 1 FROM locations LIMIT 1) THEN
+        INSERT INTO locations (city, district, gps_latitude, gps_longitude) VALUES
+        ('Gaborone', 'South-East', -24.6282, 25.9231),
+        ('Francistown', 'North-East', -21.1699, 27.5084),
+        ('Maun', 'North-West', -19.9945, 23.4163);
+    END IF;
+
+    -- 2. Create Medicines (if empty)
+    IF NOT EXISTS (SELECT 1 FROM medicines LIMIT 1) THEN
+        INSERT INTO medicines (name, generic_name, common_uses, price_per_unit) VALUES
+        ('Panado Extra', 'Paracetamol 500mg', 'Pain relief', 35.00),
+        ('Amoxil 500', 'Amoxicillin 500mg', 'Infection', 120.00),
+        ('Lipitor 20mg', 'Atorvastatin', 'Cholesterol', 280.00);
+    END IF;
+
+    -- 3. Create Admin User
+    CALL sp_create_user('Admin Kgosi', 'admin@haemilife.com', '+26771234567', p_password_hash, 'admin');
+
+    -- 4. Create Doctor (Dr. Mpho)
+    CALL sp_create_user('Dr. Mpho Modise', 'doctor@haemilife.com', '+26772123456', p_password_hash, 'doctor');
+    
+    -- Get ID for profile creation
+    SELECT id INTO v_doctor_id FROM users WHERE email = 'doctor@haemilife.com';
+    
+    -- Create Profile (Idempotent upsert)
+    INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, consultation_fee, is_verified)
+    VALUES (v_doctor_id, 'General Practitioner', 'BW-GP-2018-1234', 6, 250.00, true)
+    ON CONFLICT (user_id) DO NOTHING;
+
+    -- Create Schedule (Delete & Re-insert for purity)
+    DELETE FROM doctor_schedules WHERE doctor_id = v_doctor_id;
+    INSERT INTO doctor_schedules (doctor_id, day_of_week, start_time, end_time) VALUES
+    (v_doctor_id, 'monday', '08:00'::TIME, '17:00'::TIME),
+    (v_doctor_id, 'wednesday', '08:00'::TIME, '17:00'::TIME),
+    (v_doctor_id, 'friday', '08:00'::TIME, '17:00'::TIME);
+
+    -- 4b. Create Pharmacist (Keitumetse)
+    CALL sp_create_user('Keitumetse Gaosekwe', 'pharmacist@haemilife.com', '+26775123456', p_password_hash, 'pharmacist');
+
+    -- 5. Create Patient (Tebogo)
+    CALL sp_create_user('Tebogo Motswana', 'patient@haemilife.com', '+26773123456', p_password_hash, 'patient', '123456789');
+    
+    SELECT id INTO v_patient_id FROM users WHERE email = 'patient@haemilife.com';
+
+    -- 6. Create Appointment
+    -- Refactored to procedural logic to avoid checkInsertTargets error
+    IF NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = v_patient_id AND appointment_date = (CURRENT_DATE + INTERVAL '2 days')::DATE) THEN
+        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, consultation_type, reason)
+        VALUES (
+            v_patient_id,
+            v_doctor_id,
+            (CURRENT_DATE + INTERVAL '2 days')::DATE,
+            '10:00'::TIME,
+            'scheduled',
+            'video',
+            'General Checkup'
+        );
+    END IF;
+
+
+
+    -- 7. Seed Analytics (If empty)
+    IF NOT EXISTS (SELECT 1 FROM analytics_daily_visits LIMIT 1) THEN
+        INSERT INTO analytics_daily_visits (date, visits, new_users) VALUES
+        (CURRENT_DATE - INTERVAL '6 days', 320, 15),
+        (CURRENT_DATE - INTERVAL '5 days', 450, 22),
+        (CURRENT_DATE - INTERVAL '4 days', 380, 18),
+        (CURRENT_DATE - INTERVAL '3 days', 520, 28),
+        (CURRENT_DATE - INTERVAL '2 days', 590, 35),
+        (CURRENT_DATE - INTERVAL '1 day', 650, 42),
+        (CURRENT_DATE, 720, 45);
+    END IF;
+
+END;
+$$;
+
+COMMIT;

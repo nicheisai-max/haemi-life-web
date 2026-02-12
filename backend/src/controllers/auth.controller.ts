@@ -87,3 +87,69 @@ export const login = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+export const getProfile = async (req: any, res: Response) => {
+    try {
+        const userId = req.user.id;
+        const result = await pool.query('SELECT id, name, email, phone_number, role, id_number, is_active, created_at FROM users WHERE id = $1', [userId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error fetching profile:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const updateProfile = async (req: any, res: Response) => {
+    try {
+        const userId = req.user.id;
+        const { name, email, phone_number } = req.body;
+
+        const result = await pool.query(
+            'UPDATE users SET name = $1, email = $2, phone_number = $3, updated_at = NOW() WHERE id = $4 RETURNING id, name, email, phone_number, role',
+            [name, email, phone_number, userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const changePassword = async (req: any, res: Response) => {
+    try {
+        const userId = req.user.id;
+        const { current_password, new_password } = req.body;
+
+        // Get current password hash
+        const result = await pool.query('SELECT password FROM users WHERE id = $1', [userId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user = result.rows[0];
+        const validPassword = await bcrypt.compare(current_password, user.password);
+
+        if (!validPassword) {
+            return res.status(400).json({ message: 'Invalid current password' });
+        }
+
+        const hashedPassword = await bcrypt.hash(new_password, 10);
+
+        await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, userId]);
+
+        res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Error changing password:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};

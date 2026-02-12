@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 
@@ -93,27 +94,34 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     return (
         <ToastContext.Provider value={{ showToast, success, error, warning, info }}>
             {children}
-            <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 w-full max-w-[400px] pointer-events-none sm:right-4 sm:left-auto sm:top-4 max-sm:left-2 max-sm:right-2 max-sm:w-auto">
-                {toasts.map(toast => (
-                    <div
-                        key={toast.id}
-                        className={`flex items-center gap-3 p-4 bg-background rounded-xl shadow-lg border-l-4 cursor-pointer pointer-events-auto animate-in slide-in-from-right-full transition-all duration-200 hover:-translate-x-1 hover:opacity-95 ${getToastStyles(toast.type)}`}
-                        onClick={() => removeToast(toast.id)}
-                    >
-                        {getIcon(toast.type)}
-                        <span className="flex-1 text-sm font-medium text-foreground leading-snug">{toast.message}</span>
-                        <button
-                            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-sm hover:bg-muted text-muted-foreground transition-colors"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                removeToast(toast.id);
-                            }}
-                            aria-label="Close"
+            <div className="fixed top-24 right-4 z-[100] flex flex-col gap-3 w-full max-w-[400px] pointer-events-none sm:right-4 sm:left-auto max-sm:left-2 max-sm:right-2 max-sm:w-auto">
+                <AnimatePresence mode="popLayout">
+                    {toasts.map(toast => (
+                        <motion.div
+                            key={toast.id}
+                            layout
+                            initial={{ opacity: 0, x: 50, scale: 0.95 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                            className={`flex items-center gap-3 p-4 bg-background rounded-xl shadow-lg border-l-4 cursor-pointer pointer-events-auto hover:opacity-95 ${getToastStyles(toast.type)}`}
+                            onClick={() => removeToast(toast.id)}
                         >
-                            <X className="h-4 w-4" />
-                        </button>
-                    </div>
-                ))}
+                            {getIcon(toast.type)}
+                            <span className="flex-1 text-sm font-medium text-foreground leading-snug">{toast.message}</span>
+                            <button
+                                className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-sm hover:bg-muted text-muted-foreground transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeToast(toast.id);
+                                }}
+                                aria-label="Close"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
             </div>
         </ToastContext.Provider>
     );

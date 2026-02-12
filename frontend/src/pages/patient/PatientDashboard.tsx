@@ -3,15 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getMyAppointments } from '../../services/appointment.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import type { Appointment } from '../../services/appointment.service';
 import type { Prescription } from '../../services/prescription.service';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Calendar, FileText, FolderOpen, AlertCircle, ThermometerSun, Search, History, Settings as SettingsIcon, CalendarX, Clock, ArrowRight, Activity, Heart } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Plus, Calendar, FileText, FolderOpen, AlertCircle, ThermometerSun, Search, History, Settings as SettingsIcon, CalendarX, Clock, ArrowRight, Heart } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart'; // Re-import to fix HMR
 import { motion } from 'framer-motion';
 
 const MOCK_HEALTH_DATA = [
@@ -124,7 +125,7 @@ export const PatientDashboard: React.FC = () => {
                     <Button
                         size="lg"
                         className="bg-primary hover:bg-primary/90 text-white shadow-xl px-8 h-14 text-lg font-bold rounded-2xl shrink-0 gap-3 group"
-                        onClick={() => navigate('/appointments/book')}
+                        onClick={() => navigate('/book-appointment')}
                     >
                         <Plus className="h-6 w-6 group-hover:rotate-90 transition-transform" />
                         Book Appointment
@@ -181,51 +182,15 @@ export const PatientDashboard: React.FC = () => {
 
             {/* Health Pulse Visualization */}
             <motion.div variants={itemVariants}>
-                <GlassCard className="p-8 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <h2 className="text-2xl font-bold tracking-tight">Your Health Pulse</h2>
-                            <p className="text-muted-foreground">Wellness score and activity trends over the last month</p>
-                        </div>
-                        <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-xl text-primary font-bold text-sm">
-                            <Activity className="h-4 w-4" />
-                            Top 5% Active
-                        </div>
-                    </div>
-
-                    <div className="h-[250px] w-full mt-4">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={MOCK_HEALTH_DATA}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground))" opacity={0.1} />
-                                <XAxis
-                                    dataKey="name"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontWeight: 500 }}
-                                />
-                                <YAxis
-                                    hide
-                                    domain={['dataMin - 10', 'dataMax + 10']}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: 'hsl(var(--background))',
-                                        border: '1px solid hsl(var(--border))',
-                                        borderRadius: '12px'
-                                    }}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="score"
-                                    stroke="hsl(var(--primary))"
-                                    strokeWidth={4}
-                                    dot={{ fill: 'hsl(var(--primary))', strokeWidth: 2, r: 6, stroke: 'hsl(var(--background))' }}
-                                    activeDot={{ r: 8, strokeWidth: 0 }}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                </GlassCard>
+                <PremiumAreaChart
+                    title="Your Health Pulse"
+                    description="Wellness score and activity trends over the last month"
+                    data={MOCK_HEALTH_DATA}
+                    dataKey="score"
+                    categoryKey="name"
+                    color="#0E6B74"
+                    valueSuffix=" pts"
+                />
             </motion.div>
 
             {/* Main Content Split */}
@@ -245,7 +210,7 @@ export const PatientDashboard: React.FC = () => {
                                 <Search className="h-8 w-8 text-primary group-hover:scale-110 transition-transform" />
                                 <span className="font-medium">Find Doctor</span>
                             </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/medical-records')}>
+                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/records')}>
                                 <History className="h-8 w-8 text-primary group-hover:scale-110 transition-transform" />
                                 <span className="font-medium">View History</span>
                             </Card>
@@ -304,7 +269,7 @@ export const PatientDashboard: React.FC = () => {
                             <Card className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
                                 <CalendarX className="h-12 w-12 opacity-20 mb-3" />
                                 <p>No upcoming appointments</p>
-                                <Button variant="link" className="mt-2 text-primary" onClick={() => navigate('/appointments/book')}>Book now</Button>
+                                <Button variant="link" className="mt-2 text-primary" onClick={() => navigate('/book-appointment')}>Book now</Button>
                             </Card>
                         ) : (
                             upcomingAppointments.map((appointment) => {
@@ -315,6 +280,19 @@ export const PatientDashboard: React.FC = () => {
                                             <span className="block text-xl font-bold leading-none">{dateInfo.day}</span>
                                             <span className="block text-xs font-bold text-muted-foreground uppercase mt-0.5">{dateInfo.month}</span>
                                         </div>
+
+                                        <div className="shrink-0">
+                                            <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                                                <AvatarImage
+                                                    src={`/images/doctors/${appointment.other_party_name?.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`}
+                                                    alt={appointment.other_party_name || 'Doctor'}
+                                                />
+                                                <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                    {appointment.other_party_name?.slice(0, 2).toUpperCase() || 'DR'}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        </div>
+
                                         <div className="flex-1 min-w-0">
                                             <h3 className="font-semibold truncate">{appointment.other_party_name || 'Doctor'}</h3>
                                             <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Users, UserCheck, Activity, Settings, ShieldCheck, TrendingUp, ArrowUpRight, ClipboardCheck } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { motion } from 'framer-motion';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -200,69 +200,26 @@ export const AdminDashboard: React.FC = () => {
             {/* Main Content Areas */}
             <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Analytics Chart */}
-                <GlassCard className="lg:col-span-2 p-8 space-y-8" mesh meshVariant="primary">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">System Growth</h2>
-                            <p className="text-slate-500 font-medium font-medium">New user registrations across all sectors</p>
-                        </div>
-                        <Badge variant="secondary" className="px-4 py-1.5 rounded-xl font-bold text-primary bg-primary/10 border-primary/20">
-                            +24% vs Prev. Month
-                        </Badge>
-                    </div>
-
-                    <div className="h-[350px] w-full mt-6">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={growthData}>
-                                <defs>
-                                    <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3FC2B5" stopOpacity={0.8} />
-                                        <stop offset="95%" stopColor="#3FC2B5" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
-                                <XAxis
-                                    dataKey="name"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: '#64748b', fontSize: 13, fontWeight: 600 }}
-                                />
-                                <YAxis
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: '#64748b', fontSize: 13, fontWeight: 600 }}
-                                />
-                                <Tooltip
-                                    cursor={{ stroke: '#3FC2B5', strokeWidth: 1 }}
-                                    contentStyle={{
-                                        borderRadius: '16px',
-                                        border: 'none',
-                                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-                                        padding: '12px 16px',
-                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                    }}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="value"
-                                    stroke="#3FC2B5"
-                                    strokeWidth={4}
-                                    fillOpacity={1}
-                                    fill="url(#colorGrowth)"
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                </GlassCard>
+                <div className="lg:col-span-2">
+                    <PremiumAreaChart
+                        title="System Growth"
+                        description="New user registrations across all sectors"
+                        data={growthData}
+                        dataKey="value"
+                        categoryKey="name"
+                        color="#3FC2B5"
+                        height={350}
+                    />
+                </div>
 
                 {/* System Alerts / Logs */}
                 <div className="space-y-6">
                     <h2 className="text-xl font-black uppercase tracking-widest text-slate-500">Security Pulse</h2>
                     <div className="space-y-4">
                         {[
-                            { title: 'New Provider Auth', desc: 'Dr. Sarah Wilson verified', time: '2m ago', type: 'success' },
-                            { title: 'DDoS Mitigation', desc: 'Resolved 2 minute spike', time: '45m ago', type: 'warning' },
-                            { title: 'Backup Complete', desc: 'Global shard redundancy', time: '1h ago', type: 'info' },
+                            { title: 'New Provider Auth', desc: 'Dr. Sarah Wilson verified', time: '2m ago', type: 'success', user: 'Dr. Sarah Wilson' },
+                            { title: 'DDoS Mitigation', desc: 'Resolved 2 minute spike', time: '45m ago', type: 'warning', user: 'System' },
+                            { title: 'Backup Complete', desc: 'Global shard redundancy', time: '1h ago', type: 'info', user: 'System' },
                         ].map((log, i) => (
                             <motion.div
                                 key={i}
@@ -271,6 +228,17 @@ export const AdminDashboard: React.FC = () => {
                                 transition={{ delay: 0.5 + i * 0.1 }}
                             >
                                 <GlassCard className="p-5 flex items-start gap-4 hover:border-primary/40 transition-all border-l-4 border-l-primary group">
+                                    <div className="shrink-0 mt-1">
+                                        <Avatar className="h-8 w-8 border border-border">
+                                            <AvatarImage
+                                                src={`/images/doctors/${log.user?.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`}
+                                                alt={log.user}
+                                            />
+                                            <AvatarFallback className="text-[10px] font-bold">
+                                                {log.user?.slice(0, 2).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between mb-1">
                                             <h4 className="font-bold text-slate-900 dark:text-white truncate">{log.title}</h4>

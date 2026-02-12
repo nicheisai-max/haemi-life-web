@@ -6,9 +6,9 @@ import { ToastProvider } from './context/ToastContext';
 import { NetworkStatusProvider } from './context/NetworkStatus';
 import { SessionManagerProvider } from './context/SessionManager';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
-import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { ScrollToTop } from './components/utils/ScrollToTop';
+import { PremiumLoader } from './components/ui/PremiumLoader';
 
 // Lazy loaded pages
 // Eagerly loaded Auth/Public pages for zero-jerks and instantaneous navigation
@@ -42,15 +42,7 @@ const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then(m => 
 const VideoConsultation = lazy(() => import('./components/telemedicine/VideoConsultation').then(m => ({ default: m.VideoConsultation })));
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound })));
 
-const LoadingFallback = () => (
-  <div className="h-screen p-8 space-y-4">
-    <Skeleton className="h-48 w-full rounded-xl" />
-    <div className="space-y-2">
-      <Skeleton className="h-4 w-[250px]" />
-      <Skeleton className="h-4 w-[200px]" />
-    </div>
-  </div>
-);
+const LoadingFallback = () => <PremiumLoader />;
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -154,7 +146,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/find-doctors"
+              path="/doctors"
               element={
                 <ProtectedRoute>
                   <DashboardLayout>

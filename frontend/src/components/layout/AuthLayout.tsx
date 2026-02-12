@@ -20,7 +20,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
                     alt="Authentication Background"
                     className="absolute inset-0 w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900/85 via-slate-800/70 to-slate-700/40 backdrop-blur-[2px]" />
+                {/* Gradient overlay removed as per user request */}
 
                 <div className="absolute bottom-[10%] left-[10%] right-[10%] text-white z-20">
                     <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight drop-shadow-lg">
