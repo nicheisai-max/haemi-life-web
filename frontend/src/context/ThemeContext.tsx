@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 type Theme = 'light' | 'dark';
 
@@ -10,66 +11,44 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const location = useLocation();
+
+    // Function to check if current page is an auth page
+    const isAuthPage = (pathname: string) => {
+        return pathname.includes('/login') ||
+            pathname.includes('/signup') ||
+            pathname.includes('/forgot-password') ||
+            pathname.includes('/onboarding');
+    };
+
     const [theme, setTheme] = useState<Theme>(() => {
-        // Detect if we are on an auth page to force light initial state
-        const path = window.location.pathname;
-        const isAuthPage = path.includes('/login') || path.includes('/signup') || path.includes('/forgot-password');
+        // Initial check relies on window.location since useLocation might not be ready during initial state setup? 
+        // Actually it is, but let's be safe.
+        if (isAuthPage(window.location.pathname)) return 'light';
 
-        if (isAuthPage) return 'light';
-
-        // Check local storage or system preference
         const savedTheme = localStorage.getItem('theme') as Theme;
         if (savedTheme) return savedTheme;
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
 
-    // We need location to react to route changes
-    const [path, setPath] = useState(window.location.pathname);
-
-    // Listen for route changes manually since ThemeProvider is outside Router in App.tsx
-    // (Wait, actually ThemeProvider is INSIDE Router in App.tsx? No, let's check App.tsx)
-    // In App.tsx: Router is inside AppRoutes? No, Router wraps AppRoutes. 
-    // Wait, App.tsx has Router inside. ThemeProvider is OUTSIDE Router.
-    // So we can't use useLocation here. We'll use a simple event listener or just check on every render.
-
     useEffect(() => {
         const root = window.document.documentElement;
 
-        // Check current path
-        const currentPath = window.location.pathname;
-        const isAuthPage = currentPath.includes('/login') ||
-            currentPath.includes('/signup') ||
-            currentPath.includes('/forgot-password') ||
-            currentPath.includes('/onboarding');
-
-        const activeTheme = isAuthPage ? 'light' : theme;
-
-        root.classList.remove('light', 'dark');
-        root.classList.add(activeTheme);
-
-        if (!isAuthPage) {
+        // If it's an auth page, FORCE 'light' regardless of 'theme' state
+        if (isAuthPage(location.pathname)) {
+            root.classList.remove('dark');
+            root.classList.add('light');
+            // We don't update setItem here to preserve user preference when they leave auth pages
+        } else {
+            root.classList.remove('light', 'dark');
+            root.classList.add(theme);
             localStorage.setItem('theme', theme);
         }
 
-        // Add a global listener for navigation jerks if needed, but this should suffice 
-        // if we also listen to popstate or just handle it in the component.
-        const handleLocationChange = () => {
-            setPath(window.location.pathname);
-        };
-
-        window.addEventListener('popstate', handleLocationChange);
-        // Also listen for our own link clicks
-        window.addEventListener('pushstate', handleLocationChange);
-        window.addEventListener('replacestate', handleLocationChange);
-
-        return () => {
-            window.removeEventListener('popstate', handleLocationChange);
-            window.removeEventListener('pushstate', handleLocationChange);
-            window.removeEventListener('replacestate', handleLocationChange);
-        };
-    }, [theme, path]);
+    }, [theme, location.pathname]);
 
     const toggleTheme = () => {
+        if (isAuthPage(location.pathname)) return; // Prevent toggling on auth pages
         setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
     };
 

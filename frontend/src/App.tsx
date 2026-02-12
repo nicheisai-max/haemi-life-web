@@ -16,6 +16,7 @@ import { Login } from './pages/public/Login';
 import { Signup } from './pages/public/Signup';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { StyleGuide } from './pages/public/StyleGuide';
+import { PATHS } from './routes/paths';
 
 // Lazy loaded dashboard pages
 const PatientDashboard = lazy(() => import('./pages/patient/PatientDashboard').then(m => ({ default: m.PatientDashboard })));
@@ -33,6 +34,7 @@ const DoctorScheduleManagement = lazy(() => import('./pages/doctor/DoctorSchedul
 const PrescriptionQueue = lazy(() => import('./pages/pharmacist/PrescriptionQueue').then(m => ({ default: m.PrescriptionQueue })));
 const VerifyDoctors = lazy(() => import('./pages/admin/VerifyDoctors').then(m => ({ default: m.VerifyDoctors })));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement').then(m => ({ default: m.UserManagement })));
+const SystemLogs = lazy(() => import('./pages/admin/SystemLogs').then(m => ({ default: m.SystemLogs })));
 const Inventory = lazy(() => import('./pages/pharmacist/Inventory').then(m => ({ default: m.Inventory })));
 const PrivacyPolicy = lazy(() => import('./pages/legal/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfService = lazy(() => import('./pages/legal/TermsOfService').then(m => ({ default: m.TermsOfService })));
@@ -41,6 +43,7 @@ const TelemedicineConsent = lazy(() => import('./pages/legal/TelemedicineConsent
 const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then(m => ({ default: m.Onboarding })));
 const VideoConsultation = lazy(() => import('./components/telemedicine/VideoConsultation').then(m => ({ default: m.VideoConsultation })));
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound })));
+import { DoctorPatientList } from './pages/doctor/DoctorPatientList';
 
 const LoadingFallback = () => <PremiumLoader />;
 
@@ -98,12 +101,12 @@ const AppRoutes = () => {
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             {/* Eagerly Loaded Auth/Public Routes (Zero Flicker) */}
-            <Route path="/style-guide" element={<StyleGuide />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/terms" element={<TermsOfService />} />
+            <Route path={PATHS.STYLE_GUIDE} element={<StyleGuide />} />
+            <Route path={PATHS.LOGIN} element={<Login />} />
+            <Route path={PATHS.SIGNUP} element={<Signup />} />
+            <Route path={PATHS.FORGOT_PASSWORD} element={<ForgotPassword />} />
+            <Route path={PATHS.PRIVACY} element={<PrivacyPolicy />} />
+            <Route path={PATHS.TERMS} element={<TermsOfService />} />
 
             {/* Lazy Loaded Routes */}
             <Route path="/help" element={<Help />} />
@@ -254,12 +257,48 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/admin/users"
+              path={PATHS.DOCTOR.PATIENTS}
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                      <DoctorPatientList />
+                    </motion.div>
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={PATHS.ADMIN.DASHBOARD}
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                      <AdminDashboard />
+                    </motion.div>
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={PATHS.ADMIN.USERS}
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
                     <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
                       <UserManagement />
+                    </motion.div>
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={PATHS.ADMIN.SYSTEM_LOGS}
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                      <SystemLogs />
                     </motion.div>
                   </DashboardLayout>
                 </ProtectedRoute>
@@ -275,7 +314,9 @@ const AppRoutes = () => {
                 </ProtectedRoute>
               }
             />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path={PATHS.DOCTOR.DASHBOARD_LEGACY} element={<Navigate to={PATHS.DASHBOARD} replace />} />
+            <Route path={PATHS.ADMIN.DASHBOARD_LEGACY} element={<Navigate to={PATHS.ADMIN.DASHBOARD} replace />} />
+            <Route path={PATHS.ROOT} element={<Navigate to={PATHS.DASHBOARD} replace />} />
             <Route path="*" element={<motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}><NotFound /></motion.div>} />
           </Routes>
         </AnimatePresence>
@@ -289,22 +330,22 @@ import { LanguageProvider } from './context/LanguageContext';
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <ThemeProvider>
-          <ToastProvider>
-            <NetworkStatusProvider>
-              <SessionManagerProvider>
-                <LanguageProvider>
-                  <Router>
+      <Router>
+        <AuthProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <NetworkStatusProvider>
+                <SessionManagerProvider>
+                  <LanguageProvider>
                     <ScrollToTop />
                     <AppRoutes />
-                  </Router>
-                </LanguageProvider>
-              </SessionManagerProvider>
-            </NetworkStatusProvider>
-          </ToastProvider>
-        </ThemeProvider>
-      </AuthProvider>
+                  </LanguageProvider>
+                </SessionManagerProvider>
+              </NetworkStatusProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </AuthProvider>
+      </Router>
     </ErrorBoundary>
   );
 };

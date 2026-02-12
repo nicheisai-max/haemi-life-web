@@ -8,7 +8,6 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
-import type { TooltipProps } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 interface PremiumAreaChartProps {

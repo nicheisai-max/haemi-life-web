@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 interface GradientMeshProps {
     className?: string;
-    variant?: 'primary' | 'secondary' | 'accent' | 'subtle';
+    variant?: 'primary' | 'secondary' | 'accent' | 'subtle' | 'brand';
 }
 
 /**
@@ -19,6 +19,7 @@ export const GradientMesh: React.FC<GradientMeshProps> = ({
         secondary: "from-teal-500/10 via-emerald-500/5 to-indigo-500/10",
         accent: "from-rose-500/10 via-orange-500/5 to-amber-500/10",
         subtle: "from-slate-500/5 via-transparent to-slate-500/5",
+        brand: "from-[#0E6B74]/10 via-[#1BA7A6]/5 to-[#6ED3C4]/10",
     };
 
     return (

@@ -13,12 +13,12 @@ import {
     ArrowRight, Play, CalendarX, BrainCircuit, Activity, Zap
 } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
-import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { motion } from 'framer-motion';
 import { ClinicalCopilot } from '@/components/ui/ClinicalCopilot';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
 import { AnimatedEmptyState } from '@/components/ui/AnimatedEmptyState';
+import { PremiumStatCard } from '@/components/ui/PremiumStatCard';
 
 const MOCK_VOLUME_DATA = [
     { name: '08:00', patients: 2 },
@@ -119,13 +119,6 @@ export const DoctorDashboard: React.FC = () => {
         });
     };
 
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return t('hero.greeting_morning');
-        if (hour < 18) return t('hero.greeting_afternoon');
-        return t('hero.greeting_evening');
-    };
-
     const todayAppointments = appointments.filter(a => {
         const apptDate = new Date(a.appointment_date);
         const today = new Date();
@@ -144,44 +137,44 @@ export const DoctorDashboard: React.FC = () => {
             <ClinicalCopilot isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
 
             {/* Hero Section */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-2xl">
+            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
                 <GradientMesh variant="secondary" className="opacity-40" />
-                <div className="relative z-10 p-6 md:p-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-                    <div className="space-y-4 max-w-2xl">
-                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-teal-500/20 text-teal-400 text-sm font-bold border border-teal-500/30">
+                <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div className="space-y-2 max-w-2xl">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-400 text-[10px] font-bold border border-teal-500/30">
                             <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
                             </span>
                             Shift: On-Duty
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
-                            {getGreeting()}, Dr. {user?.name}
+                        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
+                            Hi, Dr. {user?.name}
                         </h1>
-                        <p className="text-white/70 text-lg md:text-xl font-medium leading-relaxed">
+                        <p className="text-white/70 text-base font-medium leading-relaxed">
                             {loading
                                 ? t('common.loading')
                                 : t('hero.subtitle_doctor').replace('{count}', todayAppointments.length.toString())
                             }
                         </p>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-4 shrink-0">
+                    <div className="flex flex-col sm:flex-row gap-3 shrink-0">
                         <Button
-                            size="lg"
+                            size="sm"
                             variant="outline"
-                            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/30 shadow-xl px-8 h-14 text-lg font-bold rounded-2xl gap-3 group"
+                            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/30 shadow-lg px-6 h-11 text-sm font-bold rounded-xl gap-2 group"
                             onClick={() => setIsCopilotOpen(true)}
                         >
-                            <BrainCircuit className="h-6 w-6 group-hover:animate-pulse" />
+                            <BrainCircuit className="h-4 w-4 group-hover:animate-pulse" />
                             AI Copilot
                         </Button>
                         <Button
-                            size="lg"
-                            className="bg-teal-500 hover:bg-teal-600 text-white shadow-xl px-8 h-14 text-lg font-bold rounded-2xl gap-3 group"
+                            size="sm"
+                            className="bg-teal-500 hover:bg-teal-600 text-white shadow-lg px-6 h-11 text-sm font-bold rounded-xl gap-2 group"
                             onClick={() => navigate('/appointments')}
                         >
-                            <CalendarCheck className="h-6 w-6 group-hover:scale-110 transition-transform" />
-                            Master Schedule
+                            <CalendarCheck className="h-4 w-4 group-hover:scale-110 transition-transform" />
+                            Schedule
                         </Button>
                     </div>
                 </div>
@@ -198,39 +191,33 @@ export const DoctorDashboard: React.FC = () => {
             {/* Stats Grid */}
             <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="primary">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-500 shadow-inner">
-                            <Users className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : todayAppointments.length}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-blue-500/80">Today's Patients</div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={Users}
+                        label="Today's Patients"
+                        value={loading ? '...' : todayAppointments.length}
+                        trend="neutral"
+                        trendValue="Scheduled"
+                    />
                 </motion.div>
 
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="accent">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-500 shadow-inner">
-                            <ClipboardCheck className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : pendingReviews}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-amber-500/80">Completed Encounters</div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={ClipboardCheck}
+                        label="Completed Encounters"
+                        value={loading ? '...' : pendingReviews}
+                        trend="up"
+                        trendValue="On Track"
+                    />
                 </motion.div>
 
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="secondary">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/20 text-indigo-500 shadow-inner">
-                            <Contact className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : patientCount}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-indigo-500/80">Primary Care Panel</div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={Contact}
+                        label="Primary Care Panel"
+                        value={loading ? '...' : patientCount}
+                        trend="up"
+                        trendValue="+3 New"
+                    />
                 </motion.div>
             </motion.div>
 

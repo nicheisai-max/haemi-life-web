@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User as UserIcon, Settings, LogOut } from 'lucide-react';
 import { CommandCenter } from '../ui/CommandCenter';
 import { NotificationMenu } from '../ui/NotificationMenu';
+import { MobileSidebar } from './MobileSidebar';
 
 // Import Real Assets
 import doctorImg from '../../assets/images/doctors/doctor_01.jpg';
@@ -79,10 +80,12 @@ export const Navbar: React.FC = () => {
             <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
 
                 {/* Left: Logo */}
-                <div className="flex items-center gap-2 min-w-[200px]">
+                {/* Left: Logo */}
+                <div className="flex items-center gap-2 min-w-[260px] h-full pl-4 md:pl-0">
+                    <MobileSidebar />
                     <Link
                         to="/"
-                        className="flex items-center gap-2 transition-opacity hover:opacity-90"
+                        className="flex items-center gap-2 transition-opacity hover:opacity-90 px-4"
                         aria-label="Haemi Life Home"
                     >
                         <Logo size="md" />

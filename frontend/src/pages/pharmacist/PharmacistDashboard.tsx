@@ -8,6 +8,7 @@ import { QrCode, Receipt, CheckCircle2, AlertCircle, ClipboardCheck, Box, Shoppi
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { PremiumStatCard } from '@/components/ui/PremiumStatCard';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -60,12 +61,7 @@ export const PharmacistDashboard: React.FC = () => {
         }
     };
 
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Good Morning';
-        if (hour < 18) return 'Good Afternoon';
-        return 'Good Evening';
-    };
+
 
     const pendingOrders = prescriptions.filter(p => p.status === 'pending');
     const todayFilled = prescriptions.filter(p => {
@@ -83,18 +79,18 @@ export const PharmacistDashboard: React.FC = () => {
             className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8"
         >
             {/* Hero Section */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-2xl">
+            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
                 <GradientMesh variant="secondary" className="opacity-40" />
-                <div className="relative z-10 p-6 md:p-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-                    <div className="space-y-4 max-w-2xl">
-                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-bold border border-emerald-500/30">
-                            <Zap className="h-4 w-4 fill-current" />
+                <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div className="space-y-2 max-w-2xl">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                            <Zap className="h-3 w-3 fill-current" />
                             Inventory Health: Stable
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
-                            {getGreeting()}, {user?.name}
+                        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
+                            Hi, {user?.name}
                         </h1>
-                        <p className="text-white/70 text-lg md:text-xl font-medium leading-relaxed">
+                        <p className="text-white/70 text-base font-medium leading-relaxed">
                             {loading
                                 ? 'Syncing pharmaceutical logistics...'
                                 : `Operational readiness is at 98.4%. ${pendingOrders.length} vital prescriptions are awaiting your expert verification.`
@@ -102,10 +98,10 @@ export const PharmacistDashboard: React.FC = () => {
                         </p>
                     </div>
                     <Button
-                        size="lg"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl px-8 h-14 text-lg font-bold rounded-2xl shrink-0 gap-3 group"
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg px-6 h-11 text-sm font-bold rounded-xl shrink-0 gap-2 group"
                     >
-                        <QrCode className="h-6 w-6 group-hover:rotate-12 transition-transform" />
+                        <QrCode className="h-5 w-5 group-hover:rotate-12 transition-transform" />
                         Smart Scan
                     </Button>
                 </div>
@@ -122,39 +118,34 @@ export const PharmacistDashboard: React.FC = () => {
             {/* Stats Grid */}
             <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="secondary">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-500 shadow-inner">
-                            <Receipt className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : pendingOrders.length}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-emerald-500/80 tracking-tight">Active Prescriptions</div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={Receipt}
+                        label="Active Prescriptions"
+                        value={loading ? '...' : pendingOrders.length}
+                        trend="up"
+                        trendValue="Pending"
+                    />
                 </motion.div>
 
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="primary">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-500 shadow-inner">
-                            <CheckCircle2 className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : todayFilled}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-blue-500/80 tracking-tight">Orders Fulfilled</div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={CheckCircle2}
+                        label="Orders Fulfilled"
+                        value={loading ? '...' : todayFilled}
+                        trend="up"
+                        trendValue="Today"
+                        subtext="Completion Rate: 98%"
+                    />
                 </motion.div>
 
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="accent">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-500/20 text-orange-500 shadow-inner">
-                            <Database className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : prescriptions.length}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-orange-500/80 tracking-tight">Stock Analytics</div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={Database}
+                        label="Stock Analytics"
+                        value={loading ? '...' : prescriptions.length}
+                        trend="neutral"
+                        trendValue="Syncing"
+                    />
                 </motion.div>
             </motion.div>
 
@@ -208,7 +199,7 @@ export const PharmacistDashboard: React.FC = () => {
                     <section>
                         <h2 className="text-xl font-semibold mb-4 text-foreground">Quick Actions</h2>
                         <div className="grid grid-cols-2 gap-4">
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/prescriptions')}>
+                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/pharmacist/queue')}>
                                 <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                                     <ClipboardCheck className="h-6 w-6" />
                                 </div>

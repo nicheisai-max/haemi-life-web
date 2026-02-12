@@ -21,10 +21,14 @@ import {
     ArrowRight,
     Sparkles,
     MapPin,
-    Pill
+    Pill,
+    ClipboardList,
+    Package,
+    ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Badge } from './badge';
+import { PATHS } from '../../routes/paths';
 
 export const CommandCenter: React.FC = () => {
     const [open, setOpen] = useState(false);
@@ -54,12 +58,24 @@ export const CommandCenter: React.FC = () => {
     ];
 
     const quickActions = [
-        { label: "Book Appointment", icon: Calendar, path: "/book-appointment", role: ["patient"] },
-        { label: "My Prescriptions", icon: FileText, path: "/prescriptions", role: ["patient"] },
-        { label: "Doctor Schedule", icon: Clock, path: "/doctor/schedule", role: ["doctor"] },
-        { label: "Patient List", icon: User, path: "/doctor/patients", role: ["doctor"] },
-        { label: "System Health", icon: Activity, path: "/admin/dashboard", role: ["admin"] },
-        { label: "User Management", icon: Settings, path: "/admin/users", role: ["admin"] },
+        // Patient
+        { label: "Book Appointment", icon: Calendar, path: PATHS.PATIENT.BOOK_APPOINTMENT, role: ["patient"] },
+        { label: "My Appointments", icon: Calendar, path: PATHS.PATIENT.APPOINTMENTS, role: ["patient"] },
+        { label: "My Prescriptions", icon: FileText, path: PATHS.PATIENT.PRESCRIPTIONS, role: ["patient"] },
+
+        // Doctor
+        { label: "My Schedule", icon: Clock, path: PATHS.DOCTOR.SCHEDULE, role: ["doctor"] },
+        { label: "Patient List", icon: User, path: PATHS.DOCTOR.PATIENTS, role: ["doctor"] },
+
+        // Pharmacist
+        { label: "Prescription Queue", icon: ClipboardList, path: PATHS.PHARMACIST.QUEUE, role: ["pharmacist"] },
+        { label: "Inventory", icon: Package, path: PATHS.PHARMACIST.INVENTORY, role: ["pharmacist"] },
+
+        // Admin
+        { label: "System Health", icon: Activity, path: PATHS.ADMIN.DASHBOARD, role: ["admin"] },
+        { label: "User Management", icon: Settings, path: PATHS.ADMIN.USERS, role: ["admin"] },
+        { label: "Verify Doctors", icon: ShieldCheck, path: PATHS.ADMIN.VERIFY_DOCTORS, role: ["admin"] },
+        { label: "System Logs", icon: ClipboardList, path: PATHS.ADMIN.SYSTEM_LOGS, role: ["admin"] },
     ].filter(action => action.role.includes(user?.role || ''));
 
     return (
@@ -82,8 +98,8 @@ export const CommandCenter: React.FC = () => {
 
                     <CommandGroup heading="Trending in Botswana 🇧🇼">
                         {trendingBotswana.map((item, i) => (
-                            <CommandItem key={i} onSelect={() => console.log(item.label)} className="flex items-center gap-3 py-4 cursor-pointer group">
-                                <div className={`p-2 rounded-xl bg-slate-50 dark:bg-slate-800 group-aria-selected:bg-white dark:group-aria-selected:bg-slate-700 transition-colors`}>
+                            <CommandItem key={i} onSelect={() => console.log(item.label)} className="flex items-center gap-3 py-4 cursor-default group">
+                                <div className={`p-2 rounded-xl bg-slate-50 dark:bg-slate-800 transition-colors`}>
                                     <item.icon className={`h-5 w-5 ${item.color}`} />
                                 </div>
                                 <div className="flex-1">
@@ -93,7 +109,7 @@ export const CommandCenter: React.FC = () => {
                                     </div>
                                     <div className="text-xs text-slate-400 font-medium tracking-tight">Real-time demographic data</div>
                                 </div>
-                                <Badge variant="secondary" className="bg-slate-100 text-[10px] font-black uppercase">Trending</Badge>
+                                <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 dark:text-slate-200 text-[10px] font-black uppercase">Trending</Badge>
                             </CommandItem>
                         ))}
                     </CommandGroup>
@@ -115,11 +131,11 @@ export const CommandCenter: React.FC = () => {
                     <CommandSeparator />
 
                     <CommandGroup heading="Global Registry">
-                        <CommandItem className="flex items-center gap-3 py-4 cursor-pointer opacity-60">
+                        <CommandItem className="flex items-center gap-3 py-4 opacity-60 cursor-default">
                             <MapPin className="h-5 w-5 text-slate-400" />
                             <span className="font-bold">Princess Marina Hospital, Gaborone</span>
                         </CommandItem>
-                        <CommandItem className="flex items-center gap-3 py-4 cursor-pointer opacity-60">
+                        <CommandItem className="flex items-center gap-3 py-4 opacity-60 cursor-default">
                             <MapPin className="h-5 w-5 text-slate-400" />
                             <span className="font-bold">Bokamoso Private Hospital, Mmopane</span>
                         </CommandItem>

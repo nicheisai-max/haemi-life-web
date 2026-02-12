@@ -57,12 +57,14 @@
   --card-foreground: #0F172A;
   --popover: #FFFFFF;
   --popover-foreground: #0F172A;
-  --primary: #148C8B;
+  --primary: #064E4D;
+  /* Even darker for true WCAG AA compliance on white */
   --primary-foreground: #FFFFFF;
   --secondary: #FFFFFF;
   --secondary-foreground: #148C8B;
   --muted: #F1F5F9;
-  --muted-foreground: #64748B;
+  --muted-foreground: #4B5563;
+  /* Improved contrast for subtext */
   --accent: #F1F5F9;
   --accent-foreground: #0F172A;
   --destructive: #DC2626;
@@ -97,45 +99,62 @@
 
 .dark {
   /* Dark Theme - Haemi Life Premium Optimized */
-  --background: #071012; /* Dark-Base */
-  --foreground: #E6F4F3; /* Primary Text */
-  
-  --card: #10262A; /* Dark-Card */
-  --card-foreground: #E6F4F3; /* Primary Text */
-  
-  --popover: #10262A; /* Dark-Card */
+  --background: #071012;
+  /* Dark-Base */
+  --foreground: #E6F4F3;
+  /* Primary Text */
+
+  --card: #10262A;
+  /* Dark-Card */
+  --card-foreground: #E6F4F3;
+  /* Primary Text */
+
+  --popover: #10262A;
+  /* Dark-Card */
   --popover-foreground: #E6F4F3;
-  
-  --primary: #1BA7A6; /* Primary-600 */
-  --primary-foreground: #FFFFFF;
-  
-  --secondary: #133338; /* Dark-Elevated */
-  --secondary-foreground: #A7DAD5; /* Secondary Text */
-  
-  --muted: #0D1B1E; /* Dark-Surface */
-  --muted-foreground: #6FA8A2; /* Muted Text */
-  
-  --accent: #133338; /* Dark-Elevated */
+
+  --primary: #1BA7A6;
+  /* Primary-600 */
+  --primary-foreground: #0D1117;
+  /* High contrast for Dark Mode buttons */
+
+  --secondary: #133338;
+  /* Dark-Elevated */
+  --secondary-foreground: #A7DAD5;
+  /* Secondary Text */
+
+  --muted: #0D1B1E;
+  /* Dark-Surface */
+  --muted-foreground: #A7DAD5;
+  /* Improved readability for Dark subtext */
+
+  --accent: #133338;
+  /* Dark-Elevated */
   --accent-foreground: #E6F4F3;
-  
+
   --destructive: #DC2626;
   --destructive-foreground: #FFFFFF;
-  
-  --border: #1F3F44; /* Dark-Border */
-  --input: #1F3F44; /* Dark-Border */
-  --ring: rgba(63, 194, 181, 0.60); /* Primary-Glow-Strong */
-  
+
+  --border: #346971;
+  /* High visibility border */
+  --input: #346971;
+  /* High visibility input border */
+  --ring: rgba(63, 194, 181, 0.60);
+  /* Primary-Glow-Strong */
+
   --chart-1: #1BA7A6;
   --chart-2: #3FC2B5;
   --chart-3: #6ED3C4;
   --chart-4: #F59E0B;
   --chart-5: #DC2626;
-  
-  --sidebar: #0D1B1E; /* Dark-Surface */
+
+  --sidebar: #0D1B1E;
+  /* Dark-Surface */
   --sidebar-foreground: #E6F4F3;
   --sidebar-primary: #1BA7A6;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #133338; /* Dark-Elevated */
+  --sidebar-accent: #133338;
+  /* Dark-Elevated */
   --sidebar-accent-foreground: #E6F4F3;
   --sidebar-border: #1F3F44;
   --sidebar-ring: rgba(63, 194, 181, 0.60);
@@ -168,5 +187,18 @@
     font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
 import { Button } from '@/components/ui/button';
 import { Users, UserCheck, Activity, Settings, ShieldCheck, TrendingUp, ArrowUpRight, ClipboardCheck } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
@@ -7,6 +8,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { motion } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PremiumStatCard } from '@/components/ui/PremiumStatCard';
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -73,14 +75,9 @@ export const AdminDashboard: React.FC = () => {
         const fetchData = async () => {
             try {
                 // Fetch growth data
-                const token = localStorage.getItem('token');
-                const response = await fetch('http://localhost:5000/api/analytics/growth', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    setGrowthData(data);
-                }
+                // Fetch growth data
+                const response = await api.get('/analytics/growth');
+                setGrowthData(response.data);
             } catch (error) {
                 console.error('Failed to fetch analytics', error);
             } finally {
@@ -91,12 +88,7 @@ export const AdminDashboard: React.FC = () => {
         fetchData();
     }, []);
 
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Good Morning';
-        if (hour < 18) return 'Good Afternoon';
-        return 'Good Evening';
-    };
+
 
     return (
         <motion.div
@@ -106,28 +98,28 @@ export const AdminDashboard: React.FC = () => {
             className="max-w-7xl mx-auto p-6 md:p-8 space-y-8"
         >
             {/* Header / Hero */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xl">
+            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xl">
                 <GradientMesh variant="primary" className="opacity-40" />
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8 p-6 md:p-14">
-                    <div className="space-y-4">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold tracking-wider uppercase border border-primary/20">
-                            <ShieldCheck className="h-4 w-4" />
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 p-6">
+                    <div className="space-y-2">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold tracking-wider uppercase border border-primary/20">
+                            <ShieldCheck className="h-3 w-3" />
                             System Administrator
                         </div>
-                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 dark:text-white">
-                            {getGreeting()}, <span className="text-primary">{user?.name}</span>
+                        <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+                            Hi, <span className="text-primary">{user?.name}</span>
                         </h1>
-                        <p className="text-slate-400 text-lg md:text-xl max-w-2xl font-medium">
-                            System vitals are <span className="text-emerald-400 font-bold">Stable</span>. Global uptime is at 99.98% for the current billing cycle.
+                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
+                            System vitals are <span className="text-emerald-500 font-bold">Stable</span>. 99.98% uptime.
                         </p>
                     </div>
-                    <div className="flex gap-4 w-full md:w-auto">
-                        <Button className="flex-1 md:flex-none shadow-lg shadow-primary/20 h-14 px-8 rounded-2xl text-lg font-bold transition-all hover:scale-105 active:scale-95 group">
-                            <Activity className="mr-2 h-5 w-5 group-hover:rotate-12 transition-transform" />
+                    <div className="flex gap-3 w-full md:w-auto">
+                        <Button className="flex-1 md:flex-none h-11 px-6 rounded-xl text-sm font-bold shadow-md">
+                            <Activity className="mr-2 h-4 w-4" />
                             Live Metrics
                         </Button>
-                        <Button variant="outline" className="flex-1 md:flex-none bg-white/5 border-white/10 text-white hover:bg-white/10 h-14 px-6 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95">
-                            <Settings className="h-6 w-6" />
+                        <Button variant="outline" className="flex-1 md:flex-none h-11 px-4 rounded-xl shadow-sm">
+                            <Settings className="h-5 w-5" />
                         </Button>
                     </div>
                 </div>
@@ -141,59 +133,40 @@ export const AdminDashboard: React.FC = () => {
             {/* Stats Grid */}
             <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" hoverEffect mesh meshVariant="primary">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20 text-primary shadow-inner">
-                            <Users className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-1">Total Network</div>
-                            <div className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-                                {loading ? '...' : stats.totalUsers.toLocaleString()}
-                            </div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={Users}
+                        label="Total Network"
+                        value={loading ? '...' : stats.totalUsers.toLocaleString()}
+                        trend="up"
+                        trendValue="+12%"
+                    />
                 </motion.div>
-
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" hoverEffect mesh meshVariant="secondary">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-500 shadow-inner">
-                            <UserCheck className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-1">Verified Medical</div>
-                            <div className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-                                {loading ? '...' : stats.activeDoctors}
-                            </div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={UserCheck}
+                        label="Verified Medical"
+                        value={loading ? '...' : stats.activeDoctors}
+                        trend="up"
+                        trendValue="+5"
+                    />
                 </motion.div>
-
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" hoverEffect mesh meshVariant="accent">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-500 shadow-inner">
-                            <ClipboardCheck className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-1">Verification Queue</div>
-                            <div className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-                                {loading ? '...' : stats.pendingVerifications}
-                            </div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={ClipboardCheck}
+                        label="Verification Queue"
+                        value={loading ? '...' : stats.pendingVerifications}
+                        trend="neutral"
+                        trendValue="Stable"
+                    />
                 </motion.div>
-
                 <motion.div variants={itemVariants}>
-                    <GlassCard className="p-8 flex items-center gap-6" hoverEffect mesh meshVariant="subtle">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/20 text-indigo-500 shadow-inner">
-                            <TrendingUp className="h-8 w-8" />
-                        </div>
-                        <div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-1">Network Capacity</div>
-                            <div className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-                                {loading ? '...' : stats.hospitalCapacity}
-                            </div>
-                        </div>
-                    </GlassCard>
+                    <PremiumStatCard
+                        icon={TrendingUp}
+                        label="Network Capacity"
+                        value={loading ? '...' : stats.hospitalCapacity}
+                        trend="up"
+                        trendValue="+2%"
+                    />
                 </motion.div>
             </motion.div>
 
@@ -251,7 +224,7 @@ export const AdminDashboard: React.FC = () => {
                             </motion.div>
                         ))}
                     </div>
-                    <Button variant="ghost" className="w-full h-14 rounded-2xl border-dashed border-2 hover:bg-slate-50 hover:border-primary/50 text-slate-500 font-bold">
+                    <Button variant="ghost" className="w-full h-14 rounded-2xl border-dashed border-2 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-primary/50 text-slate-500 dark:text-slate-400 dark:hover:text-white font-bold transition-colors">
                         View Audit Vault
                     </Button>
                 </div>

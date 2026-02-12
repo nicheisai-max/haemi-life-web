@@ -298,7 +298,7 @@ interface RoleCardProps {
 const RoleCard: React.FC<RoleCardProps> = ({ icon, title, description, onClick }) => (
     <div
         onClick={onClick}
-        className="group relative flex flex-col items-start p-4 rounded-xl border border-input bg-background hover:bg-accent/5 hover:border-primary/50 transition-all cursor-pointer hover:shadow-md"
+        className="group relative flex flex-col items-center text-center p-4 rounded-xl border border-input bg-background hover:bg-accent/5 hover:border-primary/50 transition-all cursor-pointer hover:shadow-md"
     >
         <div className="mb-3 p-2.5 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
             {icon}
