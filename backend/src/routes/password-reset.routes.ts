@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import pool from '../config/database';
+import { pool } from '../config/db';
 import demoConfig from '../config/demo.config';
 
 const router = Router();
@@ -24,7 +24,7 @@ router.post(
     [
         body('identifier').notEmpty().withMessage('Email or phone number is required'),
     ],
-    async (req, res) => {
+    async (req: Request, res: Response) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
@@ -92,7 +92,7 @@ router.post(
         body('identifier').notEmpty().withMessage('Email or phone number is required'),
         body('otp').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
     ],
-    async (req, res) => {
+    async (req: Request, res: Response) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
@@ -161,7 +161,7 @@ router.post(
             .isLength({ min: 8 })
             .withMessage('Password must be at least 8 characters'),
     ],
-    async (req, res) => {
+    async (req: Request, res: Response) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
@@ -196,7 +196,7 @@ router.post(
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
             // Update password
-            await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
+            await pool.query('UPDATE users SET password = $1 WHERE id = $2', [
                 hashedPassword,
                 userId,
             ]);
@@ -230,7 +230,7 @@ router.post(
 router.post(
     '/resend-otp',
     [body('identifier').notEmpty().withMessage('Email or phone number is required')],
-    async (req, res) => {
+    async (req: Request, res: Response) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
