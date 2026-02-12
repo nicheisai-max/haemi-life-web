@@ -189,7 +189,10 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
         }
 
         // Get day of week from date
-        const dayOfWeek = new Date(date as string).getDay();
+        const dateObj = new Date(date as string);
+        const dayOfWeekIndex = dateObj.getDay();
+        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const dayOfWeek = days[dayOfWeekIndex]; // Convert 0-6 to 'sunday'-'saturday'
 
         // Get doctor's schedule for that day
         const scheduleResult = await pool.query(`

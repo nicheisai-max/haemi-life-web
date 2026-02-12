@@ -3,19 +3,10 @@ import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, UserCheck, Activity, Settings, ShieldCheck, TrendingUp, ArrowUpRight, ClipboardCheck } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { motion } from 'framer-motion';
-
-const MOCK_GROWTH_DATA = [
-    { name: 'Jan', value: 400 },
-    { name: 'Feb', value: 700 },
-    { name: 'Mar', value: 600 },
-    { name: 'Apr', value: 900 },
-    { name: 'May', value: 1200 },
-    { name: 'Jun', value: 1500 },
-];
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -76,13 +67,28 @@ export const AdminDashboard: React.FC = () => {
         pendingVerifications: 15,
         hospitalCapacity: '85%'
     });
+    const [growthData, setGrowthData] = useState([]);
 
     useEffect(() => {
-        // Simulate loading
-        const timer = setTimeout(() => {
-            setLoading(false);
-        }, 1000);
-        return () => clearTimeout(timer);
+        const fetchData = async () => {
+            try {
+                // Fetch growth data
+                const token = localStorage.getItem('token');
+                const response = await fetch('http://localhost:5000/api/analytics/growth', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setGrowthData(data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch analytics', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
     }, []);
 
     const getGreeting = () => {
@@ -100,15 +106,15 @@ export const AdminDashboard: React.FC = () => {
             className="max-w-7xl mx-auto p-6 md:p-8 space-y-8"
         >
             {/* Header / Hero */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl bg-slate-950 border border-slate-800 shadow-2xl">
+            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xl">
                 <GradientMesh variant="primary" className="opacity-40" />
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8 p-6 md:p-14">
                     <div className="space-y-4">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-bold tracking-wider uppercase border border-primary/30">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold tracking-wider uppercase border border-primary/20">
                             <ShieldCheck className="h-4 w-4" />
                             System Administrator
                         </div>
-                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white">
+                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 dark:text-white">
                             {getGreeting()}, <span className="text-primary">{user?.name}</span>
                         </h1>
                         <p className="text-slate-400 text-lg md:text-xl max-w-2xl font-medium">
@@ -207,7 +213,13 @@ export const AdminDashboard: React.FC = () => {
 
                     <div className="h-[350px] w-full mt-6">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={MOCK_GROWTH_DATA}>
+                            <AreaChart data={growthData}>
+                                <defs>
+                                    <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3FC2B5" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#3FC2B5" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
                                 <XAxis
                                     dataKey="name"
@@ -221,27 +233,24 @@ export const AdminDashboard: React.FC = () => {
                                     tick={{ fill: '#64748b', fontSize: 13, fontWeight: 600 }}
                                 />
                                 <Tooltip
-                                    cursor={{ fill: 'rgba(0,0,0,0.02)' }}
+                                    cursor={{ stroke: '#3FC2B5', strokeWidth: 1 }}
                                     contentStyle={{
                                         borderRadius: '16px',
                                         border: 'none',
                                         boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-                                        padding: '12px 16px'
+                                        padding: '12px 16px',
+                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
                                     }}
                                 />
-                                <Bar
+                                <Area
+                                    type="monotone"
                                     dataKey="value"
-                                    radius={[8, 8, 8, 8]}
-                                    barSize={45}
-                                >
-                                    {MOCK_GROWTH_DATA.map((_, index) => (
-                                        <Cell
-                                            key={`cell-${index}`}
-                                            fill={index === MOCK_GROWTH_DATA.length - 1 ? 'hsl(var(--primary))' : 'rgba(100, 116, 139, 0.1)'}
-                                        />
-                                    ))}
-                                </Bar>
-                            </BarChart>
+                                    stroke="#3FC2B5"
+                                    strokeWidth={4}
+                                    fillOpacity={1}
+                                    fill="url(#colorGrowth)"
+                                />
+                            </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </GlassCard>

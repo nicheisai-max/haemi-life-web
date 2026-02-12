@@ -14,6 +14,7 @@ import doctorRoutes from './routes/doctor.routes';
 import appointmentRoutes from './routes/appointment.routes';
 import prescriptionRoutes from './routes/prescription.routes';
 import adminRoutes from './routes/admin.routes';
+import analyticsRoutes from './routes/analytics.routes';
 // // import passwordResetRoutes from './routes/password-reset.routes';
 
 const app = express();
@@ -38,6 +39,7 @@ app.use('/api/doctors', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
 // app.use('/api/password-reset', passwordResetRoutes);
 
 // Basic health check route

@@ -2,229 +2,196 @@
 
 ## Official UX/UI Branding & Design System Specification
 
-### Version 2.0 -- Web Application (Light + Dark Theme)
-
-### Typography Updated: ROBOTO Variable
+### Version 1.0 --- Unified Enterprise Edition (Light + Dark)
 
 ------------------------------------------------------------------------
 
 # 1. BRAND POSITIONING
 
-**Haemi Life** is Botswana's first fully integrated digital healthcare
-ecosystem.
+Haemi Life is a National-Grade Digital Healthcare Infrastructure
+Platform.
 
-The UX/UI must communicate:
+Design must communicate:
 
--   Medical authority\
--   Institutional trust\
--   Regulatory compliance\
--   Security & data protection\
--   Financial reliability\
--   Calm digital precision\
--   Premium but accessible healthcare
+-   Medical Authority
+-   Institutional Trust
+-   Regulatory Compliance
+-   Data Security
+-   Financial Reliability
+-   Premium SaaS Maturity
+-   Investor-Grade Presentation
 
-The interface should feel like:
+Design Tone:
 
 > "Google-level readability meets Enterprise Healthcare Compliance."
 
-Avoid: - Cartoonish illustrations\
-- Neon hospital colors\
-- Overly playful UI\
-- Loud gradients\
-- Heavy shadow abuse
+Avoid: - Cartoonish UI - Neon medical tones - Loud gradients - Flat dark
+backgrounds - Overuse of glow
 
 ------------------------------------------------------------------------
 
-# 2. CORE BRAND COLOR SYSTEM
+# 2. COLOR SYSTEM
 
-## 🌤 LIGHT THEME (NORMAL MODE)
+## 🌤 LIGHT THEME
 
-### 🎨 Primary Brand Scale
+### Primary Brand Scale
 
-  Token         Value
-  ------------- ---------
-  Primary-900   #083E44
-  Primary-800   #0E6B74
-  Primary-700   #148C8B
-  Primary-600   #1BA7A6
-  Primary-500   #3FC2B5
-  Primary-400   #6ED3C4
-  Primary-300   #A7E6DB
-  Primary-200   #D5F6F1
-  Primary-100   #ECFCFA
+Primary-900 #083E44\
+Primary-800 #0E6B74\
+Primary-700 #148C8B\
+Primary-600 #1BA7A6\
+Primary-500 #3FC2B5\
+Primary-400 #6ED3C4\
+Primary-300 #A7E6DB\
+Primary-200 #D5F6F1\
+Primary-100 #ECFCFA
 
 ### Brand Gradient
 
-    linear-gradient(135deg, #0E6B74 → #1BA7A6 → #6ED3C4)
+linear-gradient(135deg, #0E6B74 → #1BA7A6 → #6ED3C4)
 
 ------------------------------------------------------------------------
 
-### 🎨 Neutral System
+### Neutral System
 
-  Token      Value
-  ---------- ---------
-  Gray-900   #0F172A
-  Gray-800   #1E293B
-  Gray-700   #334155
-  Gray-600   #475569
-  Gray-500   #64748B
-  Gray-400   #94A3B8
-  Gray-300   #CBD5E1
-  Gray-200   #E2E8F0
-  Gray-100   #F1F5F9
-  Gray-50    #F8FAFC
+Gray-900 #0F172A\
+Gray-800 #1E293B\
+Gray-700 #334155\
+Gray-600 #475569\
+Gray-500 #64748B\
+Gray-400 #94A3B8\
+Gray-300 #CBD5E1\
+Gray-200 #E2E8F0\
+Gray-100 #F1F5F9\
+Gray-50 #F8FAFC
 
 ------------------------------------------------------------------------
 
-### 🎨 Semantic Colors
+### Semantic Colors
 
-  State     Color
-  --------- ---------
-  Success   #16A34A
-  Warning   #F59E0B
-  Error     #DC2626
-  Info      #2563EB
+Success #16A34A\
+Warning #F59E0B\
+Error #DC2626\
+Info #2563EB
 
 ------------------------------------------------------------------------
 
-# 🌙 DARK THEME
+## 🌙 DARK THEME (Premium Optimized)
 
-## 🎨 Dark Foundations
+### Core Background Layers
 
-  Token          Value
-  -------------- ---------
-  Dark-Base      #0B1214
-  Dark-Surface   #0F1C1F
-  Dark-Card      #14262A
-  Dark-Border    #1F3B40
+Dark-Base #071012\
+Dark-Surface #0D1B1E\
+Dark-Card #10262A\
+Dark-Elevated #133338\
+Dark-Border #1F3F44
 
-------------------------------------------------------------------------
-
-## 🎨 Primary in Dark
-
-  Token               Value
-  ------------------- ----------------------
-  Primary-Dark-700    #1BA7A6
-  Primary-Dark-500    #3FC2B5
-  Primary-Dark-Glow   rgba(63,194,181,0.4)
+Dark mode must feel layered and breathable --- never flat black.
 
 ------------------------------------------------------------------------
 
-# 3. TYPOGRAPHY SYSTEM (ROBOTO VARIABLE)
+### Primary Glow System (Controlled Use Only)
 
-## Primary Font
+Primary-Glow-Soft rgba(63,194,181,0.25)\
+Primary-Glow-Medium rgba(63,194,181,0.40)\
+Primary-Glow-Strong rgba(63,194,181,0.60)
 
-**Roboto Variable (Google Fonts)**\
-- Use `Roboto Flex` or `Roboto Variable` (wdth, wght axis enabled) -
-Optimized for digital screens - Excellent Google-level readability -
-Enterprise dashboard friendly - Clean and neutral tone
+Use glow only for: - Logo - Active navigation - KPI highlights - Primary
+CTA
 
-------------------------------------------------------------------------
-
-## Font Implementation
-
-### Google Fonts Import
-
-``` html
-<link href="https://fonts.googleapis.com/css2?family=Roboto:opsz,wght@8..144,100..900&display=swap" rel="stylesheet">
-```
-
-### CSS Base Setup
-
-``` css
-html {
-  font-family: 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-optical-sizing: auto;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-```
+Never apply globally.
 
 ------------------------------------------------------------------------
 
-## Recommended Weight Usage
+# 3. LOGO SYSTEM (Light + Dark)
 
-  Usage                Weight
-  -------------------- --------
-  Body Text            400
-  Labels               500
-  Section Titles       600
-  Headings             700
-  Financial Emphasis   600
-  Buttons              500
+## Light Mode
 
-Avoid ultra-thin weights (100--300) for healthcare UI.
+-   Place on Primary-100 or White
+-   Maintain minimum 24px padding around logo
+-   No heavy shadows
 
-------------------------------------------------------------------------
+## Dark Mode
 
-## Typography Scale
+Never place logo directly on Dark-Base.
 
-  Usage        Size   Weight   Line Height
-  ------------ ------ -------- -------------
-  H1           40px   700      1.3
-  H2           32px   700      1.3
-  H3           24px   600      1.4
-  H4           20px   600      1.4
-  Body Large   16px   400      1.6
-  Body         14px   400      1.6
-  Caption      12px   400      1.5
+Approved Background Options:
 
-------------------------------------------------------------------------
+1)  Gradient Support\
+    linear-gradient(135deg, #0E6B74 0%, #1BA7A6 50%, #0F1C1F 100%)
 
-# 4. SPACING SYSTEM
+2)  Spotlight Technique\
+    radial-gradient(circle at center, rgba(63,194,181,0.25) 0%,
+    rgba(7,16,18,1) 70%)
 
-8pt grid system.
+Enhancement Layer:
 
-Spacing scale: 4 / 8 / 16 / 24 / 32 / 48 / 64
+box-shadow: 0 0 40px rgba(63,194,181,0.35);\
+border: 1px solid rgba(63,194,181,0.4);
+
+Goal: Crisp. Premium. Investor-ready.
 
 ------------------------------------------------------------------------
 
-# 5. COMPONENT RULES
+# 4. TYPOGRAPHY SYSTEM
+
+Primary Font: Roboto Variable (Google Fonts)
+
+Recommended Weights: Body 400\
+Labels 500\
+Section 600\
+Headings 700\
+Buttons 500
+
+Dark Mode Text Colors:
+
+Primary Text #E6F4F3\
+Secondary Text #A7DAD5\
+Muted #6FA8A2\
+Disabled #3A5558
+
+Avoid pure white in dark mode.
+
+------------------------------------------------------------------------
+
+# 5. SPACING SYSTEM
+
+8pt Grid\
+Scale: 4 / 8 / 16 / 24 / 32 / 48 / 64
+
+------------------------------------------------------------------------
+
+# 6. COMPONENT SYSTEM
 
 ## Buttons
 
-Primary: - Background: Primary-700 - Hover: Primary-800 - Radius: 8px -
-Height: 44px - Font Weight: 500
+Light Mode Primary: - Background: Primary-700 - Hover: Primary-800 -
+Radius: 8px - Height: 44px
 
-Secondary: - Border: Primary-600 - Transparent background - Font Weight:
-500
+Dark Mode Primary: - Background: linear-gradient(135deg, #148C8B,
+#3FC2B5) - Shadow: 0 4px 20px rgba(63,194,181,0.35) - Text: #071012
 
-Danger: - Background: #DC2626
+Secondary: - Border: 1px solid Primary-600 - Transparent background
 
 ------------------------------------------------------------------------
 
 ## Cards
 
--   Radius: 12px
--   Subtle shadow (light mode only)
--   24px internal padding
--   Dark mode uses border separation instead of heavy shadows
+Light: - Radius: 12px - Subtle shadow - 24px padding
+
+Dark: - Background: Dark-Card - Border: 1px solid Dark-Border - Elevated
+state uses Dark-Elevated
 
 ------------------------------------------------------------------------
 
-# 6. DASHBOARD STRUCTURE
+# 7. NAVIGATION SYSTEM
 
-All portals must follow:
+Left Sidebar: 240px\
+Top Navigation Required\
+12-column layout grid
 
--   Left sidebar (240px)
--   Top navigation
--   12-column grid layout
--   Modular card system
-
-------------------------------------------------------------------------
-
-# 7. STATUS BADGES
-
-  Type        Color
-  ----------- -------------
-  Verified    Primary-600
-  Reserved    Warning
-  Expired     Error
-  Dispensed   Success
-  Pending     Gray-500
-
-Badges: - Rounded (999px) - 12px font - 6px 10px padding - Font Weight:
-500
+Dark Active State: - Background: rgba(63,194,181,0.15) - Left Accent
+Bar: 3px solid #3FC2B5 - Text: #3FC2B5
 
 ------------------------------------------------------------------------
 
@@ -232,9 +199,8 @@ Badges: - Rounded (999px) - 12px font - 6px 10px padding - Font Weight:
 
 -   150--250ms transitions
 -   Ease-in-out
--   Subtle elevation on hover
+-   Subtle hover elevation
 -   No bounce animations
--   Clean fade transitions
 
 ------------------------------------------------------------------------
 
@@ -243,14 +209,20 @@ Badges: - Rounded (999px) - 12px font - 6px 10px padding - Font Weight:
 -   WCAG AA minimum
 -   Contrast ≥ 4.5
 -   Keyboard navigable
--   Clear focus states
+-   Visible focus states
 
 ------------------------------------------------------------------------
 
-# 10. FINAL DESIGN GOAL
+# 10. FINAL ENTERPRISE DESIGN TARGET
 
-Haemi Life must look like:
+Haemi Life must feel like:
 
-> Botswana's National Digital Healthcare Platform\
-> Secure. Trusted. Premium.\
-> Designed with Google-grade readability.
+-   National Digital Healthcare Infrastructure
+-   Enterprise Secure
+-   Backed by serious capital
+-   Premium SaaS valuation ready
+-   Clean. Authoritative. Trusted.
+
+------------------------------------------------------------------------
+
+© Haemi Life --- Official Unified Branding System v1.0

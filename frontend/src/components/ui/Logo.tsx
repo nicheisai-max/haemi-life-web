@@ -8,8 +8,8 @@ interface LogoProps {
 
 export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '' }) => {
     const heightMap = {
-        sm: '24px',
-        md: '32px',
+        sm: '28px',
+        md: '40px', // Increased from 32px for better visibility
         auth: '60px',
         lg: '64px',
         xl: '96px',
@@ -22,9 +22,9 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '' }) => {
                 src={logoImg}
                 alt="Haemi Life"
                 loading="eager"
-                className="dark:drop-shadow-[0_0_12px_rgba(63,194,181,0.6)]"
+                className="transition-all duration-300 dark:drop-shadow-[0_0_15px_rgba(63,194,181,0.5)] filter drop-shadow-sm"
                 style={{
-                    height: heightMap[size as keyof typeof heightMap] || '32px',
+                    height: heightMap[size as keyof typeof heightMap] || '40px',
                     width: 'auto',
                     display: 'block',
                     pointerEvents: 'none'

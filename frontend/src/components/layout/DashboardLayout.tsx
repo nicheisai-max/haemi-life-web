@@ -8,6 +8,7 @@ interface DashboardLayoutProps {
 }
 
 import { ChatHub } from '../ui/ChatHub';
+import { Footer } from './Footer';
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     return (
@@ -17,6 +18,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             <main className="flex-1 w-full max-w-7xl mx-auto pb-12 px-4 md:px-8">
                 {children}
             </main>
+            <Footer />
             <ChatHub />
         </div>
     );
