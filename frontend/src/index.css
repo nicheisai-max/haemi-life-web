@@ -202,3 +202,21 @@
     display: none;
   }
 }
+
+@layer components {
+  .interactive-card {
+    @apply relative transition-all duration-medium ease-premium border border-transparent bg-card;
+  }
+
+  .interactive-card:hover {
+    @apply -translate-y-1 shadow-elevation-hover border-primary/20;
+  }
+
+  .dark .interactive-card:hover {
+    @apply shadow-none border-primary/40 bg-accent/10;
+  }
+
+  .interactive-card:active {
+    @apply scale-[0.99] shadow-sm;
+  }
+}

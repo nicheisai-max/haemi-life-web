@@ -146,7 +146,7 @@ export const ForgotPassword: React.FC = () => {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute left-0 top-0 -mt-2 h-8 w-8"
+                            className="absolute left-0 top-0 -mt-2 h-8 w-8 border border-gray-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm rounded-full"
                             onClick={() => setStep(step === 'verify' ? 'request' : 'verify')}
                         >
                             <ArrowLeft className="h-4 w-4" />
@@ -173,7 +173,7 @@ export const ForgotPassword: React.FC = () => {
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                            className="h-8 px-3 text-muted-foreground hover:text-foreground border border-gray-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm rounded-full"
                             onClick={() => setStep(step === 'verify' ? 'request' : 'verify')}
                         >
                             <ArrowLeft className="h-4 w-4 mr-2" />

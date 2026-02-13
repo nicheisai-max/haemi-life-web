@@ -111,7 +111,7 @@ export const Signup: React.FC = () => {
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute left-0 top-0 -mt-2 h-8 w-8"
+                    className="absolute left-0 top-0 -mt-2 h-8 w-8 border border-gray-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm rounded-full"
                     onClick={() => setStep('role')}
                 >
                     <ArrowLeft className="h-4 w-4" />
@@ -130,7 +130,7 @@ export const Signup: React.FC = () => {
                 <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                    className="h-8 px-3 text-muted-foreground hover:text-foreground border border-gray-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm rounded-full"
                     onClick={() => setStep('role')}
                 >
                     <ArrowLeft className="h-4 w-4 mr-2" />
@@ -174,7 +174,7 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <div className="relative">
                                             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                                <span className="text-muted-foreground font-medium">+267</span>
+                                                <span className="text-[#1BA7A6] text-sm">+267</span>
                                             </div>
                                             <Input
                                                 type="tel"
@@ -307,9 +307,9 @@ interface RoleCardProps {
 const RoleCard: React.FC<RoleCardProps> = ({ icon, title, description, onClick }) => (
     <div
         onClick={onClick}
-        className="group relative flex flex-col items-center text-center p-4 rounded-xl border border-input bg-background hover:bg-accent/5 hover:border-primary/50 transition-all cursor-pointer hover:shadow-md"
+        className="group interactive-card flex flex-col items-center text-center p-6 rounded-2xl cursor-pointer"
     >
-        <div className="mb-3 p-2.5 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+        <div className="mb-4 p-3 rounded-full bg-primary/5 text-primary transition-all duration-medium ease-out group-hover:scale-110 group-hover:bg-primary group-hover:text-white group-hover:shadow-elevation-glow">
             {icon}
         </div>
         <h3 className="font-semibold text-sm mb-1">{title}</h3>

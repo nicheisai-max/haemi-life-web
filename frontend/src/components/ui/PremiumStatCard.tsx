@@ -50,12 +50,12 @@ export const PremiumStatCard: React.FC<PremiumStatCardProps> = ({
     return (
         <Card
             onClick={onClick}
+            interactive={!!onClick}
             className={cn(
-                "relative overflow-hidden transition-all duration-300 group",
+                "relative overflow-hidden group",
                 "p-5 flex flex-col items-start gap-3",
                 "rounded-2xl", // Slightly tighter radius
                 cardBg,
-                onClick && "cursor-pointer hover:-translate-y-1",
                 className
             )}
         >

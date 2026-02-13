@@ -75,6 +75,20 @@ export default {
                 "accordion-down": "accordion-down 0.2s ease-out",
                 "accordion-up": "accordion-up 0.2s ease-out",
             },
+            transitionDuration: {
+                "fast": "150ms",
+                "medium": "250ms",
+                "slow": "350ms",
+            },
+            transitionTimingFunction: {
+                "premium": "cubic-bezier(0.25, 0.1, 0.25, 1.0)",
+                "standard": "cubic-bezier(0.4, 0.0, 0.2, 1)",
+            },
+            boxShadow: {
+                "elevation-rest": "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+                "elevation-hover": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+                "elevation-glow": "0 4px 20px -4px rgba(27, 167, 166, 0.3)",
+            },
         },
     },
     plugins: [],
