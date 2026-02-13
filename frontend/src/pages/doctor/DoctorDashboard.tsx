@@ -19,6 +19,7 @@ import { ClinicalCopilot } from '@/components/ui/ClinicalCopilot';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
 import { AnimatedEmptyState } from '@/components/ui/AnimatedEmptyState';
 import { PremiumStatCard } from '@/components/ui/PremiumStatCard';
+import { Loader } from '@/components/ui/Loader';
 
 const MOCK_VOLUME_DATA = [
     { name: '08:00', patients: 2 },
@@ -153,7 +154,7 @@ export const DoctorDashboard: React.FC = () => {
                         </h1>
                         <p className="text-white/70 text-base font-medium leading-relaxed">
                             {loading
-                                ? t('common.loading')
+                                ? <Loader size="xs" className="inline-block align-middle" />
                                 : t('hero.subtitle_doctor').replace('{count}', todayAppointments.length.toString())
                             }
                         </p>
@@ -194,7 +195,7 @@ export const DoctorDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={Users}
                         label="Today's Patients"
-                        value={loading ? '...' : todayAppointments.length}
+                        value={loading ? <Loader size="xs" /> : todayAppointments.length}
                         trend="neutral"
                         trendValue="Scheduled"
                     />
@@ -204,7 +205,7 @@ export const DoctorDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={ClipboardCheck}
                         label="Completed Encounters"
-                        value={loading ? '...' : pendingReviews}
+                        value={loading ? <Loader size="xs" /> : pendingReviews}
                         trend="up"
                         trendValue="On Track"
                     />
@@ -214,7 +215,7 @@ export const DoctorDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={Contact}
                         label="Primary Care Panel"
-                        value={loading ? '...' : patientCount}
+                        value={loading ? <Loader size="xs" /> : patientCount}
                         trend="up"
                         trendValue="+3 New"
                     />
@@ -305,9 +306,9 @@ export const DoctorDashboard: React.FC = () => {
 
                     <div className="space-y-4">
                         {loading ? (
-                            <Card className="p-8 text-center text-muted-foreground">
-                                Loading schedule...
-                            </Card>
+                            <div className="flex justify-center p-8">
+                                <Loader />
+                            </div>
                         ) : todayAppointments.length === 0 ? (
                             <AnimatedEmptyState
                                 title="No Consultations Today"

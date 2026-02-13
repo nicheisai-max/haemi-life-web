@@ -194,14 +194,14 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
         const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const dayOfWeek = days[dayOfWeekIndex]; // Convert 0-6 to 'sunday'-'saturday'
 
-        // Get doctor's schedule for that day
+        // Get doctor's schedule for that day (using ILIKE for case-insensitive match)
         const scheduleResult = await pool.query(`
             SELECT start_time, end_time FROM doctor_schedules
-            WHERE doctor_id = $1 AND day_of_week = $2 AND is_available = true
+            WHERE doctor_id = $1 AND day_of_week ILIKE $2 AND is_available = true
         `, [doctor_id, dayOfWeek]);
 
         if (scheduleResult.rows.length === 0) {
-            return res.json([]);
+            return res.json({ slots: [] });
         }
 
         // Get booked appointments
@@ -210,12 +210,27 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
             WHERE doctor_id = $1 AND appointment_date = $2 AND status != 'cancelled'
         `, [doctor_id, date]);
 
-        const bookedTimes = bookedResult.rows.map(row => row.appointment_time);
-
-        res.json({
-            schedule: scheduleResult.rows,
-            booked: bookedTimes
+        const bookedTimes = bookedResult.rows.map(row => {
+            // Ensure time is in HH:mm format for comparison
+            const time = row.appointment_time;
+            return typeof time === 'string' ? time.slice(0, 5) : time;
         });
+
+        const slots: string[] = [];
+        for (const row of scheduleResult.rows) {
+            let current = new Date(`2000-01-01T${row.start_time}`);
+            const end = new Date(`2000-01-01T${row.end_time}`);
+
+            while (current < end) {
+                const timeStr = current.toTimeString().slice(0, 5);
+                if (!bookedTimes.includes(timeStr)) {
+                    slots.push(timeStr);
+                }
+                current.setMinutes(current.getMinutes() + 30); // 30-min slots
+            }
+        }
+
+        res.json({ date, slots });
     } catch (error) {
         console.error('Error fetching available slots:', error);
         res.status(500).json({ message: 'Error fetching available slots' });

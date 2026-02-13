@@ -9,15 +9,23 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 1.5 Clean Start (Prevent Schema Drift)
+-- Non-critical tables can be dropped if schema changed significantly
+DROP TABLE IF EXISTS analytics_daily_visits CASCADE;
+DROP TABLE IF EXISTS revenue_stats CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+-- Table 'medical_records' should stay persistent for files
+-- DROP TABLE IF EXISTS medical_records CASCADE;
 DROP TABLE IF EXISTS prescription_items CASCADE;
 DROP TABLE IF EXISTS prescriptions CASCADE;
 DROP TABLE IF EXISTS appointments CASCADE;
 DROP TABLE IF EXISTS pharmacies CASCADE;
-DROP TABLE IF EXISTS locations CASCADE;
-DROP TABLE IF EXISTS medicines CASCADE;
-DROP TABLE IF EXISTS doctor_schedules CASCADE;
-DROP TABLE IF EXISTS doctor_profiles CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
+
+-- CRITICAL TABLES: DO NOT DROP (Ensures persistent users and core data)
+-- DROP TABLE IF EXISTS locations CASCADE;
+-- DROP TABLE IF EXISTS medicines CASCADE;
+-- DROP TABLE IF EXISTS doctor_schedules CASCADE;
+-- DROP TABLE IF EXISTS doctor_profiles CASCADE;
+-- DROP TABLE IF EXISTS users CASCADE;
 
 -- 2. Schema Definitions (Tables)
 
@@ -134,6 +142,17 @@ CREATE TABLE IF NOT EXISTS prescription_items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Notifications (Role-Based System)
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    type VARCHAR(20) NOT NULL CHECK (type IN ('success', 'warning', 'info', 'error')),
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Analytics: Daily Visits (Apple Health Style Data)
 CREATE TABLE IF NOT EXISTS analytics_daily_visits (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -150,6 +169,17 @@ CREATE TABLE IF NOT EXISTS revenue_stats (
     revenue DECIMAL(10, 2) NOT NULL,
     expenses DECIMAL(10, 2) NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Medical Records (Documents)
+CREATE TABLE IF NOT EXISTS medical_records (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    file_type VARCHAR(100),
+    file_size VARCHAR(50),
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 3. Stored Procedures (The "Golden Path" Logic)
@@ -255,7 +285,65 @@ BEGIN
         (CURRENT_DATE, 720, 45);
     END IF;
 
+    -- 8. Seed Notifications (Role Specific - Botswana Context)
+    -- 8a. Doctor Notifications
+    IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_doctor_id) THEN
+        INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
+        (v_doctor_id, 'Critical Lab Result', 'Patient Kagiso Moalusi: HbA1c levels critical (9.2%). Action required.', 'warning', NOW() - INTERVAL '10 minutes'),
+        (v_doctor_id, 'New Appointment Request', 'Neo Dube (Francistown) requested a video consultation for tomorrow.', 'info', NOW() - INTERVAL '1 hour'),
+        (v_doctor_id, 'System Update', 'Botswana Essential Drug List (BEDL) updated successfully.', 'success', NOW() - INTERVAL '3 hours');
+    END IF;
+
+    -- 8b. Pharmacist Notifications (Keitumetse)
+    DECLARE
+        v_pharmacist_id UUID;
+    BEGIN
+        SELECT id INTO v_pharmacist_id FROM users WHERE email = 'pharmacist@haemilife.com';
+        IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_pharmacist_id) THEN
+            INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
+            (v_pharmacist_id, 'New E-Prescription', 'Dr. Thabo Molefe sent a prescription for Amoxil 500mg.', 'info', NOW() - INTERVAL '5 minutes'),
+            (v_pharmacist_id, 'Stock Alert: Panado', 'Inventory low at Gaborone North branch. 15 units remaining.', 'warning', NOW() - INTERVAL '2 hours'),
+            (v_pharmacist_id, 'Regulatory Sync', 'BOMRA compliance audit scheduled for next Tuesday.', 'info', NOW() - INTERVAL '1 day'),
+            (v_pharmacist_id, 'Security Alert', 'Login detected from a new device in Selebi-Phikwe.', 'warning', NOW() - INTERVAL '2 days');
+        END IF;
+    END;
+
+    -- 8c. Patient Notifications (Tebogo)
+    IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_patient_id) THEN
+        INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
+        (v_patient_id, 'Appointment Reminder', 'Video consultation with Dr. Mpho Modise is in 2 days.', 'info', NOW() - INTERVAL '30 minutes'),
+        (v_patient_id, 'Lab Results Ready', 'Your blood test results from Princess Marina Hospital are available.', 'success', NOW() - INTERVAL '4 hours'),
+        (v_patient_id, 'Health Tip: Heatwave', 'Gaborone temperatures to reach 38°C. Stay hydrated.', 'info', NOW() - INTERVAL '1 day'),
+        (v_patient_id, 'Medication Refill', 'Your Amoxil prescription is eligible for refill at any Clicks Pharmacy.', 'success', NOW() - INTERVAL '3 days');
+    END IF;
+
+    -- 8d. Doctor Notifications (Dr. Mpho) extra
+    IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_doctor_id AND title = 'Patient Feedback') THEN
+        INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
+        (v_doctor_id, 'Patient Feedback', 'Tebogo Motswana rated your last consultation 5 stars.', 'success', NOW() - INTERVAL '5 hours');
+    END IF;
+
 END;
 $$;
+
+-- Trigger to add Welcome Notifications for any newly signed up user
+CREATE OR REPLACE FUNCTION fn_on_user_signup()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO notifications (user_id, title, description, type)
+    VALUES (NEW.id, 'Welcome to Haemi Life!', 'Your healthcare gateway to Botswana is now active. Explore your dashboard.', 'success');
+    
+    INSERT INTO notifications (user_id, title, description, type)
+    VALUES (NEW.id, 'Security Notification', 'Please ensure your profile is updated for accurate medical records.', 'info');
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_user_signup_notification ON users;
+CREATE TRIGGER tr_user_signup_notification
+AFTER INSERT ON users
+FOR EACH ROW
+EXECUTE FUNCTION fn_on_user_signup();
 
 COMMIT;

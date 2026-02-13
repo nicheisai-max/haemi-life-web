@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getMyAppointments, cancelAppointment, updateAppointmentStatus } from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
 import { Plus, AlertCircle, CalendarX, Clock, Calendar } from 'lucide-react';
+import { Loader } from '@/components/ui/Loader';
 
 export const Appointments: React.FC = () => {
     const navigate = useNavigate();
@@ -39,16 +40,19 @@ export const Appointments: React.FC = () => {
 
     const applyFilter = () => {
         const now = new Date();
+        now.setHours(0, 0, 0, 0); // Start of today
         let filtered = appointments;
 
         if (filter === 'upcoming') {
             filtered = appointments.filter(apt => {
                 const aptDate = new Date(apt.appointment_date);
+                aptDate.setHours(0, 0, 0, 0);
                 return aptDate >= now && apt.status !== 'cancelled';
             });
         } else if (filter === 'past') {
             filtered = appointments.filter(apt => {
                 const aptDate = new Date(apt.appointment_date);
+                aptDate.setHours(0, 0, 0, 0);
                 return aptDate < now || apt.status === 'completed' || apt.status === 'cancelled';
             });
         }
@@ -88,10 +92,8 @@ export const Appointments: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="max-w-7xl mx-auto p-6 md:p-8">
-                <Card className="p-8 text-center">
-                    <div className="text-muted-foreground animate-pulse">Loading appointments...</div>
-                </Card>
+            <div className="max-w-7xl mx-auto p-6 md:p-8 flex justify-center items-center min-h-[400px]">
+                <Loader size="lg" />
             </div>
         );
     }
@@ -205,7 +207,7 @@ export const Appointments: React.FC = () => {
                                                     Mark Complete
                                                 </Button>
                                             )}
-                                            {appointment.status === 'scheduled' && new Date(appointment.appointment_date) > new Date() && (
+                                            {appointment.status === 'scheduled' && (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"

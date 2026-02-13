@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 interface PremiumStatCardProps {
     icon: LucideIcon;
     label: string;
-    value: string | number;
+    value: React.ReactNode;
     subtext?: string;
     trend?: 'up' | 'down' | 'neutral';
     trendValue?: string;

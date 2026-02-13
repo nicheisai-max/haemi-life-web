@@ -9,6 +9,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumStatCard } from '@/components/ui/PremiumStatCard';
+import { Loader } from '@/components/ui/Loader';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -92,7 +93,7 @@ export const PharmacistDashboard: React.FC = () => {
                         </h1>
                         <p className="text-white/70 text-base font-medium leading-relaxed">
                             {loading
-                                ? 'Syncing pharmaceutical logistics...'
+                                ? <Loader size="xs" className="inline-block align-middle" />
                                 : `Operational readiness is at 98.4%. ${pendingOrders.length} vital prescriptions are awaiting your expert verification.`
                             }
                         </p>
@@ -121,7 +122,7 @@ export const PharmacistDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={Receipt}
                         label="Active Prescriptions"
-                        value={loading ? '...' : pendingOrders.length}
+                        value={loading ? <Loader size="xs" /> : pendingOrders.length}
                         trend="up"
                         trendValue="Pending"
                     />
@@ -131,7 +132,7 @@ export const PharmacistDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={CheckCircle2}
                         label="Orders Fulfilled"
-                        value={loading ? '...' : todayFilled}
+                        value={loading ? <Loader size="xs" /> : todayFilled}
                         trend="up"
                         trendValue="Today"
                         subtext="Completion Rate: 98%"
@@ -142,7 +143,7 @@ export const PharmacistDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={Database}
                         label="Stock Analytics"
-                        value={loading ? '...' : prescriptions.length}
+                        value={loading ? <Loader size="xs" /> : prescriptions.length}
                         trend="neutral"
                         trendValue="Syncing"
                     />
@@ -256,9 +257,9 @@ export const PharmacistDashboard: React.FC = () => {
 
                     <div className="space-y-4">
                         {loading ? (
-                            <Card className="p-8 text-center text-muted-foreground">
-                                Loading queue...
-                            </Card>
+                            <div className="flex justify-center p-8">
+                                <Loader />
+                            </div>
                         ) : pendingOrders.length === 0 ? (
                             <Card className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
                                 <CheckCheck className="h-12 w-12 opacity-20 mb-3" />

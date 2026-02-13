@@ -179,6 +179,11 @@ export const Profile: React.FC = () => {
                                                 {...field}
                                                 disabled={!editing}
                                                 className="bg-background"
+                                                maxLength={8}
+                                                onChange={(e) => {
+                                                    const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
+                                                    field.onChange(value);
+                                                }}
                                             />
                                         </FormControl>
                                         <FormMessage />

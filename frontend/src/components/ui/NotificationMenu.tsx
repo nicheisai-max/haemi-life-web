@@ -9,70 +9,77 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { notificationService, type Notification } from '../../services/notification.service';
 
-interface Notification {
-    id: string;
-    title: string;
-    description: string;
-    type: 'success' | 'warning' | 'info';
-    timeAgo: string;
-    read: boolean;
-}
+// Assuming date-fns might not be there, I'll use a simple fallback for now if it fails, 
+// but let's try to import it as it's common in premium dashboards.
+// Actually, I'll use a simple helper to be safe.
 
-const INITIAL_NOTIFICATIONS: Notification[] = [
-    {
-        id: '1',
-        title: 'Grant Pre-Approved',
-        description: 'Your application for the Youth Tech Fund has been pre-approved by NYDA.',
-        type: 'success',
-        timeAgo: '2 mins ago',
-        read: false,
-    },
-    {
-        id: '2',
-        title: 'Document Expiry Warning',
-        description: 'Your Tax Clearance Certificate expires in 5 days. Please renew it in the Vault.',
-        type: 'warning',
-        timeAgo: '1 hour ago',
-        read: false,
-    },
-    {
-        id: '3',
-        title: 'New Funding Match',
-        description: '95% match found: "Green Energy Start-up Grant" (R1.2M). View details.',
-        type: 'info',
-        timeAgo: '4 hours ago',
-        read: false,
+const getTimeAgo = (dateString: string) => {
+    try {
+        const date = new Date(dateString);
+        const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+
+        let interval = Math.floor(seconds / 31536000);
+        if (interval > 1) return interval + " years ago";
+        interval = Math.floor(seconds / 2592000);
+        if (interval > 1) return interval + " months ago";
+        interval = Math.floor(seconds / 86400);
+        if (interval > 1) return interval + " days ago";
+        interval = Math.floor(seconds / 3600);
+        if (interval > 1) return interval + " hours ago";
+        interval = Math.floor(seconds / 60);
+        if (interval > 1) return interval + " mins ago";
+        return "Just now";
+    } catch (e) {
+        return "Recently";
     }
-];
+};
 
 export const NotificationMenu: React.FC = () => {
-    const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
-    const [hasUnread, setHasUnread] = useState(true);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [hasUnread, setHasUnread] = useState(false);
 
-    // Smart Pulse: Add a new notification every 90 seconds
+    const fetchNotifications = async () => {
+        try {
+            const data = await notificationService.getNotifications();
+            setNotifications(data);
+            setHasUnread(data.some(n => !n.is_read));
+        } catch (error) {
+            console.error('Failed to fetch notifications:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const interval = setInterval(() => {
-            const newNotif: Notification = {
-                id: Date.now().toString(),
-                title: 'New Funding Match',
-                description: 'New opportunity available matching your profile.',
-                type: 'info',
-                timeAgo: 'Just now',
-                read: false,
-            };
-            setNotifications(prev => [newNotif, ...prev]);
-            setHasUnread(true);
-        }, 90000);
+        fetchNotifications();
 
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchNotifications, 30000);
         return () => clearInterval(interval);
     }, []);
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const unreadCount = notifications.filter(n => !n.is_read).length;
 
-    const markAllRead = () => {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-        setHasUnread(false);
+    const markAllRead = async () => {
+        try {
+            await notificationService.markAllAsRead();
+            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+            setHasUnread(false);
+        } catch (error) {
+            console.error('Failed to mark all as read:', error);
+        }
+    };
+
+    const markRead = async (id: string) => {
+        try {
+            await notificationService.markAsRead(id);
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+        } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+        }
     };
 
     const getIcon = (type: Notification['type']) => {
@@ -94,60 +101,96 @@ export const NotificationMenu: React.FC = () => {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors h-10 w-10">
-                    <Bell className={`h-5 w-5 transition-transform ${hasUnread ? 'animate-pulse-slow' : ''}`} />
+                <Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-300 h-10 w-10">
+                    <Bell className={`h-5 w-5 transition-all ${hasUnread ? 'text-primary' : ''}`} />
                     {unreadCount > 0 && (
-                        <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-background ring-1 ring-background" />
+                        <span className="absolute top-[11px] right-[11px] h-2 w-2 rounded-full bg-red-500 border-2 border-background" />
                     )}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[380px] p-0 overflow-hidden border-border/10 shadow-xl bg-white dark:bg-[#0f172a] rounded-xl">
+            <DropdownMenuContent align="end" className="w-[340px] p-0 overflow-hidden border-border/10 shadow-2xl bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md rounded-2xl">
                 {/* Header */}
-                <div className="p-4 border-b border-border/10 flex items-center justify-between">
-                    <h4 className="font-bold text-base text-slate-900 dark:text-white">Notifications</h4>
+                <div className="px-5 py-4 border-b border-border/5 flex items-center justify-between bg-white/50 dark:bg-white/5">
+                    <h4 className="font-bold text-base tracking-tight text-slate-900 dark:text-slate-100 italic-none">Notifications</h4>
                     {unreadCount > 0 && (
-                        <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 hover:bg-indigo-200 rounded-full px-3 py-0.5 text-xs font-bold">
+                        <Badge variant="secondary" className="bg-primary/10 text-primary dark:bg-primary/20 rounded-full px-2 py-0 text-[10px] font-bold border-none">
                             {unreadCount} NEW
                         </Badge>
                     )}
                 </div>
 
-                {/* List */}
-                <ScrollArea className="h-[380px]">
+                {/* List with Google-styled Scrollbar */}
+                <ScrollArea className="h-[320px]">
                     <div className="flex flex-col">
-                        {notifications.map((notif) => (
-                            <DropdownMenuItem key={notif.id} className="p-4 cursor-pointer border-b border-border/5 focus:bg-slate-50 dark:focus:bg-slate-800/50 items-start gap-4">
-                                <div className={`h-10 w-10 shrink-0 rounded-full flex items-center justify-center ${getBgColor(notif.type)}`}>
-                                    {getIcon(notif.type)}
-                                </div>
-                                <div className="flex-1 space-y-1">
-                                    <div className="flex flex-col">
-                                        <p className="text-sm font-bold text-slate-900 dark:text-white leading-none mb-1">
-                                            {notif.title}
-                                        </p>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400 leading-snug">
-                                            {notif.description}
-                                        </p>
-                                        <span className="text-xs text-slate-400 mt-1.5 font-medium">
-                                            {notif.timeAgo}
-                                        </span>
-                                    </div>
-                                </div>
-                            </DropdownMenuItem>
-                        ))}
+                        {loading && notifications.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground p-8 text-center space-y-3">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                <p className="text-sm font-medium">Syncing...</p>
+                            </div>
+                        ) : notifications.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground p-8 text-center">
+                                <Bell className="h-8 w-8 mb-4 opacity-10" />
+                                <p className="text-sm font-bold text-slate-900 dark:text-white mb-1">All caught up!</p>
+                                <p className="text-xs text-slate-500 leading-relaxed">Check back later for Botswana health updates.</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col">
+                                {notifications.map((notif) => (
+                                    <DropdownMenuItem
+                                        key={notif.id}
+                                        onClick={() => !notif.is_read && markRead(notif.id)}
+                                        className={`px-5 py-4 cursor-pointer outline-none transition-all duration-150 flex items-start gap-4 border-b border-border/5 last:border-0
+                                            ${!notif.is_read
+                                                ? 'bg-primary/[0.03] hover:bg-primary/[0.08] dark:bg-primary/[0.02] dark:hover:bg-primary/[0.05]'
+                                                : 'hover:bg-slate-50 dark:hover:bg-white/[0.02]'}
+                                        `}
+                                    >
+                                        <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${getBgColor(notif.type)}`}>
+                                            {getIcon(notif.type)}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                                                <p className={`text-sm tracking-tight truncate ${notif.is_read ? 'text-slate-600 dark:text-slate-400 font-normal' : 'text-slate-900 dark:text-white font-bold'}`}>
+                                                    {notif.title}
+                                                </p>
+                                                {!notif.is_read && (
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                                                )}
+                                            </div>
+                                            <p className={`text-xs leading-snug line-clamp-2 ${notif.is_read ? 'text-slate-500/80' : 'text-slate-600 dark:text-slate-300 font-normal'}`}>
+                                                {notif.description}
+                                            </p>
+                                            <span className="text-[10px] text-slate-400 font-medium mt-2 block">
+                                                {getTimeAgo(notif.created_at)}
+                                            </span>
+                                        </div>
+                                    </DropdownMenuItem>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </ScrollArea>
 
                 {/* Footer */}
-                <div className="p-3 bg-slate-50 dark:bg-slate-900/50 text-center border-t border-border/10">
+                <div className="p-2 border-t border-border/5">
                     <Button
                         variant="ghost"
                         onClick={markAllRead}
-                        className="w-full text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 font-bold"
+                        className="w-full text-xs h-9 text-primary hover:text-primary/90 hover:bg-primary/5 font-bold"
                     >
                         Mark all as read
                     </Button>
                 </div>
+
+                {/* Visual Polish Styles */}
+                <style dangerouslySetInnerHTML={{
+                    __html: `
+                    /* Ensure drop down menu items feel premium */
+                    [role="menuitem"] {
+                        margin: 0 4px;
+                        border-radius: 8px;
+                    }
+                `}} />
             </DropdownMenuContent>
         </DropdownMenu>
     );

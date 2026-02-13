@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { User, Stethoscope, Building2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -78,18 +79,21 @@ export const Signup: React.FC = () => {
                     icon={<User className="h-6 w-6" />}
                     title="Member"
                     description="Personal Health"
+                    isSelected={selectedRole === 'patient'}
                     onClick={() => handleRoleSelect('patient')}
                 />
                 <RoleCard
                     icon={<Stethoscope className="h-6 w-6" />}
                     title="Doctor"
                     description="Practice Admin"
+                    isSelected={selectedRole === 'doctor'}
                     onClick={() => handleRoleSelect('doctor')}
                 />
                 <RoleCard
                     icon={<Building2 className="h-6 w-6" />}
                     title="Pharmacist"
                     description="Dispensary"
+                    isSelected={selectedRole === 'pharmacist'}
                     onClick={() => handleRoleSelect('pharmacist')}
                 />
             </div>
@@ -98,7 +102,7 @@ export const Signup: React.FC = () => {
                 <span className="text-muted-foreground">Already have an account? </span>
                 <Button
                     variant="link"
-                    className="p-0 h-auto font-semibold text-primary hover:text-primary/80 hover:no-underline"
+                    className="p-0 h-auto font-bold text-primary hover:text-primary hover:bg-primary/5 hover:no-underline px-3 py-1 rounded-full transition-all border border-transparent hover:border-primary/20"
                     onClick={() => navigate('/login')}
                 >
                     Sign In
@@ -182,9 +186,10 @@ export const Signup: React.FC = () => {
                                                 className="bg-background h-10 pl-14"
                                                 {...field}
                                                 onChange={(e) => {
-                                                    const value = e.target.value.replace(/[^0-9]/g, '');
+                                                    const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
                                                     field.onChange(value);
                                                 }}
+                                                maxLength={8}
                                             />
                                         </div>
                                     </FormControl>
@@ -241,8 +246,7 @@ export const Signup: React.FC = () => {
                                 <FormItem>
                                     <FormLabel>Password</FormLabel>
                                     <FormControl>
-                                        <Input
-                                            type="password"
+                                        <PasswordInput
                                             placeholder="Create a strong password"
                                             className="bg-background h-10"
                                             {...field}
@@ -260,8 +264,7 @@ export const Signup: React.FC = () => {
                                 <FormItem>
                                     <FormLabel>Confirm Password</FormLabel>
                                     <FormControl>
-                                        <Input
-                                            type="password"
+                                        <PasswordInput
                                             placeholder="Re-enter your password"
                                             className="bg-background h-10"
                                             {...field}
@@ -301,18 +304,27 @@ interface RoleCardProps {
     icon: React.ReactNode;
     title: string;
     description: string;
+    isSelected?: boolean;
     onClick: () => void;
 }
 
-const RoleCard: React.FC<RoleCardProps> = ({ icon, title, description, onClick }) => (
+const RoleCard: React.FC<RoleCardProps> = ({ icon, title, description, isSelected, onClick }) => (
     <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
-        className="group interactive-card flex flex-col items-center text-center p-6 rounded-2xl cursor-pointer"
+        onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+            }
+        }}
+        className={`group interactive-card premium-gradient-border flex flex-col items-center text-center p-6 rounded-2xl cursor-pointer outline-none transition-all ${isSelected ? 'selected-card' : ''}`}
     >
-        <div className="mb-4 p-3 rounded-full bg-primary/5 text-primary transition-all duration-medium ease-out group-hover:scale-110 group-hover:bg-primary group-hover:text-white group-hover:shadow-elevation-glow">
+        <div className={`mb-4 p-3 rounded-full bg-primary/5 text-primary transition-all transition-duration-[var(--duration-hover)] ease-[var(--ease-premium)] group-hover:scale-[1.08] group-hover:bg-primary group-hover:text-white group-hover:shadow-[0_0_15px_-3px_rgba(27,167,166,0.3)] icon-wrapper`}>
             {icon}
         </div>
-        <h3 className="font-semibold text-sm mb-1">{title}</h3>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <h3 className="text-sm font-semibold mb-1 tracking-tight transition-colors group-hover:text-primary">{title}</h3>
+        <p className="text-[11px] leading-relaxed text-muted-foreground/80 opacity-90 group-hover:opacity-100 transition-opacity">{description}</p>
     </div>
 );

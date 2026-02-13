@@ -6,8 +6,8 @@ import api from './api';
 
 export interface Appointment {
     id: number;
-    patient_id: number;
-    doctor_id: number;
+    patient_id: string;
+    doctor_id: string;
     appointment_date: string;
     appointment_time: string;
     duration_minutes: number;
@@ -38,7 +38,7 @@ export interface AvailableSlots {
 
 // Book a new appointment (Patient only)
 export const bookAppointment = async (data: {
-    doctor_id: number;
+    doctor_id: string;
     appointment_date: string;
     appointment_time: string;
     reason: string;
@@ -72,7 +72,7 @@ export const cancelAppointment = async (id: number) => {
 };
 
 // Get available time slots
-export const getAvailableSlots = async (doctor_id: number, date: string) => {
+export const getAvailableSlots = async (doctor_id: string, date: string) => {
     const response = await api.get('/appointments/available-slots', {
         params: { doctor_id, date }
     });

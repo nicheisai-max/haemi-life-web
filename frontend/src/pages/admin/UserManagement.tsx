@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { getAllUsers, updateUserStatus } from '../../services/admin.service';
 import type { UserListItem } from '../../services/admin.service';
 import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail } from 'lucide-react';
+import { Loader } from '@/components/ui/Loader';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<UserListItem[]>([]);
@@ -91,10 +92,8 @@ export const UserManagement: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="max-w-[1400px] mx-auto p-8">
-                <Card className="p-8 text-center">
-                    <div className="animate-pulse text-muted-foreground">Loading users...</div>
-                </Card>
+            <div className="flex justify-center items-center min-h-[400px]">
+                <Loader size="lg" />
             </div>
         );
     }
@@ -222,7 +221,7 @@ export const UserManagement: React.FC = () => {
                                                 disabled={processing === user.id}
                                             >
                                                 {processing === user.id ? (
-                                                    <span className="animate-spin mr-2">⏳</span>
+                                                    <Loader size="xs" className="mr-2" />
                                                 ) : user.is_active ? (
                                                     <ShieldAlert className="h-4 w-4 mr-2" />
                                                 ) : (

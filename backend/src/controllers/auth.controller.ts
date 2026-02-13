@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
+import { logger } from '../utils/logger';
 
 export const signup = async (req: Request, res: Response) => {
     const { email, password, role, name, phone_number, id_number } = req.body;
@@ -46,7 +47,7 @@ export const signup = async (req: Request, res: Response) => {
             client.release();
         }
     } catch (error) {
-        console.error(error);
+        logger.error('Error creating user', { error, email, phone_number, role });
         res.status(500).json({ message: 'Error creating user' });
     }
 };
@@ -72,8 +73,11 @@ export const login = async (req: Request, res: Response) => {
         const validPassword = await bcrypt.compare(password, user.password);
 
         if (!validPassword) {
+            logger.auth('Failed login attempt: Invalid password', { email, phone_number, ip: req.ip });
             return res.status(400).json({ message: 'Invalid credentials' });
         }
+
+        logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
 
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role },
@@ -83,7 +87,7 @@ export const login = async (req: Request, res: Response) => {
 
         res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
     } catch (error) {
-        console.error(error);
+        logger.error('Login server error', { error, email, phone_number });
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -150,6 +154,29 @@ export const changePassword = async (req: any, res: Response) => {
         res.json({ message: 'Password updated successfully' });
     } catch (error) {
         console.error('Error changing password:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const verifySession = async (req: any, res: Response) => {
+    try {
+        const userId = req.user.id;
+        // Verify user still exists and is active
+        const result = await pool.query('SELECT id, name, email, role, is_active FROM users WHERE id = $1', [userId]);
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({ message: 'User no longer exists' });
+        }
+
+        const user = result.rows[0];
+
+        if (!user.is_active) {
+            return res.status(403).json({ message: 'Account is deactivated' });
+        }
+
+        res.json({ message: 'Session valid', user });
+    } catch (error) {
+        console.error('Error verifying session:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

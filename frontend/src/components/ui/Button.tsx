@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-import { Loader2 } from "lucide-react"
+import { Loader } from "./Loader"
 
 import { cn } from "@/lib/utils"
 
@@ -52,8 +52,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={isLoading || props.disabled}
         {...props}
       >
-        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {!isLoading ? children : "Processing..."}
+        {asChild ? (
+          children
+        ) : (
+          <>
+            {isLoading && <Loader size="xs" className="mr-2 inline-block" />}
+            {!isLoading ? children : "Processing..."}
+          </>
+        )}
       </Comp>
     )
   }

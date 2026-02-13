@@ -8,7 +8,7 @@ import { SessionManagerProvider } from './context/SessionManager';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { ScrollToTop } from './components/utils/ScrollToTop';
-import { PremiumLoader } from './components/ui/PremiumLoader';
+import { Loader } from './components/ui/Loader';
 
 // Lazy loaded pages
 // Eagerly loaded Auth/Public pages for zero-jerks and instantaneous navigation
@@ -45,18 +45,19 @@ const VideoConsultation = lazy(() => import('./components/telemedicine/VideoCons
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound })));
 import { DoctorPatientList } from './pages/doctor/DoctorPatientList';
 
-const LoadingFallback = () => <PremiumLoader />;
+const LoadingFallback = () => <Loader variant="fullscreen" size="lg" />;
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
+    // Zero-Trust: Show Global Loader while verifying session
     return <LoadingFallback />;
   }
 
   if (!isAuthenticated) {
-    // Save the intended destination so we can redirect back after login
+    // Zero-Trust: Immediate redirect if not authenticated after verification
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

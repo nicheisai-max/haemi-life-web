@@ -226,7 +226,7 @@ export const ForgotPassword: React.FC = () => {
                             <Button
                                 type="button"
                                 variant="ghost"
-                                className="w-full"
+                                className="w-full rounded-full hover:bg-muted/50 border border-transparent hover:border-border transition-all"
                                 onClick={() => navigate('/login')}
                             >
                                 Back to Login
@@ -249,7 +249,7 @@ export const ForgotPassword: React.FC = () => {
                                                     type="text"
                                                     placeholder="000000"
                                                     maxLength={6}
-                                                    className="text-center text-3xl tracking-[1em] font-mono h-16 w-full max-w-[300px] bg-background"
+                                                    className="text-center text-sm font-bold tracking-[1em] h-11 w-full max-w-[300px] bg-background"
                                                     {...field}
                                                     onChange={(e) => {
                                                         const value = e.target.value.replace(/\D/g, '');
@@ -269,7 +269,7 @@ export const ForgotPassword: React.FC = () => {
                                         type="button"
                                         variant="link"
                                         onClick={handleResendOtp}
-                                        className="p-0 h-auto font-semibold text-primary"
+                                        className="p-0 h-auto font-bold text-primary hover:text-primary hover:bg-primary/5 hover:no-underline px-3 py-1 rounded-full transition-all border border-transparent hover:border-primary/20"
                                     >
                                         Resend Code
                                     </Button>

@@ -4,7 +4,6 @@ import { SidebarNav } from "./SidebarNav";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "../ui/Logo";
-import { StatusWidget } from "./StatusWidget";
 import { useAuth } from "../../context/AuthContext";
 import { Link } from 'react-router-dom';
 
@@ -30,16 +29,7 @@ export const MobileSidebar: React.FC = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto py-6 px-4 scrollbar-none">
-                    <div className="px-3 mb-4">
-                        <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
-                            {user.role} Navigation
-                        </h2>
-                    </div>
                     <SidebarNav onItemClick={() => setOpen(false)} />
-                </div>
-
-                <div className="p-4 border-t border-border/40 mt-auto shrink-0">
-                    <StatusWidget />
                 </div>
             </SheetContent>
         </Sheet>

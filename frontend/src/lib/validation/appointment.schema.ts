@@ -4,7 +4,7 @@ import { z } from "zod";
  * Book Appointment Schema
  */
 export const bookAppointmentSchema = z.object({
-    doctor_id: z.coerce.number().min(1, { message: "Please select a doctor" }),
+    doctor_id: z.string().min(1, { message: "Please select a doctor" }),
     appointment_date: z.string().min(1, { message: "Please select a date" }),
     appointment_time: z.string().min(1, { message: "Please select a time" }),
     reason: z

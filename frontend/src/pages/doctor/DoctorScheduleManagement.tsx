@@ -8,7 +8,8 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { getDoctorSchedule, updateDoctorSchedule } from '../../services/doctor.service';
-import { Save, AlertCircle, CheckCircle2, Info, Loader2 } from 'lucide-react';
+import { Save, AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { Loader } from '@/components/ui/Loader';
 import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -88,10 +89,7 @@ export const DoctorScheduleManagement: React.FC = () => {
     if (loading) {
         return (
             <div className="max-w-5xl mx-auto p-8 flex justify-center items-center min-h-[400px]">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-muted-foreground">Loading schedule...</p>
-                </div>
+                <Loader size="lg" />
             </div>
         );
     }
@@ -112,7 +110,7 @@ export const DoctorScheduleManagement: React.FC = () => {
                         >
                             {form.formState.isSubmitting ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    <Loader size="xs" className="mr-2" />
                                     Saving...
                                 </>
                             ) : (

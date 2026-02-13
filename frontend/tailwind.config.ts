@@ -78,7 +78,7 @@ export default {
             transitionDuration: {
                 "fast": "150ms",
                 "medium": "250ms",
-                "slow": "350ms",
+                "slow": "300ms",
             },
             transitionTimingFunction: {
                 "premium": "cubic-bezier(0.25, 0.1, 0.25, 1.0)",

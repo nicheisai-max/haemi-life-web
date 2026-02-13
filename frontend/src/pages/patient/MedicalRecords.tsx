@@ -2,43 +2,56 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { UploadCloud, FileText, Image as ImageIcon, Download, Trash2, FolderOpen, File } from 'lucide-react';
-
-interface MedicalRecord {
-    id: string;
-    name: string;
-    type: string;
-    size: string;
-    uploadedAt: string;
-}
+import { Loader } from '@/components/ui/Loader';
+import { getMyRecords, uploadRecord, deleteRecord } from '../../services/record.service';
+import type { MedicalRecord } from '../../services/record.service';
 
 export const MedicalRecords: React.FC = () => {
     const [records, setRecords] = useState<MedicalRecord[]>([]);
     const [uploading, setUploading] = useState(false);
+    const [loading, setLoading] = useState(true);
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files) return;
+    React.useEffect(() => {
+        fetchRecords();
+    }, []);
 
-        setUploading(true);
-
-        // Simulate upload (replace with actual API call)
-        setTimeout(() => {
-            const newRecords: MedicalRecord[] = Array.from(files).map(file => ({
-                id: Math.random().toString(36).substr(2, 9),
-                name: file.name,
-                type: file.type,
-                size: (file.size / 1024).toFixed(2) + ' KB',
-                uploadedAt: new Date().toISOString()
-            }));
-
-            setRecords([...newRecords, ...records]);
-            setUploading(false);
-        }, 1500);
+    const fetchRecords = async () => {
+        try {
+            setLoading(true);
+            const data = await getMyRecords();
+            setRecords(data);
+        } catch (error) {
+            console.error('Error fetching records:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleDelete = (id: string) => {
-        if (confirm('Are you sure you want to delete this record?')) {
-            setRecords(records.filter(r => r.id !== id));
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        setUploading(true);
+        try {
+            for (const file of Array.from(files)) {
+                const newRecord = await uploadRecord(file);
+                setRecords((prev: MedicalRecord[]) => [newRecord, ...prev]);
+            }
+        } catch (error) {
+            console.error('Error uploading file:', error);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this record?')) return;
+
+        try {
+            await deleteRecord(id);
+            setRecords((records: MedicalRecord[]) => records.filter(r => r.id !== id));
+        } catch (error) {
+            console.error('Error deleting record:', error);
         }
     };
 
@@ -64,7 +77,7 @@ export const MedicalRecords: React.FC = () => {
                             asChild
                         >
                             <span>
-                                <UploadCloud className="h-4 w-4" />
+                                {uploading ? <Loader size="xs" className="mr-2 inline-block" /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
                                 {uploading ? 'Uploading...' : 'Upload Files'}
                             </span>
                         </Button>
@@ -98,7 +111,11 @@ export const MedicalRecords: React.FC = () => {
                     <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs">{records.length}</span>
                 </h2>
 
-                {records.length === 0 ? (
+                {loading ? (
+                    <div className="flex justify-center p-12">
+                        <Loader size="lg" />
+                    </div>
+                ) : records.length === 0 ? (
                     <Card className="p-12 flex flex-col items-center justify-center text-center text-muted-foreground min-h-[200px]">
                         <FolderOpen className="h-16 w-16 opacity-20 mb-4" />
                         <p>No medical records uploaded yet</p>
@@ -108,20 +125,22 @@ export const MedicalRecords: React.FC = () => {
                         {records.map((record) => (
                             <Card key={record.id} className="group p-4 flex items-start gap-4 transition-all hover:shadow-md hover:border-primary/50">
                                 <div className="shrink-0 w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                    {getFileIcon(record.type)}
+                                    {getFileIcon(record.file_type)}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h4 className="font-semibold truncate mb-1" title={record.name}>{record.name}</h4>
                                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <span>{record.size}</span>
+                                        <span>{record.file_size}</span>
                                         <span className="w-1 h-1 rounded-full bg-muted-foreground/40"></span>
-                                        <span>{new Date(record.uploadedAt).toLocaleDateString()}</span>
+                                        <span>{new Date(record.uploaded_at).toLocaleDateString()}</span>
                                     </div>
                                 </div>
                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
-                                        <Download className="h-4 w-4" />
-                                        <span className="sr-only">Download</span>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" asChild>
+                                        <a href={`http://localhost:5000/${record.file_path}`} download target="_blank" rel="noopener noreferrer">
+                                            <Download className="h-4 w-4" />
+                                            <span className="sr-only">Download</span>
+                                        </a>
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(record.id)}>
                                         <Trash2 className="h-4 w-4" />

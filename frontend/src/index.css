@@ -43,7 +43,19 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Motion Tokens - Apple/Google Standards */
+  --duration-fast: 150ms;
+  --duration-hover: 200ms;
+  --duration-state: 300ms;
+
+  --ease-premium: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --shadow-diffused: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --shadow-elevation: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
 :root {
@@ -83,7 +95,8 @@
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #F1F5F9;
   --sidebar-accent-foreground: #0F172A;
-  --sidebar-border: #E2E8F0;
+  --sidebar-border: rgba(15, 23, 42, 0.05);
+  /* Ultra-light Gray-900 */
   --sidebar-ring: #1BA7A6;
 
   /* Semantic Colors */
@@ -98,18 +111,18 @@
 }
 
 .dark {
-  /* Dark Theme - Haemi Life Premium Optimized */
-  --background: #071012;
+  /* Dark Theme - Haemi Life Premium Optimized (High Contrast Enterprise) */
+  --background: #0B1214;
   /* Dark-Base */
   --foreground: #E6F4F3;
   /* Primary Text */
 
-  --card: #10262A;
+  --card: #14262A;
   /* Dark-Card */
   --card-foreground: #E6F4F3;
   /* Primary Text */
 
-  --popover: #10262A;
+  --popover: #14262A;
   /* Dark-Card */
   --popover-foreground: #E6F4F3;
 
@@ -135,9 +148,9 @@
   --destructive: #DC2626;
   --destructive-foreground: #FFFFFF;
 
-  --border: #346971;
-  /* High visibility border */
-  --input: #346971;
+  --border: #1F3B40;
+  /* Dark-Border */
+  --input: #1F3B40;
   /* High visibility input border */
   --ring: rgba(63, 194, 181, 0.60);
   /* Primary-Glow-Strong */
@@ -148,15 +161,16 @@
   --chart-4: #F59E0B;
   --chart-5: #DC2626;
 
-  --sidebar: #0D1B1E;
-  /* Dark-Surface */
+  --sidebar: #0F1C1F;
+  /* Dark-Surface (Distinction from bg) */
   --sidebar-foreground: #E6F4F3;
   --sidebar-primary: #1BA7A6;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #133338;
   /* Dark-Elevated */
   --sidebar-accent-foreground: #E6F4F3;
-  --sidebar-border: #1F3F44;
+  --sidebar-border: #1F3B40;
+  /* Dark-Border */
   --sidebar-ring: rgba(63, 194, 181, 0.60);
 
   /* Semantic Colors Dark Mode */
@@ -191,6 +205,50 @@
 }
 
 @layer utilities {
+
+  /* Premium Global Scrollbar Implementation (Google-style) */
+  :root {
+    scrollbar-gutter: stable;
+  }
+
+  /* Webkit browsers (Chrome, Edge, Safari, Opera) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    border: 3px solid transparent;
+    /* Acts as padding between thumb and track edge */
+    background-clip: content-box;
+    transition: background 0.3s ease;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary) !important;
+    background-clip: content-box;
+  }
+
+  /* Firefox Support */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+  }
+
+  .dark * {
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
   .scrollbar-none {
     -ms-overflow-style: none;
     /* IE and Edge */
@@ -204,19 +262,79 @@
 }
 
 @layer components {
+
+  /* NOTE: overflow-hidden removed to allow outer glow/shadows */
+  /* 
+     Premium Interactive Card (Apple/Google Standard)
+     - Trustworthy elevation (2px)
+     - Clinical diffused shadows
+     - Opaque background for stability
+  */
   .interactive-card {
-    @apply relative transition-all duration-medium ease-premium border border-transparent bg-card;
+    @apply relative bg-card transition-all duration-[var(--duration-hover)] ease-[var(--ease-premium)] z-0;
+    border: 1px solid var(--border) !important;
+  }
+
+  /* Premium Shutter Effect (Subtle Reveal) */
+  .interactive-card::after {
+    content: "";
+    @apply absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-[var(--duration-hover)] ease-[var(--ease-premium)] pointer-events-none;
+    background: radial-gradient(circle at center, #ffffff26 0%, transparent 70%);
+  }
+
+  .dark .interactive-card::after {
+    background: radial-gradient(circle at center, #ffffff08 0%, transparent 70%);
   }
 
   .interactive-card:hover {
-    @apply -translate-y-1 shadow-elevation-hover border-primary/20;
+    @apply -translate-y-[2px] border-primary/20;
+    box-shadow: var(--shadow-elevation) !important;
   }
 
-  .dark .interactive-card:hover {
-    @apply shadow-none border-primary/40 bg-accent/10;
+  .interactive-card:hover::after {
+    @apply opacity-100;
   }
 
   .interactive-card:active {
-    @apply scale-[0.99] shadow-sm;
+    @apply scale-[0.99] duration-[150ms];
+  }
+
+  /* Premium Gradient Border (Official Brand Colors) */
+  .premium-gradient-border::before {
+    content: "";
+    @apply absolute -inset-[1.5px] rounded-[18px] p-[1.5px] opacity-0 transition-opacity duration-[var(--duration-hover)] ease-[var(--ease-premium)] -z-10 pointer-events-none;
+    /* Brand Gradient: #0E6B74 -> #1BA7A6 -> #6ED3C4 */
+    background: linear-gradient(135deg, #0E6B74, #1BA7A6, #6ED3C4);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Show Gradient on Hover and Selection */
+  .premium-gradient-border:hover::before,
+  .selected-card.premium-gradient-border::before {
+    @apply opacity-100;
+  }
+
+  /* Selected State Reflects Premium Branding */
+  .selected-card {
+    @apply border-transparent bg-primary/[0.02] ring-1 ring-primary/30;
+    box-shadow: var(--shadow-elevation) !important;
+  }
+
+  .dark .selected-card {
+    @apply bg-primary/[0.05] ring-primary/50;
+  }
+
+  /* Icon Glow & Scale */
+  .selected-card .icon-wrapper {
+    @apply bg-primary text-white scale-[1.05];
+    box-shadow: 0 0 20px -5px #1ba7a680 !important;
+  }
+
+  /* Standardized Focus Rings */
+  .interactive-card:focus-visible {
+    @apply outline-none ring-2 ring-primary/40 ring-offset-2 ring-offset-background;
   }
 }

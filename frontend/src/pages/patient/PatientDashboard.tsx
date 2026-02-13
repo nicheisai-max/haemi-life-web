@@ -8,11 +8,11 @@ import { getMyAppointments } from '../../services/appointment.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import type { Appointment } from '../../services/appointment.service';
 import type { Prescription } from '../../services/prescription.service';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Calendar, FileText, FolderOpen, AlertCircle, ThermometerSun, Search, History, Settings as SettingsIcon, CalendarX, Clock, ArrowRight, Heart } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart'; // Re-import to fix HMR
+import { Loader } from '@/components/ui/Loader';
 import { motion } from 'framer-motion';
 
 const MOCK_HEALTH_DATA = [
@@ -115,12 +115,12 @@ export const PatientDashboard: React.FC = () => {
                         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
                             {getGreeting()}, {user?.name}
                         </h1>
-                        <p className="text-white/70 text-lg md:text-xl font-medium leading-relaxed">
+                        <div className="text-white/70 text-lg md:text-xl font-medium leading-relaxed">
                             {loading
-                                ? 'Personalizing your health profile...'
+                                ? <Loader size="xs" className="inline-block align-middle" />
                                 : `Your health mission is on track. You have ${upcomingAppointments.length} upcoming consultations to optimize your well-being.`
                             }
-                        </p>
+                        </div>
                     </div>
                     <Button
                         size="lg"
@@ -149,7 +149,7 @@ export const PatientDashboard: React.FC = () => {
                             <Calendar className="h-8 w-8" />
                         </div>
                         <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : upcomingAppointments.length}</div>
+                            <div className="text-4xl font-black tracking-tight">{loading ? <Loader size="xs" /> : upcomingAppointments.length}</div>
                             <div className="text-sm font-bold uppercase tracking-widest text-blue-500/80 tracking-tight">Active Bookings</div>
                         </div>
                     </GlassCard>
@@ -161,7 +161,7 @@ export const PatientDashboard: React.FC = () => {
                             <FileText className="h-8 w-8" />
                         </div>
                         <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : activePrescriptions.length}</div>
+                            <div className="text-4xl font-black tracking-tight">{loading ? <Loader size="xs" /> : activePrescriptions.length}</div>
                             <div className="text-sm font-bold uppercase tracking-widest text-emerald-500/80 tracking-tight">Active Scripts</div>
                         </div>
                     </GlassCard>
@@ -173,7 +173,7 @@ export const PatientDashboard: React.FC = () => {
                             <FolderOpen className="h-8 w-8" />
                         </div>
                         <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? '...' : appointments.length}</div>
+                            <div className="text-4xl font-black tracking-tight">{loading ? <Loader size="xs" /> : appointments.length}</div>
                             <div className="text-sm font-bold uppercase tracking-widest text-purple-500/80 tracking-tight">Lifetime Visits</div>
                         </div>
                     </GlassCard>
@@ -247,24 +247,9 @@ export const PatientDashboard: React.FC = () => {
 
                     <div className="space-y-4">
                         {loading ? (
-                            <>
-                                <Card className="p-4 flex items-center gap-4">
-                                    <Skeleton className="h-14 w-14 rounded-lg shrink-0" />
-                                    <div className="flex-1 space-y-2">
-                                        <Skeleton className="h-4 w-[60%]" />
-                                        <Skeleton className="h-3 w-[40%]" />
-                                    </div>
-                                    <Skeleton className="h-9 w-16" />
-                                </Card>
-                                <Card className="p-4 flex items-center gap-4">
-                                    <Skeleton className="h-14 w-14 rounded-lg shrink-0" />
-                                    <div className="flex-1 space-y-2">
-                                        <Skeleton className="h-4 w-[60%]" />
-                                        <Skeleton className="h-3 w-[40%]" />
-                                    </div>
-                                    <Skeleton className="h-9 w-16" />
-                                </Card>
-                            </>
+                            <div className="flex justify-center p-8">
+                                <Loader />
+                            </div>
                         ) : upcomingAppointments.length === 0 ? (
                             <Card className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
                                 <CalendarX className="h-12 w-12 opacity-20 mb-3" />

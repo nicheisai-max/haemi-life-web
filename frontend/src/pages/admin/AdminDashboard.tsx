@@ -9,6 +9,7 @@ import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { motion } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PremiumStatCard } from '@/components/ui/PremiumStatCard';
+import { Loader } from '@/components/ui/Loader';
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -136,7 +137,7 @@ export const AdminDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={Users}
                         label="Total Network"
-                        value={loading ? '...' : stats.totalUsers.toLocaleString()}
+                        value={loading ? <Loader size="xs" /> : stats.totalUsers.toLocaleString()}
                         trend="up"
                         trendValue="+12%"
                     />
@@ -145,7 +146,7 @@ export const AdminDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={UserCheck}
                         label="Verified Medical"
-                        value={loading ? '...' : stats.activeDoctors}
+                        value={loading ? <Loader size="xs" /> : stats.activeDoctors}
                         trend="up"
                         trendValue="+5"
                     />
@@ -154,7 +155,7 @@ export const AdminDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={ClipboardCheck}
                         label="Verification Queue"
-                        value={loading ? '...' : stats.pendingVerifications}
+                        value={loading ? <Loader size="xs" /> : stats.pendingVerifications}
                         trend="neutral"
                         trendValue="Stable"
                     />
@@ -163,7 +164,7 @@ export const AdminDashboard: React.FC = () => {
                     <PremiumStatCard
                         icon={TrendingUp}
                         label="Network Capacity"
-                        value={loading ? '...' : stats.hospitalCapacity}
+                        value={loading ? <Loader size="xs" /> : stats.hospitalCapacity}
                         trend="up"
                         trendValue="+2%"
                     />

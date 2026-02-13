@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { getDoctors, getSpecializations } from '../../services/doctor.service';
 import type { DoctorProfile } from '../../services/doctor.service';
-import { AlertCircle, Search, SearchX, User, BadgeCheck, BadgeInfo, Briefcase, Info, Calendar, Loader2 } from 'lucide-react';
+import { AlertCircle, Search, SearchX, User, BadgeCheck, BadgeInfo, Briefcase, Info, Calendar } from 'lucide-react';
+import { Loader } from '@/components/ui/Loader';
 
 export const FindDoctors: React.FC = () => {
     const navigate = useNavigate();
@@ -72,10 +73,7 @@ export const FindDoctors: React.FC = () => {
     if (loading) {
         return (
             <div className="max-w-7xl mx-auto p-8 flex justify-center items-center min-h-[400px]">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-muted-foreground">Finding doctors...</p>
-                </div>
+                <Loader size="lg" />
             </div>
         );
     }

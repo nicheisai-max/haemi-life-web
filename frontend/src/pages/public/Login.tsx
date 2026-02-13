@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -16,11 +17,18 @@ import loginBg from '../../assets/images/login_bg_premium.png';
 export const Login: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { login } = useAuth();
+    const { login, isAuthenticated } = useAuth();
     const [generalError, setGeneralError] = useState<string>('');
 
     // Get the destination the user was trying to reach
     const from = (location.state as any)?.from?.pathname || '/dashboard';
+
+    // PRODUCTION FIX: Automatic redirection if already authenticated
+    React.useEffect(() => {
+        if (isAuthenticated) {
+            navigate(from, { replace: true });
+        }
+    }, [isAuthenticated, navigate, from]);
 
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),
@@ -104,14 +112,13 @@ export const Login: React.FC = () => {
                                     <FormLabel>Password</FormLabel>
                                     <Link
                                         to="/forgot-password"
-                                        className="text-sm font-medium text-primary hover:text-primary/80 hover:underline px-0"
+                                        className="text-xs font-semibold text-primary hover:text-primary hover:bg-primary/5 hover:no-underline px-3 py-1 rounded-full transition-all border border-transparent hover:border-primary/20"
                                     >
                                         Forgot password?
                                     </Link>
                                 </div>
                                 <FormControl>
-                                    <Input
-                                        type="password"
+                                    <PasswordInput
                                         placeholder="Enter your password"
                                         className="bg-background h-11"
                                         {...field}
@@ -146,7 +153,7 @@ export const Login: React.FC = () => {
                 <span className="text-muted-foreground">Don't have an account? </span>
                 <Button
                     variant="link"
-                    className="p-0 h-auto font-semibold text-primary hover:text-primary/80 hover:no-underline"
+                    className="p-0 h-auto font-bold text-primary hover:text-primary hover:bg-primary/5 hover:no-underline px-3 py-1 rounded-full transition-all border border-transparent hover:border-primary/20"
                     onClick={() => navigate('/signup')}
                 >
                     Create Account

@@ -12,7 +12,11 @@ import { bookAppointment, getAvailableSlots } from '../../services/appointment.s
 import { bookAppointmentSchema, type BookAppointmentFormData } from '../../lib/validation/appointment.schema';
 import type { DoctorProfile } from '../../services/doctor.service';
 import type { AvailableSlots } from '../../services/appointment.service';
-import { CheckCircle, AlertTriangle, User, Calendar, Clock, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, User, Calendar, Clock } from 'lucide-react';
+import { Loader } from '@/components/ui/Loader';
+import { DateScroller } from '@/components/ui/DateScroller';
+import { TimeGrid } from '@/components/ui/TimeGrid';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const BookAppointment: React.FC = () => {
     const navigate = useNavigate();
@@ -25,10 +29,10 @@ export const BookAppointment: React.FC = () => {
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
-    const form = useForm<z.input<typeof bookAppointmentSchema>, any, BookAppointmentFormData>({
+    const form = useForm<z.input<typeof bookAppointmentSchema>, undefined, BookAppointmentFormData>({
         resolver: zodResolver(bookAppointmentSchema),
         defaultValues: {
-            doctor_id: '' as any,
+            doctor_id: '',
             appointment_date: '',
             appointment_time: '',
             reason: '',
@@ -68,8 +72,8 @@ export const BookAppointment: React.FC = () => {
 
     const fetchAvailableSlots = async () => {
         try {
-            const doctorId = parseInt(watchedDoctorId as unknown as string, 10);
-            if (isNaN(doctorId)) return;
+            const doctorId = watchedDoctorId as string;
+            if (!doctorId) return;
 
             const slots = await getAvailableSlots(doctorId, watchedDate);
             setAvailableSlots(slots);
@@ -92,19 +96,8 @@ export const BookAppointment: React.FC = () => {
         }
     };
 
-    const selectedDoctorData = doctors.find(d => d.id === parseInt(watchedDoctorId?.toString() || '0', 10));
+    const selectedDoctorData = doctors.find(d => d.id === watchedDoctorId);
 
-    // Generate next 14 days for date picker
-    const getAvailableDates = () => {
-        const dates = [];
-        const today = new Date();
-        for (let i = 1; i <= 14; i++) {
-            const date = new Date(today);
-            date.setDate(today.getDate() + i);
-            dates.push(date.toISOString().split('T')[0]);
-        }
-        return dates;
-    };
 
     if (success) {
         return (
@@ -133,143 +126,144 @@ export const BookAppointment: React.FC = () => {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8 min-w-0">
                 {/* Booking Form */}
-                <Card className="p-6 h-fit">
-                    <h2 className="text-xl font-semibold text-foreground mb-6 pb-4 border-b">Appointment Details</h2>
+                <div className="min-w-0">
+                    <Card className="p-8 h-fit border-none shadow-xl shadow-primary/5 bg-background/50 backdrop-blur-sm">
+                        <div className="flex items-center gap-3 mb-8 pb-4 border-b border-border/40">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                <Calendar className="h-5 w-5" />
+                            </div>
+                            <h2 className="text-xl font-bold text-foreground">Appointment Details</h2>
+                        </div>
 
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                            <FormField
-                                control={form.control}
-                                name="doctor_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Select Doctor</FormLabel>
-                                        <Select
-                                            onValueChange={(value) => field.onChange(parseInt(value, 10))}
-                                            value={field.value?.toString() || ''}
-                                            disabled={loading}
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                                <FormField
+                                    control={form.control}
+                                    name="doctor_id"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Select Doctor</FormLabel>
+                                            <Select
+                                                onValueChange={(value) => field.onChange(value)}
+                                                value={field.value || ''}
+                                                disabled={loading}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Choose a doctor..." />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    {doctors.map(doctor => (
+                                                        <SelectItem key={doctor.id} value={doctor.id.toString()}>
+                                                            {doctor.name} - {doctor.specialization}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="appointment_date"
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-4">
+                                            <div className="space-y-1">
+                                                <FormLabel className="text-base font-bold text-foreground">Select Appointment Date</FormLabel>
+                                                <p className="text-xs text-muted-foreground">Choose a convenient date for your consultation</p>
+                                            </div>
+                                            <FormControl>
+                                                <DateScroller
+                                                    selectedDate={field.value}
+                                                    onDateSelect={field.onChange}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <AnimatePresence>
+                                    {watchedDate && (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            className="space-y-4 pt-6 border-t border-border/40"
                                         >
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Choose a doctor..." />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {doctors.map(doctor => (
-                                                    <SelectItem key={doctor.id} value={doctor.id.toString()}>
-                                                        {doctor.name} - {doctor.specialization}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="appointment_date"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Appointment Date</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={!watchedDoctorId}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select a date..." />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {getAvailableDates().map(date => (
-                                                    <SelectItem key={date} value={date}>
-                                                        {new Date(date).toLocaleDateString('en-US', {
-                                                            weekday: 'long',
-                                                            year: 'numeric',
-                                                            month: 'long',
-                                                            day: 'numeric'
-                                                        })}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="appointment_time"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Appointment Time</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={!watchedDate}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select a time..." />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {availableSlots?.slots.map(slot => (
-                                                    <SelectItem key={slot} value={slot}>
-                                                        {new Date(`2000-01-01T${slot}`).toLocaleTimeString('en-US', {
-                                                            hour: 'numeric',
-                                                            minute: '2-digit',
-                                                            hour12: true
-                                                        })}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="reason"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Reason for Visit</FormLabel>
-                                        <FormControl>
-                                            <textarea
-                                                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                                rows={4}
-                                                placeholder="Describe your symptoms or reason for visit..."
-                                                {...field}
+                                            <FormField
+                                                control={form.control}
+                                                name="appointment_time"
+                                                render={({ field }) => (
+                                                    <FormItem className="space-y-4">
+                                                        <div className="space-y-1">
+                                                            <FormLabel className="text-base font-bold text-foreground">Choose Available Time</FormLabel>
+                                                            <p className="text-xs text-muted-foreground">Select an available slot from the groups below</p>
+                                                        </div>
+                                                        <FormControl>
+                                                            <TimeGrid
+                                                                slots={availableSlots?.slots || []}
+                                                                selectedTime={field.value}
+                                                                onTimeSelect={field.onChange}
+                                                                loading={loading}
+                                                            />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
                                             />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
 
-                            <Button
-                                type="submit"
-                                className="w-full"
-                                size="lg"
-                                disabled={form.formState.isSubmitting}
-                            >
-                                {form.formState.isSubmitting ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Booking...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Calendar className="mr-2 h-4 w-4" />
-                                        Book Appointment
-                                    </>
-                                )}
-                            </Button>
-                        </form>
-                    </Form>
-                </Card>
+                                <FormField
+                                    control={form.control}
+                                    name="reason"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Reason for Visit</FormLabel>
+                                            <FormControl>
+                                                <textarea
+                                                    className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    rows={4}
+                                                    placeholder="Describe your symptoms or reason for visit..."
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
 
-                {/* Appointment Summary */}
+                                <Button
+                                    type="submit"
+                                    className="w-full"
+                                    size="lg"
+                                    disabled={form.formState.isSubmitting}
+                                >
+                                    {form.formState.isSubmitting ? (
+                                        <>
+                                            <Loader size="xs" className="mr-2" />
+                                            Booking...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Calendar className="mr-2 h-4 w-4" />
+                                            Book Appointment
+                                        </>
+                                    )}
+                                </Button>
+                            </form>
+                        </Form>
+                    </Card>
+                </div>
+
+                {/* Info / Summary Card */}
                 {selectedDoctorData && (
                     <div className="space-y-6">
                         <Card className="p-6 sticky top-24">

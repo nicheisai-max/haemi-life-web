@@ -16,6 +16,9 @@ import prescriptionRoutes from './routes/prescription.routes';
 import adminRoutes from './routes/admin.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import passwordResetRoutes from './routes/password-reset.routes';
+import notificationRoutes from './routes/notification.routes';
+import recordRoutes from './routes/record.routes';
+import path from 'path';
 
 const app = express();
 const httpServer = createServer(app);
@@ -31,6 +34,8 @@ const port = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -41,6 +46,8 @@ app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/records', recordRoutes);
 
 // Basic health check route
 app.get('/', (req, res) => {

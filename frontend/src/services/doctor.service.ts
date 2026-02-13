@@ -5,7 +5,7 @@ import api from './api';
 // =====================================================
 
 export interface DoctorProfile {
-    id: number;
+    id: string;
     name: string;
     email: string;
     phone_number: string;
@@ -27,7 +27,7 @@ export interface DoctorSchedule {
 }
 
 export interface Patient {
-    id: number;
+    id: string;
     name: string;
     phone_number: string;
     email?: string;
@@ -42,7 +42,7 @@ export const listDoctors = async (params?: { specialization?: string; search?: s
 };
 
 // Get doctor profile by ID
-export const getDoctorProfile = async (id: number) => {
+export const getDoctorProfile = async (id: string) => {
     const response = await api.get(`/doctors/${id}`);
     return response.data as DoctorProfile;
 };

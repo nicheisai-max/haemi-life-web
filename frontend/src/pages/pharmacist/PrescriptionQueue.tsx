@@ -5,7 +5,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { getPendingPrescriptions, updatePrescriptionStatus } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
-import { AlertCircle, X, CheckCircle2, AlertTriangle, Clock, Calendar, Pill, Check, Loader2 } from 'lucide-react';
+import { AlertCircle, X, CheckCircle2, AlertTriangle, Clock, Calendar, Pill, Check } from 'lucide-react';
+import { Loader } from '@/components/ui/Loader';
 
 export const PrescriptionQueue: React.FC = () => {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
@@ -58,10 +59,7 @@ export const PrescriptionQueue: React.FC = () => {
     if (loading) {
         return (
             <div className="max-w-7xl mx-auto p-8 flex justify-center items-center min-h-[400px]">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-muted-foreground">Loading queue...</p>
-                </div>
+                <Loader size="lg" />
             </div>
         );
     }
@@ -156,7 +154,7 @@ export const PrescriptionQueue: React.FC = () => {
                                             className="flex-1 md:w-full justify-center shadow-sm"
                                         >
                                             {processing === prescription.id.toString() ? (
-                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                <Loader size="xs" className="mr-2" />
                                             ) : (
                                                 <Check className="h-4 w-4 mr-2" />
                                             )}
