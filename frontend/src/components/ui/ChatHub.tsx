@@ -99,9 +99,12 @@ export const ChatHub: React.FC = () => {
             const loadDoctors = async () => {
                 try {
                     const res = await api.get('/doctor'); // Corrected endpoint
-                    setDoctors(res.data);
+                    // Handle both direct array and nested .data response
+                    const doctorData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+                    setDoctors(doctorData);
                 } catch (error) {
                     console.error("Failed to load doctors", error);
+                    setDoctors([]); // Set empty array on error
                 }
             };
             loadDoctors();
@@ -124,7 +127,10 @@ export const ChatHub: React.FC = () => {
 
     const handleStartNewChat = async (doctor: any) => {
         // optimistically check if conversation exists
-        const existing = conversations.find(c => c.participants.some(p => p.id === doctor.user_id || p.id === doctor.id));
+        const existing = conversations.find(c =>
+            c.participants && Array.isArray(c.participants) &&
+            c.participants.some(p => p.id === doctor.user_id || p.id === doctor.id)
+        );
         if (existing) {
             handleSelectConversation(existing);
         } else {
@@ -142,7 +148,9 @@ export const ChatHub: React.FC = () => {
     };
 
     const getOtherParticipant = (conversation: Conversation) => {
-        const other = conversation.participants.find(p => p.id !== user?.id) || { name: 'Unknown', role: 'Unknown', id: 'unknown' };
+        const other = (conversation.participants && Array.isArray(conversation.participants))
+            ? conversation.participants.find(p => p.id !== user?.id) || { name: 'Unknown', role: 'Unknown', id: 'unknown' }
+            : { name: 'Unknown', role: 'Unknown', id: 'unknown' };
         return { ...other, image: getDoctorImage(other.name) };
     };
 
