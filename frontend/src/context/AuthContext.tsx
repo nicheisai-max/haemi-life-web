@@ -24,7 +24,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isLoading = isVerifying;
 
     useEffect(() => {
-        const handleUnauthorized = () => {
+        const handleUnauthorized = (e: any) => {
+            const failingToken = e.detail?.token;
+            const currentToken = localStorage.getItem('token');
+
+            // ATOMIC SESSION SYNC:
+            // Only wipe state if the token that failed is actually the one we are currently using.
+            // If failingToken is null (old behavior) or matches current, we wipe.
+            // If they don't match, it's a "ghost" rejection from a previous session.
+            if (failingToken && failingToken !== currentToken) {
+                console.warn('Sync Conflict: Ignoring unauthorized event for stale session.');
+                return;
+            }
+
+            console.log('Session invalid: Performing authenticated state reset.');
             setUser(null);
             setToken(null);
             localStorage.removeItem('token');
@@ -32,16 +45,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsVerifying(false);
         };
 
-        window.addEventListener('auth:unauthorized', handleUnauthorized);
-        return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+        window.addEventListener('auth:unauthorized', handleUnauthorized as EventListener);
+        return () => window.removeEventListener('auth:unauthorized', handleUnauthorized as EventListener);
     }, []);
 
     // ZERO-TRUST SESSION VERIFICATION
     useEffect(() => {
         const initSession = async () => {
-            const storedToken = localStorage.getItem('token');
+            const initialToken = localStorage.getItem('token');
 
-            if (!storedToken) {
+            if (!initialToken) {
                 // No token found, immediate guest state
                 setUser(null);
                 setToken(null);
@@ -51,31 +64,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             try {
                 // Verify with backend
-                // DO NOT trust localStorage user object
-                const { user } = await authService.verifySession();
+                const { user: verifiedUser } = await authService.verifySession();
 
-                // If successful, update state
-                setUser(user);
-                setToken(storedToken);
-                // Update local storage with fresh user data (optional, for other tabs)
-                localStorage.setItem('user', JSON.stringify(user));
+                // ATOMIC SESSION SYNC check:
+                // If the token changed during the verification request (e.g. user logged in manually),
+                // do NOT overwrite the new session data with this background result.
+                const currentToken = localStorage.getItem('token');
+                if (initialToken !== currentToken) {
+                    console.warn('Sync Conflict: Session verification finished for a discarded token.');
+                    return;
+                }
+
+                setUser(verifiedUser);
+                setToken(initialToken);
+                localStorage.setItem('user', JSON.stringify(verifiedUser));
             } catch (error: any) {
                 console.error('Session verification failed:', error);
 
-                // PRODUCTION FIX: Distinguish between "Unauthorized" and "Server Down"
-                // If it's a 401/403, the session is definitely dead. Wipe it.
+                // ATOMIC SESSION SYNC check for failure path
+                const currentToken = localStorage.getItem('token');
+                if (initialToken !== currentToken) return;
+
                 if (error.response?.status === 401 || error.response?.status === 403) {
                     localStorage.removeItem('token');
                     localStorage.removeItem('user');
                     setToken(null);
                     setUser(null);
                 } else {
-                    // It's likely a network error or server restart. 
-                    // Keep the token for retry, but stop loading state.
                     console.warn('Server unreachable, keeping session for retry...');
                 }
             } finally {
-                setIsVerifying(false);
+                // Final safety check before ending loading state
+                const currentToken = localStorage.getItem('token');
+                if (initialToken === currentToken) {
+                    setIsVerifying(false);
+                }
             }
         };
 
@@ -83,15 +106,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const login = async (credentials: LoginCredentials) => {
-        setIsVerifying(true);
+        // When manual login starts, we don't necessarily want to set isVerifying=true 
+        // if it's already verifying, but we do want to ensure the UI shows a loader.
         try {
-            const { token, user } = await authService.login(credentials);
+            const { token: newToken, user: newUser } = await authService.login(credentials);
 
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
+            // Manual login always takes precedence. We set these first to 
+            // trigger the Atomic Sync mismatch in any pending background tasks.
+            localStorage.setItem('token', newToken);
+            localStorage.setItem('user', JSON.stringify(newUser));
 
-            setToken(token);
-            setUser(user);
+            setToken(newToken);
+            setUser(newUser);
         } catch (error) {
             console.error('Login failed', error);
             throw error;
@@ -101,16 +127,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const signup = async (credentials: SignupCredentials) => {
-        setIsVerifying(true);
         try {
-            const { token, user } = await authService.signup(credentials);
+            const { token: newToken, user: newUser } = await authService.signup(credentials);
 
-            // Auto-login after signup
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('token', newToken);
+            localStorage.setItem('user', JSON.stringify(newUser));
 
-            setToken(token);
-            setUser(user);
+            setToken(newToken);
+            setUser(newUser);
         } catch (error) {
             console.error('Signup failed', error);
             throw error;

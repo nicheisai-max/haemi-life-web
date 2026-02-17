@@ -16,6 +16,9 @@
   <meta property="og:type" content="website" />
   <title>Haemi Life | Premium Digital Health Platform</title>
   <script>
+    // FIX: simple-peer requires 'global' to be defined in Vite/Modern environments
+    window.global = window;
+
     // ZERO-FLASH THEME ENGINE
     (function () {
       try {

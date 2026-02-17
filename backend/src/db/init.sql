@@ -216,7 +216,11 @@ BEGIN
         INSERT INTO locations (city, district, gps_latitude, gps_longitude) VALUES
         ('Gaborone', 'South-East', -24.6282, 25.9231),
         ('Francistown', 'North-East', -21.1699, 27.5084),
-        ('Maun', 'North-West', -19.9945, 23.4163);
+        ('Maun', 'North-West', -19.9945, 23.4163),
+        ('Lobatse', 'South-East', -25.2163, 25.6749),
+        ('Serowe', 'Central', -22.3833, 26.7167),
+        ('Molepolole', 'Kweneng', -24.4106, 25.4984),
+        ('Kasane', 'Chobe', -17.8167, 25.1500);
     END IF;
 
     -- 2. Create Medicines (if empty)
@@ -230,34 +234,70 @@ BEGIN
     -- 3. Create Admin User
     CALL sp_create_user('Admin Kgosi', 'admin@haemilife.com', '+26771234567', p_password_hash, 'admin');
 
-    -- 4. Create Doctor (Dr. Mpho)
-    CALL sp_create_user('Dr. Mpho Modise', 'doctor@haemilife.com', '+26772123456', p_password_hash, 'doctor');
-    
-    -- Get ID for profile creation
-    SELECT id INTO v_doctor_id FROM users WHERE email = 'doctor@haemilife.com';
-    
-    -- Create Profile (Idempotent upsert)
-    INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, consultation_fee, is_verified)
-    VALUES (v_doctor_id, 'General Practitioner', 'BW-GP-2018-1234', 6, 250.00, true)
+    -- 4. Create Specialists (The Advanced Medical Network)
+    -- Dr. Thabo (Cardiologist - Gaborone)
+    CALL sp_create_user('Dr. Thabo Sekgwi', 'thabo.sekgwi@haemilife.com', '+26771000001', p_password_hash, 'doctor');
+    SELECT id INTO v_doctor_id FROM users WHERE email = 'thabo.sekgwi@haemilife.com';
+    INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
+    VALUES (v_doctor_id, 'Cardiologist', 'BW-MD-2010-0982', 15, 'Lead cardiologist specializing in interventional procedures. 15 years experience at Princess Marina Hospital.', 450.00, true)
     ON CONFLICT (user_id) DO NOTHING;
 
-    -- Create Schedule (Delete & Re-insert for purity)
+    -- Dr. Lerato (Pediatrician - Maun)
+    CALL sp_create_user('Dr. Lerato Molefe', 'lerato.molefe@haemilife.com', '+26771000002', p_password_hash, 'doctor');
+    SELECT id INTO v_doctor_id FROM users WHERE email = 'lerato.molefe@haemilife.com';
+    INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
+    VALUES (v_doctor_id, 'Pediatrician', 'BW-MD-2015-1123', 8, 'Dedicated pediatrician serving the North-West community. Resident doctor at Letsholathebe II Memorial.', 350.00, true)
+    ON CONFLICT (user_id) DO NOTHING;
+
+    -- Dr. Kagiso (Psychiatrist - Francistown)
+    CALL sp_create_user('Dr. Kagiso Dube', 'kagiso.dube@haemilife.com', '+26771000003', p_password_hash, 'doctor');
+    SELECT id INTO v_doctor_id FROM users WHERE email = 'kagiso.dube@haemilife.com';
+    INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
+    VALUES (v_doctor_id, 'Psychiatrist', 'BW-MD-2012-4432', 12, 'Mental health advocate specializing in adult psychiatry and CBT.', 400.00, true)
+    ON CONFLICT (user_id) DO NOTHING;
+
+    -- Dr. Neo (Obstetrician - Kasane)
+    CALL sp_create_user('Dr. Neo Balopi', 'neo.balopi@haemilife.com', '+26771000004', p_password_hash, 'doctor');
+    SELECT id INTO v_doctor_id FROM users WHERE email = 'neo.balopi@haemilife.com';
+    INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
+    VALUES (v_doctor_id, 'Obstetrician', 'BW-MD-2018-7762', 6, 'Providing comprehensive maternal healthcare in the Chobe region.', 300.00, true)
+    ON CONFLICT (user_id) DO NOTHING;
+
+    -- Dr. Mpho (Existing General Practitioner - Gaborone)
+    CALL sp_create_user('Dr. Mpho Modise', 'doctor@haemilife.com', '+26772123456', p_password_hash, 'doctor');
+    SELECT id INTO v_doctor_id FROM users WHERE email = 'doctor@haemilife.com';
+    INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, consultation_fee, is_verified, bio)
+    VALUES (v_doctor_id, 'General Practitioner', 'BW-GP-2018-1234', 6, 250.00, true, 'Senior GP focused on family medicine and preventive care.')
+    ON CONFLICT (user_id) DO NOTHING;
+
+    -- Create Schedule for Dr. Mpho
     DELETE FROM doctor_schedules WHERE doctor_id = v_doctor_id;
     INSERT INTO doctor_schedules (doctor_id, day_of_week, start_time, end_time) VALUES
     (v_doctor_id, 'monday', '08:00'::TIME, '17:00'::TIME),
     (v_doctor_id, 'wednesday', '08:00'::TIME, '17:00'::TIME),
     (v_doctor_id, 'friday', '08:00'::TIME, '17:00'::TIME);
 
-    -- 4b. Create Pharmacist (Keitumetse)
+    -- 5. Create Pharmacist (Keitumetse)
     CALL sp_create_user('Keitumetse Gaosekwe', 'pharmacist@haemilife.com', '+26775123456', p_password_hash, 'pharmacist');
 
-    -- 5. Create Patient (Tebogo)
+    -- 6. Create Patient (Tebogo)
     CALL sp_create_user('Tebogo Motswana', 'patient@haemilife.com', '+26773123456', p_password_hash, 'patient', '123456789');
-    
     SELECT id INTO v_patient_id FROM users WHERE email = 'patient@haemilife.com';
 
-    -- 6. Create Appointment
-    -- Refactored to procedural logic to avoid checkInsertTargets error
+    -- 7. Create Appointment
+    IF NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = v_patient_id AND appointment_date = CURRENT_DATE) THEN
+        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, consultation_type, reason)
+        VALUES (
+            v_patient_id,
+            v_doctor_id,
+            CURRENT_DATE,
+            '14:00'::TIME,
+            'scheduled',
+            'video',
+            'Follow-up Consultation'
+        );
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = v_patient_id AND appointment_date = (CURRENT_DATE + INTERVAL '2 days')::DATE) THEN
         INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, consultation_type, reason)
         VALUES (
@@ -271,9 +311,7 @@ BEGIN
         );
     END IF;
 
-
-
-    -- 7. Seed Analytics (If empty)
+    -- 8. Seed Analytics
     IF NOT EXISTS (SELECT 1 FROM analytics_daily_visits LIMIT 1) THEN
         INSERT INTO analytics_daily_visits (date, visits, new_users) VALUES
         (CURRENT_DATE - INTERVAL '6 days', 320, 15),
@@ -285,8 +323,8 @@ BEGIN
         (CURRENT_DATE, 720, 45);
     END IF;
 
-    -- 8. Seed Notifications (Role Specific - Botswana Context)
-    -- 8a. Doctor Notifications
+    -- 9. Seed Notifications (Role Specific)
+    -- 9a. Doctor Notifications
     IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_doctor_id) THEN
         INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
         (v_doctor_id, 'Critical Lab Result', 'Patient Kagiso Moalusi: HbA1c levels critical (9.2%). Action required.', 'warning', NOW() - INTERVAL '10 minutes'),
@@ -294,7 +332,7 @@ BEGIN
         (v_doctor_id, 'System Update', 'Botswana Essential Drug List (BEDL) updated successfully.', 'success', NOW() - INTERVAL '3 hours');
     END IF;
 
-    -- 8b. Pharmacist Notifications (Keitumetse)
+    -- 9b. Pharmacist Notifications
     DECLARE
         v_pharmacist_id UUID;
     BEGIN
@@ -303,31 +341,27 @@ BEGIN
             INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
             (v_pharmacist_id, 'New E-Prescription', 'Dr. Thabo Molefe sent a prescription for Amoxil 500mg.', 'info', NOW() - INTERVAL '5 minutes'),
             (v_pharmacist_id, 'Stock Alert: Panado', 'Inventory low at Gaborone North branch. 15 units remaining.', 'warning', NOW() - INTERVAL '2 hours'),
-            (v_pharmacist_id, 'Regulatory Sync', 'BOMRA compliance audit scheduled for next Tuesday.', 'info', NOW() - INTERVAL '1 day'),
-            (v_pharmacist_id, 'Security Alert', 'Login detected from a new device in Selebi-Phikwe.', 'warning', NOW() - INTERVAL '2 days');
+            (v_pharmacist_id, 'Regulatory Sync', 'BOMRA compliance audit scheduled for next Tuesday.', 'info', NOW() - INTERVAL '1 day');
         END IF;
     END;
 
-    -- 8c. Patient Notifications (Tebogo)
+    -- 9c. Patient Notifications
     IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_patient_id) THEN
         INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
         (v_patient_id, 'Appointment Reminder', 'Video consultation with Dr. Mpho Modise is in 2 days.', 'info', NOW() - INTERVAL '30 minutes'),
         (v_patient_id, 'Lab Results Ready', 'Your blood test results from Princess Marina Hospital are available.', 'success', NOW() - INTERVAL '4 hours'),
-        (v_patient_id, 'Health Tip: Heatwave', 'Gaborone temperatures to reach 38°C. Stay hydrated.', 'info', NOW() - INTERVAL '1 day'),
-        (v_patient_id, 'Medication Refill', 'Your Amoxil prescription is eligible for refill at any Clicks Pharmacy.', 'success', NOW() - INTERVAL '3 days');
+        (v_patient_id, 'Health Tip: Heatwave', 'Gaborone temperatures to reach 38°C. Stay hydrated.', 'info', NOW() - INTERVAL '1 day');
     END IF;
 
-    -- 8d. Admin Notifications (Admin Kgosi)
+    -- 9d. Admin Notifications
     DECLARE
         v_admin_id UUID;
     BEGIN
         SELECT id INTO v_admin_id FROM users WHERE email = 'admin@haemilife.com';
         IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_admin_id) THEN
             INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
-            (v_admin_id, 'System Health Alert', 'Infrastructure monitoring: Gaborone Data Center is running at 92% capacity. Scaling might be required soon.', 'warning', NOW() - INTERVAL '15 minutes'),
-            (v_admin_id, 'New Doctor Verification', 'Dr. Thabo Sekgwi (Maun) has submitted documents for verification. License: BW-MA-2024-88.', 'info', NOW() - INTERVAL '2 hours'),
-            (v_admin_id, 'Regulatory Compliance', 'Quarterly audit for Botswana Ministry of Health (MOH) data protection compliance is scheduled for Monday.', 'info', NOW() - INTERVAL '5 hours'),
-            (v_admin_id, 'Service Interruption', 'Emergency maintenance scheduled for Sunday 2 AM to update the national citizen registry integration (Omang Sync).', 'error', NOW() - INTERVAL '1 day');
+            (v_admin_id, 'System Health Alert', 'Infrastructure monitoring: Gaborone Data Center is running at 92% capacity.', 'warning', NOW() - INTERVAL '15 minutes'),
+            (v_admin_id, 'New Doctor Verification', 'Dr. Neo Balopi (Kasane) has submitted documents for verification.', 'info', NOW() - INTERVAL '2 hours');
         END IF;
     END;
 

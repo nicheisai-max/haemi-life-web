@@ -138,10 +138,13 @@ api.interceptors.response.use(
 
         // Handle 401 auth errors
         if (error.response && error.response.status === 401) {
+            const token = localStorage.getItem('token');
+            // Dispatch event for AuthContext to handle SPA redirect
+            // Include the token that failed to allow identity matching in AuthContext
+            window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { token } }));
+
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            // Dispatch event for AuthContext to handle SPA redirect
-            window.dispatchEvent(new CustomEvent('auth:unauthorized'));
             return Promise.reject(error);
         }
 

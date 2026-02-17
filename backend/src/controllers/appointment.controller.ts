@@ -6,7 +6,7 @@ export const bookAppointment = async (req: Request, res: Response) => {
     try {
         const user = (req as any).user;
         const patientId = user.id;
-        const { doctor_id, appointment_date, appointment_time, reason } = req.body;
+        const { doctor_id, appointment_date, appointment_time, consultation_type, reason } = req.body;
 
         // Validate that doctor exists and is verified
         const doctorCheck = await pool.query(`
@@ -30,10 +30,10 @@ export const bookAppointment = async (req: Request, res: Response) => {
         }
 
         const result = await pool.query(`
-            INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason, status)
-            VALUES ($1, $2, $3, $4, $5, 'scheduled')
+            INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status)
+            VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
             RETURNING *
-        `, [patientId, doctor_id, appointment_date, appointment_time, reason]);
+        `, [patientId, doctor_id, appointment_date, appointment_time, consultation_type, reason]);
 
         res.status(201).json({ message: 'Appointment booked successfully', appointment: result.rows[0] });
     } catch (error) {

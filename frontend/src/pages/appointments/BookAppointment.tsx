@@ -4,9 +4,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { cn } from '@/lib/utils';
 import { getDoctors } from '../../services/doctor.service';
 import { bookAppointment, getAvailableSlots } from '../../services/appointment.service';
 import { bookAppointmentSchema, type BookAppointmentFormData } from '../../lib/validation/appointment.schema';
@@ -35,6 +37,7 @@ export const BookAppointment: React.FC = () => {
             doctor_id: '',
             appointment_date: '',
             appointment_time: '',
+            consultation_type: 'in-person',
             reason: '',
         },
     });
@@ -223,6 +226,31 @@ export const BookAppointment: React.FC = () => {
 
                                 <FormField
                                     control={form.control}
+                                    name="consultation_type"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Consultation Type</FormLabel>
+                                            <Select
+                                                onValueChange={(value) => field.onChange(value)}
+                                                value={field.value}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select type..." />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="in-person">In-Person (Physical)</SelectItem>
+                                                    <SelectItem value="video">Online (Video Call)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
                                     name="reason"
                                     render={({ field }) => (
                                         <FormItem>
@@ -313,6 +341,18 @@ export const BookAppointment: React.FC = () => {
                                     <p className="text-sm text-muted-foreground line-clamp-3">
                                         {form.watch('reason')}
                                     </p>
+                                </div>
+                            )}
+
+                            {form.watch('consultation_type') && (
+                                <div className="pt-4 border-t border-border/40">
+                                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Type</h3>
+                                    <Badge variant="secondary" className={cn(
+                                        "capitalize",
+                                        form.watch('consultation_type') === 'video' ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                                    )}>
+                                        {form.watch('consultation_type') === 'video' ? 'Video Call' : 'Physical Visit'}
+                                    </Badge>
                                 </div>
                             )}
                         </Card>
