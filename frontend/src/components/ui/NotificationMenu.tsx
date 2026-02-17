@@ -99,7 +99,7 @@ export const NotificationMenu: React.FC = () => {
     };
 
     return (
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-300 h-10 w-10">
                     <Bell className={`h-5 w-5 transition-all ${hasUnread ? 'text-primary' : ''}`} />

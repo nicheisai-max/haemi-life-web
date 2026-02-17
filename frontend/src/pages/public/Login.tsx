@@ -42,12 +42,8 @@ export const Login: React.FC = () => {
         setGeneralError('');
 
         try {
-            const isEmail = data.emailOrPhone.includes('@');
             const credentials = {
-                ...(isEmail
-                    ? { email: data.emailOrPhone }
-                    : { phone_number: data.emailOrPhone }
-                ),
+                identifier: data.emailOrPhone,
                 password: data.password,
             };
 

@@ -154,7 +154,7 @@ export const FindDoctors: React.FC = () => {
                             filteredDoctors.map((doctor) => (
                                 <Card key={doctor.id} className="group hover:shadow-lg transition-all duration-300 border-border/60 hover:border-primary/20">
                                     <CardHeader className="flex flex-row justify-between items-start pb-2">
-                                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary ring-4 ring-background shadow-sm">
+                                        <div className="w-16 h-16 rounded-full bg-primary/10 dark:bg-primary/5 flex items-center justify-center text-primary border-2 border-primary/30 dark:border-primary/40 shadow-lg dark:shadow-primary/20 ring-2 ring-primary/10 dark:ring-primary/15">
                                             <User className="h-8 w-8" />
                                         </div>
                                         <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 gap-1.5 px-2.5 py-1">

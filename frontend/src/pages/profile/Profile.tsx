@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { getProfile, updateProfile } from '../../services/user.service';
 import type { UserProfile } from '../../services/user.service';
 import { profileUpdateSchema, type ProfileUpdateFormData } from '../../lib/validation/profile.schema';
+import { PageTransition } from '../../components/layout/PageTransition';
 
 export const Profile: React.FC = () => {
     const navigate = useNavigate();
@@ -87,7 +88,7 @@ export const Profile: React.FC = () => {
     }
 
     return (
-        <div className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8 animate-in fade-in duration-500">
+        <div className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight mb-2">My Profile</h1>
                 <p className="text-muted-foreground text-lg">Manage your personal information and account settings</p>

@@ -70,7 +70,7 @@ export const Settings: React.FC = () => {
     };
 
     return (
-        <div className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8 animate-in fade-in duration-500">
+        <div className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight mb-2">Settings</h1>
                 <p className="text-muted-foreground text-lg">Manage your account preferences and security settings</p>

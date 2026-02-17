@@ -94,151 +94,149 @@ export const DoctorScheduleManagement: React.FC = () => {
         );
     }
 
-    return (
-        <div className="max-w-5xl mx-auto p-6 md:p-8 animate-in fade-in duration-500">
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                    <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Schedule Management</h1>
-                            <p className="text-muted-foreground">Configure your weekly availability for patient appointments</p>
+    return (            <div className="max-w-5xl mx-auto p-6 md:p-8">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                            <div>
+                                <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Schedule Management</h1>
+                                <p className="text-muted-foreground">Configure your weekly availability for patient appointments</p>
+                            </div>
+                            <Button
+                                type="submit"
+                                disabled={form.formState.isSubmitting}
+                                className="min-w-[140px]"
+                            >
+                                {form.formState.isSubmitting ? (
+                                    <>
+                                        <Loader size="xs" className="mr-2" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="mr-2 h-4 w-4" />
+                                        Save Schedule
+                                    </>
+                                )}
+                            </Button>
                         </div>
-                        <Button
-                            type="submit"
-                            disabled={form.formState.isSubmitting}
-                            className="min-w-[140px]"
-                        >
-                            {form.formState.isSubmitting ? (
-                                <>
-                                    <Loader size="xs" className="mr-2" />
-                                    Saving...
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="mr-2 h-4 w-4" />
-                                    Save Schedule
-                                </>
-                            )}
-                        </Button>
-                    </div>
 
-                    {error && (
-                        <Alert variant="destructive">
-                            <div className="flex-shrink-0 flex items-center justify-center">
-                                <AlertCircle className="h-4 w-4" />
-                            </div>
-                            <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                    )}
+                        {error && (
+                            <Alert variant="destructive">
+                                <div className="flex-shrink-0 flex items-center justify-center">
+                                    <AlertCircle className="h-4 w-4" />
+                                </div>
+                                <AlertDescription>{error}</AlertDescription>
+                            </Alert>
+                        )}
 
-                    {success && (
-                        <Alert className="border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300">
-                            <div className="flex-shrink-0 flex items-center justify-center">
-                                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                            </div>
-                            <AlertDescription>{success}</AlertDescription>
-                        </Alert>
-                    )}
+                        {success && (
+                            <Alert className="border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300">
+                                <div className="flex-shrink-0 flex items-center justify-center">
+                                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                </div>
+                                <AlertDescription>{success}</AlertDescription>
+                            </Alert>
+                        )}
 
-                    <Card className="p-6">
-                        <div className="space-y-4">
-                            {fields.map((field, index) => {
-                                const isAvailable = form.watch(`schedule.${index}.is_available`);
+                        <Card className="p-6">
+                            <div className="space-y-4">
+                                {fields.map((field, index) => {
+                                    const isAvailable = form.watch(`schedule.${index}.is_available`);
 
-                                return (
-                                    <div
-                                        key={field.id}
-                                        className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border transition-all duration-200 ${isAvailable
-                                            ? 'bg-card border-border shadow-sm'
-                                            : 'bg-muted/30 border-transparent opacity-80 hover:opacity-100'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-4 w-full md:w-48 mb-4 md:mb-0">
-                                            <FormField
-                                                control={form.control}
-                                                name={`schedule.${index}.is_available`}
-                                                render={({ field }) => (
-                                                    <FormItem className="flex items-center space-x-3 space-y-0">
-                                                        <FormControl>
-                                                            <Switch
-                                                                checked={field.value}
-                                                                onCheckedChange={field.onChange}
-                                                            />
-                                                        </FormControl>
-                                                        <FormLabel className={`text-base font-medium cursor-pointer ${field.value ? 'text-foreground' : 'text-muted-foreground'}`}>
-                                                            {DAYS_OF_WEEK[index]}
-                                                        </FormLabel>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </div>
+                                    return (
+                                        <div
+                                            key={field.id}
+                                            className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border transition-all duration-200 ${isAvailable
+                                                ? 'bg-card border-border shadow-sm'
+                                                : 'bg-muted/30 border-transparent opacity-80 hover:opacity-100'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4 w-full md:w-48 mb-4 md:mb-0">
+                                                <FormField
+                                                    control={form.control}
+                                                    name={`schedule.${index}.is_available`}
+                                                    render={({ field }) => (
+                                                        <FormItem className="flex items-center space-x-3 space-y-0">
+                                                            <FormControl>
+                                                                <Switch
+                                                                    checked={field.value}
+                                                                    onCheckedChange={field.onChange}
+                                                                />
+                                                            </FormControl>
+                                                            <FormLabel className={`text-base font-medium cursor-pointer ${field.value ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                                {DAYS_OF_WEEK[index]}
+                                                            </FormLabel>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </div>
 
-                                        {isAvailable ? (
-                                            <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
-                                                <div className="grid grid-cols-2 gap-3 w-full md:w-auto md:flex md:items-center">
-                                                    <FormField
-                                                        control={form.control}
-                                                        name={`schedule.${index}.start_time`}
-                                                        render={({ field }) => (
-                                                            <FormItem className="space-y-1">
-                                                                <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">Start</FormLabel>
-                                                                <FormControl>
-                                                                    <Input type="time" {...field} className="w-full md:w-36 cursor-pointer" />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                            {isAvailable ? (
+                                                <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
+                                                    <div className="grid grid-cols-2 gap-3 w-full md:w-auto md:flex md:items-center">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`schedule.${index}.start_time`}
+                                                            render={({ field }) => (
+                                                                <FormItem className="space-y-1">
+                                                                    <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">Start</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input type="time" {...field} className="w-full md:w-36 cursor-pointer" />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
 
-                                                    <div className="flex items-center justify-center md:hidden">
-                                                        <span className="text-muted-foreground text-sm">to</span>
+                                                        <div className="flex items-center justify-center md:hidden">
+                                                            <span className="text-muted-foreground text-sm">to</span>
+                                                        </div>
+                                                        <span className="hidden md:block text-muted-foreground text-sm px-2">to</span>
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`schedule.${index}.end_time`}
+                                                            render={({ field }) => (
+                                                                <FormItem className="space-y-1">
+                                                                    <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">End</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input type="time" {...field} className="w-full md:w-36 cursor-pointer" />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
                                                     </div>
-                                                    <span className="hidden md:block text-muted-foreground text-sm px-2">to</span>
-
-                                                    <FormField
-                                                        control={form.control}
-                                                        name={`schedule.${index}.end_time`}
-                                                        render={({ field }) => (
-                                                            <FormItem className="space-y-1">
-                                                                <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">End</FormLabel>
-                                                                <FormControl>
-                                                                    <Input type="time" {...field} className="w-full md:w-36 cursor-pointer" />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <div className="flex-1 text-center md:text-left md:pl-4">
-                                                <span className="text-sm text-muted-foreground italic">Unavailable</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </Card>
+                                            ) : (
+                                                <div className="flex-1 text-center md:text-left md:pl-4">
+                                                    <span className="text-sm text-muted-foreground italic">Unavailable</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </Card>
 
-                    <Card className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800">
-                        <div className="p-6 flex flex-col sm:flex-row gap-4">
-                            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 h-fit">
-                                <Info className="h-5 w-5" />
+                        <Card className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800">
+                            <div className="p-6 flex flex-col sm:flex-row gap-4">
+                                <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 h-fit">
+                                    <Info className="h-5 w-5" />
+                                </div>
+                                <div className="space-y-1">
+                                    <h3 className="font-semibold text-blue-900 dark:text-blue-100">Schedule Guidelines</h3>
+                                    <ul className="text-sm text-blue-800/80 dark:text-blue-200/80 space-y-1.5 list-disc pl-4 pt-2">
+                                        <li>Toggle days on/off to set your availability for that specific day of the week.</li>
+                                        <li>Set start and end times for each available day in 24-hour format.</li>
+                                        <li>Appointments will only be bookable by patients during these hours.</li>
+                                        <li>Changes take effect immediately after clicking "Save Schedule".</li>
+                                    </ul>
+                                </div>
                             </div>
-                            <div className="space-y-1">
-                                <h3 className="font-semibold text-blue-900 dark:text-blue-100">Schedule Guidelines</h3>
-                                <ul className="text-sm text-blue-800/80 dark:text-blue-200/80 space-y-1.5 list-disc pl-4 pt-2">
-                                    <li>Toggle days on/off to set your availability for that specific day of the week.</li>
-                                    <li>Set start and end times for each available day in 24-hour format.</li>
-                                    <li>Appointments will only be bookable by patients during these hours.</li>
-                                    <li>Changes take effect immediately after clicking "Save Schedule".</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </Card>
-                </form>
-            </Form>
-        </div>
-    );
+                        </Card>
+                    </form>
+                </Form>
+            </div>    );
 };

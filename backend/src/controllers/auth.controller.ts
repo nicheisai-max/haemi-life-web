@@ -54,23 +54,20 @@ export const signup = async (req: Request, res: Response) => {
 };
 
 export const login = async (req: Request, res: Response) => {
-    const { email, phone_number, password } = req.body;
+    const { identifier, password } = req.body;
 
     try {
-        let result;
-        if (email) {
-            result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-        } else if (phone_number) {
-            result = await pool.query('SELECT * FROM users WHERE phone_number = $1', [phone_number]);
-        } else {
-            return res.status(400).json({ message: 'Email or Phone number required' });
-        }
+        // Unified query: Check if identifier matches email OR phone_number
+        const result = await pool.query(
+            'SELECT * FROM users WHERE email = $1 OR phone_number = $1',
+            [identifier]
+        );
 
         if (result.rows.length === 0) {
             // Audit failed attempt (unknown user)
             await auditService.log({
                 action_type: 'LOGIN_FAILED',
-                metadata: { reason: 'User not found', email, phone_number },
+                metadata: { reason: 'User not found', identifier },
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
@@ -103,7 +100,7 @@ export const login = async (req: Request, res: Response) => {
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
-            logger.auth('Failed login attempt: Invalid password', { email, phone_number, ip: req.ip });
+            logger.auth('Failed login attempt: Invalid password', { identifier, ip: req.ip });
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
@@ -131,7 +128,7 @@ export const login = async (req: Request, res: Response) => {
 
         res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, status: user.status } });
     } catch (error) {
-        logger.error('Login server error', { error, email, phone_number });
+        logger.error('Login server error', { error, identifier });
         res.status(500).json({ message: 'Server error' });
     }
 };

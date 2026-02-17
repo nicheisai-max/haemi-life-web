@@ -171,54 +171,64 @@ export const AdminDashboard: React.FC = () => {
             {/* Quick Actions Grid */}
             <TransitionItem>
                 <h2 className="text-xl font-bold mb-4 text-foreground">System Actions</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <DashboardCard
-                        className="flex items-center gap-4 p-4 cursor-pointer hover:border-indigo-500/50 hover:bg-muted/30 transition-all group"
-                        noPadding
-                        onClick={() => navigate('/admin/settings')}
-                    >
-                        <IconWrapper icon={Settings} className="h-12 w-12 group-hover:scale-110 transition-transform" />
-                        <div>
-                            <div className="font-bold text-foreground">Global Settings</div>
-                            <div className="text-xs text-muted-foreground">Configure system parameters</div>
-                        </div>
-                    </DashboardCard>
-
-                    <DashboardCard
-                        className="flex items-center gap-4 p-4 cursor-pointer hover:border-indigo-500/50 hover:bg-muted/30 transition-all group"
-                        noPadding
-                        onClick={() => navigate('/admin/logs')}
-                    >
-                        <IconWrapper icon={FileText} className="h-12 w-12 group-hover:scale-110 transition-transform" />
-                        <div>
-                            <div className="font-bold text-foreground">Audit Logs</div>
-                            <div className="text-xs text-muted-foreground">View security events</div>
-                        </div>
-                    </DashboardCard>
-
-                    <DashboardCard
-                        className="flex items-center gap-4 p-4 cursor-pointer hover:border-indigo-500/50 hover:bg-muted/30 transition-all group"
-                        noPadding
-                        onClick={() => navigate('/admin/security')}
-                    >
-                        <IconWrapper icon={Lock} className="h-12 w-12 group-hover:scale-110 transition-transform" />
-                        <div>
-                            <div className="font-bold text-foreground">Security Policy</div>
-                            <div className="text-xs text-muted-foreground">Manage RBAC & Access</div>
-                        </div>
-                    </DashboardCard>
-
-                    <DashboardCard
-                        className="flex items-center gap-4 p-4 cursor-pointer hover:border-indigo-500/50 hover:bg-muted/30 transition-all group"
-                        noPadding
-                        onClick={() => navigate('/admin/database')}
-                    >
-                        <IconWrapper icon={Database} className="h-12 w-12 group-hover:scale-110 transition-transform" />
-                        <div>
-                            <div className="font-bold text-foreground">Database</div>
-                            <div className="text-xs text-muted-foreground">Monitor backups & health</div>
-                        </div>
-                    </DashboardCard>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                    {[
+                        {
+                            icon: Settings,
+                            label: "Global Settings",
+                            sub: "Configure system",
+                            path: "/admin/settings",
+                            color: "text-slate-600 bg-slate-50 dark:bg-slate-800",
+                            hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-500/80",
+                            hoverShadow: "hover:shadow-slate-500/10 dark:hover:shadow-slate-500/20",
+                            hoverText: "group-hover:text-slate-600"
+                        },
+                        {
+                            icon: FileText,
+                            label: "Audit Logs",
+                            sub: "View security events",
+                            path: "/admin/logs",
+                            color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20",
+                            hoverBorder: "hover:border-indigo-500/50 dark:hover:border-indigo-500/80",
+                            hoverShadow: "hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/20",
+                            hoverText: "group-hover:text-indigo-600"
+                        },
+                        {
+                            icon: Lock,
+                            label: "Security Policy",
+                            sub: "Manage RBAC & Access",
+                            path: "/admin/security",
+                            color: "text-rose-600 bg-rose-50 dark:bg-rose-900/20",
+                            hoverBorder: "hover:border-rose-500/50 dark:hover:border-rose-500/80",
+                            hoverShadow: "hover:shadow-rose-500/10 dark:hover:shadow-rose-500/20",
+                            hoverText: "group-hover:text-rose-600"
+                        },
+                        {
+                            icon: Database,
+                            label: "Database",
+                            sub: "Backups & health",
+                            path: "/admin/database",
+                            color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-900/20",
+                            hoverBorder: "hover:border-cyan-500/50 dark:hover:border-cyan-500/80",
+                            hoverShadow: "hover:shadow-cyan-500/10 dark:hover:shadow-cyan-500/20",
+                            hoverText: "group-hover:text-cyan-600"
+                        },
+                    ].map((action, idx) => (
+                        <DashboardCard
+                            key={idx}
+                            className={`flex flex-col items-center justify-center gap-3 p-4 cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:shadow-lg h-32 text-center ${action.hoverBorder} ${action.hoverShadow}`}
+                            noPadding
+                            onClick={() => navigate(action.path)}
+                        >
+                            <div className={`p-3 rounded-full ${action.color} group-hover:scale-110 transition-transform duration-300`}>
+                                <action.icon className="h-6 w-6" />
+                            </div>
+                            <div className="flex flex-col items-center gap-0.5">
+                                <span className={`font-semibold text-slate-700 dark:text-slate-200 text-sm transition-colors ${action.hoverText}`}>{action.label}</span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wide">{action.sub}</span>
+                            </div>
+                        </DashboardCard>
+                    ))}
                 </div>
             </TransitionItem>
         </main>

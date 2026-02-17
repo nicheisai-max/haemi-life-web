@@ -107,7 +107,7 @@ export const DoctorDashboard: React.FC = () => {
     const pendingReviews = appointments.filter(a => a.status === 'completed').length;
 
     return (
-        <main className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8 relative overflow-x-hidden">
+        <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
             <ClinicalCopilot isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
 
             {/* Hero Section */}
@@ -165,37 +165,43 @@ export const DoctorDashboard: React.FC = () => {
             {/* Stats Grid */}
             <section className="grid grid-cols-1 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-teal-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={Users} variant="primary" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : todayAppointments.length}
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-teal-500/50 dark:hover:border-teal-500/80 hover:shadow-lg hover:shadow-teal-500/10 dark:hover:shadow-teal-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
+                        <div className="p-4 rounded-2xl bg-teal-500/10 text-teal-600 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors">
+                            <Users className="h-7 w-7" />
+                        </div>
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                                {loading ? "-" : todayAppointments.length}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Today's Census</div>
+                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-teal-600 transition-colors">Today's Census</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-emerald-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={ClipboardCheck} variant="success" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : pendingReviews}
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
+                        <div className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                            <ClipboardCheck className="h-7 w-7" />
+                        </div>
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                                {loading ? "-" : pendingReviews}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Completed Notes</div>
+                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 transition-colors">Completed Notes</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-blue-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={Contact} variant="accent" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : patientCount}
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-blue-500/50 dark:hover:border-blue-500/80 hover:shadow-lg hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
+                        <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                            <Contact className="h-7 w-7" />
+                        </div>
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                                {loading ? "-" : patientCount}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Total Panel</div>
+                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-blue-600 transition-colors">Total Panel</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -227,38 +233,56 @@ export const DoctorDashboard: React.FC = () => {
                     <section className="flex-1">
                         <h2 className="text-xl font-bold mb-4 text-foreground">Quick Actions</h2>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 h-full">
-                            <DashboardCard
-                                className="flex flex-col items-center justify-center text-center gap-3 transition-all hover:bg-muted/50 hover:border-primary/50 cursor-pointer h-32 group"
-                                onClick={() => navigate('/book-appointment')}
-                                noPadding
-                            >
-                                <IconWrapper icon={UserPlus} className="group-hover:scale-110 transition-transform duration-200" />
-                                <span className="font-semibold text-foreground text-sm">Add Patient</span>
-                            </DashboardCard>
-                            <DashboardCard
-                                className="flex flex-col items-center justify-center text-center gap-3 transition-all hover:bg-muted/50 hover:border-primary/50 cursor-pointer h-32 group"
-                                onClick={() => navigate('/records')}
-                                noPadding
-                            >
-                                <IconWrapper icon={ClipboardList} className="group-hover:scale-110 transition-transform duration-200" />
-                                <span className="font-semibold text-foreground text-sm">SOAP Notes</span>
-                            </DashboardCard>
-                            <DashboardCard
-                                className="flex flex-col items-center justify-center text-center gap-3 transition-all hover:bg-muted/50 hover:border-primary/50 cursor-pointer h-32 group"
-                                onClick={() => navigate('/prescriptions')}
-                                noPadding
-                            >
-                                <IconWrapper icon={Pill} className="group-hover:scale-110 transition-transform duration-200" />
-                                <span className="font-semibold text-foreground text-sm">Prescribe</span>
-                            </DashboardCard>
-                            <DashboardCard
-                                className="flex flex-col items-center justify-center text-center gap-3 transition-all hover:bg-muted/50 hover:border-primary/50 cursor-pointer h-32 group"
-                                onClick={() => navigate('/analytics')}
-                                noPadding
-                            >
-                                <IconWrapper icon={BarChart3} className="group-hover:scale-110 transition-transform duration-200" />
-                                <span className="font-semibold text-foreground text-sm">Reports</span>
-                            </DashboardCard>
+                            {[
+                                {
+                                    icon: UserPlus,
+                                    label: "Add Patient",
+                                    path: "/book-appointment",
+                                    color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+                                    hoverBorder: "hover:border-blue-500/50 dark:hover:border-blue-500/80",
+                                    hoverShadow: "hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20",
+                                    hoverText: "group-hover:text-blue-600"
+                                },
+                                {
+                                    icon: ClipboardList,
+                                    label: "SOAP Notes",
+                                    path: "/records",
+                                    color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
+                                    hoverBorder: "hover:border-purple-500/50 dark:hover:border-purple-500/80",
+                                    hoverShadow: "hover:shadow-purple-500/10 dark:hover:shadow-purple-500/20",
+                                    hoverText: "group-hover:text-purple-600"
+                                },
+                                {
+                                    icon: Pill,
+                                    label: "Prescribe",
+                                    path: "/prescriptions",
+                                    color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20",
+                                    hoverBorder: "hover:border-emerald-500/50 dark:hover:border-emerald-500/80",
+                                    hoverShadow: "hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20",
+                                    hoverText: "group-hover:text-emerald-600"
+                                },
+                                {
+                                    icon: BarChart3,
+                                    label: "Reports",
+                                    path: "/analytics",
+                                    color: "text-amber-600 bg-amber-50 dark:bg-amber-900/20",
+                                    hoverBorder: "hover:border-amber-500/50 dark:hover:border-amber-500/80",
+                                    hoverShadow: "hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20",
+                                    hoverText: "group-hover:text-amber-600"
+                                },
+                            ].map((action, idx) => (
+                                <DashboardCard
+                                    key={idx}
+                                    className={`flex flex-col items-center justify-center gap-3 p-4 cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:shadow-lg h-32 ${action.hoverBorder} ${action.hoverShadow}`}
+                                    onClick={() => navigate(action.path)}
+                                    noPadding
+                                >
+                                    <div className={`p-3 rounded-full ${action.color} group-hover:scale-110 transition-transform duration-300`}>
+                                        <action.icon className="h-6 w-6" />
+                                    </div>
+                                    <span className={`font-semibold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wide transition-colors ${action.hoverText}`}>{action.label}</span>
+                                </DashboardCard>
+                            ))}
                         </div>
                     </section>
 

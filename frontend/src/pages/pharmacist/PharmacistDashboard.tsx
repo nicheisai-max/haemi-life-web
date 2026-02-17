@@ -50,7 +50,7 @@ export const PharmacistDashboard: React.FC = () => {
     const completedOrdersValue = prescriptions.filter(p => p.status === 'filled').length;
 
     return (
-        <main className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8">
+        <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
             {/* Hero Section */}
             <TransitionItem className="relative overflow-hidden rounded-3xl border bg-teal-900 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-40" />
@@ -207,22 +207,38 @@ export const PharmacistDashboard: React.FC = () => {
                     <section className="flex-1">
                         <h2 className="text-xl font-bold mb-4 text-foreground">Quick Actions</h2>
                         <div className="grid grid-cols-2 gap-4">
-                            <DashboardCard
-                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-all group h-28"
-                                onClick={() => navigate('/inventory/check')}
-                                noPadding
-                            >
-                                <IconWrapper icon={Pill} className="group-hover:scale-110 transition-transform" />
-                                <span className="font-semibold text-foreground text-sm">Stock Check</span>
-                            </DashboardCard>
-                            <DashboardCard
-                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-all group h-28"
-                                onClick={() => navigate('/history')}
-                                noPadding
-                            >
-                                <IconWrapper icon={History} className="group-hover:scale-110 transition-transform" />
-                                <span className="font-semibold text-foreground text-sm">Logs</span>
-                            </DashboardCard>
+                            {[
+                                {
+                                    icon: Pill,
+                                    label: "Stock Check",
+                                    path: "/inventory/check",
+                                    color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+                                    hoverBorder: "hover:border-blue-500/50 dark:hover:border-blue-500/80",
+                                    hoverShadow: "hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20",
+                                    hoverText: "group-hover:text-blue-600"
+                                },
+                                {
+                                    icon: History,
+                                    label: "Logs",
+                                    path: "/history",
+                                    color: "text-slate-600 bg-slate-50 dark:bg-slate-800",
+                                    hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-500/80",
+                                    hoverShadow: "hover:shadow-slate-500/10 dark:hover:shadow-slate-500/20",
+                                    hoverText: "group-hover:text-slate-600"
+                                },
+                            ].map((action, idx) => (
+                                <DashboardCard
+                                    key={idx}
+                                    className={`flex flex-col items-center justify-center gap-3 p-4 cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:shadow-lg h-28 ${action.hoverBorder} ${action.hoverShadow}`}
+                                    onClick={() => navigate(action.path)}
+                                    noPadding
+                                >
+                                    <div className={`p-3 rounded-full ${action.color} group-hover:scale-110 transition-transform duration-300`}>
+                                        <action.icon className="h-6 w-6" />
+                                    </div>
+                                    <span className={`font-semibold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wide transition-colors ${action.hoverText}`}>{action.label}</span>
+                                </DashboardCard>
+                            ))}
                         </div>
                     </section>
                 </div>

@@ -84,7 +84,7 @@ export const PatientDashboard: React.FC = () => {
 
     return (
 
-        <main className="w-full mx-auto p-4 md:p-6 max-w-[1600px] space-y-6">
+        <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
             {/* Hero Section - Compact */}
             <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
@@ -133,39 +133,39 @@ export const PatientDashboard: React.FC = () => {
 
                     {/* Key Metrics - Compact Grid */}
                     <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <DashboardCard className="flex items-center gap-3 p-4 hover:border-primary/50 transition-colors" noPadding>
-                            <div className="p-3 rounded-lg bg-primary/10 text-primary">
-                                <Calendar className="h-6 w-6" />
+                        <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-primary/50 dark:hover:border-primary/80 hover:shadow-lg hover:shadow-primary/10 dark:hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
+                            <div className="p-4 rounded-2xl bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                                <Calendar className="h-7 w-7" />
                             </div>
-                            <div>
-                                <div className="text-2xl font-bold text-slate-900 dark:text-white leading-none">
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
                                     {loading ? "-" : upcomingAppointments.length}
                                 </div>
-                                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Bookings</div>
+                                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-primary transition-colors">Bookings</div>
                             </div>
                         </DashboardCard>
 
-                        <DashboardCard className="flex items-center gap-3 p-4 hover:border-emerald-500/50 transition-colors" noPadding>
-                            <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-600">
-                                <FileText className="h-6 w-6" />
+                        <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
+                            <div className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                                <FileText className="h-7 w-7" />
                             </div>
-                            <div>
-                                <div className="text-2xl font-bold text-slate-900 dark:text-white leading-none">
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
                                     {loading ? "-" : activePrescriptions.length}
                                 </div>
-                                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Scripts</div>
+                                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-emerald-500 transition-colors">Scripts</div>
                             </div>
                         </DashboardCard>
 
-                        <DashboardCard className="flex items-center gap-3 p-4 hover:border-amber-500/50 transition-colors" noPadding>
-                            <div className="p-3 rounded-lg bg-amber-500/10 text-amber-600">
-                                <FolderOpen className="h-6 w-6" />
+                        <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 dark:hover:border-amber-500/80 hover:shadow-lg hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
+                            <div className="p-4 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                                <FolderOpen className="h-7 w-7" />
                             </div>
-                            <div>
-                                <div className="text-2xl font-bold text-slate-900 dark:text-white leading-none">
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
                                     {loading ? "-" : appointments.length}
                                 </div>
-                                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Total Visits</div>
+                                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-amber-500 transition-colors">Total Visits</div>
                             </div>
                         </DashboardCard>
                     </section>
@@ -191,21 +191,53 @@ export const PatientDashboard: React.FC = () => {
                         </h2>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             {[
-                                { icon: ThermometerSun, label: "Order Meds", path: "/prescriptions", color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20" },
-                                { icon: Search, label: "Find Doctor", path: "/doctors", color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20" },
-                                { icon: History, label: "History", path: "/records", color: "text-amber-600 bg-amber-50 dark:bg-amber-900/20" },
-                                { icon: SettingsIcon, label: "Settings", path: "/settings", color: "text-slate-600 bg-slate-50 dark:bg-slate-800" },
+                                {
+                                    icon: ThermometerSun,
+                                    label: "Order Meds",
+                                    path: "/prescriptions",
+                                    color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+                                    hoverBorder: "hover:border-blue-500/50 dark:hover:border-blue-500/80",
+                                    hoverShadow: "hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20",
+                                    hoverText: "group-hover:text-blue-600"
+                                },
+                                {
+                                    icon: Search,
+                                    label: "Find Doctor",
+                                    path: "/doctors",
+                                    color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
+                                    hoverBorder: "hover:border-purple-500/50 dark:hover:border-purple-500/80",
+                                    hoverShadow: "hover:shadow-purple-500/10 dark:hover:shadow-purple-500/20",
+                                    hoverText: "group-hover:text-purple-600"
+                                },
+                                {
+                                    icon: History,
+                                    label: "History",
+                                    path: "/records",
+                                    color: "text-amber-600 bg-amber-50 dark:bg-amber-900/20",
+                                    hoverBorder: "hover:border-amber-500/50 dark:hover:border-amber-500/80",
+                                    hoverShadow: "hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20",
+                                    hoverText: "group-hover:text-amber-600"
+                                },
+                                {
+                                    icon: SettingsIcon,
+                                    label: "Settings",
+                                    path: "/settings",
+                                    color: "text-slate-600 bg-slate-50 dark:bg-slate-800",
+                                    hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-500/80",
+                                    hoverShadow: "hover:shadow-slate-500/10 dark:hover:shadow-slate-500/20",
+                                    hoverText: "group-hover:text-slate-600"
+                                },
                             ].map((action, idx) => (
                                 <DashboardCard
                                     key={idx}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
+                                    className={`flex flex-col items-center justify-center gap-3 p-4 cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:shadow-lg ${action.hoverBorder} ${action.hoverShadow}`}
                                     onClick={() => navigate(action.path)}
                                     noPadding
                                 >
-                                    <div className={`p-2.5 rounded-full ${action.color} group-hover:scale-110 transition-transform`}>
-                                        <action.icon className="h-5 w-5" />
+                                    <div className={`p-3 rounded-full ${action.color} group-hover:scale-110 transition-transform duration-300`}>
+                                        <action.icon className="h-6 w-6" />
                                     </div>
-                                    <span className="font-semibold text-slate-700 dark:text-slate-200 text-xs">{action.label}</span>
+                                    <span className={`font-semibold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wide transition-colors ${action.hoverText}`}>{action.label}</span>
                                 </DashboardCard>
                             ))}
                         </div>
