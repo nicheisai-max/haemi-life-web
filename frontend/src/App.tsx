@@ -9,7 +9,7 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { ScrollToTop } from './components/utils/ScrollToTop';
 import { PageTransition } from './components/layout/PageTransition';
-import { Loader } from './components/ui/Loader';
+import { MedicalLoader } from './components/ui/MedicalLoader';
 import { RoleRoute } from './components/auth/RoleRoute';
 
 // Lazy loaded pages
@@ -45,9 +45,11 @@ const TelemedicineConsent = lazy(() => import('./pages/legal/TelemedicineConsent
 const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then(m => ({ default: m.Onboarding })));
 const VideoConsultation = lazy(() => import('./components/telemedicine/VideoConsultation').then(m => ({ default: m.VideoConsultation })));
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound })));
+const DoctorReports = lazy(() => import('./pages/doctor/Reports'));
+const DispensePrescription = lazy(() => import('./pages/pharmacist/DispensePrescription'));
 import { DoctorPatientList } from './pages/doctor/DoctorPatientList';
 
-const LoadingFallback = () => <Loader variant="fullscreen" size="lg" />;
+const LoadingFallback = () => <MedicalLoader fullPage message="Securing clinical data..." />;
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -106,9 +108,9 @@ const AppRoutes = () => {
             <Route path={PATHS.TERMS} element={<TermsOfService />} />
 
             {/* Lazy Loaded Routes */}
-            <Route path="/help" element={<Help />} />
-            <Route path="/consent" element={<TelemedicineConsent />} />
-            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path={PATHS.HELP} element={<Help />} />
+            <Route path={PATHS.CONSENT} element={<TelemedicineConsent />} />
+            <Route path={PATHS.ONBOARDING} element={<Onboarding />} />
             <Route
               path="/dashboard/*"
               element={
@@ -122,7 +124,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/profile"
+              path={PATHS.PROFILE}
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
@@ -134,7 +136,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/settings"
+              path={PATHS.SETTINGS}
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
@@ -146,7 +148,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/doctors"
+              path={PATHS.PATIENT.FIND_DOCTORS}
               element={
                 <RoleRoute allowedRoles={['patient']}>
                   <DashboardLayout>
@@ -158,7 +160,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/book-appointment"
+              path={PATHS.PATIENT.BOOK_APPOINTMENT}
               element={
                 <RoleRoute allowedRoles={['patient']}>
                   <DashboardLayout>
@@ -170,7 +172,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/appointments"
+              path={PATHS.PATIENT.APPOINTMENTS}
               element={
                 <RoleRoute allowedRoles={['patient', 'doctor']}>
                   <DashboardLayout>
@@ -182,7 +184,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/prescriptions"
+              path={PATHS.PATIENT.PRESCRIPTIONS}
               element={
                 <RoleRoute allowedRoles={['patient', 'doctor', 'pharmacist']}>
                   <DashboardLayout>
@@ -194,7 +196,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/records"
+              path={PATHS.PATIENT.MEDICAL_RECORDS}
               element={
                 <RoleRoute allowedRoles={['patient']}>
                   <DashboardLayout>
@@ -206,7 +208,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/doctor/schedule"
+              path={PATHS.DOCTOR.SCHEDULE}
               element={
                 <RoleRoute allowedRoles={['doctor']}>
                   <DashboardLayout>
@@ -218,7 +220,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/pharmacist/queue"
+              path={PATHS.PHARMACIST.QUEUE}
               element={
                 <RoleRoute allowedRoles={['pharmacist']}>
                   <DashboardLayout>
@@ -230,7 +232,19 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/pharmacist/inventory"
+              path={PATHS.PHARMACIST.DISPENSE}
+              element={
+                <RoleRoute allowedRoles={['pharmacist']}>
+                  <DashboardLayout>
+                    <PageTransition>
+                      <DispensePrescription />
+                    </PageTransition>
+                  </DashboardLayout>
+                </RoleRoute>
+              }
+            />
+            <Route
+              path={PATHS.PHARMACIST.INVENTORY}
               element={
                 <RoleRoute allowedRoles={['pharmacist']}>
                   <DashboardLayout>
@@ -242,7 +256,7 @@ const AppRoutes = () => {
               }
             />
             <Route
-              path="/admin/verify-doctors"
+              path={PATHS.ADMIN.VERIFY_DOCTORS}
               element={
                 <RoleRoute allowedRoles={['admin']}>
                   <DashboardLayout>
@@ -260,6 +274,18 @@ const AppRoutes = () => {
                   <DashboardLayout>
                     <PageTransition>
                       <DoctorPatientList />
+                    </PageTransition>
+                  </DashboardLayout>
+                </RoleRoute>
+              }
+            />
+            <Route
+              path={PATHS.DOCTOR.REPORTS}
+              element={
+                <RoleRoute allowedRoles={['doctor']}>
+                  <DashboardLayout>
+                    <PageTransition>
+                      <DoctorReports />
                     </PageTransition>
                   </DashboardLayout>
                 </RoleRoute>

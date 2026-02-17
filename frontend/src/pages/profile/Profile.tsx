@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { getProfile, updateProfile } from '../../services/user.service';
 import type { UserProfile } from '../../services/user.service';
 import { profileUpdateSchema, type ProfileUpdateFormData } from '../../lib/validation/profile.schema';
-import { PageTransition } from '../../components/layout/PageTransition';
+
 
 export const Profile: React.FC = () => {
     const navigate = useNavigate();

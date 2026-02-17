@@ -26,6 +26,14 @@ import analyticsRoutes from './routes/analytics.routes';
 import passwordResetRoutes from './routes/password-reset.routes';
 import commonRoutes from './routes/common.routes';
 
+// --- Production Hardening: Fail-Fast Environment Check ---
+const REQUIRED_ENV = ['JWT_SECRET', 'DB_PASSWORD'];
+const missingEnv = REQUIRED_ENV.filter(key => !process.env[key]);
+if (missingEnv.length > 0) {
+    console.error(`[FATAL] Missing critical environment variables: ${missingEnv.join(', ')}`);
+    process.exit(1);
+}
+
 const app = express();
 
 // --- Phase 10: Production Security ---

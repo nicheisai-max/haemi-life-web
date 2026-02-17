@@ -1,6 +1,6 @@
 import axios, { AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 
-const API_URL = 'http://localhost:5000/api'; // Adjust if backend runs on different port
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api';
 
 // DEMO MODE FLAG
 // @ts-ignore

@@ -53,10 +53,10 @@ export class ErrorBoundary extends Component<Props, State> {
                             We've encountered an unexpected error. Don't worry, your data is safe.
                         </p>
                         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                            <Button variant="default" onClick={this.handleReset}>
+                            <Button variant="default" onClick={this.handleReset} className="w-[140px]">
                                 Back to Safety
                             </Button>
-                            <Button variant="outline" onClick={() => window.location.reload()}>
+                            <Button variant="outline" onClick={() => window.location.reload()} className="w-[140px]">
                                 Try Reloading
                             </Button>
                         </div>

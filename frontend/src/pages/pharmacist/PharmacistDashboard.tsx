@@ -7,9 +7,10 @@ import {
     Filter, RefreshCw
 } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
-import { Loader } from '@/components/ui/Loader';
+import { MedicalLoader } from '@/components/ui/MedicalLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
 import { IconWrapper } from '@/components/ui/IconWrapper';
+import { PATHS } from '../../routes/paths';
 import { TransitionItem } from '../../components/layout/PageTransition';
 import { PremiumPieChart } from '../../components/charts/PremiumPieChart';
 import { getAllPrescriptions } from '../../services/prescription.service';
@@ -65,7 +66,7 @@ export const PharmacistDashboard: React.FC = () => {
                         </h1>
                         <p className="text-white/80 text-lg font-medium leading-relaxed">
                             {loading
-                                ? <Loader size="xs" className="text-white inline-block align-middle" />
+                                ? <MedicalLoader message="Scanning pharmacy hub..." />
                                 : `You have ${pendingOrders.length} prescriptions pending verification and dispensing.`
                             }
                         </p>
@@ -74,7 +75,7 @@ export const PharmacistDashboard: React.FC = () => {
                         <Button
                             size="lg"
                             className="bg-teal-500 hover:bg-teal-600 text-white shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto"
-                            onClick={() => navigate('/prescriptions/dispense')}
+                            onClick={() => navigate(PATHS.PHARMACIST.DISPENSE)}
                         >
                             <QrCode className="h-5 w-5" aria-hidden="true" />
                             Scan QR Code
@@ -83,7 +84,7 @@ export const PharmacistDashboard: React.FC = () => {
                             size="lg"
                             variant="outline"
                             className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto"
-                            onClick={() => navigate('/inventory')}
+                            onClick={() => navigate(PATHS.PHARMACIST.INVENTORY)}
                         >
                             <ClipboardList className="h-5 w-5" aria-hidden="true" />
                             Inventory
@@ -107,7 +108,7 @@ export const PharmacistDashboard: React.FC = () => {
                         <IconWrapper icon={Receipt} variant="primary" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : pendingOrders.length}
+                                {loading ? <MedicalLoader message="Verifying..." /> : pendingOrders.length}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Active Queue</div>
                         </div>
@@ -119,7 +120,7 @@ export const PharmacistDashboard: React.FC = () => {
                         <IconWrapper icon={CheckCircle2} variant="success" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : completedOrdersValue}
+                                {loading ? <MedicalLoader message="Finalizing..." /> : completedOrdersValue}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Dispensed Today</div>
                         </div>
@@ -131,7 +132,7 @@ export const PharmacistDashboard: React.FC = () => {
                         <IconWrapper icon={Truck} variant="warning" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : "12"}
+                                {loading ? <MedicalLoader message="Tracking..." /> : "12"}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stock Arrivals</div>
                         </div>
@@ -158,7 +159,7 @@ export const PharmacistDashboard: React.FC = () => {
                     <div className="space-y-3 flex-1">
                         {loading ? (
                             <div className="flex justify-center p-12 h-full items-center">
-                                <Loader />
+                                <MedicalLoader message="Syncing dispense queue..." />
                             </div>
                         ) : pendingOrders.length === 0 ? (
                             <DashboardCard className="text-center text-muted-foreground flex flex-col items-center justify-center h-[300px] border-dashed">
@@ -180,7 +181,7 @@ export const PharmacistDashboard: React.FC = () => {
                                             <span>Dr. {prescription.doctor_name || 'N/A'}</span>
                                         </p>
                                     </div>
-                                    <Button variant="default" size="sm" className="action-btn bg-teal-600 hover:bg-teal-700 shadow-sm" onClick={() => navigate(`/prescriptions/${prescription.id}`)}>
+                                    <Button variant="default" size="sm" className="action-btn bg-teal-600 hover:bg-teal-700 shadow-sm" onClick={() => navigate(PATHS.PHARMACIST.PRESCRIPTION_DETAIL(prescription.id))}>
                                         Process
                                     </Button>
                                 </DashboardCard>

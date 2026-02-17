@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle2, AlertCircle, ArrowLeft, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Logo } from '../../components/ui/Logo';
 import { AuthLayout } from '../../components/layout/AuthLayout';
 import { forgotPasswordSchema, type ForgotPasswordFormData } from '../../lib/validation/auth.schema';
 import loginBg from '../../assets/images/login_bg_premium.png';
@@ -71,9 +70,6 @@ export const ForgotPassword: React.FC = () => {
     const handleRequestSubmit = async (data: ForgotPasswordFormData) => {
         try {
             setError(null);
-            // TODO: Call API to send reset email/OTP
-            // await forgotPassword(data.email);
-
             setEmail(data.email);
             setStep('verify');
             setOtpTimer(60);
@@ -86,9 +82,6 @@ export const ForgotPassword: React.FC = () => {
     const handleOtpSubmit = async (_data: OtpFormData) => {
         try {
             setError(null);
-            // TODO: Call API to verify OTP
-            // await verifyOTP(email, data.otp);
-
             setStep('reset');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Invalid verification code');
@@ -98,9 +91,6 @@ export const ForgotPassword: React.FC = () => {
     const handleResetSubmit = async (_data: ResetPasswordFormData) => {
         try {
             setError(null);
-            // TODO: Call API to reset password
-            // await resetPassword(email, data.password);
-
             setStep('success');
             setTimeout(() => navigate('/login'), 3000);
         } catch (err: any) {
@@ -111,9 +101,6 @@ export const ForgotPassword: React.FC = () => {
     const handleResendOtp = async () => {
         try {
             setError(null);
-            // TODO: Call API to resend OTP
-            // await forgotPassword(email);
-
             setOtpTimer(60);
             setCanResend(false);
         } catch (err: any) {
@@ -121,18 +108,28 @@ export const ForgotPassword: React.FC = () => {
         }
     };
 
-    const renderContent = () => {
+    const getTitle = () => {
+        if (step === 'success') return 'Success!';
+        if (step === 'verify') return 'Verify Identity';
+        if (step === 'reset') return 'Reset Password';
+        return 'Forgot Password';
+    };
+
+    const getSubtitle = () => {
+        if (step === 'success') return 'Your password has been successfully reset.';
+        if (step === 'verify') return `We sent a code to ${email}`;
+        if (step === 'reset') return 'Create a new secure password';
+        return "We'll help you get back into your account.";
+    };
+
+    const renderForm = () => {
         if (step === 'success') {
             return (
                 <div className="flex flex-col items-center text-center space-y-6 animate-in fade-in zoom-in-95 duration-500">
                     <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center text-green-600 dark:text-green-400 mb-2">
                         <CheckCircle2 className="h-10 w-10" />
                     </div>
-                    <div className="space-y-2">
-                        <h2 className="text-2xl font-bold tracking-tight">Password Reset Successful!</h2>
-                        <p className="text-muted-foreground">Your password has been successfully reset.</p>
-                    </div>
-                    <div className="p-4 bg-muted/30 rounded-lg w-full max-w-sm border border-muted">
+                    <div className="p-4 bg-muted/30 rounded-lg w-full max-w-sm border border-muted text-center">
                         <p className="text-sm font-medium animate-pulse">Redirecting to login...</p>
                     </div>
                 </div>
@@ -140,44 +137,16 @@ export const ForgotPassword: React.FC = () => {
         }
 
         return (
-            <>
-                <div className="hidden lg:flex flex-col space-y-2 text-center relative">
-                    {step !== 'request' && (
+            <div className="space-y-6">
+                {(step === 'verify' || step === 'reset') && (
+                    <div className="relative">
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute left-0 top-0 -mt-2 h-8 w-8 border border-gray-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm rounded-full"
+                            className="absolute left-0 top-0 -mt-16 h-8 w-8 border border-gray-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm rounded-full"
                             onClick={() => setStep(step === 'verify' ? 'request' : 'verify')}
                         >
                             <ArrowLeft className="h-4 w-4" />
-                        </Button>
-                    )}
-                    <div className="flex justify-center mb-6">
-                        <Logo size="auth" />
-                    </div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        {step === 'request' && 'Forgot Password'}
-                        {step === 'verify' && 'Verify Your Identity'}
-                        {step === 'reset' && 'Reset Password'}
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        {step === 'request' && "Enter your email address and we'll send you a verification code"}
-                        {step === 'verify' && `We sent a 6-digit code to ${email}`}
-                        {step === 'reset' && 'Create a new secure password for your account'}
-                    </p>
-                </div>
-
-                {/* Mobile Navigation Header (Visible only on mobile) */}
-                {step !== 'request' && (
-                    <div className="lg:hidden flex items-center mb-6">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-3 text-muted-foreground hover:text-foreground border border-gray-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm rounded-full"
-                            onClick={() => setStep(step === 'verify' ? 'request' : 'verify')}
-                        >
-                            <ArrowLeft className="h-4 w-4 mr-2" />
-                            Back
                         </Button>
                     </div>
                 )}
@@ -352,31 +321,19 @@ export const ForgotPassword: React.FC = () => {
                         </form>
                     </Form>
                 )}
-            </>
+            </div>
         );
-    };
-
-    const getTitle = () => {
-        if (step === 'success') return 'Success!';
-        if (step === 'verify') return 'Verify Identity';
-        if (step === 'reset') return 'Reset Password';
-        return 'Forgot Password';
-    };
-
-    const getSubtitle = () => {
-        if (step === 'success') return 'Your password has been successfully reset.';
-        if (step === 'verify') return `We sent a code to ${email}`;
-        if (step === 'reset') return 'Create a new secure password';
-        return "We'll help you get back into your account.";
     };
 
     return (
         <AuthLayout
+            brandingTitle="Security & Trust"
+            brandingSubtitle="Haemi Life ensures your health data is always protected and your account remains secure."
             title={getTitle()}
             subtitle={getSubtitle()}
             image={loginBg}
         >
-            {renderContent()}
+            {renderForm()}
         </AuthLayout>
     );
 };

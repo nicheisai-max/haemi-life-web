@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer, Home } from 'lucide-react';
+import { PATHS } from '../../routes/paths';
 
 export const PrivacyPolicy: React.FC = () => {
     const navigate = useNavigate();
@@ -208,7 +209,7 @@ export const PrivacyPolicy: React.FC = () => {
                     </Button>
                     <Button
                         variant="default"
-                        onClick={() => navigate('/')}
+                        onClick={() => navigate(PATHS.LOGIN)}
                         className="flex items-center gap-2"
                     >
                         <Home className="h-4 w-4" />

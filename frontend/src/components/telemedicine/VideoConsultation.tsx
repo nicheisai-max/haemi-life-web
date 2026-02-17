@@ -6,15 +6,16 @@ import type { Instance, SignalData } from 'simple-peer';
 import { useAuth } from '../../context/AuthContext';
 import {
     CheckCircle2, Mic, MicOff, Video, VideoOff, PhoneOff,
-    ShieldCheck, Settings, AlertCircle, Info, User, Loader2
+    ShieldCheck, Settings, AlertCircle, Info, User
 } from 'lucide-react';
+import { MedicalLoader } from '../ui/MedicalLoader';
 import appointmentService from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 type SocketType = ReturnType<typeof io>;
 
@@ -184,8 +185,7 @@ export const VideoConsultation: React.FC = () => {
     if (loading) {
         return (
             <div className="h-screen w-full flex flex-col items-center justify-center bg-background">
-                <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-                <p className="text-muted-foreground font-medium">Securing encrypted connection...</p>
+                <MedicalLoader fullPage message="Securing end-to-end encrypted connection..." />
             </div>
         );
     }
@@ -285,10 +285,7 @@ export const VideoConsultation: React.FC = () => {
                         <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
                     ) : (
                         <div className="text-center">
-                            <div className="w-24 h-24 rounded-full bg-primary/20 border-2 border-primary mx-auto mb-8 flex items-center justify-center">
-                                <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                            </div>
-                            <p className="text-2xl font-bold tracking-tight">Waiting for Specialist...</p>
+                            <MedicalLoader message="Waiting for Specialist..." />
                             <p className="text-neutral-400 mt-2">{appointment?.doctor_name} is being notified of your arrival.</p>
 
                             <div className="mt-12 p-6 rounded-2xl bg-white/5 border border-white/5 max-w-sm mx-auto flex items-center gap-4 text-left">

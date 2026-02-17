@@ -10,9 +10,10 @@ import { GradientMesh } from '@/components/ui/GradientMesh';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { TransitionItem } from '../../components/layout/PageTransition';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
-import { Loader } from '@/components/ui/Loader';
+import { MedicalLoader } from '@/components/ui/MedicalLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
 import { IconWrapper } from '@/components/ui/IconWrapper';
+import { PATHS } from '../../routes/paths';
 
 // Realistic Growth Data for a National Platform
 const SYSTEM_GROWTH_DATA = [
@@ -83,7 +84,7 @@ export const AdminDashboard: React.FC = () => {
                         </h1>
                         <p className="text-white/80 text-lg font-medium leading-relaxed">
                             {loading
-                                ? <Loader size="xs" className="text-white inline-block align-middle" />
+                                ? <MedicalLoader message="Monitoring system health..." />
                                 : `Platform is operating normally. All services are online.`
                             }
                         </p>
@@ -92,7 +93,7 @@ export const AdminDashboard: React.FC = () => {
                         <Button
                             size="lg"
                             className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto"
-                            onClick={() => navigate('/admin/users')}
+                            onClick={() => navigate(PATHS.ADMIN.USERS)}
                         >
                             <Users className="h-5 w-5" aria-hidden="true" />
                             User Management
@@ -101,7 +102,7 @@ export const AdminDashboard: React.FC = () => {
                             size="lg"
                             variant="outline"
                             className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto"
-                            onClick={() => navigate('/admin/settings')}
+                            onClick={() => navigate(PATHS.SETTINGS)}
                         >
                             <Settings className="h-5 w-5" aria-hidden="true" />
                             System Config
@@ -117,7 +118,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={Globe} variant="primary" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : "12,450"}
+                                {loading ? <MedicalLoader message="Counting..." /> : "12,450"}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Total Users</div>
                         </div>
@@ -129,7 +130,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={Activity} variant="success" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : "99.9%"}
+                                {loading ? <MedicalLoader message="Syncing..." /> : "99.9%"}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">System Uptime</div>
                         </div>
@@ -141,7 +142,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <Loader size="xs" /> : "3"}
+                                {loading ? <MedicalLoader message="Auditing..." /> : "3"}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pending Alerts</div>
                         </div>

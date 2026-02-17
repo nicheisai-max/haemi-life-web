@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getMyAppointments } from '../../services/appointment.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import type { Appointment } from '../../services/appointment.service';
@@ -12,12 +11,12 @@ import {
     ThermometerSun, Search, History, Settings as SettingsIcon,
     CalendarX, Clock, ArrowRight, Heart, Activity
 } from 'lucide-react';
+import { PATHS } from '../../routes/paths';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { TransitionItem } from '../../components/layout/PageTransition';
-import { Loader } from '@/components/ui/Loader';
+import { MedicalLoader } from '@/components/ui/MedicalLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
-import { IconWrapper } from '@/components/ui/IconWrapper';
 
 // REALISTIC BOTSWANA CONTEXT DATA
 const HEALTH_TRENDS_DATA = [
@@ -111,7 +110,7 @@ export const PatientDashboard: React.FC = () => {
                     <Button
                         size="sm"
                         className="bg-white text-teal-900 hover:bg-white/90 shadow-lg px-6 h-10 text-sm font-bold rounded-xl border-none whitespace-nowrap transition-transform active:scale-95"
-                        onClick={() => navigate('/book-appointment')}
+                        onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
                     >
                         <Plus className="h-4 w-4 mr-2" />
                         Book Appointment
@@ -203,7 +202,7 @@ export const PatientDashboard: React.FC = () => {
                                 {
                                     icon: Search,
                                     label: "Find Doctor",
-                                    path: "/doctors",
+                                    path: PATHS.PATIENT.FIND_DOCTORS,
                                     color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
                                     hoverBorder: "hover:border-purple-500/50 dark:hover:border-purple-500/80",
                                     hoverShadow: "hover:shadow-purple-500/10 dark:hover:shadow-purple-500/20",
@@ -251,7 +250,7 @@ export const PatientDashboard: React.FC = () => {
                     <section className="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col h-full shadow-sm overflow-hidden">
                         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
                             <h2 className="font-bold text-slate-900 dark:text-white text-sm">Upcoming</h2>
-                            <Button variant="ghost" size="sm" className="h-6 text-xs text-primary hover:text-primary-700 px-2" onClick={() => navigate('/appointments')}>
+                            <Button variant="ghost" size="sm" className="h-6 text-xs text-primary hover:text-primary-700 px-2" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
                                 View All
                             </Button>
                         </div>
@@ -259,13 +258,13 @@ export const PatientDashboard: React.FC = () => {
                         <div className="p-3 space-y-3 flex-1">
                             {loading ? (
                                 <div className="flex justify-center p-8">
-                                    <Loader size="sm" />
+                                    <MedicalLoader message="Syncing records..." />
                                 </div>
                             ) : upcomingAppointments.length === 0 ? (
                                 <div className="text-center py-8 px-4 flex flex-col items-center">
                                     <CalendarX className="h-10 w-10 text-slate-300 dark:text-slate-700 mb-2" />
                                     <p className="text-sm font-medium text-slate-600 dark:text-slate-400">No appointments</p>
-                                    <Button variant="link" size="sm" className="text-primary text-xs h-auto p-0 mt-1" onClick={() => navigate('/book-appointment')}>Book now</Button>
+                                    <Button variant="link" size="sm" className="text-primary text-xs h-auto p-0 mt-1" onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}>Book now</Button>
                                 </div>
                             ) : (
                                 upcomingAppointments.map((appointment) => {
@@ -290,7 +289,7 @@ export const PatientDashboard: React.FC = () => {
                                                 size="icon"
                                                 variant="ghost"
                                                 className="h-8 w-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
-                                                onClick={() => navigate(`/consultation/${appointment.id}`)}
+                                                onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}
                                             >
                                                 <ArrowRight className="h-4 w-4" />
                                             </Button>

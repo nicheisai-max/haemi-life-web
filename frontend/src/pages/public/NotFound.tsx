@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Logo } from '../../components/ui/Logo';
+import { PATHS } from '../../routes/paths';
 
 export const NotFound: React.FC = () => {
     const navigate = useNavigate();
@@ -18,11 +19,11 @@ export const NotFound: React.FC = () => {
                     <p className="text-base text-muted-foreground">The link you followed might be broken, or the page may have been moved.</p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-                    <Button variant="default" size="lg" onClick={() => navigate('/dashboard')} className="min-w-[160px]">
+                <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4 w-full">
+                    <Button variant="default" size="lg" onClick={() => navigate(PATHS.DASHBOARD)} className="w-full sm:w-48">
                         Return to Dashboard
                     </Button>
-                    <Button variant="outline" size="lg" onClick={() => navigate(-1)} className="min-w-[160px]">
+                    <Button variant="outline" size="lg" onClick={() => navigate(-1)} className="w-full sm:w-48">
                         Go Back
                     </Button>
                 </div>

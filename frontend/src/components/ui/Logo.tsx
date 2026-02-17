@@ -9,7 +9,7 @@ interface LogoProps {
 export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '' }) => {
     const heightMap = {
         sm: '28px',
-        md: '40px', // Increased from 32px for better visibility
+        md: '32px',
         auth: '60px',
         lg: '64px',
         xl: '96px',

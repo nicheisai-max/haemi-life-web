@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer, Home, AlertTriangle } from 'lucide-react';
+import { PATHS } from '../../routes/paths';
 
 export const TermsOfService: React.FC = () => {
     const navigate = useNavigate();
@@ -258,7 +259,7 @@ export const TermsOfService: React.FC = () => {
                     </Button>
                     <Button
                         variant="default"
-                        onClick={() => navigate('/')}
+                        onClick={() => navigate(PATHS.LOGIN)}
                         className="flex items-center gap-2"
                     >
                         <Home className="h-4 w-4" />

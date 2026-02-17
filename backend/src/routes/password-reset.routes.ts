@@ -106,7 +106,7 @@ router.post(
                 demoConfig.log('Demo OTP accepted', identifier);
                 const resetToken = jwt.sign(
                     { identifier },
-                    process.env.JWT_SECRET || 'your-secret-key',
+                    process.env.JWT_SECRET!,
                     { expiresIn: '30m' }
                 );
                 return res.status(200).json({
@@ -133,7 +133,7 @@ router.post(
             // Generate reset token (valid for 30 minutes)
             const resetToken = jwt.sign(
                 { identifier },
-                process.env.JWT_SECRET || 'your-secret-key',
+                process.env.JWT_SECRET!,
                 { expiresIn: '30m' }
             );
 
@@ -173,7 +173,7 @@ router.post(
             // Verify reset token
             const decoded = jwt.verify(
                 resetToken,
-                process.env.JWT_SECRET || 'your-secret-key'
+                process.env.JWT_SECRET!
             ) as { identifier: string };
 
             const { identifier } = decoded;

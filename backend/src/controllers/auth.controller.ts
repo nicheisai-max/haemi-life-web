@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
+import { userRepository } from '../repositories/user.repository';
 import { logger } from '../utils/logger';
 import { auditService } from '../services/audit.service';
 
@@ -10,13 +11,8 @@ export const signup = async (req: Request, res: Response) => {
 
     try {
         // Check if user exists (by phone or email if provided)
-        const query = email
-            ? 'SELECT * FROM users WHERE phone_number = $1 OR email = $2'
-            : 'SELECT * FROM users WHERE phone_number = $1';
-        const params = email ? [phone_number, email] : [phone_number];
-
-        const userCheck = await pool.query(query, params);
-        if (userCheck.rows.length > 0) {
+        const userCheck = await userRepository.findByPhoneOrEmail(phone_number, email);
+        if (userCheck) {
             return res.status(400).json({ message: 'User already exists with this phone number or email' });
         }
 
@@ -28,19 +24,21 @@ export const signup = async (req: Request, res: Response) => {
         try {
             await client.query('BEGIN');
 
-            const newUser = await client.query(
-                `INSERT INTO users (
-            name, phone_number, email, password, role, id_number, created_at, updated_at, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), 'ACTIVE') RETURNING id, email, role, name, phone_number, status`,
-                [name, phone_number, email || null, hashedPassword, role, id_number || null]
-            );
+            const newUser = await userRepository.create({
+                name,
+                phone_number,
+                email: email || null,
+                password: hashedPassword,
+                role,
+                id_number: id_number || null
+            }, client);
 
             // Handle role specific data insertion here (dummy logic for now)
             // if (role === 'doctor') { ... }
 
             await client.query('COMMIT');
 
-            res.status(201).json({ message: 'User created successfully', user: newUser.rows[0] });
+            res.status(201).json({ message: 'User created successfully', user: newUser });
         } catch (e) {
             await client.query('ROLLBACK');
             throw e;
@@ -58,12 +56,9 @@ export const login = async (req: Request, res: Response) => {
 
     try {
         // Unified query: Check if identifier matches email OR phone_number
-        const result = await pool.query(
-            'SELECT * FROM users WHERE email = $1 OR phone_number = $1',
-            [identifier]
-        );
+        const user = await userRepository.findByEmailOrPhone(identifier);
 
-        if (result.rows.length === 0) {
+        if (!user) {
             // Audit failed attempt (unknown user)
             await auditService.log({
                 action_type: 'LOGIN_FAILED',
@@ -73,8 +68,6 @@ export const login = async (req: Request, res: Response) => {
             });
             return res.status(400).json({ message: 'Invalid credentials' });
         }
-
-        const user = result.rows[0];
 
         // STRICT STATUS CHECK
         if (user.status !== 'ACTIVE') {
@@ -89,7 +82,7 @@ export const login = async (req: Request, res: Response) => {
             return res.status(403).json({ message: 'Account is not active. Please contact support.' });
         }
 
-        const validPassword = await bcrypt.compare(password, user.password);
+        const validPassword = await bcrypt.compare(password, user.password!);
 
         if (!validPassword) {
             await auditService.log({
@@ -136,13 +129,13 @@ export const login = async (req: Request, res: Response) => {
 export const getProfile = async (req: any, res: Response) => {
     try {
         const userId = req.user.id;
-        const result = await pool.query('SELECT id, name, email, phone_number, role, id_number, is_active, created_at FROM users WHERE id = $1', [userId]);
+        const user = await userRepository.findById(userId);
 
-        if (result.rows.length === 0) {
+        if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        res.json(result.rows[0]);
+        res.json(user);
     } catch (error) {
         console.error('Error fetching profile:', error);
         res.status(500).json({ message: 'Server error' });
@@ -154,16 +147,13 @@ export const updateProfile = async (req: any, res: Response) => {
         const userId = req.user.id;
         const { name, email, phone_number } = req.body;
 
-        const result = await pool.query(
-            'UPDATE users SET name = $1, email = $2, phone_number = $3, updated_at = NOW() WHERE id = $4 RETURNING id, name, email, phone_number, role',
-            [name, email, phone_number, userId]
-        );
+        const updatedUser = await userRepository.updateProfile(userId, { name, email, phone_number });
 
-        if (result.rows.length === 0) {
+        if (!updatedUser) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        res.json(result.rows[0]);
+        res.json(updatedUser);
     } catch (error) {
         console.error('Error updating profile:', error);
         res.status(500).json({ message: 'Server error' });
@@ -176,13 +166,12 @@ export const changePassword = async (req: any, res: Response) => {
         const { current_password, new_password } = req.body;
 
         // Get current password hash
-        const result = await pool.query('SELECT password FROM users WHERE id = $1', [userId]);
-        if (result.rows.length === 0) {
+        const passwordHash = await userRepository.getPasswordHash(userId);
+        if (!passwordHash) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        const user = result.rows[0];
-        const validPassword = await bcrypt.compare(current_password, user.password);
+        const validPassword = await bcrypt.compare(current_password, passwordHash);
 
         if (!validPassword) {
             return res.status(400).json({ message: 'Invalid current password' });
@@ -190,7 +179,7 @@ export const changePassword = async (req: any, res: Response) => {
 
         const hashedPassword = await bcrypt.hash(new_password, 10);
 
-        await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, userId]);
+        await userRepository.updatePassword(userId, hashedPassword);
 
         res.json({ message: 'Password updated successfully' });
     } catch (error) {
@@ -203,13 +192,11 @@ export const verifySession = async (req: any, res: Response) => {
     try {
         const userId = req.user.id;
         // Verify user still exists and is active
-        const result = await pool.query('SELECT id, name, email, role, status FROM users WHERE id = $1', [userId]);
+        const user = await userRepository.findById(userId);
 
-        if (result.rows.length === 0) {
+        if (!user) {
             return res.status(401).json({ message: 'User no longer exists' });
         }
-
-        const user = result.rows[0];
 
         // STRICT STATUS CHECK
         if (user.status !== 'ACTIVE') {

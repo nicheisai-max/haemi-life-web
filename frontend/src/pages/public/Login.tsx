@@ -9,7 +9,6 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Logo } from '../../components/ui/Logo';
 import { AuthLayout } from '../../components/layout/AuthLayout';
 import { loginSchema, type LoginFormData } from '../../lib/validation/auth.schema';
 import loginBg from '../../assets/images/login_bg_premium.png';
@@ -61,18 +60,12 @@ export const Login: React.FC = () => {
 
     return (
         <AuthLayout
-            title={<>Your Health, <br />Reimagined.</>}
-            subtitle="Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you."
+            brandingTitle={<>Your Health, <br />Reimagined.</>}
+            brandingSubtitle="Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you."
+            title="Welcome Back"
+            subtitle="Sign in to access your dashboard"
             image={loginBg}
         >
-            <div className="hidden lg:flex flex-col space-y-2 text-center">
-                <div className="flex justify-center mb-6">
-                    <Logo size="auth" />
-                </div>
-                <h1 className="text-2xl font-semibold tracking-tight">Welcome Back</h1>
-                <p className="text-sm text-muted-foreground">Sign in to access your dashboard</p>
-            </div>
-
             <Form {...form}>
                 {generalError && (
                     <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">

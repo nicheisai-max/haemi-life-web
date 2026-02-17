@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getMyAppointments, cancelAppointment, updateAppointmentStatus } from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
 import { Plus, AlertCircle, CalendarX, Clock, Calendar } from 'lucide-react';
-import { Loader } from '@/components/ui/Loader';
+import { MedicalLoader } from '@/components/ui/MedicalLoader';
 
 import { PageTransition, TransitionItem } from '../../components/layout/PageTransition';
 
@@ -95,7 +95,7 @@ export const Appointments: React.FC = () => {
     if (loading) {
         return (
             <div className="max-w-[1920px] mx-auto p-6 md:p-8 flex justify-center items-center min-h-[400px]">
-                <Loader size="lg" />
+                <MedicalLoader message="Syncing clinical appointments..." />
             </div>
         );
     }

@@ -9,9 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { getDoctors, getSpecializations } from '../../services/doctor.service';
 import type { DoctorProfile } from '../../services/doctor.service';
 import { AlertCircle, Search, SearchX, User, BadgeCheck, BadgeInfo, Briefcase, Info, Calendar } from 'lucide-react';
-import { Loader } from '@/components/ui/Loader';
+import { MedicalLoader } from '../../components/ui/MedicalLoader';
 
 import { PageTransition, TransitionItem } from '../../components/layout/PageTransition';
+import { PATHS } from '../../routes/paths';
 
 export const FindDoctors: React.FC = () => {
     const navigate = useNavigate();
@@ -69,13 +70,13 @@ export const FindDoctors: React.FC = () => {
     };
 
     const handleBookAppointment = (doctorId: string | number) => {
-        navigate('/appointments/book', { state: { doctorId: doctorId.toString() } });
+        navigate(PATHS.PATIENT.BOOK_APPOINTMENT, { state: { doctorId: doctorId.toString() } });
     };
 
     if (loading) {
         return (
             <div className="max-w-[1920px] mx-auto p-8 flex justify-center items-center min-h-[400px]">
-                <Loader size="lg" />
+                <MedicalLoader message="Retrieving Specialist Directory..." />
             </div>
         );
     }

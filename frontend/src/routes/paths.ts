@@ -24,7 +24,7 @@ export const PATHS = {
 
     // Patient
     PATIENT: {
-        DASHBOARD: '/dashboard', // Patient lands here
+        DASHBOARD: '/dashboard',
         APPOINTMENTS: '/appointments',
         BOOK_APPOINTMENT: '/book-appointment',
         PRESCRIPTIONS: '/prescriptions',
@@ -34,26 +34,29 @@ export const PATHS = {
 
     // Doctor
     DOCTOR: {
-        DASHBOARD: '/dashboard', // Doctor lands here
+        DASHBOARD: '/dashboard',
         SCHEDULE: '/doctor/schedule',
         PATIENTS: '/doctor/patients',
+        REPORTS: '/doctor/reports',
         // Legacy redirects
         DASHBOARD_LEGACY: '/doctor/dashboard',
     },
 
     // Pharmacist
     PHARMACIST: {
-        DASHBOARD: '/dashboard', // Pharmacist lands here
+        DASHBOARD: '/dashboard',
         QUEUE: '/pharmacist/queue',
         INVENTORY: '/pharmacist/inventory',
+        DISPENSE: '/pharmacist/dispense',
+        PRESCRIPTION_DETAIL: (id: string | number) => `/prescriptions/${id}`,
     },
 
     // Admin
     ADMIN: {
-        DASHBOARD: '/admin', // Admin has a specific root
+        DASHBOARD: '/admin',
         USERS: '/admin/users',
         VERIFY_DOCTORS: '/admin/verify-doctors',
-        SYSTEM_LOGS: '/admin/logs', // New
+        SYSTEM_LOGS: '/admin/logs',
         // Legacy redirects
         DASHBOARD_LEGACY: '/admin/dashboard',
     },

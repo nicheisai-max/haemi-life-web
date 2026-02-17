@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import io, { Socket } from 'socket.io-client';
+import io from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
-const SOCKET_URL = 'http://localhost:5000'; // Adjust for production
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'; // Adjust for production
 
 export interface Message {
     id: string;
@@ -29,7 +29,7 @@ export interface Conversation {
 
 export const useChat = () => {
     const { user, token } = useAuth();
-    const [socket, setSocket] = useState<Socket | null>(null);
+    const [socket, setSocket] = useState<any>(null); // Use any for socket to bypass strict constructor matching in dev
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -88,7 +88,7 @@ export const useChat = () => {
                 // A better approach is to check message.conversation_id against a Ref or just
                 // append if it matches.
 
-                setMessages((prev) => {
+                setMessages((prev: Message[]) => {
                     if (prev.find(m => m.id === message.id)) return prev;
 
                     // Logic: If we are in the conversation, show it.
@@ -104,9 +104,9 @@ export const useChat = () => {
 
             newSocket.on('user_typing', ({ userId, isTyping }: { userId: string, isTyping: boolean }) => {
                 if (isTyping) {
-                    setTypingUsers(prev => [...new Set([...prev, userId])]);
+                    setTypingUsers((prev: string[]) => [...new Set([...prev, userId])]);
                 } else {
-                    setTypingUsers(prev => prev.filter(id => id !== userId));
+                    setTypingUsers((prev: string[]) => prev.filter(id => id !== userId));
                 }
             });
 
@@ -124,7 +124,7 @@ export const useChat = () => {
 
         const handler = (message: Message) => {
             if (activeConversation && message.conversation_id === activeConversation.id) {
-                setMessages(prev => {
+                setMessages((prev: Message[]) => {
                     if (prev.find(m => m.id === message.id)) return prev;
                     return [...prev, { ...message, isMe: message.sender_id === user?.id }];
                 });
@@ -171,7 +171,7 @@ export const useChat = () => {
             const { conversationId } = res.data;
             // Fetch updated list and select it
             await fetchConversations();
-            const newConv = conversations.find(c => c.id === conversationId) ||
+            const newConv = conversations.find((c: Conversation) => c.id === conversationId) ||
                 (await api.get('/chat/conversations')).data.find((c: any) => c.id === conversationId);
 
             if (newConv) selectConversation(newConv);

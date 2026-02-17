@@ -126,7 +126,7 @@ export const ChatHub: React.FC = () => {
 
     const handleStartNewChat = async (doctor: any) => {
         // optimistically check if conversation exists
-        const existing = conversations.find(c =>
+        const existing = conversations.find((c: Conversation) =>
             c.participants && Array.isArray(c.participants) &&
             c.participants.some(p => p.id === doctor.user_id || p.id === doctor.id)
         );

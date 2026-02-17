@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { UploadCloud, FileText, Image as ImageIcon, Download, Trash2, FolderOpen, File } from 'lucide-react';
-import { Loader } from '@/components/ui/Loader';
+import { MedicalLoader } from '../../components/ui/MedicalLoader';
 import { getMyRecords, uploadRecord, deleteRecord } from '../../services/record.service';
 import type { MedicalRecord } from '../../services/record.service';
 
@@ -80,7 +80,7 @@ export const MedicalRecords: React.FC = () => {
                                 asChild
                             >
                                 <span>
-                                    {uploading ? <Loader size="xs" className="mr-2 inline-block" /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
+                                    {uploading ? <MedicalLoader /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
                                     {uploading ? 'Uploading...' : 'Upload Files'}
                                 </span>
                             </Button>
@@ -118,7 +118,7 @@ export const MedicalRecords: React.FC = () => {
 
                     {loading ? (
                         <div className="flex justify-center p-12">
-                            <Loader size="lg" />
+                            <MedicalLoader message="Retrieving clinical records..." />
                         </div>
                     ) : records.length === 0 ? (
                         <Card className="p-12 flex flex-col items-center justify-center text-center text-muted-foreground min-h-[200px]">
@@ -142,7 +142,7 @@ export const MedicalRecords: React.FC = () => {
                                     </div>
                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" asChild>
-                                            <a href={`http://localhost:5000/${record.file_path}`} download target="_blank" rel="noopener noreferrer">
+                                            <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${record.file_path}`} download target="_blank" rel="noopener noreferrer">
                                                 <Download className="h-4 w-4" />
                                                 <span className="sr-only">Download</span>
                                             </a>

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { pool } from '../config/db';
+import { appointmentRepository } from '../repositories/appointment.repository';
 
 // Book a new appointment (Patient)
 export const bookAppointment = async (req: Request, res: Response) => {
@@ -9,33 +9,27 @@ export const bookAppointment = async (req: Request, res: Response) => {
         const { doctor_id, appointment_date, appointment_time, consultation_type, reason } = req.body;
 
         // Validate that doctor exists and is verified
-        const doctorCheck = await pool.query(`
-            SELECT u.id FROM users u
-            JOIN doctor_profiles dp ON u.id = dp.user_id
-            WHERE u.id = $1 AND dp.is_verified = true
-        `, [doctor_id]);
-
-        if (doctorCheck.rows.length === 0) {
+        const isVerified = await appointmentRepository.checkDoctorVerified(doctor_id);
+        if (!isVerified) {
             return res.status(404).json({ message: 'Doctor not found or not verified' });
         }
 
         // Check for conflicts
-        const conflictCheck = await pool.query(`
-            SELECT id FROM appointments
-            WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3 AND status != 'cancelled'
-        `, [doctor_id, appointment_date, appointment_time]);
-
-        if (conflictCheck.rows.length > 0) {
+        const hasConflict = await appointmentRepository.checkConflict(doctor_id, appointment_date, appointment_time);
+        if (hasConflict) {
             return res.status(409).json({ message: 'This time slot is already booked' });
         }
 
-        const result = await pool.query(`
-            INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status)
-            VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
-            RETURNING *
-        `, [patientId, doctor_id, appointment_date, appointment_time, consultation_type, reason]);
+        const appointment = await appointmentRepository.create({
+            patient_id: patientId,
+            doctor_id,
+            appointment_date,
+            appointment_time,
+            consultation_type,
+            reason
+        });
 
-        res.status(201).json({ message: 'Appointment booked successfully', appointment: result.rows[0] });
+        res.status(201).json({ message: 'Appointment booked successfully', appointment });
     } catch (error) {
         console.error('Error booking appointment:', error);
         res.status(500).json({ message: 'Error booking appointment' });
@@ -49,38 +43,12 @@ export const getMyAppointments = async (req: Request, res: Response) => {
         const userId = user.id;
         const { status, upcoming } = req.query;
 
-        let query = `
-            SELECT 
-                a.*,
-                CASE 
-                    WHEN a.patient_id = $1 THEN u_doctor.name
-                    ELSE u_patient.name
-                END as other_party_name,
-                CASE 
-                    WHEN a.patient_id = $1 THEN 'patient'
-                    ELSE 'doctor'
-                END as user_role
-            FROM appointments a
-            LEFT JOIN users u_doctor ON a.doctor_id = u_doctor.id
-            LEFT JOIN users u_patient ON a.patient_id = u_patient.id
-            WHERE (a.patient_id = $1 OR a.doctor_id = $1)
-        `;
-
-        const params: any[] = [userId];
-
-        if (status) {
-            params.push(status);
-            query += ` AND a.status = $${params.length}`;
-        }
-
-        if (upcoming === 'true') {
-            query += ` AND a.appointment_date >= CURRENT_DATE`;
-        }
-
-        query += ' ORDER BY a.appointment_date DESC, a.appointment_time DESC';
-
-        const result = await pool.query(query, params);
-        res.json(result.rows);
+        const appointments = await appointmentRepository.findByUserId(
+            userId as string,
+            status as string,
+            upcoming === 'true'
+        );
+        res.json(appointments);
     } catch (error) {
         console.error('Error fetching appointments:', error);
         res.status(500).json({ message: 'Error fetching appointments' });
@@ -93,25 +61,13 @@ export const getAppointmentById = async (req: Request, res: Response) => {
         const { id } = req.params;
         const user = (req as any).user;
 
-        const result = await pool.query(`
-            SELECT 
-                a.*,
-                u_doctor.name as doctor_name,
-                u_patient.name as patient_name,
-                u_patient.phone_number as patient_phone,
-                dp.specialization
-            FROM appointments a
-            JOIN users u_doctor ON a.doctor_id = u_doctor.id
-            JOIN users u_patient ON a.patient_id = u_patient.id
-            LEFT JOIN doctor_profiles dp ON a.doctor_id = dp.user_id
-            WHERE a.id = $1 AND (a.patient_id = $2 OR a.doctor_id = $2)
-        `, [id, user.id]);
+        const appointment = await appointmentRepository.findByIdWithDetails(id as string, user.id as string);
 
-        if (result.rows.length === 0) {
+        if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found' });
         }
 
-        res.json(result.rows[0]);
+        res.json(appointment);
     } catch (error) {
         console.error('Error fetching appointment:', error);
         res.status(500).json({ message: 'Error fetching appointment' });
@@ -125,24 +81,13 @@ export const updateAppointmentStatus = async (req: Request, res: Response) => {
         const { status, notes } = req.body;
         const user = (req as any).user;
 
-        // Verify doctor owns this appointment
-        const apptCheck = await pool.query(
-            'SELECT id FROM appointments WHERE id = $1 AND doctor_id = $2',
-            [id, user.id]
-        );
+        const appointment = await appointmentRepository.updateStatus(id as string, user.id as string, status as string, notes as string);
 
-        if (apptCheck.rows.length === 0) {
+        if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found or access denied' });
         }
 
-        const result = await pool.query(`
-            UPDATE appointments
-            SET status = $1, notes = COALESCE($2, notes), updated_at = CURRENT_TIMESTAMP
-            WHERE id = $3
-            RETURNING *
-        `, [status, notes, id]);
-
-        res.json({ message: 'Appointment updated successfully', appointment: result.rows[0] });
+        res.json({ message: 'Appointment updated successfully', appointment });
     } catch (error) {
         console.error('Error updating appointment:', error);
         res.status(500).json({ message: 'Error updating appointment' });
@@ -155,24 +100,13 @@ export const cancelAppointment = async (req: Request, res: Response) => {
         const { id } = req.params;
         const user = (req as any).user;
 
-        // Verify user owns this appointment (as patient or doctor)
-        const apptCheck = await pool.query(
-            'SELECT id FROM appointments WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2)',
-            [id, user.id]
-        );
+        const appointment = await appointmentRepository.cancel(id as string, user.id as string);
 
-        if (apptCheck.rows.length === 0) {
+        if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found or access denied' });
         }
 
-        const result = await pool.query(`
-            UPDATE appointments
-            SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-            RETURNING *
-        `, [id]);
-
-        res.json({ message: 'Appointment cancelled successfully', appointment: result.rows[0] });
+        res.json({ message: 'Appointment cancelled successfully', appointment });
     } catch (error) {
         console.error('Error cancelling appointment:', error);
         res.status(500).json({ message: 'Error cancelling appointment' });
@@ -194,30 +128,18 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
         const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const dayOfWeek = days[dayOfWeekIndex]; // Convert 0-6 to 'sunday'-'saturday'
 
-        // Get doctor's schedule for that day (using ILIKE for case-insensitive match)
-        const scheduleResult = await pool.query(`
-            SELECT start_time, end_time FROM doctor_schedules
-            WHERE doctor_id = $1 AND day_of_week ILIKE $2 AND is_available = true
-        `, [doctor_id, dayOfWeek]);
+        // Get doctor's schedule for that day
+        const schedule = await appointmentRepository.getDoctorSchedule(doctor_id as string, dayOfWeek);
 
-        if (scheduleResult.rows.length === 0) {
+        if (schedule.length === 0) {
             return res.json({ slots: [] });
         }
 
         // Get booked appointments
-        const bookedResult = await pool.query(`
-            SELECT appointment_time FROM appointments
-            WHERE doctor_id = $1 AND appointment_date = $2 AND status != 'cancelled'
-        `, [doctor_id, date]);
-
-        const bookedTimes = bookedResult.rows.map(row => {
-            // Ensure time is in HH:mm format for comparison
-            const time = row.appointment_time;
-            return typeof time === 'string' ? time.slice(0, 5) : time;
-        });
+        const bookedTimes = await appointmentRepository.getBookedTimes(doctor_id as string, date as string);
 
         const slots: string[] = [];
-        for (const row of scheduleResult.rows) {
+        for (const row of schedule) {
             let current = new Date(`2000-01-01T${row.start_time}`);
             const end = new Date(`2000-01-01T${row.end_time}`);
 

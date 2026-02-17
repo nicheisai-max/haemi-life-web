@@ -14,12 +14,12 @@ import {
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { TransitionItem } from '../../components/layout/PageTransition';
+import { PATHS } from '../../routes/paths';
 import { ClinicalCopilot } from '@/components/ui/ClinicalCopilot';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
 import { AnimatedEmptyState } from '@/components/ui/AnimatedEmptyState';
-import { Loader } from '@/components/ui/Loader';
+import { MedicalLoader } from '@/components/ui/MedicalLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
-import { IconWrapper } from '@/components/ui/IconWrapper';
 
 const CLINICAL_VOLUME_DATA = [
     { name: '08:00', patients: 3 },
@@ -127,7 +127,7 @@ export const DoctorDashboard: React.FC = () => {
                         </h1>
                         <p className="text-white/80 text-lg font-medium leading-relaxed max-w-xl">
                             {loading
-                                ? <Loader size="xs" className="text-white inline-block align-middle" />
+                                ? <MedicalLoader message="Analyzing census..." />
                                 : `You have ${todayAppointments.length} patients scheduled for today. Your vitals dashboard is trending positive.`
                             }
                         </p>
@@ -237,7 +237,7 @@ export const DoctorDashboard: React.FC = () => {
                                 {
                                     icon: UserPlus,
                                     label: "Add Patient",
-                                    path: "/book-appointment",
+                                    path: PATHS.PATIENT.BOOK_APPOINTMENT,
                                     color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
                                     hoverBorder: "hover:border-blue-500/50 dark:hover:border-blue-500/80",
                                     hoverShadow: "hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20",
@@ -246,7 +246,7 @@ export const DoctorDashboard: React.FC = () => {
                                 {
                                     icon: ClipboardList,
                                     label: "SOAP Notes",
-                                    path: "/records",
+                                    path: PATHS.PATIENT.MEDICAL_RECORDS,
                                     color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
                                     hoverBorder: "hover:border-purple-500/50 dark:hover:border-purple-500/80",
                                     hoverShadow: "hover:shadow-purple-500/10 dark:hover:shadow-purple-500/20",
@@ -264,7 +264,7 @@ export const DoctorDashboard: React.FC = () => {
                                 {
                                     icon: BarChart3,
                                     label: "Reports",
-                                    path: "/analytics",
+                                    path: PATHS.DOCTOR.REPORTS,
                                     color: "text-amber-600 bg-amber-50 dark:bg-amber-900/20",
                                     hoverBorder: "hover:border-amber-500/50 dark:hover:border-amber-500/80",
                                     hoverShadow: "hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20",
@@ -317,7 +317,7 @@ export const DoctorDashboard: React.FC = () => {
                 <div className="flex flex-col h-full">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-foreground">Today's Schedule</h2>
-                        <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-primary font-semibold" onClick={() => navigate('/appointments')}>
+                        <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-primary font-semibold" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
                             Full Calendar <ArrowRight className="ml-1 h-3.5 w-3.5" />
                         </Button>
                     </div>
@@ -325,7 +325,7 @@ export const DoctorDashboard: React.FC = () => {
                     <div className="space-y-4 flex-1">
                         {loading ? (
                             <div className="flex justify-center p-12 h-full items-center">
-                                <Loader />
+                                <MedicalLoader message="Retrieving schedule..." />
                             </div>
                         ) : todayAppointments.length === 0 ? (
                             <AnimatedEmptyState
@@ -334,7 +334,7 @@ export const DoctorDashboard: React.FC = () => {
                                 icon={CalendarX}
                                 suggestion="Consider opening 2 emergency slots."
                                 actionLabel="View Full Calendar"
-                                onAction={() => navigate('/appointments')}
+                                onAction={() => navigate(PATHS.PATIENT.APPOINTMENTS)}
                             />
                         ) : (
                             todayAppointments.map((appointment) => {
@@ -371,7 +371,7 @@ export const DoctorDashboard: React.FC = () => {
                                         <Button
                                             size="sm"
                                             className="h-9 w-9 p-0 rounded-full shrink-0 shadow-sm"
-                                            onClick={() => navigate(`/consultation/${appointment.id}`)}
+                                            onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}
                                         >
                                             <Play className="h-3.5 w-3.5 ml-0.5" />
                                             <span className="sr-only">Start Consultation</span>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Loader } from '../ui/Loader';
+import { MedicalLoader } from '../ui/MedicalLoader';
 
 interface RoleRouteProps {
     children: React.ReactElement;
@@ -13,7 +13,7 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) 
     const location = useLocation();
 
     if (isLoading) {
-        return <Loader variant="fullscreen" />;
+        return <MedicalLoader fullPage message="Verifying clinical identity..." />;
     }
 
     if (!isAuthenticated || !user) {
