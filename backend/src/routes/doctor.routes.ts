@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { authenticateToken } from '../middleware/auth.middleware';
-import { requireDoctor } from '../middleware/role.middleware';
+import { authenticateToken, requireRole } from '../middleware/auth.middleware';
 import {
     listDoctors,
     getDoctorProfile,
@@ -19,9 +18,9 @@ router.get('/specializations', getSpecializations);
 router.get('/:id', getDoctorProfile);
 
 // Protected routes (Doctor only)
-router.put('/profile', authenticateToken, requireDoctor, updateDoctorProfile);
-router.get('/me/schedule', authenticateToken, requireDoctor, getDoctorSchedule);
-router.put('/me/schedule', authenticateToken, requireDoctor, updateDoctorSchedule);
-router.get('/me/patients', authenticateToken, requireDoctor, getDoctorPatients);
+router.put('/profile', authenticateToken, requireRole('doctor'), updateDoctorProfile);
+router.get('/me/schedule', authenticateToken, requireRole('doctor'), getDoctorSchedule);
+router.put('/me/schedule', authenticateToken, requireRole('doctor'), updateDoctorSchedule);
+router.get('/me/patients', authenticateToken, requireRole('doctor'), getDoctorPatients);
 
 export default router;

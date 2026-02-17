@@ -33,10 +33,13 @@ export const SidebarNav: React.FC<{ onItemClick?: () => void }> = ({ onItemClick
                                     isActive && "opacity-100"
                                 )} />
 
-                                <item.icon className={cn(
-                                    "h-5 w-5 transition-transform shrink-0",
-                                    "group-hover:scale-110 duration-200"
-                                )} />
+                                <item.icon
+                                    className={cn(
+                                        "h-5 w-5 transition-transform shrink-0",
+                                        "group-hover:scale-110 duration-200"
+                                    )}
+                                    aria-hidden="true"
+                                />
                                 <span className="truncate">{item.label}</span>
                             </>
                         )}

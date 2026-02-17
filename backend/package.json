@@ -7,6 +7,7 @@
     "dev": "nodemon src/app.ts",
     "build": "tsc",
     "db:setup": "ts-node src/utils/setup-db.ts",
+    "db:seed": "ts-node src/scripts/seed.ts",
     "update-constraint": "ts-node src/utils/update-constraint.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -20,11 +21,14 @@
     "cors": "^2.8.6",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
     "express-validator": "^6.15.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.2",
     "pg": "^8.18.0",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

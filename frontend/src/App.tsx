@@ -10,6 +10,7 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { ScrollToTop } from './components/utils/ScrollToTop';
 import { PageTransition } from './components/layout/PageTransition';
 import { Loader } from './components/ui/Loader';
+import { RoleRoute } from './components/auth/RoleRoute';
 
 // Lazy loaded pages
 // Eagerly loaded Auth/Public pages for zero-jerks and instantaneous navigation
@@ -147,157 +148,157 @@ const AppRoutes = () => {
             <Route
               path="/doctors"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['patient']}>
                   <DashboardLayout>
                     <PageTransition>
                       <FindDoctors />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path="/book-appointment"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['patient']}>
                   <DashboardLayout>
                     <PageTransition>
                       <BookAppointment />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path="/appointments"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['patient', 'doctor']}>
                   <DashboardLayout>
                     <PageTransition>
                       <Appointments />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path="/prescriptions"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['patient', 'doctor', 'pharmacist']}>
                   <DashboardLayout>
                     <PageTransition>
                       <Prescriptions />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path="/records"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['patient']}>
                   <DashboardLayout>
                     <PageTransition>
                       <MedicalRecords />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path="/doctor/schedule"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['doctor']}>
                   <DashboardLayout>
                     <PageTransition>
                       <DoctorScheduleManagement />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path="/pharmacist/queue"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['pharmacist']}>
                   <DashboardLayout>
                     <PageTransition>
                       <PrescriptionQueue />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path="/pharmacist/inventory"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['pharmacist']}>
                   <DashboardLayout>
                     <PageTransition>
                       <Inventory />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path="/admin/verify-doctors"
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['admin']}>
                   <DashboardLayout>
                     <PageTransition>
                       <VerifyDoctors />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path={PATHS.DOCTOR.PATIENTS}
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['doctor']}>
                   <DashboardLayout>
                     <PageTransition>
                       <DoctorPatientList />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path={PATHS.ADMIN.DASHBOARD}
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['admin']}>
                   <DashboardLayout>
                     <PageTransition>
                       <AdminDashboard />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path={PATHS.ADMIN.USERS}
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['admin']}>
                   <DashboardLayout>
                     <PageTransition>
                       <UserManagement />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route
               path={PATHS.ADMIN.SYSTEM_LOGS}
               element={
-                <ProtectedRoute>
+                <RoleRoute allowedRoles={['admin']}>
                   <DashboardLayout>
                     <PageTransition>
                       <SystemLogs />
                     </PageTransition>
                   </DashboardLayout>
-                </ProtectedRoute>
+                </RoleRoute>
               }
             />
             <Route

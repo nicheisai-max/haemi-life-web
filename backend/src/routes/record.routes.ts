@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticateToken, requireRole } from '../middleware/auth.middleware';
 import { getMyRecords, uploadRecord, deleteRecord } from '../controllers/record.controller';
 
 const router = Router();
@@ -22,8 +22,9 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-// Protect all routes
+// Protect all routes - Patient Only for "My Records"
 router.use(authenticateToken);
+router.use(requireRole('patient'));
 
 // Record routes
 router.get('/', getMyRecords);

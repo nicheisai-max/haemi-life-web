@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
+import { auditService } from '../services/audit.service';
 
 export const signup = async (req: Request, res: Response) => {
     const { email, password, role, name, phone_number, id_number } = req.body;
@@ -29,8 +30,8 @@ export const signup = async (req: Request, res: Response) => {
 
             const newUser = await client.query(
                 `INSERT INTO users (
-            name, phone_number, email, password, role, id_number, created_at, updated_at, is_active
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), true) RETURNING id, email, role, name, phone_number`,
+            name, phone_number, email, password, role, id_number, created_at, updated_at, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), 'ACTIVE') RETURNING id, email, role, name, phone_number, status`,
                 [name, phone_number, email || null, hashedPassword, role, id_number || null]
             );
 
@@ -66,26 +67,69 @@ export const login = async (req: Request, res: Response) => {
         }
 
         if (result.rows.length === 0) {
+            // Audit failed attempt (unknown user)
+            await auditService.log({
+                action_type: 'LOGIN_FAILED',
+                metadata: { reason: 'User not found', email, phone_number },
+                ip_address: req.ip,
+                user_agent: req.headers['user-agent']
+            });
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
         const user = result.rows[0];
+
+        // STRICT STATUS CHECK
+        if (user.status !== 'ACTIVE') {
+            await auditService.log({
+                actor_id: user.id,
+                actor_role: user.role,
+                action_type: 'LOGIN_DENIED',
+                metadata: { reason: `User status is ${user.status}` },
+                ip_address: req.ip,
+                user_agent: req.headers['user-agent']
+            });
+            return res.status(403).json({ message: 'Account is not active. Please contact support.' });
+        }
+
         const validPassword = await bcrypt.compare(password, user.password);
 
         if (!validPassword) {
+            await auditService.log({
+                actor_id: user.id,
+                actor_role: user.role, // Log role even on failure if user known
+                action_type: 'LOGIN_FAILED',
+                metadata: { reason: 'Invalid password' },
+                ip_address: req.ip,
+                user_agent: req.headers['user-agent']
+            });
             logger.auth('Failed login attempt: Invalid password', { email, phone_number, ip: req.ip });
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
+        // Audit Successful Login
+        await auditService.log({
+            actor_id: user.id,
+            actor_role: user.role,
+            action_type: 'LOGIN_SUCCESS',
+            ip_address: req.ip,
+            user_agent: req.headers['user-agent']
+        });
+
         logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
 
         const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
+            {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                token_version: user.token_version // CRITICAL: Bind token to specific version
+            },
             process.env.JWT_SECRET as string,
-            { expiresIn: '1h' }
+            { expiresIn: '12h' }
         );
 
-        res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
+        res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, status: user.status } });
     } catch (error) {
         logger.error('Login server error', { error, email, phone_number });
         res.status(500).json({ message: 'Server error' });
@@ -162,7 +206,7 @@ export const verifySession = async (req: any, res: Response) => {
     try {
         const userId = req.user.id;
         // Verify user still exists and is active
-        const result = await pool.query('SELECT id, name, email, role, is_active FROM users WHERE id = $1', [userId]);
+        const result = await pool.query('SELECT id, name, email, role, status FROM users WHERE id = $1', [userId]);
 
         if (result.rows.length === 0) {
             return res.status(401).json({ message: 'User no longer exists' });
@@ -170,8 +214,9 @@ export const verifySession = async (req: any, res: Response) => {
 
         const user = result.rows[0];
 
-        if (!user.is_active) {
-            return res.status(403).json({ message: 'Account is deactivated' });
+        // STRICT STATUS CHECK
+        if (user.status !== 'ACTIVE') {
+            return res.status(403).json({ message: `Account is ${user.status.toLowerCase()}` });
         }
 
         res.json({ message: 'Session valid', user });

@@ -37,11 +37,26 @@ CREATE TABLE IF NOT EXISTS users (
     phone_number VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL, -- Will be renamed to password_hash in v3
     role VARCHAR(50) NOT NULL CHECK (role IN ('patient', 'doctor', 'admin', 'pharmacist')),
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING_DELETION')),
+    token_version INTEGER DEFAULT 0,
     id_number VARCHAR(50),
-    is_active BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT true, -- Deprecated, use status
     is_verified BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Audit Logs (Compulsory for Compliance)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    actor_id UUID, -- Nullable if system action or failed login
+    actor_role VARCHAR(50),
+    action_type VARCHAR(50) NOT NULL, -- LOGIN, LOGOUT, VIEW_DASHBOARD, UPDATE_PROFILE, etc.
+    target_id UUID,
+    metadata JSONB,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Doctor Profiles
@@ -139,6 +154,32 @@ CREATE TABLE IF NOT EXISTS prescription_items (
     duration_days INTEGER,
     quantity INTEGER,
     instructions TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Chat System
+CREATE TABLE IF NOT EXISTS conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS conversation_participants (
+    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (conversation_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
+    sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    content TEXT,
+    attachment_url VARCHAR(255),
+    attachment_type VARCHAR(50), -- 'image', 'pdf', 'document'
+    is_read BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

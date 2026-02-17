@@ -79,6 +79,12 @@ export const getPendingPrescriptions = async () => {
     return response.data as Prescription[];
 };
 
+// Get ALL prescriptions (Pharmacist/Admin)
+export const getAllPrescriptions = async () => {
+    const response = await api.get('/prescriptions');
+    return response.data as Prescription[];
+};
+
 export default {
     createPrescription,
     getMyPrescriptions,

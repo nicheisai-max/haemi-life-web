@@ -22,9 +22,51 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     });
 };
 
+import { auditService } from '../services/audit.service';
+
+export const requireRole = (allowedRole: string) => {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+        if (!req.user) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        if (req.user.role !== allowedRole) {
+            // CRITICAL SECURITY LOGGING
+            await auditService.log({
+                actor_id: req.user.id,
+                actor_role: req.user.role,
+                action_type: 'ACCESS_DENIED_RBAC',
+                metadata: {
+                    required_role: allowedRole,
+                    attempted_path: req.originalUrl,
+                    method: req.method
+                },
+                ip_address: req.ip,
+                user_agent: req.headers['user-agent']
+            });
+
+            return res.status(403).json({
+                message: `Access denied. ${allowedRole.toUpperCase()} privilege required.`
+            });
+        }
+        next();
+    };
+};
+
 export const authorizeRole = (roles: string[]) => {
-    return (req: AuthRequest, res: Response, next: NextFunction) => {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
         if (!req.user || !roles.includes(req.user.role)) {
+            await auditService.log({
+                actor_id: req.user?.id,
+                actor_role: req.user?.role,
+                action_type: 'ACCESS_DENIED_RBAC_MULTI',
+                metadata: {
+                    required_roles: roles,
+                    attempted_path: req.originalUrl
+                },
+                ip_address: req.ip,
+                user_agent: req.headers['user-agent']
+            });
             return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
         }
         next();

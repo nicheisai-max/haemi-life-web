@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { authenticateToken } from '../middleware/auth.middleware';
-import { requireDoctor, requirePatient, requirePatientOrDoctor } from '../middleware/role.middleware';
+import { authenticateToken, requireRole, authorizeRole } from '../middleware/auth.middleware';
 import {
     bookAppointment,
     getMyAppointments,
@@ -16,10 +15,10 @@ const router = Router();
 router.get('/available-slots', getAvailableSlots);
 
 // Protected routes
-router.post('/', authenticateToken, requirePatient, bookAppointment);
-router.get('/my-appointments', authenticateToken, getMyAppointments);
-router.get('/:id', authenticateToken, requirePatientOrDoctor, getAppointmentById);
-router.put('/:id/status', authenticateToken, requireDoctor, updateAppointmentStatus);
-router.delete('/:id', authenticateToken, requirePatientOrDoctor, cancelAppointment);
+router.post('/', authenticateToken, requireRole('patient'), bookAppointment);
+router.get('/my-appointments', authenticateToken, authorizeRole(['patient', 'doctor']), getMyAppointments);
+router.get('/:id', authenticateToken, authorizeRole(['patient', 'doctor']), getAppointmentById);
+router.put('/:id/status', authenticateToken, requireRole('doctor'), updateAppointmentStatus);
+router.delete('/:id', authenticateToken, authorizeRole(['patient', 'doctor']), cancelAppointment);
 
 export default router;

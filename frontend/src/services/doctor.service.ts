@@ -37,19 +37,19 @@ export interface Patient {
 
 // List all verified doctors
 export const listDoctors = async (params?: { specialization?: string; search?: string }) => {
-    const response = await api.get('/doctors', { params });
+    const response = await api.get('/doctor', { params });
     return response.data as DoctorProfile[];
 };
 
 // Get doctor profile by ID
 export const getDoctorProfile = async (id: string) => {
-    const response = await api.get(`/doctors/${id}`);
+    const response = await api.get(`/doctor/${id}`);
     return response.data as DoctorProfile;
 };
 
 // Get list of specializations
 export const getSpecializations = async () => {
-    const response = await api.get('/doctors/specializations');
+    const response = await api.get('/doctor/specializations');
     return response.data as string[];
 };
 
@@ -60,13 +60,13 @@ export const updateDoctorProfile = async (data: {
     bio?: string;
     consultation_fee?: number;
 }) => {
-    const response = await api.put('/doctors/profile', data);
+    const response = await api.put('/doctor/profile', data);
     return response.data;
 };
 
 // Get doctor's schedule
 export const getDoctorSchedule = async () => {
-    const response = await api.get('/doctors/me/schedule');
+    const response = await api.get('/doctor/me/schedule');
     return response.data as DoctorSchedule[];
 };
 
@@ -77,13 +77,13 @@ export const updateDoctorSchedule = async (schedule: Array<{
     end_time: string;
     is_available: boolean;
 }>) => {
-    const response = await api.put('/doctors/me/schedule', { schedule });
+    const response = await api.put('/doctor/me/schedule', { schedule });
     return response.data;
 };
 
 // Get doctor's patients
 export const getDoctorPatients = async () => {
-    const response = await api.get('/doctors/me/patients');
+    const response = await api.get('/doctor/me/patients');
     return response.data as Patient[];
 };
 

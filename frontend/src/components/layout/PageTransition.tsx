@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import type { HTMLMotionProps } from 'framer-motion';
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -19,7 +20,7 @@ const containerVariants = {
     }
 };
 
-const itemVariants = {
+const itemVariants: any = {
     hidden: { y: 20, opacity: 0 },
     visible: {
         y: 0,
@@ -57,9 +58,9 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
     );
 };
 
-export const TransitionItem: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className }) => {
+export const TransitionItem: React.FC<HTMLMotionProps<'div'>> = ({ children, className, ...props }) => {
     return (
-        <motion.div variants={itemVariants} className={className}>
+        <motion.div variants={itemVariants} className={className} {...props}>
             {children}
         </motion.div>
     );

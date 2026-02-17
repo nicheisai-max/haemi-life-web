@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { authenticateToken } from '../middleware/auth.middleware';
-import { requireAdmin } from '../middleware/role.middleware';
+import { authenticateToken, requireRole } from '../middleware/auth.middleware';
 import {
     getPendingVerifications,
     verifyDoctor,
@@ -14,7 +13,7 @@ const router = Router();
 
 // All routes require admin authentication
 router.use(authenticateToken);
-router.use(requireAdmin);
+router.use(requireRole('admin'));
 
 router.get('/pending-verifications', getPendingVerifications);
 router.put('/verify-doctor/:id', verifyDoctor);
