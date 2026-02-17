@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from './button';
-import { GlassCard } from './GlassCard';
 import {
     MessageSquare, X, Minus,
     ChevronLeft,
