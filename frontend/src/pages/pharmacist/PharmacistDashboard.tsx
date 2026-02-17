@@ -1,25 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getPendingPrescriptions } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
 import { QrCode, Receipt, CheckCircle2, AlertCircle, ClipboardCheck, Box, ShoppingCart, Truck, Pill, CheckCheck, ArrowRight, Zap, Database } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { GradientMesh } from '@/components/ui/GradientMesh';
-import { GlassCard } from '@/components/ui/GlassCard';
-import { PremiumStatCard } from '@/components/ui/PremiumStatCard';
 import { Loader } from '@/components/ui/Loader';
 import { useNavigate } from 'react-router-dom';
 import { TransitionItem } from '../../components/layout/PageTransition';
+import { DashboardCard } from '@/components/ui/DashboardCard';
+import { IconWrapper } from '@/components/ui/IconWrapper';
 
 const MOCK_INVENTORY_DATA = [
     { name: 'Optimal', value: 45, color: 'hsl(var(--primary))' },
     { name: 'Low Stock', value: 15, color: '#f59e0b' },
     { name: 'Out of Stock', value: 5, color: '#ef4444' },
 ];
-
-
 
 export const PharmacistDashboard: React.FC = () => {
     const { user } = useAuth();
@@ -45,8 +42,6 @@ export const PharmacistDashboard: React.FC = () => {
         }
     };
 
-
-
     const pendingOrders = prescriptions.filter(p => p.status === 'pending');
     const todayFilled = prescriptions.filter(p => {
         if (p.status !== 'filled') return false;
@@ -56,9 +51,7 @@ export const PharmacistDashboard: React.FC = () => {
     }).length;
 
     return (
-        <div
-            className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8"
-        >
+        <div className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8">
             {/* Hero Section */}
             <TransitionItem className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
                 <GradientMesh variant="secondary" className="opacity-40" />
@@ -99,40 +92,46 @@ export const PharmacistDashboard: React.FC = () => {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <TransitionItem>
-                    <PremiumStatCard
-                        icon={Receipt}
-                        label="Active Prescriptions"
-                        value={loading ? <Loader size="xs" /> : pendingOrders.length}
-                        trend="up"
-                        trendValue="Pending"
-                    />
+                    <DashboardCard className="flex items-center gap-4">
+                        <IconWrapper icon={Receipt} variant="primary" />
+                        <div>
+                            <div className="text-3xl font-bold tracking-tight text-foreground">
+                                {loading ? <Loader size="xs" /> : pendingOrders.length}
+                            </div>
+                            <div className="text-sm font-medium text-muted-foreground">Active Prescriptions</div>
+                        </div>
+                    </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <PremiumStatCard
-                        icon={CheckCircle2}
-                        label="Orders Fulfilled"
-                        value={loading ? <Loader size="xs" /> : todayFilled}
-                        trend="up"
-                        trendValue="Today"
-                        subtext="Completion Rate: 98%"
-                    />
+                    <DashboardCard className="flex items-center gap-4">
+                        <IconWrapper icon={CheckCircle2} variant="success" />
+                        <div>
+                            <div className="text-3xl font-bold tracking-tight text-foreground">
+                                {loading ? <Loader size="xs" /> : todayFilled}
+                            </div>
+                            <div className="text-sm font-medium text-muted-foreground">Orders Fulfilled</div>
+                            <div className="text-xs text-muted-foreground mt-1">Completion Rate: 98%</div>
+                        </div>
+                    </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <PremiumStatCard
-                        icon={Database}
-                        label="Stock Analytics"
-                        value={loading ? <Loader size="xs" /> : prescriptions.length}
-                        trend="neutral"
-                        trendValue="Syncing"
-                    />
+                    <DashboardCard className="flex items-center gap-4">
+                        <IconWrapper icon={Database} variant="neutral" />
+                        <div>
+                            <div className="text-3xl font-bold tracking-tight text-foreground">
+                                {loading ? <Loader size="xs" /> : prescriptions.length}
+                            </div>
+                            <div className="text-sm font-medium text-muted-foreground">Stock Analytics</div>
+                        </div>
+                    </DashboardCard>
                 </TransitionItem>
             </div>
 
             {/* Supply Chain Visualization */}
             <TransitionItem>
-                <GlassCard className="p-8 space-y-6">
+                <DashboardCard className="p-8 space-y-6">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
                             <h2 className="text-2xl font-bold tracking-tight">Warehouse Pulse</h2>
@@ -170,7 +169,7 @@ export const PharmacistDashboard: React.FC = () => {
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                </GlassCard>
+                </DashboardCard>
             </TransitionItem>
 
             {/* Main Content Split */}
@@ -180,36 +179,38 @@ export const PharmacistDashboard: React.FC = () => {
                     <section>
                         <h2 className="text-xl font-semibold mb-4 text-foreground">Quick Actions</h2>
                         <div className="grid grid-cols-2 gap-4">
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/pharmacist/queue')}>
-                                <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                    <ClipboardCheck className="h-6 w-6" />
-                                </div>
-                                <span className="font-medium">Validate</span>
-                            </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/pharmacist/inventory')}>
-                                <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                    <Box className="h-6 w-6" />
-                                </div>
-                                <span className="font-medium">Inventory</span>
-                            </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group">
-                                <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                    <ShoppingCart className="h-6 w-6" />
-                                </div>
-                                <span className="font-medium">New Sale</span>
-                            </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group">
-                                <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                    <Truck className="h-6 w-6" />
-                                </div>
-                                <span className="font-medium">Orders</span>
-                            </Card>
+                            <DashboardCard
+                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                                onClick={() => navigate('/pharmacist/queue')}
+                            >
+                                <IconWrapper icon={ClipboardCheck} />
+                                <span className="font-medium text-foreground">Validate</span>
+                            </DashboardCard>
+                            <DashboardCard
+                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                                onClick={() => navigate('/pharmacist/inventory')}
+                            >
+                                <IconWrapper icon={Box} />
+                                <span className="font-medium text-foreground">Inventory</span>
+                            </DashboardCard>
+                            <DashboardCard
+                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                            >
+                                <IconWrapper icon={ShoppingCart} />
+                                <span className="font-medium text-foreground">New Sale</span>
+                            </DashboardCard>
+                            <DashboardCard
+                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                            >
+                                <IconWrapper icon={Truck} />
+                                <span className="font-medium text-foreground">Orders</span>
+                            </DashboardCard>
                         </div>
                     </section>
 
                     <section>
                         <h2 className="text-xl font-semibold mb-4 text-foreground">Operations Status</h2>
-                        <Card className="bg-gradient-to-br from-teal-500 to-emerald-600 text-white p-6 flex items-center justify-between shadow-lg">
+                        <DashboardCard className="bg-gradient-to-br from-teal-500 to-emerald-600 text-white p-6 flex items-center justify-between shadow-lg border-none">
                             <div className="space-y-2">
                                 <h3 className="text-lg font-bold">Pharmacy Overview</h3>
                                 <div className="space-y-1 text-teal-50">
@@ -222,7 +223,7 @@ export const PharmacistDashboard: React.FC = () => {
                                 </div>
                             </div>
                             <Pill className="h-16 w-16 opacity-20" />
-                        </Card>
+                        </DashboardCard>
                     </section>
                 </div>
 
@@ -241,13 +242,13 @@ export const PharmacistDashboard: React.FC = () => {
                                 <Loader />
                             </div>
                         ) : pendingOrders.length === 0 ? (
-                            <Card className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
+                            <DashboardCard className="text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
                                 <CheckCheck className="h-12 w-12 opacity-20 mb-3" />
                                 <p>All prescriptions processed</p>
-                            </Card>
+                            </DashboardCard>
                         ) : (
                             pendingOrders.slice(0, 3).map((prescription) => (
-                                <Card key={prescription.id} className="group p-4 flex items-center gap-4 transition-all hover:shadow-md hover:border-teal-500/50">
+                                <DashboardCard key={prescription.id} className="group p-4 flex items-center gap-4 transition-all hover:border-teal-500/50">
                                     <div className="bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 rounded-lg p-2 min-w-[60px] text-center shrink-0 border border-teal-100 dark:border-teal-900/50">
                                         <span className="block text-xs font-bold uppercase tracking-wider">New</span>
                                     </div>
@@ -260,7 +261,7 @@ export const PharmacistDashboard: React.FC = () => {
                                     <Button variant="default" size="sm" className="action-btn bg-teal-600 hover:bg-teal-700" onClick={() => navigate(`/prescriptions/${prescription.id}`)}>
                                         Process
                                     </Button>
-                                </Card>
+                                </DashboardCard>
                             ))
                         )}
                     </div>

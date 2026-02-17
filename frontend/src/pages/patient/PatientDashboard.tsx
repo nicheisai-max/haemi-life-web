@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getMyAppointments } from '../../services/appointment.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import type { Appointment } from '../../services/appointment.service';
 import type { Prescription } from '../../services/prescription.service';
-import { Plus, Calendar, FileText, FolderOpen, AlertCircle, ThermometerSun, Search, History, Settings as SettingsIcon, CalendarX, Clock, ArrowRight, Heart } from 'lucide-react';
+import {
+    Plus, Calendar, FileText, FolderOpen, AlertCircle,
+    ThermometerSun, Search, History, Settings as SettingsIcon,
+    CalendarX, Clock, ArrowRight, Heart
+} from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
-import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { TransitionItem } from '../../components/layout/PageTransition';
 import { Loader } from '@/components/ui/Loader';
+import { DashboardCard } from '@/components/ui/DashboardCard';
+import { IconWrapper } from '@/components/ui/IconWrapper';
 
 const MOCK_HEALTH_DATA = [
     { name: 'Week 1', score: 65 },
@@ -21,10 +25,6 @@ const MOCK_HEALTH_DATA = [
     { name: 'Week 3', score: 68 },
     { name: 'Week 4', score: 85 },
 ];
-
-
-
-
 
 export const PatientDashboard: React.FC = () => {
     const { user } = useAuth();
@@ -82,9 +82,7 @@ export const PatientDashboard: React.FC = () => {
     const activePrescriptions = prescriptions.filter(p => p.status === 'pending' || p.status === 'filled');
 
     return (
-        <div
-            className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8"
-        >
+        <div className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8">
             {/* Hero Section */}
             <TransitionItem className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-2xl">
                 <GradientMesh variant="primary" className="opacity-40" />
@@ -106,10 +104,10 @@ export const PatientDashboard: React.FC = () => {
                     </div>
                     <Button
                         size="lg"
-                        className="bg-primary hover:bg-primary/90 text-white shadow-xl px-8 h-14 text-lg font-bold rounded-2xl shrink-0 gap-3 group"
+                        className="bg-primary hover:bg-primary/90 text-white shadow-xl px-8 h-14 text-lg font-bold rounded-2xl shrink-0 gap-3"
                         onClick={() => navigate('/book-appointment')}
                     >
-                        <Plus className="h-6 w-6 group-hover:rotate-90 transition-transform" />
+                        <Plus className="h-6 w-6" />
                         Book Appointment
                     </Button>
                 </div>
@@ -126,39 +124,39 @@ export const PatientDashboard: React.FC = () => {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <TransitionItem>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="primary">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-500 shadow-inner">
-                            <Calendar className="h-8 w-8" />
-                        </div>
+                    <DashboardCard className="flex items-center gap-4">
+                        <IconWrapper icon={Calendar} variant="accent" />
                         <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? <Loader size="xs" /> : upcomingAppointments.length}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-blue-500/80 tracking-tight">Active Bookings</div>
+                            <div className="text-3xl font-bold tracking-tight text-foreground">
+                                {loading ? <Loader size="xs" /> : upcomingAppointments.length}
+                            </div>
+                            <div className="text-sm font-medium text-muted-foreground">Active Bookings</div>
                         </div>
-                    </GlassCard>
+                    </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="secondary">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-500 shadow-inner">
-                            <FileText className="h-8 w-8" />
-                        </div>
+                    <DashboardCard className="flex items-center gap-4">
+                        <IconWrapper icon={FileText} variant="success" />
                         <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? <Loader size="xs" /> : activePrescriptions.length}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-emerald-500/80 tracking-tight">Active Scripts</div>
+                            <div className="text-3xl font-bold tracking-tight text-foreground">
+                                {loading ? <Loader size="xs" /> : activePrescriptions.length}
+                            </div>
+                            <div className="text-sm font-medium text-muted-foreground">Active Scripts</div>
                         </div>
-                    </GlassCard>
+                    </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="accent">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-500 shadow-inner">
-                            <FolderOpen className="h-8 w-8" />
-                        </div>
+                    <DashboardCard className="flex items-center gap-4">
+                        <IconWrapper icon={FolderOpen} variant="warning" />
                         <div>
-                            <div className="text-4xl font-black tracking-tight">{loading ? <Loader size="xs" /> : appointments.length}</div>
-                            <div className="text-sm font-bold uppercase tracking-widest text-purple-500/80 tracking-tight">Lifetime Visits</div>
+                            <div className="text-3xl font-bold tracking-tight text-foreground">
+                                {loading ? <Loader size="xs" /> : appointments.length}
+                            </div>
+                            <div className="text-sm font-medium text-muted-foreground">Lifetime Visits</div>
                         </div>
-                    </GlassCard>
+                    </DashboardCard>
                 </TransitionItem>
             </div>
 
@@ -180,48 +178,62 @@ export const PatientDashboard: React.FC = () => {
                 {/* Left: Quick Actions & Tips */}
                 <div className="space-y-8">
                     <section>
-                        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-foreground">
                             Quick Actions
                         </h2>
                         <div className="grid grid-cols-2 gap-4">
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/prescriptions')}>
-                                <ThermometerSun className="h-8 w-8 text-primary group-hover:scale-110 transition-transform" />
-                                <span className="font-medium">Order Medicine</span>
-                            </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/doctors')}>
-                                <Search className="h-8 w-8 text-primary group-hover:scale-110 transition-transform" />
-                                <span className="font-medium">Find Doctor</span>
-                            </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/records')}>
-                                <History className="h-8 w-8 text-primary group-hover:scale-110 transition-transform" />
-                                <span className="font-medium">View History</span>
-                            </Card>
-                            <Card className="p-6 flex flex-col items-center justify-center text-center gap-3 cursor-pointer transition-all hover:border-primary hover:bg-muted/50 group" onClick={() => navigate('/settings')}>
-                                <SettingsIcon className="h-8 w-8 text-primary group-hover:rotate-90 transition-transform" />
-                                <span className="font-medium">Settings</span>
-                            </Card>
+                            <DashboardCard
+                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                                onClick={() => navigate('/prescriptions')}
+                            >
+                                <IconWrapper icon={ThermometerSun} />
+                                <span className="font-medium text-foreground">Order Medicine</span>
+                            </DashboardCard>
+                            <DashboardCard
+                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                                onClick={() => navigate('/doctors')}
+                            >
+                                <IconWrapper icon={Search} />
+                                <span className="font-medium text-foreground">Find Doctor</span>
+                            </DashboardCard>
+                            <DashboardCard
+                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                                onClick={() => navigate('/records')}
+                            >
+                                <IconWrapper icon={History} />
+                                <span className="font-medium text-foreground">View History</span>
+                            </DashboardCard>
+                            <DashboardCard
+                                className="flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                                onClick={() => navigate('/settings')}
+                            >
+                                <IconWrapper icon={SettingsIcon} />
+                                <span className="font-medium text-foreground">Settings</span>
+                            </DashboardCard>
                         </div>
                     </section>
 
                     <section>
-                        <h2 className="text-xl font-semibold mb-4">Health Tips</h2>
-                        <Card className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground p-6 flex items-center justify-between shadow-lg overflow-hidden relative">
+                        <h2 className="text-xl font-semibold mb-4 text-foreground">Health Tips</h2>
+                        <DashboardCard className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground border-none relative overflow-hidden">
                             <GradientMesh variant="subtle" className="opacity-20" />
-                            <div className="space-y-2 max-w-[80%] relative z-10">
-                                <h3 className="text-lg font-bold">Stay Hydrated</h3>
-                                <p className="text-primary-foreground/90 leading-relaxed">
-                                    Drinking enough water is crucial for regulating body temperature and maintaining organ function.
-                                </p>
+                            <div className="flex items-start justify-between relative z-10">
+                                <div className="space-y-2 max-w-[80%]">
+                                    <h3 className="text-lg font-bold">Stay Hydrated</h3>
+                                    <p className="text-primary-foreground/90 leading-relaxed">
+                                        Drinking enough water is crucial for regulating body temperature and maintaining organ function.
+                                    </p>
+                                </div>
+                                <ThermometerSun className="h-12 w-12 opacity-20" />
                             </div>
-                            <ThermometerSun className="h-12 w-12 opacity-20 relative z-10" />
-                        </Card>
+                        </DashboardCard>
                     </section>
                 </div>
 
                 {/* Right: Upcoming Appointments */}
                 <div>
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-semibold">Appointments</h2>
+                        <h2 className="text-xl font-semibold text-foreground">Appointments</h2>
                         <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-primary" onClick={() => navigate('/appointments')}>
                             View All <ArrowRight className="ml-1 h-3.5 w-3.5" />
                         </Button>
@@ -233,18 +245,18 @@ export const PatientDashboard: React.FC = () => {
                                 <Loader />
                             </div>
                         ) : upcomingAppointments.length === 0 ? (
-                            <Card className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
+                            <DashboardCard className="text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
                                 <CalendarX className="h-12 w-12 opacity-20 mb-3" />
                                 <p>No upcoming appointments</p>
                                 <Button variant="link" className="mt-2 text-primary" onClick={() => navigate('/book-appointment')}>Book now</Button>
-                            </Card>
+                            </DashboardCard>
                         ) : (
                             upcomingAppointments.map((appointment) => {
                                 const dateInfo = formatDate(appointment.appointment_date);
                                 return (
-                                    <Card key={appointment.id} className="p-4 flex items-center gap-4 transition-all hover:shadow-md hover:border-primary/50 group">
-                                        <div className="bg-muted rounded-lg p-2 min-w-[60px] text-center shrink-0 border group-hover:bg-primary/10 group-hover:border-primary/20 transition-colors">
-                                            <span className="block text-xl font-bold leading-none">{dateInfo.day}</span>
+                                    <DashboardCard key={appointment.id} className="flex items-center gap-4 transition-all hover:border-primary/50 p-4">
+                                        <div className="bg-muted rounded-lg p-2 min-w-[60px] text-center shrink-0 border">
+                                            <span className="block text-xl font-bold leading-none text-foreground">{dateInfo.day}</span>
                                             <span className="block text-xs font-bold text-muted-foreground uppercase mt-0.5">{dateInfo.month}</span>
                                         </div>
 
@@ -261,7 +273,7 @@ export const PatientDashboard: React.FC = () => {
                                         </div>
 
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="font-semibold truncate">{appointment.other_party_name || 'Doctor'}</h3>
+                                            <h3 className="font-semibold truncate text-foreground">{appointment.other_party_name || 'Doctor'}</h3>
                                             <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                                                 <span className="truncate max-w-[120px]">{appointment.reason}</span>
                                                 <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
@@ -275,13 +287,13 @@ export const PatientDashboard: React.FC = () => {
                                             <Button
                                                 variant="default"
                                                 size="sm"
-                                                className="shadow-md"
+                                                className="shadow-sm"
                                                 onClick={() => navigate(`/consultation/${appointment.id}`)}
                                             >
                                                 Join
                                             </Button>
                                         </div>
-                                    </Card>
+                                    </DashboardCard>
                                 );
                             })
                         )}
