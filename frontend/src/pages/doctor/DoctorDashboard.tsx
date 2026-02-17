@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
-import { motion } from 'framer-motion';
+import { TransitionItem } from '../../components/layout/PageTransition';
 import { ClinicalCopilot } from '@/components/ui/ClinicalCopilot';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
 import { AnimatedEmptyState } from '@/components/ui/AnimatedEmptyState';
@@ -60,24 +60,15 @@ const MOCK_DOCTOR_INSIGHTS = [
     }
 ];
 
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1
-        }
-    }
+const formatTime = (timeString: string) => {
+    if (!timeString) return '';
+    const [hours, minutes] = timeString.split(':');
+    const date = new Date();
+    date.setHours(parseInt(hours), parseInt(minutes));
+    return date.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 };
 
-const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-        y: 0,
-        opacity: 1,
-        transition: { type: 'spring' as const, stiffness: 100 }
-    }
-};
+
 
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -129,16 +120,13 @@ export const DoctorDashboard: React.FC = () => {
     const pendingReviews = appointments.filter(a => a.status === 'completed').length;
 
     return (
-        <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-12 relative overflow-x-hidden"
+        <div
+            className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-12 relative overflow-x-hidden"
         >
             <ClinicalCopilot isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
 
             {/* Hero Section */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
+            <TransitionItem className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
                 <GradientMesh variant="secondary" className="opacity-40" />
                 <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-2 max-w-2xl">
@@ -179,19 +167,19 @@ export const DoctorDashboard: React.FC = () => {
                         </Button>
                     </div>
                 </div>
-            </motion.div>
+            </TransitionItem>
 
             {/* Error Message */}
             {error && (
-                <motion.div variants={itemVariants} className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3">
+                <TransitionItem className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3">
                     <AlertCircle className="h-5 w-5" />
                     <p className="text-sm font-medium">{error}</p>
-                </motion.div>
+                </TransitionItem>
             )}
 
             {/* Stats Grid */}
-            <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <motion.div variants={itemVariants}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <TransitionItem>
                     <PremiumStatCard
                         icon={Users}
                         label="Today's Patients"
@@ -199,9 +187,9 @@ export const DoctorDashboard: React.FC = () => {
                         trend="neutral"
                         trendValue="Scheduled"
                     />
-                </motion.div>
+                </TransitionItem>
 
-                <motion.div variants={itemVariants}>
+                <TransitionItem>
                     <PremiumStatCard
                         icon={ClipboardCheck}
                         label="Completed Encounters"
@@ -209,9 +197,9 @@ export const DoctorDashboard: React.FC = () => {
                         trend="up"
                         trendValue="On Track"
                     />
-                </motion.div>
+                </TransitionItem>
 
-                <motion.div variants={itemVariants}>
+                <TransitionItem>
                     <PremiumStatCard
                         icon={Contact}
                         label="Primary Care Panel"
@@ -219,16 +207,16 @@ export const DoctorDashboard: React.FC = () => {
                         trend="up"
                         trendValue="+3 New"
                     />
-                </motion.div>
-            </motion.div>
+                </TransitionItem>
+            </div>
 
             {/* Predictive Intelligence Section */}
-            <motion.div variants={itemVariants}>
+            <TransitionItem>
                 <PredictiveInsights insights={MOCK_DOCTOR_INSIGHTS} />
-            </motion.div>
+            </TransitionItem>
 
             {/* Clinical Analytics Visualization */}
-            <motion.div variants={itemVariants}>
+            <TransitionItem>
                 <PremiumAreaChart
                     title="Clinical Load Analysis"
                     description="Hourly patient flow and consultation density"
@@ -238,10 +226,10 @@ export const DoctorDashboard: React.FC = () => {
                     color="#0E6B74" // Primary-800
                     valueSuffix=" pts"
                 />
-            </motion.div>
+            </TransitionItem>
 
             {/* Main Content Split */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
+            <TransitionItem className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
                 {/* Left: Quick Actions */}
                 <div className="space-y-8">
                     <section>
@@ -363,7 +351,7 @@ export const DoctorDashboard: React.FC = () => {
                         )}
                     </div>
                 </div>
-            </motion.div>
-        </motion.div>
+            </TransitionItem>
+        </div>
     );
 };

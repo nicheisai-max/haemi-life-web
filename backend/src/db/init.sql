@@ -317,7 +317,21 @@ BEGIN
         (v_patient_id, 'Medication Refill', 'Your Amoxil prescription is eligible for refill at any Clicks Pharmacy.', 'success', NOW() - INTERVAL '3 days');
     END IF;
 
-    -- 8d. Doctor Notifications (Dr. Mpho) extra
+    -- 8d. Admin Notifications (Admin Kgosi)
+    DECLARE
+        v_admin_id UUID;
+    BEGIN
+        SELECT id INTO v_admin_id FROM users WHERE email = 'admin@haemilife.com';
+        IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_admin_id) THEN
+            INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
+            (v_admin_id, 'System Health Alert', 'Infrastructure monitoring: Gaborone Data Center is running at 92% capacity. Scaling might be required soon.', 'warning', NOW() - INTERVAL '15 minutes'),
+            (v_admin_id, 'New Doctor Verification', 'Dr. Thabo Sekgwi (Maun) has submitted documents for verification. License: BW-MA-2024-88.', 'info', NOW() - INTERVAL '2 hours'),
+            (v_admin_id, 'Regulatory Compliance', 'Quarterly audit for Botswana Ministry of Health (MOH) data protection compliance is scheduled for Monday.', 'info', NOW() - INTERVAL '5 hours'),
+            (v_admin_id, 'Service Interruption', 'Emergency maintenance scheduled for Sunday 2 AM to update the national citizen registry integration (Omang Sync).', 'error', NOW() - INTERVAL '1 day');
+        END IF;
+    END;
+
+    -- 8e. Doctor Notifications (Dr. Mpho) extra
     IF NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = v_doctor_id AND title = 'Patient Feedback') THEN
         INSERT INTO notifications (user_id, title, description, type, created_at) VALUES
         (v_doctor_id, 'Patient Feedback', 'Tebogo Motswana rated your last consultation 5 stars.', 'success', NOW() - INTERVAL '5 hours');

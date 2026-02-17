@@ -11,8 +11,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle } from 'lucide-react';
+import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle, Calendar } from 'lucide-react';
 import { inventorySchema } from '../../lib/validation/inventory.schema';
+import { Loader } from '@/components/ui/Loader';
+
+import { PageTransition, TransitionItem } from '../../components/layout/PageTransition';
 
 interface InventoryItem {
     id: string;
@@ -82,273 +85,279 @@ export const Inventory: React.FC = () => {
     };
 
     return (
-        <div className="max-w-7xl mx-auto p-6 md:p-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Inventory Management</h1>
-                    <p className="text-muted-foreground">Track and manage pharmacy stock levels and reordering</p>
-                </div>
-
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="min-w-[140px]">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add New Item
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
-                        <DialogHeader>
-                            <DialogTitle>Add New Medicine</DialogTitle>
-                            <DialogDescription>
-                                Enter the details of the new medicine to add it to the inventory.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <Form {...form}>
-                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-                                <FormField
-                                    control={form.control}
-                                    name="name"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Medicine Name</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="e.g. Paracetamol" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="category"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Category</FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select a category" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    {CATEGORIES.map(cat => (
-                                                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <div className="grid grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="stock"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Initial Stock</FormLabel>
-                                                <FormControl>
-                                                    <Input type="number" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={form.control}
-                                        name="minStock"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Min. Stock Level</FormLabel>
-                                                <FormControl>
-                                                    <Input type="number" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                </div>
-                                <FormField
-                                    control={form.control}
-                                    name="price"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Price (BWP)</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" step="0.01" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <DialogFooter className="pt-4">
-                                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                                    <Button type="submit">Add Item</Button>
-                                </DialogFooter>
-                            </form>
-                        </Form>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <Card>
-                    <CardContent className="p-6 flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                            <Package className="h-6 w-6" />
-                        </div>
-                        <div>
-                            <div className="text-2xl font-bold">{inventory.length}</div>
-                            <div className="text-sm text-muted-foreground font-medium">Total Items</div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-6 flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
-                            <AlertTriangle className="h-6 w-6" />
-                        </div>
-                        <div>
-                            <div className="text-2xl font-bold">{lowStockItems.length}</div>
-                            <div className="text-sm text-muted-foreground font-medium">Low Stock Alerts</div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-6 flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
-                            <TrendingUp className="h-6 w-6" />
-                        </div>
-                        <div>
-                            <div className="text-2xl font-bold">{uniqueCategoriesInStock.length}</div>
-                            <div className="text-sm text-muted-foreground font-medium">Categories</div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Low Stock Alert */}
-            {lowStockItems.length > 0 && (
-                <Alert variant="destructive" className="mb-8 border-amber-500 bg-amber-50 dark:bg-amber-900/10 text-amber-800 dark:text-amber-200">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    <AlertTitle>Low Stock Warning</AlertTitle>
-                    <AlertDescription>
-                        {lowStockItems.length} item(s) are running low on stock. Please review and restock soon.
-                    </AlertDescription>
-                </Alert>
-            )}
-
-            {/* Filters */}
-            <Card className="mb-6">
-                <CardContent className="p-6 space-y-4">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            type="text"
-                            placeholder="Search medicines..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10 max-w-md"
-                        />
+        <PageTransition>
+            <div className="max-w-[1920px] mx-auto p-6 md:p-8 space-y-8">
+                <TransitionItem className="flex flex-col md:flex-row justify-between items-start gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Inventory Management</h1>
+                        <p className="text-muted-foreground">Track and manage pharmacy stock levels and reordering</p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        {filterOptions.map(cat => (
-                            <Button
-                                key={cat}
-                                variant={categoryFilter === cat ? 'default' : 'outline'}
-                                size="sm"
-                                onClick={() => setCategoryFilter(cat)}
-                                className="capitalize"
-                            >
-                                {cat}
+
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button className="min-w-[140px]">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add New Item
                             </Button>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[500px]">
+                            <DialogHeader>
+                                <DialogTitle>Add New Medicine</DialogTitle>
+                                <DialogDescription>
+                                    Enter the details of the new medicine to add it to the inventory.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <Form {...form}>
+                                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="name"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Medicine Name</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="e.g. Paracetamol" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="category"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Category</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select a category" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {CATEGORIES.map(cat => (
+                                                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="stock"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Initial Stock</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="minStock"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Min. Stock Level</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="price"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Price (BWP)</FormLabel>
+                                                <FormControl>
+                                                    <Input type="number" step="0.01" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <DialogFooter className="pt-4">
+                                        <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                                        <Button type="submit">Add Item</Button>
+                                    </DialogFooter>
+                                </form>
+                            </Form>
+                        </DialogContent>
+                    </Dialog>
+                </TransitionItem>
 
-            {/* Inventory Table */}
-            <Card className="overflow-hidden">
-                <div className="overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Medicine</TableHead>
-                                <TableHead className="hidden sm:table-cell">Category</TableHead>
-                                <TableHead>Stock</TableHead>
-                                <TableHead className="hidden lg:table-cell">Min. Stock</TableHead>
-                                <TableHead className="hidden md:table-cell">Price</TableHead>
-                                <TableHead className="hidden md:table-cell">Last Restocked</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredInventory.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                                        No items found.
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                filteredInventory.map((item) => {
-                                    const status = getStockStatus(item);
-                                    return (
-                                        <TableRow key={item.id} className="hover:bg-muted/50">
-                                            <TableCell>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                                        <Pill className="h-5 w-5" />
-                                                    </div>
-                                                    <span className="font-medium">{item.name}</span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="hidden sm:table-cell">{item.category}</TableCell>
-                                            <TableCell>
-                                                <span className="font-semibold">{item.stock}</span> units
-                                            </TableCell>
-                                            <TableCell className="hidden lg:table-cell text-muted-foreground">{item.minStock}</TableCell>
-                                            <TableCell className="hidden md:table-cell font-medium text-green-600 dark:text-green-400">
-                                                ${item.price.toFixed(2)}
-                                            </TableCell>
-                                            <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                                                {new Date(item.lastRestocked).toLocaleDateString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric'
-                                                })}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    variant={status === 'low' ? 'destructive' : status === 'medium' ? 'secondary' : 'default'}
-                                                    className={
-                                                        status === 'good' ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400' :
-                                                            status === 'medium' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400' : ''
-                                                    }
-                                                >
-                                                    {status === 'low' ? 'Low Stock' : status === 'medium' ? 'Medium' : 'In Stock'}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" title="Restock">
-                                                        <PlusCircle className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" title="Edit">
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
+                {/* Stats Cards */}
+                <TransitionItem className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <Card>
+                        <CardContent className="p-6 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                <Package className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold">{inventory.length}</div>
+                                <div className="text-sm text-muted-foreground font-medium">Total Items</div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="p-6 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
+                                <AlertTriangle className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold">{lowStockItems.length}</div>
+                                <div className="text-sm text-muted-foreground font-medium">Low Stock Alerts</div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="p-6 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+                                <TrendingUp className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold">{uniqueCategoriesInStock.length}</div>
+                                <div className="text-sm text-muted-foreground font-medium">Categories</div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TransitionItem>
+
+                <TransitionItem>
+                    {/* Low Stock Alert */}
+                    {lowStockItems.length > 0 && (
+                        <Alert variant="destructive" className="mb-8 border-amber-500 bg-amber-50 dark:bg-amber-900/10 text-amber-800 dark:text-amber-200">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            <AlertTitle>Low Stock Warning</AlertTitle>
+                            <AlertDescription>
+                                {lowStockItems.length} item(s) are running low on stock. Please review and restock soon.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {/* Filters */}
+                    <Card className="mb-6">
+                        <CardContent className="p-6 space-y-4">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="text"
+                                    placeholder="Search medicines..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-10 max-w-md"
+                                />
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {filterOptions.map(cat => (
+                                    <Button
+                                        key={cat}
+                                        variant={categoryFilter === cat ? 'default' : 'outline'}
+                                        size="sm"
+                                        onClick={() => setCategoryFilter(cat)}
+                                        className="capitalize"
+                                    >
+                                        {cat}
+                                    </Button>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TransitionItem>
+
+                <TransitionItem>
+                    {/* Inventory Table */}
+                    <Card className="overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Medicine</TableHead>
+                                        <TableHead className="hidden sm:table-cell">Category</TableHead>
+                                        <TableHead>Stock</TableHead>
+                                        <TableHead className="hidden lg:table-cell">Min. Stock</TableHead>
+                                        <TableHead className="hidden md:table-cell">Price</TableHead>
+                                        <TableHead className="hidden md:table-cell">Last Restocked</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredInventory.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                                No items found.
                                             </TableCell>
                                         </TableRow>
-                                    );
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-            </Card>
-        </div>
+                                    ) : (
+                                        filteredInventory.map((item) => {
+                                            const status = getStockStatus(item);
+                                            return (
+                                                <TableRow key={item.id} className="hover:bg-muted/50">
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                                                <Pill className="h-5 w-5" />
+                                                            </div>
+                                                            <span className="font-medium">{item.name}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="hidden sm:table-cell">{item.category}</TableCell>
+                                                    <TableCell>
+                                                        <span className="font-semibold">{item.stock}</span> units
+                                                    </TableCell>
+                                                    <TableCell className="hidden lg:table-cell text-muted-foreground">{item.minStock}</TableCell>
+                                                    <TableCell className="hidden md:table-cell font-medium text-green-600 dark:text-green-400">
+                                                        ${item.price.toFixed(2)}
+                                                    </TableCell>
+                                                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+                                                        {new Date(item.lastRestocked).toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric'
+                                                        })}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge
+                                                            variant={status === 'low' ? 'destructive' : status === 'medium' ? 'secondary' : 'default'}
+                                                            className={
+                                                                status === 'good' ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400' :
+                                                                    status === 'medium' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400' : ''
+                                                            }
+                                                        >
+                                                            {status === 'low' ? 'Low Stock' : status === 'medium' ? 'Medium' : 'In Stock'}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" title="Restock">
+                                                                <PlusCircle className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" title="Edit">
+                                                                <Edit className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </Card>
+                </TransitionItem>
+            </div>
+        </PageTransition>
     );
 };

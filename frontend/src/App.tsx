@@ -8,6 +8,7 @@ import { SessionManagerProvider } from './context/SessionManager';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { ScrollToTop } from './components/utils/ScrollToTop';
+import { PageTransition } from './components/layout/PageTransition';
 import { Loader } from './components/ui/Loader';
 
 // Lazy loaded pages
@@ -83,14 +84,8 @@ const RoleBasedDashboard: React.FC = () => {
   }
 };
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
-
-const pageVariants = {
-  initial: { opacity: 0, x: 10 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -10 },
-};
 
 const AppRoutes = () => {
   const location = useLocation();
@@ -118,9 +113,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <RoleBasedDashboard />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -130,9 +125,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <Profile />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -142,9 +137,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <Settings />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -154,9 +149,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <FindDoctors />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -166,9 +161,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <BookAppointment />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -178,9 +173,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <Appointments />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -190,9 +185,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <Prescriptions />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -202,9 +197,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <MedicalRecords />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -214,9 +209,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <DoctorScheduleManagement />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -226,9 +221,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <PrescriptionQueue />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -238,9 +233,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <Inventory />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -250,9 +245,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <VerifyDoctors />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -262,9 +257,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <DoctorPatientList />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -274,9 +269,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <AdminDashboard />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -286,9 +281,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <UserManagement />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -298,9 +293,9 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}>
+                    <PageTransition>
                       <SystemLogs />
-                    </motion.div>
+                    </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -318,7 +313,7 @@ const AppRoutes = () => {
             <Route path={PATHS.DOCTOR.DASHBOARD_LEGACY} element={<Navigate to={PATHS.DASHBOARD} replace />} />
             <Route path={PATHS.ADMIN.DASHBOARD_LEGACY} element={<Navigate to={PATHS.ADMIN.DASHBOARD} replace />} />
             <Route path={PATHS.ROOT} element={<Navigate to={PATHS.DASHBOARD} replace />} />
-            <Route path="*" element={<motion.div initial="initial" animate="animate" exit="exit" variants={pageVariants}><NotFound /></motion.div>} />
+            <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
           </Routes>
         </AnimatePresence>
       </Suspense>

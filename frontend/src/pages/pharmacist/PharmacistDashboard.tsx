@@ -11,7 +11,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { PremiumStatCard } from '@/components/ui/PremiumStatCard';
 import { Loader } from '@/components/ui/Loader';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { TransitionItem } from '../../components/layout/PageTransition';
 
 const MOCK_INVENTORY_DATA = [
     { name: 'Optimal', value: 45, color: 'hsl(var(--primary))' },
@@ -19,24 +19,7 @@ const MOCK_INVENTORY_DATA = [
     { name: 'Out of Stock', value: 5, color: '#ef4444' },
 ];
 
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1
-        }
-    }
-};
 
-const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-        y: 0,
-        opacity: 1,
-        transition: { type: 'spring' as const, stiffness: 100 }
-    }
-};
 
 export const PharmacistDashboard: React.FC = () => {
     const { user } = useAuth();
@@ -73,14 +56,11 @@ export const PharmacistDashboard: React.FC = () => {
     }).length;
 
     return (
-        <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8"
+        <div
+            className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8"
         >
             {/* Hero Section */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
+            <TransitionItem className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
                 <GradientMesh variant="secondary" className="opacity-40" />
                 <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-2 max-w-2xl">
@@ -106,19 +86,19 @@ export const PharmacistDashboard: React.FC = () => {
                         Smart Scan
                     </Button>
                 </div>
-            </motion.div>
+            </TransitionItem>
 
             {/* Error Message */}
             {error && (
-                <motion.div variants={itemVariants} className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3">
+                <TransitionItem className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3">
                     <AlertCircle className="h-5 w-5" />
                     <p className="text-sm font-medium">{error}</p>
-                </motion.div>
+                </TransitionItem>
             )}
 
             {/* Stats Grid */}
-            <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <motion.div variants={itemVariants}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <TransitionItem>
                     <PremiumStatCard
                         icon={Receipt}
                         label="Active Prescriptions"
@@ -126,9 +106,9 @@ export const PharmacistDashboard: React.FC = () => {
                         trend="up"
                         trendValue="Pending"
                     />
-                </motion.div>
+                </TransitionItem>
 
-                <motion.div variants={itemVariants}>
+                <TransitionItem>
                     <PremiumStatCard
                         icon={CheckCircle2}
                         label="Orders Fulfilled"
@@ -137,9 +117,9 @@ export const PharmacistDashboard: React.FC = () => {
                         trendValue="Today"
                         subtext="Completion Rate: 98%"
                     />
-                </motion.div>
+                </TransitionItem>
 
-                <motion.div variants={itemVariants}>
+                <TransitionItem>
                     <PremiumStatCard
                         icon={Database}
                         label="Stock Analytics"
@@ -147,11 +127,11 @@ export const PharmacistDashboard: React.FC = () => {
                         trend="neutral"
                         trendValue="Syncing"
                     />
-                </motion.div>
-            </motion.div>
+                </TransitionItem>
+            </div>
 
             {/* Supply Chain Visualization */}
-            <motion.div variants={itemVariants}>
+            <TransitionItem>
                 <GlassCard className="p-8 space-y-6">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
@@ -191,10 +171,10 @@ export const PharmacistDashboard: React.FC = () => {
                         </ResponsiveContainer>
                     </div>
                 </GlassCard>
-            </motion.div>
+            </TransitionItem>
 
             {/* Main Content Split */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
+            <TransitionItem className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
                 {/* Left: Quick Actions */}
                 <div className="space-y-8">
                     <section>
@@ -285,7 +265,7 @@ export const PharmacistDashboard: React.FC = () => {
                         )}
                     </div>
                 </div>
-            </motion.div>
-        </motion.div>
+            </TransitionItem>
+        </div>
     );
 };

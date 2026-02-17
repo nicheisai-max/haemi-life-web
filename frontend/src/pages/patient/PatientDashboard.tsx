@@ -11,9 +11,9 @@ import type { Prescription } from '../../services/prescription.service';
 import { Plus, Calendar, FileText, FolderOpen, AlertCircle, ThermometerSun, Search, History, Settings as SettingsIcon, CalendarX, Clock, ArrowRight, Heart } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart'; // Re-import to fix HMR
+import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
+import { TransitionItem } from '../../components/layout/PageTransition';
 import { Loader } from '@/components/ui/Loader';
-import { motion } from 'framer-motion';
 
 const MOCK_HEALTH_DATA = [
     { name: 'Week 1', score: 65 },
@@ -22,24 +22,9 @@ const MOCK_HEALTH_DATA = [
     { name: 'Week 4', score: 85 },
 ];
 
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1
-        }
-    }
-};
 
-const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-        y: 0,
-        opacity: 1,
-        transition: { type: 'spring' as const, stiffness: 100 }
-    }
-};
+
+
 
 export const PatientDashboard: React.FC = () => {
     const { user } = useAuth();
@@ -97,14 +82,11 @@ export const PatientDashboard: React.FC = () => {
     const activePrescriptions = prescriptions.filter(p => p.status === 'pending' || p.status === 'filled');
 
     return (
-        <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8"
+        <div
+            className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8"
         >
             {/* Hero Section */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-2xl">
+            <TransitionItem className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-2xl">
                 <GradientMesh variant="primary" className="opacity-40" />
                 <div className="relative z-10 p-6 md:p-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
                     <div className="space-y-4 max-w-2xl">
@@ -131,19 +113,19 @@ export const PatientDashboard: React.FC = () => {
                         Book Appointment
                     </Button>
                 </div>
-            </motion.div>
+            </TransitionItem>
 
             {/* Error Message */}
             {error && (
-                <motion.div variants={itemVariants} className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3">
+                <TransitionItem className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3">
                     <AlertCircle className="h-5 w-5" />
                     <p className="text-sm font-medium">{error}</p>
-                </motion.div>
+                </TransitionItem>
             )}
 
             {/* Stats Grid */}
-            <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <motion.div variants={itemVariants}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <TransitionItem>
                     <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="primary">
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-500 shadow-inner">
                             <Calendar className="h-8 w-8" />
@@ -153,9 +135,9 @@ export const PatientDashboard: React.FC = () => {
                             <div className="text-sm font-bold uppercase tracking-widest text-blue-500/80 tracking-tight">Active Bookings</div>
                         </div>
                     </GlassCard>
-                </motion.div>
+                </TransitionItem>
 
-                <motion.div variants={itemVariants}>
+                <TransitionItem>
                     <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="secondary">
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-500 shadow-inner">
                             <FileText className="h-8 w-8" />
@@ -165,9 +147,9 @@ export const PatientDashboard: React.FC = () => {
                             <div className="text-sm font-bold uppercase tracking-widest text-emerald-500/80 tracking-tight">Active Scripts</div>
                         </div>
                     </GlassCard>
-                </motion.div>
+                </TransitionItem>
 
-                <motion.div variants={itemVariants}>
+                <TransitionItem>
                     <GlassCard className="p-8 flex items-center gap-6" mesh meshVariant="accent">
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-500 shadow-inner">
                             <FolderOpen className="h-8 w-8" />
@@ -177,11 +159,11 @@ export const PatientDashboard: React.FC = () => {
                             <div className="text-sm font-bold uppercase tracking-widest text-purple-500/80 tracking-tight">Lifetime Visits</div>
                         </div>
                     </GlassCard>
-                </motion.div>
-            </motion.div>
+                </TransitionItem>
+            </div>
 
             {/* Health Pulse Visualization */}
-            <motion.div variants={itemVariants}>
+            <TransitionItem>
                 <PremiumAreaChart
                     title="Your Health Pulse"
                     description="Wellness score and activity trends over the last month"
@@ -191,10 +173,10 @@ export const PatientDashboard: React.FC = () => {
                     color="#0E6B74"
                     valueSuffix=" pts"
                 />
-            </motion.div>
+            </TransitionItem>
 
             {/* Main Content Split */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
+            <TransitionItem className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
                 {/* Left: Quick Actions & Tips */}
                 <div className="space-y-8">
                     <section>
@@ -305,7 +287,7 @@ export const PatientDashboard: React.FC = () => {
                         )}
                     </div>
                 </div>
-            </motion.div>
-        </motion.div>
+            </TransitionItem>
+        </div>
     );
 };
