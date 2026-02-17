@@ -237,11 +237,15 @@ export const Inventory: React.FC = () => {
                     {/* Low Stock Alert */}
                     {lowStockItems.length > 0 && (
                         <Alert variant="destructive" className="mb-8 border-amber-500 bg-amber-50 dark:bg-amber-900/10 text-amber-800 dark:text-amber-200">
-                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                            <AlertTitle>Low Stock Warning</AlertTitle>
-                            <AlertDescription>
-                                {lowStockItems.length} item(s) are running low on stock. Please review and restock soon.
-                            </AlertDescription>
+                            <div className="flex-shrink-0 flex items-center justify-center">
+                                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            </div>
+                            <div className="flex-1">
+                                <AlertTitle>Low Stock Warning</AlertTitle>
+                                <AlertDescription>
+                                    {lowStockItems.length} item(s) are running low on stock. Please review and restock soon.
+                                </AlertDescription>
+                            </div>
                         </Alert>
                     )}
 

@@ -95,14 +95,18 @@ export const Profile: React.FC = () => {
 
             {generalError && (
                 <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
+                    <div className="flex-shrink-0 flex items-center justify-center">
+                        <AlertCircle className="h-4 w-4" />
+                    </div>
                     <AlertDescription>{generalError}</AlertDescription>
                 </Alert>
             )}
 
             {success && (
                 <Alert className="border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400">
-                    <CheckCircle2 className="h-4 w-4" />
+                    <div className="flex-shrink-0 flex items-center justify-center">
+                        <CheckCircle2 className="h-4 w-4" />
+                    </div>
                     <AlertDescription>{success}</AlertDescription>
                 </Alert>
             )}

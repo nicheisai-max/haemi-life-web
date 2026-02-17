@@ -184,7 +184,9 @@ export const ForgotPassword: React.FC = () => {
 
                 {error && (
                     <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
-                        <AlertCircle className="h-4 w-4" />
+                        <div className="flex-shrink-0 flex items-center justify-center">
+                            <AlertCircle className="h-4 w-4" />
+                        </div>
                         <AlertDescription>{error}</AlertDescription>
                     </Alert>
                 )}

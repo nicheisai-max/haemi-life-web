@@ -107,7 +107,9 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
                             className={`flex items-center gap-3 p-4 bg-background rounded-xl shadow-lg border-l-4 cursor-pointer pointer-events-auto hover:opacity-95 ${getToastStyles(toast.type)}`}
                             onClick={() => removeToast(toast.id)}
                         >
-                            {getIcon(toast.type)}
+                            <div className="flex-shrink-0 flex items-center justify-center">
+                                {getIcon(toast.type)}
+                            </div>
                             <span className="flex-1 text-sm font-medium text-foreground leading-snug">{toast.message}</span>
                             <button
                                 className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-sm hover:bg-muted text-muted-foreground transition-colors"

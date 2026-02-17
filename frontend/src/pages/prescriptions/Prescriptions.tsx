@@ -65,7 +65,9 @@ export const Prescriptions: React.FC = () => {
 
                 {error && (
                     <Alert variant="destructive" className="mb-6">
-                        <AlertCircle className="h-4 w-4" />
+                        <div className="flex-shrink-0 flex items-center justify-center">
+                            <AlertCircle className="h-4 w-4" />
+                        </div>
                         <AlertDescription>{error}</AlertDescription>
                     </Alert>
                 )}
