@@ -54,7 +54,8 @@ export const Signup: React.FC = () => {
                 id_number: data.omang_id || undefined,
             });
 
-            navigate('/dashboard');
+            // Navigation is now handled by the AuthContext state change effect
+            // which detects the new user and redirects to /dashboard automatically.
         } catch (error: any) {
             console.error('Signup failed:', error);
             setGeneralError(
@@ -136,7 +137,7 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <Input
                                             placeholder="Enter your full name"
-                                            className="bg-background h-10"
+                                            className="h-11"
                                             {...field}
                                         />
                                     </FormControl>
@@ -159,7 +160,7 @@ export const Signup: React.FC = () => {
                                             <Input
                                                 type="tel"
                                                 placeholder="71 234 567"
-                                                className="bg-background h-10 pl-14"
+                                                className="h-11 pl-14"
                                                 {...field}
                                                 onChange={(e) => {
                                                     const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
@@ -185,7 +186,7 @@ export const Signup: React.FC = () => {
                                     <Input
                                         type="email"
                                         placeholder="your.email@example.com"
-                                        className="bg-background h-10"
+                                        className="h-11"
                                         {...field}
                                     />
                                 </FormControl>
@@ -204,7 +205,7 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <Input
                                             placeholder="Enter your Omang ID"
-                                            className="bg-background h-10"
+                                            className="h-11"
                                             {...field}
                                         />
                                     </FormControl>
@@ -224,7 +225,7 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <PasswordInput
                                             placeholder="Create a strong password"
-                                            className="bg-background h-10"
+                                            className="h-11"
                                             {...field}
                                         />
                                     </FormControl>
@@ -242,7 +243,7 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <PasswordInput
                                             placeholder="Re-enter your password"
-                                            className="bg-background h-10"
+                                            className="h-11"
                                             {...field}
                                         />
                                     </FormControl>

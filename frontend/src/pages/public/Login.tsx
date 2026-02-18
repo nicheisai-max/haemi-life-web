@@ -43,8 +43,9 @@ export const Login: React.FC = () => {
             };
 
             await login(credentials);
-            // Always redirect to dashboard — role-based routing handles the rest
-            navigate('/dashboard', { replace: true });
+            // No manual navigate here! 
+            // The AuthContext update will trigger the useEffect above to handle 
+            // navigation gracefully once the state has fully propagated.
         } catch (error: any) {
             console.error('Login failed:', error);
             setGeneralError(
@@ -81,7 +82,7 @@ export const Login: React.FC = () => {
                                 <FormControl>
                                     <Input
                                         placeholder="user@example.com"
-                                        className="bg-background h-11"
+                                        className="h-11"
                                         {...field}
                                     />
                                 </FormControl>
@@ -107,7 +108,7 @@ export const Login: React.FC = () => {
                                 <FormControl>
                                     <PasswordInput
                                         placeholder="Enter your password"
-                                        className="bg-background h-11"
+                                        className="h-11"
                                         {...field}
                                     />
                                 </FormControl>

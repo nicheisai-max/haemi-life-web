@@ -176,13 +176,22 @@ api.interceptors.response.use(
             const requestToken = config.__requestToken || null;
             const currentToken = localStorage.getItem('token');
 
-            // If we're already resetting OR the token is already gone/changed, stop.
-            if (isResetting || (requestToken && requestToken !== currentToken)) {
+            // CRITICAL ENTERPRISE FIX: Scoped Token Rejection
+            // If the 401 response came from a request that was sent with a token 
+            // different from the current one, ignore it. This prevents ghost 
+            // rejections from stale in-flight requests during a new login transition.
+            if (requestToken && requestToken !== currentToken) {
+                console.warn('[API] Ignoring 401 for stale/mismatched token. New session preserved.');
+                return Promise.reject(error);
+            }
+
+            // If we're already resetting, ignore concurrent triggers.
+            if (isResetting) {
                 return Promise.reject(error);
             }
 
             isResetting = true;
-            console.log('[API] Unauthorized detected. Triggering state reset.');
+            console.log('[API] Unauthorized detected for current session. Triggering state reset.');
 
             window.dispatchEvent(new CustomEvent('auth:unauthorized', {
                 detail: { token: requestToken }
