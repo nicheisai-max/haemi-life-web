@@ -206,90 +206,80 @@
 
 @layer utilities {
 
-  /* Premium Global Scrollbar Implementation (Overlay-style, No Layout Shift) */
-
-  /* Prevent horizontal overflow globally — vertical scroll is natural */
+  /* NUCLEAR SCROLLBAR ENFORCEMENT V5 - DEFINITIVE FIX FOR CHROME 121+ */
   html {
     overflow-x: hidden;
     max-width: 100vw;
+    /* 
+       CRITICAL: scrollbar-width and scrollbar-color must NOT be set 
+       to allow ::-webkit-scrollbar to work in modern browsers. 
+    */
   }
 
   body {
     overflow-x: hidden;
-    /* No scrollbar-gutter: let the browser show scrollbar only on overflow */
   }
 
-  /* Webkit browsers (Chrome, Edge, Safari, Opera) */
+  /* Global Webkit Reset - Only works if scrollbar-width is NOT present on html/body */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px !important;
+    height: 6px !important;
   }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
+  /* Force hide EVERY possible button variation */
+  ::-webkit-scrollbar-button,
+  ::-webkit-scrollbar-button:vertical,
+  ::-webkit-scrollbar-button:horizontal,
+  ::-webkit-scrollbar-button:start,
+  ::-webkit-scrollbar-button:end,
+  ::-webkit-scrollbar-button:vertical:increment,
+  ::-webkit-scrollbar-button:vertical:decrement,
+  ::-webkit-scrollbar-button:horizontal:increment,
+  ::-webkit-scrollbar-button:horizontal:decrement {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    opacity: 0 !important;
   }
 
-  /* Hide scrollbar track buttons (ugly arrows) */
-  ::-webkit-scrollbar-button {
-    display: none;
-    height: 0;
-    width: 0;
+  /* Transparent Track - Eliminates the "Ugly White/Gray Background" */
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-track-piece {
+    background: transparent !important;
+    border: none !important;
+    margin: 0 !important;
   }
 
-  ::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-
+  /* Sleek Thumb - Premium Apple-Style */
   ::-webkit-scrollbar-thumb {
-    background: rgba(27, 167, 166, 0.2);
-    /* Brand teal with transparency */
-    border-radius: 100px;
-    border: 2px solid transparent;
-    /* Padding between thumb and edge */
-    background-clip: padding-box;
-    transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .dark ::-webkit-scrollbar-thumb {
-    background: rgba(27, 167, 166, 0.25);
-    /* Slightly more visible in dark mode */
+    background-color: rgba(148, 163, 184, 0.5) !important;
+    border-radius: 20px !important;
+    border: 2px solid transparent !important;
+    background-clip: content-box !important;
+    transition: background-color 0.2s ease;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(27, 167, 166, 0.5);
-    background-clip: padding-box;
+    background-color: rgba(148, 163, 184, 0.7) !important;
+  }
+
+  /* Dark mode refined contrast */
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.4) !important;
   }
 
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: rgba(27, 167, 166, 0.6);
-    background-clip: padding-box;
+    background-color: rgba(148, 163, 184, 0.6) !important;
   }
 
-  ::-webkit-scrollbar-thumb:active {
-    background: rgba(27, 167, 166, 0.7);
-    background-clip: padding-box;
+  /* Hide scrollbar corners */
+  ::-webkit-scrollbar-corner {
+    background: transparent !important;
   }
 
-  /* Firefox Support */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(27, 167, 166, 0.2) transparent;
-  }
 
-  .dark * {
-    scrollbar-color: rgba(27, 167, 166, 0.25) transparent;
-  }
-
-  .scrollbar-none {
-    -ms-overflow-style: none;
-    /* IE and Edge */
-    scrollbar-width: none;
-    /* Firefox */
-  }
-
-  .scrollbar-none::-webkit-scrollbar {
-    display: none;
-  }
 }
 
 @layer components {

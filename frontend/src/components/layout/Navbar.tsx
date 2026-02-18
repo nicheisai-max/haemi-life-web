@@ -115,7 +115,7 @@ export const Navbar: React.FC = () => {
                     <NotificationMenu />
 
                     {/* User Profile */}
-                    <DropdownMenu>
+                    <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0 overflow-hidden border-2 border-primary/20 hover:border-primary transition-all shadow-sm ml-1" aria-label="User account menu">
                                 <Avatar className="h-full w-full">
