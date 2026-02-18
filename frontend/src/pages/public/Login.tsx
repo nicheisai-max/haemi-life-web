@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../context/AuthContext';
@@ -15,19 +15,15 @@ import loginBg from '../../assets/images/login_bg_premium.png';
 
 export const Login: React.FC = () => {
     const navigate = useNavigate();
-    const location = useLocation();
     const { login, isAuthenticated } = useAuth();
     const [generalError, setGeneralError] = useState<string>('');
-
-    // Get the destination the user was trying to reach
-    const from = (location.state as any)?.from?.pathname || '/dashboard';
 
     // PRODUCTION FIX: Automatic redirection if already authenticated
     React.useEffect(() => {
         if (isAuthenticated) {
-            navigate(from, { replace: true });
+            navigate('/dashboard', { replace: true });
         }
-    }, [isAuthenticated, navigate, from]);
+    }, [isAuthenticated, navigate]);
 
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),
@@ -47,8 +43,8 @@ export const Login: React.FC = () => {
             };
 
             await login(credentials);
-            // Redirect to intended destination or dashboard
-            navigate(from, { replace: true });
+            // Always redirect to dashboard — role-based routing handles the rest
+            navigate('/dashboard', { replace: true });
         } catch (error: any) {
             console.error('Login failed:', error);
             setGeneralError(

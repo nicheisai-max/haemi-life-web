@@ -1,4 +1,4 @@
-import axios, { AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import axios, { AxiosError, type InternalAxiosRequestConfig, type AxiosRequestConfig } from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api';
 
@@ -9,6 +9,34 @@ const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 // Cache for successful GET responses
 const CACHE_KEY_PREFIX = 'haemi_api_cache_';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Custom interface for request configuration with our metadata
+interface ExtendedRequestConfig extends InternalAxiosRequestConfig {
+    __requestToken?: string | null;
+    __cachedData?: unknown;
+    __retryCount?: number;
+}
+
+// V11 FIX: Routes that must NEVER be cached in localStorage.
+// These contain PHI (Protected Health Information), auth tokens, or sensitive
+// admin data. Caching them in localStorage risks exposure via XSS or shared devices.
+const SENSITIVE_ROUTE_PATTERNS = [
+    '/auth/',
+    '/admin/',
+    '/records/',
+    '/prescriptions/',
+    '/chat/',
+    '/notifications/',
+    '/password-reset/',
+];
+
+// Flag to prevent multiple unauthorized events from firing simultaneously
+let isResetting = false;
+
+function isSensitiveRoute(url: string | undefined): boolean {
+    if (!url) return true; // Default to sensitive if URL unknown
+    return SENSITIVE_ROUTE_PATTERNS.some(pattern => url.includes(pattern));
+}
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -49,9 +77,11 @@ function getCacheKey(config: AxiosRequestConfig): string {
 }
 
 // Check cache for valid response
-function getFromCache(cacheKey: string): any | null {
+function getFromCache(cacheKey: string, url?: string): any | null {
     // BYPASS CACHE IN DEMO MODE
     if (IS_DEMO_MODE) return null;
+    // V11: Never cache sensitive routes
+    if (isSensitiveRoute(url)) return null;
 
     const storageKey = CACHE_KEY_PREFIX + btoa(cacheKey);
     const cachedStr = localStorage.getItem(storageKey);
@@ -62,7 +92,6 @@ function getFromCache(cacheKey: string): any | null {
             if (Date.now() - cached.timestamp < CACHE_DURATION) {
                 return cached.data;
             } else {
-                // Remove expired cache
                 localStorage.removeItem(storageKey);
             }
         } catch (e) {
@@ -73,15 +102,14 @@ function getFromCache(cacheKey: string): any | null {
 }
 
 // Save response to cache
-function saveToCache(cacheKey: string, data: any): void {
+function saveToCache(cacheKey: string, data: any, url?: string): void {
     // DISABLE CACHE WRITE IN DEMO MODE
     if (IS_DEMO_MODE) return;
+    // V11: Never cache sensitive routes
+    if (isSensitiveRoute(url)) return;
 
     const storageKey = CACHE_KEY_PREFIX + btoa(cacheKey);
-    const cacheData = {
-        data,
-        timestamp: Date.now(),
-    };
+    const cacheData = { data, timestamp: Date.now() };
     localStorage.setItem(storageKey, JSON.stringify(cacheData));
 }
 
@@ -98,21 +126,23 @@ function showRetryToast(retryCount: number, maxRetries: number): void {
 
 // Add a request interceptor to include the auth token
 api.interceptors.request.use(
-    (config) => {
+    (config: ExtendedRequestConfig) => {
         const token = localStorage.getItem('token');
-        if (token) {
+        if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
 
-        // For GET requests, check cache
+        // CRITICAL: Stamp the token used for THIS request onto the config.
+        // This allows the response interceptor to identify which token caused
+        // a 401 — even if localStorage has been updated by a concurrent login.
+        config.__requestToken = token || null;
+
+        // For GET requests, check cache (skip sensitive routes)
         if (config.method?.toLowerCase() === 'get') {
             const cacheKey = getCacheKey(config);
-            const cachedData = getFromCache(cacheKey);
+            const cachedData = getFromCache(cacheKey, config.url);
             if (cachedData) {
-                // If we want to return from cache immediately, we'd need to cancel the request
-                // but Axios interceptors aren't designed for "bypass and return".
-                // Instead, we mark it to be handled in the response interceptor if the request fails.
-                (config as any).__cachedData = cachedData;
+                config.__cachedData = cachedData;
             }
         }
 
@@ -125,38 +155,56 @@ api.interceptors.request.use(
 
 // Enhanced response interceptor with retry logic and caching
 api.interceptors.response.use(
-    (response: AxiosResponse) => {
-        // Cache successful GET requests
-        if (response.config.method?.toLowerCase() === 'get') {
-            const cacheKey = getCacheKey(response.config);
-            saveToCache(cacheKey, response.data);
+    async (response) => {
+        const config = response.config as ExtendedRequestConfig;
+
+        // If this was a GET request, save to cache
+        if (config.method?.toLowerCase() === 'get' && response.data) {
+            const cacheKey = getCacheKey(config);
+            saveToCache(cacheKey, response.data, config.url);
         }
+
         return response;
     },
     async (error: AxiosError) => {
-        const config: any = error.config;
+        const config = error.config as ExtendedRequestConfig | undefined;
 
-        // Handle 401 auth errors
+        if (!config) return Promise.reject(error);
+
+        // 1. Handle 401 Unauthorized
         if (error.response && error.response.status === 401) {
-            const token = localStorage.getItem('token');
-            // Dispatch event for AuthContext to handle SPA redirect
-            // Include the token that failed to allow identity matching in AuthContext
-            window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { token } }));
+            const requestToken = config.__requestToken || null;
+            const currentToken = localStorage.getItem('token');
 
+            // If we're already resetting OR the token is already gone/changed, stop.
+            if (isResetting || (requestToken && requestToken !== currentToken)) {
+                return Promise.reject(error);
+            }
+
+            isResetting = true;
+            console.log('[API] Unauthorized detected. Triggering state reset.');
+
+            window.dispatchEvent(new CustomEvent('auth:unauthorized', {
+                detail: { token: requestToken }
+            }));
+
+            // Clear local storage immediately
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+
+            // Reset flag after a delay to allow UI to settle and redirects to happen
+            setTimeout(() => { isResetting = false; }, 2000);
+
             return Promise.reject(error);
         }
 
         // Initialize retry count
-        if (!config.__retryCount) {
+        if (config.__retryCount === undefined) {
             config.__retryCount = 0;
         }
 
         // Check if we should retry
         if (config.__retryCount >= MAX_RETRIES || !isRetryableError(error)) {
-            // Max retries reached or non-retryable error
-            // Try to serve from cache for GET requests
             if (config.method?.toLowerCase() === 'get') {
                 const cacheKey = getCacheKey(config);
                 const cachedData = getFromCache(cacheKey);

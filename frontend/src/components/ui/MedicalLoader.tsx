@@ -1,4 +1,3 @@
-import React from 'react';
 import { Loader2, Activity } from 'lucide-react';
 import { Logo } from './Logo';
 

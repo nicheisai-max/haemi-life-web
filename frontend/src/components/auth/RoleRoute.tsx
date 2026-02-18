@@ -12,6 +12,8 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) 
     const { user, isLoading, isAuthenticated } = useAuth();
     const location = useLocation();
 
+    // During initial app-load verification, show a loader.
+    // Never redirect during this phase.
     if (isLoading) {
         return <MedicalLoader fullPage message="Verifying clinical identity..." />;
     }
@@ -21,25 +23,18 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) 
     }
 
     if (!allowedRoles.includes(user.role)) {
-        // Strict Role Mismatch Handling
-        console.warn(`Access Denied: User role '${user.role}' attempted to access protected route requiring '${allowedRoles.join(', ')}'.`);
+        console.warn(`[RoleRoute] Access denied: role '${user.role}' cannot access route requiring '${allowedRoles.join(', ')}'.`);
 
-        // Redirect to their own dashboard if possible, or home
-        // This prevents infinite loops if they try to access a role route they don't have
         const dashboardMap: Record<string, string> = {
             'patient': '/dashboard',
-            'doctor': '/dashboard', // All dashboards currently live under /dashboard but with different content
+            'doctor': '/dashboard',
             'pharmacist': '/dashboard',
-            'admin': '/admin/dashboard'
+            'admin': '/admin',
         };
 
-        const target = dashboardMap[user.role] || '/login';
-
-        // Prevent redirect loop if the user is already at their target but somehow it's still restricted??
-        // (Unlikely with correct routing, but safe to check)
-
-        return <Navigate to={target} replace />;
+        return <Navigate to={dashboardMap[user.role] ?? '/login'} replace />;
     }
 
     return children;
 };
+

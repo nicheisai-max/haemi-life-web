@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -55,18 +55,22 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
+  // During initial app-load verification, show a loader.
+  // NEVER redirect during this phase — the user may be authenticated
+  // but the async verification hasn't completed yet.
   if (isLoading) {
-    // Zero-Trust: Show Global Loader while verifying session
     return <LoadingFallback />;
   }
 
+  // Verification complete. If not authenticated, redirect to login.
   if (!isAuthenticated) {
-    // Zero-Trust: Immediate redirect if not authenticated after verification
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Authenticated — render the protected content.
   return children;
 };
+
 
 const RoleBasedDashboard: React.FC = () => {
   const { user } = useAuth();

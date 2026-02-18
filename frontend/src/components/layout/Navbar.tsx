@@ -45,7 +45,7 @@ export const Navbar: React.FC = () => {
 
     const handleLogout = () => {
         logout();
-        navigate('/login');
+        navigate('/login', { replace: true });
     };
 
     const getInitials = (name: string) => {

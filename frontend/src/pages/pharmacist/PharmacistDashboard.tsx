@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +23,7 @@ const INVENTORY_METRICS = [
     { name: 'Topicals', value: 10, color: '#A7E6DB' },   // Primary-300
 ];
 
-export const PharmacistDashboard: React.FC = () => {
+export const PharmacistDashboard = () => {
     // const { user } = useAuth(); // Unused
     const navigate = useNavigate();
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
@@ -39,8 +39,9 @@ export const PharmacistDashboard: React.FC = () => {
             setLoading(true);
             const data = await getAllPrescriptions();
             setPrescriptions(data);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load prescriptions');
+        } catch (err) {
+            const apiError = err as { response?: { data?: { message?: string } } };
+            setError(apiError.response?.data?.message || 'Failed to load prescriptions');
             console.error('Pharmacist dashboard error:', err);
         } finally {
             setLoading(false);

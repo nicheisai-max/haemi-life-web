@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from './button';
 import {
     MessageSquare, X, Minus,
@@ -11,6 +11,7 @@ import { useChat, type Conversation } from '../../hooks/useChat';
 import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
 import api from '../../services/api';
+import type { DoctorProfile } from '../../services/doctor.service';
 import doctor01 from '../../assets/images/doctors/doctor_01.jpg';
 import doctor02 from '../../assets/images/doctors/doctor_02.png';
 
@@ -79,7 +80,7 @@ export const ChatHub: React.FC = () => {
     const [view, setView] = useState<'contacts' | 'conversation' | 'new-chat'>('contacts');
     const [newMessage, setNewMessage] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [doctors, setDoctors] = useState<any[]>([]); // List of doctors for new chat
+    const [doctors, setDoctors] = useState<DoctorProfile[]>([]); // List of doctors for new chat
     const [doctorSearch, setDoctorSearch] = useState('');
 
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -124,16 +125,16 @@ export const ChatHub: React.FC = () => {
         setView('conversation');
     };
 
-    const handleStartNewChat = async (doctor: any) => {
+    const handleStartNewChat = async (doctor: DoctorProfile) => {
         // optimistically check if conversation exists
         const existing = conversations.find((c: Conversation) =>
             c.participants && Array.isArray(c.participants) &&
-            c.participants.some(p => p.id === doctor.user_id || p.id === doctor.id)
+            c.participants.some(p => p.id === doctor.id)
         );
         if (existing) {
             handleSelectConversation(existing);
         } else {
-            await startNewConversation(doctor.user_id || doctor.id);
+            await startNewConversation(doctor.id);
             setView('conversation'); // startNewConversation usually updates state/refetches
         }
     };
@@ -159,7 +160,7 @@ export const ChatHub: React.FC = () => {
     }), [conversations, searchTerm, user]);
 
     const filteredDoctors = useMemo(() => doctors.filter(d => {
-        const name = d.user?.name || d.name || '';
+        const name = d.name || '';
         return name.toLowerCase().includes(doctorSearch.toLowerCase()) ||
             d.specialization?.toLowerCase().includes(doctorSearch.toLowerCase());
     }), [doctors, doctorSearch]);

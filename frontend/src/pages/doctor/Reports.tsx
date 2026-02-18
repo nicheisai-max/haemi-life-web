@@ -88,11 +88,11 @@ const Reports: React.FC = () => {
                 <DashboardCard title="Clinical Volume Trend" className="p-0 overflow-hidden">
                     <div className="h-[350px] w-full mt-4">
                         <PremiumAreaChart
-                            title="Patient Volume (Weekly)"
-                            description="Consultations performed per day"
-                            data={stats}
-                            dataKey="value"
-                            categoryKey="name"
+                            title="Patient Volume Trend"
+                            description="Historical consultation volume"
+                            data={stats as any[]}
+                            dataKey="patients"
+                            categoryKey="month"
                             color="#148C8B"
                         />
                     </div>

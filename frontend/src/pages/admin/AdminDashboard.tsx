@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +16,7 @@ import { IconWrapper } from '@/components/ui/IconWrapper';
 import { PATHS } from '../../routes/paths';
 
 // Realistic Growth Data for a National Platform
-const SYSTEM_GROWTH_DATA = [
+const SYSTEM_GROWTH_DATA: any[] = [
     { name: 'Jan', users: 1200 },
     { name: 'Feb', users: 1450 },
     { name: 'Mar', users: 1800 },

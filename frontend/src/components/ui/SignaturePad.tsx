@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Button } from './button';
 import { Card } from './card';
 import { Eraser, Check, Signature as SignatureIcon } from 'lucide-react';

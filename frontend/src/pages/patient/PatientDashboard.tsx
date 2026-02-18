@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ const HEALTH_TRENDS_DATA = [
     { name: 'Week 4', score: 82, label: 'Current Status' },
 ];
 
-export const PatientDashboard: React.FC = () => {
+export const PatientDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -47,8 +47,9 @@ export const PatientDashboard: React.FC = () => {
             ]);
             setAppointments(apptData);
             setPrescriptions(prescData);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load dashboard data');
+        } catch (err) {
+            const apiError = err as { response?: { data?: { message?: string } } };
+            setError(apiError.response?.data?.message || 'Failed to load dashboard data');
             console.error('Dashboard fetch error:', err);
         } finally {
             setLoading(false);

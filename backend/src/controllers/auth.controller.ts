@@ -191,6 +191,8 @@ export const changePassword = async (req: any, res: Response) => {
 export const verifySession = async (req: any, res: Response) => {
     try {
         const userId = req.user.id;
+        const tokenVersion = req.user.token_version;
+
         // Verify user still exists and is active
         const user = await userRepository.findById(userId);
 
@@ -203,9 +205,21 @@ export const verifySession = async (req: any, res: Response) => {
             return res.status(403).json({ message: `Account is ${user.status.toLowerCase()}` });
         }
 
+        // V6 FIX: Token version check — detects revoked tokens.
+        // When a user changes their password or an admin revokes a session,
+        // token_version is incremented in the DB. Any JWT with an older version
+        // is immediately rejected, even if it hasn't expired yet.
+        if (tokenVersion !== undefined && user.token_version !== undefined) {
+            if (tokenVersion !== user.token_version) {
+                logger.auth('Token version mismatch — session revoked', { userId, tokenVersion, dbVersion: user.token_version });
+                return res.status(401).json({ message: 'Session has been revoked. Please log in again.' });
+            }
+        }
+
         res.json({ message: 'Session valid', user });
     } catch (error) {
-        console.error('Error verifying session:', error);
+        logger.error('Error verifying session', { error });
         res.status(500).json({ message: 'Server error' });
     }
 };
+

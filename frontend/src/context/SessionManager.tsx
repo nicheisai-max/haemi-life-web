@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { Button } from '../components/ui/button';
 import { Clock, RotateCw } from 'lucide-react';
@@ -25,7 +26,8 @@ const WARNING_TIME = 2 * 60 * 1000; // Show warning 2 minutes before expiry
 
 export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ children }) => {
     const { isAuthenticated, logout } = useAuth();
-    const [lastActivity, setLastActivity] = useState(Date.now());
+    const navigate = useNavigate();
+    const [lastActivity, setLastActivity] = useState(() => Date.now());
     const [showWarning, setShowWarning] = useState(false);
     const [countdown, setCountdown] = useState(120); // 2 minutes in seconds
 
@@ -42,7 +44,8 @@ export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ 
     const handleLogout = useCallback(() => {
         logout();
         setShowWarning(false);
-    }, [logout]);
+        navigate('/login', { replace: true });
+    }, [logout, navigate]);
 
     // Track user activity
     useEffect(() => {

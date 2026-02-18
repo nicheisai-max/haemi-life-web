@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import Peer from 'simple-peer';
@@ -69,7 +69,7 @@ export const VideoConsultation: React.FC = () => {
                 peerRef.current.destroy();
             }
         };
-    }, [appointmentId]);
+    }, [appointmentId, navigate, stream]);
 
     // 2. Initialize Media in Lobby
     useEffect(() => {

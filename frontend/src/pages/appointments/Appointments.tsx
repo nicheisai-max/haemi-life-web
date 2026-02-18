@@ -9,7 +9,7 @@ import type { Appointment } from '../../services/appointment.service';
 import { Plus, AlertCircle, CalendarX, Clock, Calendar } from 'lucide-react';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
 
-import { PageTransition, TransitionItem } from '../../components/layout/PageTransition';
+import { TransitionItem } from '../../components/layout/PageTransition';
 
 export const Appointments: React.FC = () => {
     const navigate = useNavigate();
@@ -101,155 +101,153 @@ export const Appointments: React.FC = () => {
     }
 
     return (
-        <PageTransition>
-            <div className="max-w-[1920px] mx-auto p-6 md:p-8 space-y-8">
-                <TransitionItem className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">My Appointments</h1>
-                        <p className="text-muted-foreground mt-1">View and manage your appointments</p>
-                    </div>
-                    <Button
-                        variant="default"
-                        className="flex items-center gap-2"
-                        onClick={() => navigate('/book-appointment')}
-                    >
-                        <Plus className="h-5 w-5" />
-                        Book New
-                    </Button>
-                </TransitionItem>
+        <div className="max-w-[1920px] mx-auto p-6 md:p-8 space-y-8">
+            <TransitionItem className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">My Appointments</h1>
+                    <p className="text-muted-foreground mt-1">View and manage your appointments</p>
+                </div>
+                <Button
+                    variant="default"
+                    className="flex items-center gap-2"
+                    onClick={() => navigate('/book-appointment')}
+                >
+                    <Plus className="h-5 w-5" />
+                    Book New
+                </Button>
+            </TransitionItem>
 
-                {error && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                )}
+            {error && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            )}
 
-                {/* Filters */}
-                <TransitionItem className="flex flex-wrap gap-3 p-2 bg-muted/50 rounded-lg border">
-                    <button
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'all'
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
-                            }`}
-                        onClick={() => setFilter('all')}
-                    >
-                        All ({appointments.length})
-                    </button>
-                    <button
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'upcoming'
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
-                            }`}
-                        onClick={() => setFilter('upcoming')}
-                    >
-                        Upcoming ({appointments.filter(a => new Date(a.appointment_date) >= new Date() && a.status !== 'cancelled').length})
-                    </button>
-                    <button
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'past'
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-muted-foreground hover:bg-background hover:text-foreground'
-                            }`}
-                        onClick={() => setFilter('past')}
-                    >
-                        Past ({appointments.filter(a => new Date(a.appointment_date) < new Date() || a.status === 'completed' || a.status === 'cancelled').length})
-                    </button>
-                </TransitionItem>
+            {/* Filters */}
+            <TransitionItem className="flex flex-wrap gap-3 p-2 bg-muted/50 rounded-lg border">
+                <button
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'all'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        }`}
+                    onClick={() => setFilter('all')}
+                >
+                    All ({appointments.length})
+                </button>
+                <button
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'upcoming'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        }`}
+                    onClick={() => setFilter('upcoming')}
+                >
+                    Upcoming ({appointments.filter(a => new Date(a.appointment_date) >= new Date() && a.status !== 'cancelled').length})
+                </button>
+                <button
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'past'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                        }`}
+                    onClick={() => setFilter('past')}
+                >
+                    Past ({appointments.filter(a => new Date(a.appointment_date) < new Date() || a.status === 'completed' || a.status === 'cancelled').length})
+                </button>
+            </TransitionItem>
 
-                {/* Appointments List */}
-                <TransitionItem className="grid gap-4">
-                    {filteredAppointments.length === 0 ? (
-                        <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
-                            <CalendarX className="h-16 w-16 text-muted-foreground/30" />
-                            <p className="text-muted-foreground text-lg">
-                                No {filter === 'all' ? '' : filter} appointments found
-                            </p>
-                            <Button
-                                variant="default"
-                                onClick={() => navigate('/book-appointment')}
-                                className="mt-4"
-                            >
-                                Book Your First Appointment
-                            </Button>
-                        </Card>
-                    ) : (
-                        filteredAppointments.map((appointment) => (
-                            <Card key={appointment.id} className="group hover:shadow-md transition-all duration-200">
-                                <div className="p-6 flex flex-col md:flex-row gap-6">
-                                    {/* Date Badge */}
-                                    <div className="flex-shrink-0 w-16 h-16 bg-primary/10 rounded-xl flex flex-col items-center justify-center text-primary border border-primary/20">
-                                        <span className="text-2xl font-bold leading-none">
-                                            {new Date(appointment.appointment_date).getDate()}
-                                        </span>
-                                        <span className="text-xs font-semibold uppercase mt-1">
-                                            {new Date(appointment.appointment_date).toLocaleDateString('en-US', { month: 'short' })}
-                                        </span>
-                                    </div>
+            {/* Appointments List */}
+            <TransitionItem className="grid gap-4">
+                {filteredAppointments.length === 0 ? (
+                    <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                        <CalendarX className="h-16 w-16 text-muted-foreground/30" />
+                        <p className="text-muted-foreground text-lg">
+                            No {filter === 'all' ? '' : filter} appointments found
+                        </p>
+                        <Button
+                            variant="default"
+                            onClick={() => navigate('/book-appointment')}
+                            className="mt-4"
+                        >
+                            Book Your First Appointment
+                        </Button>
+                    </Card>
+                ) : (
+                    filteredAppointments.map((appointment) => (
+                        <Card key={appointment.id} className="group hover:shadow-md transition-all duration-200">
+                            <div className="p-6 flex flex-col md:flex-row gap-6">
+                                {/* Date Badge */}
+                                <div className="flex-shrink-0 w-16 h-16 bg-primary/10 rounded-xl flex flex-col items-center justify-center text-primary border border-primary/20">
+                                    <span className="text-2xl font-bold leading-none">
+                                        {new Date(appointment.appointment_date).getDate()}
+                                    </span>
+                                    <span className="text-xs font-semibold uppercase mt-1">
+                                        {new Date(appointment.appointment_date).toLocaleDateString('en-US', { month: 'short' })}
+                                    </span>
+                                </div>
 
-                                    {/* Main Content */}
-                                    <div className="flex-1 space-y-4">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div className="space-y-1">
-                                                <h3 className="font-semibold text-lg flex items-center gap-3">
-                                                    {user?.role === 'doctor' ? appointment.other_party_name || 'Patient' : `Dr. ${appointment.other_party_name}` || 'Doctor'}
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getStatusColor(appointment.status)}`}>
-                                                        {appointment.status}
-                                                    </span>
-                                                </h3>
-                                                <p className="text-muted-foreground">{appointment.reason}</p>
-                                            </div>
-
-                                            {/* Actions for Desktop (and Mobile wrapped) */}
-                                            <div className="flex flex-row sm:flex-col md:flex-row gap-3">
-                                                {appointment.status === 'scheduled' && user?.role === 'doctor' && (
-                                                    <Button
-                                                        variant="default"
-                                                        size="sm"
-                                                        onClick={() => handleComplete(appointment.id)}
-                                                    >
-                                                        Mark Complete
-                                                    </Button>
-                                                )}
-                                                {appointment.status === 'scheduled' && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleCancel(appointment.id)}
-                                                        className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
-                                                    >
-                                                        Cancel
-                                                    </Button>
-                                                )}
-                                            </div>
+                                {/* Main Content */}
+                                <div className="flex-1 space-y-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div className="space-y-1">
+                                            <h3 className="font-semibold text-lg flex items-center gap-3">
+                                                {user?.role === 'doctor' ? appointment.other_party_name || 'Patient' : `Dr. ${appointment.other_party_name}` || 'Doctor'}
+                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getStatusColor(appointment.status)}`}>
+                                                    {appointment.status}
+                                                </span>
+                                            </h3>
+                                            <p className="text-muted-foreground">{appointment.reason}</p>
                                         </div>
 
-                                        {/* Details Grid */}
-                                        <div className="flex flex-wrap gap-6 text-sm text-muted-foreground pt-2 border-t border-border/50">
-                                            <div className="flex items-center gap-2">
-                                                <Clock className="h-4 w-4 text-primary/60" />
-                                                <span>{new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', {
-                                                    hour: 'numeric',
-                                                    minute: '2-digit',
-                                                    hour12: true
-                                                })}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Calendar className="h-4 w-4 text-primary/60" />
-                                                <span>{new Date(appointment.appointment_date).toLocaleDateString('en-US', {
-                                                    weekday: 'long',
-                                                    month: 'long',
-                                                    day: 'numeric',
-                                                    year: 'numeric'
-                                                })}</span>
-                                            </div>
+                                        {/* Actions for Desktop (and Mobile wrapped) */}
+                                        <div className="flex flex-row sm:flex-col md:flex-row gap-3">
+                                            {appointment.status === 'scheduled' && user?.role === 'doctor' && (
+                                                <Button
+                                                    variant="default"
+                                                    size="sm"
+                                                    onClick={() => handleComplete(appointment.id)}
+                                                >
+                                                    Mark Complete
+                                                </Button>
+                                            )}
+                                            {appointment.status === 'scheduled' && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleCancel(appointment.id)}
+                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Details Grid */}
+                                    <div className="flex flex-wrap gap-6 text-sm text-muted-foreground pt-2 border-t border-border/50">
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-4 w-4 text-primary/60" />
+                                            <span>{new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', {
+                                                hour: 'numeric',
+                                                minute: '2-digit',
+                                                hour12: true
+                                            })}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="h-4 w-4 text-primary/60" />
+                                            <span>{new Date(appointment.appointment_date).toLocaleDateString('en-US', {
+                                                weekday: 'long',
+                                                month: 'long',
+                                                day: 'numeric',
+                                                year: 'numeric'
+                                            })}</span>
                                         </div>
                                     </div>
                                 </div>
-                            </Card>
-                        ))
-                    )}
-                </TransitionItem>
-            </div>
-        </PageTransition>
+                            </div>
+                        </Card>
+                    ))
+                )}
+            </TransitionItem>
+        </div>
     );
 };

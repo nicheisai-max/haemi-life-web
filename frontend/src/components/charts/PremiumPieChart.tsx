@@ -1,4 +1,3 @@
-import React from 'react';
 import {
     PieChart,
     Pie,
@@ -9,10 +8,16 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
+interface ChartDataItem {
+    name?: string;
+    color?: string;
+    [key: string]: string | number | undefined;
+}
+
 interface PremiumPieChartProps {
     title: string;
     description?: string;
-    data: any[];
+    data: ChartDataItem[];
     dataKey: string;
     categoryKey: string;
     height?: number;
@@ -20,8 +25,7 @@ interface PremiumPieChartProps {
     valueSuffix?: string;
 }
 
-const CustomTooltip = (props: any) => {
-    const { active, payload, prefix, suffix } = props;
+const CustomTooltip = ({ active, payload, prefix, suffix }: any) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-popover border border-border shadow-xl rounded-lg p-3 animate-in fade-in-0 zoom-in-95">

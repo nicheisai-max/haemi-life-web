@@ -207,16 +207,16 @@
 @layer utilities {
 
   /* Premium Global Scrollbar Implementation (Overlay-style, No Layout Shift) */
-  
-  /* Prevent horizontal scrollbar globally */
-  html, body {
-    overflow-x: hidden !important;
+
+  /* Prevent horizontal overflow globally — vertical scroll is natural */
+  html {
+    overflow-x: hidden;
     max-width: 100vw;
   }
 
-  /* Use overlay scrollbar to prevent layout shift */
-  html {
-    scrollbar-gutter: stable both-edges;
+  body {
+    overflow-x: hidden;
+    /* No scrollbar-gutter: let the browser show scrollbar only on overflow */
   }
 
   /* Webkit browsers (Chrome, Edge, Safari, Opera) */
@@ -333,7 +333,7 @@
   /* Premium Gradient Border (Official Brand Colors) */
   .premium-gradient-border::before {
     content: "";
-    @apply absolute -inset-[1.5px] rounded-[18px] p-[1.5px] opacity-0 transition-opacity duration-[var(--duration-hover)] ease-[var(--ease-premium)] -z-10 pointer-events-none;
+    @apply absolute -inset-[1px] rounded-[18px] p-[1px] opacity-0 transition-opacity duration-[var(--duration-hover)] ease-[var(--ease-premium)] -z-10 pointer-events-none;
     /* Brand Gradient: #0E6B74 -> #1BA7A6 -> #6ED3C4 */
     background: linear-gradient(135deg, #0E6B74, #1BA7A6, #6ED3C4);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -342,10 +342,10 @@
     mask-composite: exclude;
   }
 
-  /* Show Gradient on Hover and Selection */
+  /* Show Gradient on Hover and Selection - SUBTLE V2 */
   .premium-gradient-border:hover::before,
   .selected-card.premium-gradient-border::before {
-    @apply opacity-100;
+    opacity: 0.6;
   }
 
   /* Selected State Reflects Premium Branding */

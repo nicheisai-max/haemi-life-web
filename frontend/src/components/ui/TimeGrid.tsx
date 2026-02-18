@@ -50,46 +50,7 @@ export const TimeGrid: React.FC<TimeGridProps> = ({
     };
 
     const categories = categorizeSlots();
-
-    const Section = ({ title, items, icon: Icon }: { title: string, items: string[], icon: any }) => {
-        if (items.length === 0) return null;
-        return (
-            <div className="space-y-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    <Icon className="h-3.5 w-3.5" />
-                    {title}
-                </div>
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-                    {items.map(slot => {
-                        const isSelected = selectedTime === slot;
-                        const formattedTime = new Date(`2000-01-01T${slot}`).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                        });
-
-                        return (
-                            <motion.button
-                                key={slot}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => onTimeSelect(slot)}
-                                type="button"
-                                className={cn(
-                                    "py-2.5 px-3 rounded-lg border text-sm font-medium transition-all duration-200",
-                                    isSelected
-                                        ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
-                                        : "bg-background border-border hover:border-primary/50 hover:bg-primary/5 text-foreground"
-                                )}
-                            >
-                                {formattedTime}
-                            </motion.button>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    };
+    const { morning, afternoon, evening } = categories;
 
     return (
         <div className="space-y-6">
@@ -100,11 +61,77 @@ export const TimeGrid: React.FC<TimeGridProps> = ({
                     exit={{ opacity: 0, y: -10 }}
                     className="space-y-6"
                 >
-                    <Section title="Morning" items={categories.morning} icon={Sun} />
-                    <Section title="Afternoon" items={categories.afternoon} icon={Sunset} />
-                    <Section title="Evening" items={categories.evening} icon={Moon} />
+                    <Section
+                        title="Morning"
+                        items={morning}
+                        icon={Sun}
+                        selectedTime={selectedTime}
+                        onTimeSelect={onTimeSelect}
+                    />
+                    <Section
+                        title="Afternoon"
+                        items={afternoon}
+                        icon={Sunset}
+                        selectedTime={selectedTime}
+                        onTimeSelect={onTimeSelect}
+                    />
+                    <Section
+                        title="Evening"
+                        items={evening}
+                        icon={Moon}
+                        selectedTime={selectedTime}
+                        onTimeSelect={onTimeSelect}
+                    />
                 </motion.div>
             </AnimatePresence>
+        </div>
+    );
+};
+
+interface SectionProps {
+    title: string;
+    items: string[];
+    icon: any;
+    selectedTime: string;
+    onTimeSelect: (time: string) => void;
+}
+
+const Section = ({ title, items, icon: Icon, selectedTime, onTimeSelect }: SectionProps) => {
+    if (items.length === 0) return null;
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <Icon className="h-3.5 w-3.5" />
+                {title}
+            </div>
+            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                {items.map(slot => {
+                    const isSelected = selectedTime === slot;
+                    const formattedTime = new Date(`2000-01-01T${slot}`).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+
+                    return (
+                        <motion.button
+                            key={slot}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => onTimeSelect(slot)}
+                            type="button"
+                            className={cn(
+                                "py-2.5 px-3 rounded-lg border text-sm font-medium transition-all duration-200",
+                                isSelected
+                                    ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
+                                    : "bg-background border-border hover:border-primary/50 hover:bg-primary/5 text-foreground"
+                            )}
+                        >
+                            {formattedTime}
+                        </motion.button>
+                    );
+                })}
+            </div>
         </div>
     );
 };

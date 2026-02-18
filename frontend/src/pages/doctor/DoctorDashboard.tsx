@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -60,7 +60,7 @@ const DOCTOR_INSIGHTS_DATA = [
     }
 ];
 
-export const DoctorDashboard: React.FC = () => {
+export const DoctorDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -82,8 +82,9 @@ export const DoctorDashboard: React.FC = () => {
             ]);
             setAppointments(apptData);
             setPatientCount(patientsData.length);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load dashboard data');
+        } catch (err) {
+            const apiError = err as { response?: { data?: { message?: string } } };
+            setError(apiError.response?.data?.message || 'Failed to load dashboard data');
             console.error('Dashboard fetch error:', err);
         } finally {
             setLoading(false);
@@ -125,12 +126,12 @@ export const DoctorDashboard: React.FC = () => {
                         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
                             Dr. {user?.name?.split(' ')[0]}
                         </h1>
-                        <p className="text-white/80 text-lg font-medium leading-relaxed max-w-xl">
+                        <div className="text-white/80 text-lg font-medium leading-relaxed max-w-xl">
                             {loading
                                 ? <MedicalLoader message="Analyzing census..." />
                                 : `You have ${todayAppointments.length} patients scheduled for today. Your vitals dashboard is trending positive.`
                             }
-                        </p>
+                        </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button

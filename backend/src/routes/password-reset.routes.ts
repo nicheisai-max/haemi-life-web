@@ -7,23 +7,47 @@ import demoConfig from '../config/demo.config';
 
 const router = Router();
 
-// Helper function to generate 6-digit OTP
+// Helper function to generate cryptographically adequate 6-digit OTP
 const generateOTP = (): string => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // Use crypto.randomInt for better randomness than Math.random()
+    const { randomInt } = require('crypto');
+    return randomInt(100000, 999999).toString();
 };
 
-// Store OTPs temporarily (in production, use Redis)
-const otpStore: Map<string, { otp: string; expiresAt: number; identifier: string }> = new Map();
+/**
+ * V3 FIX: OTP store with brute-force protection.
+ * Each entry tracks attempt count. After MAX_OTP_ATTEMPTS failed verifications,
+ * the OTP is invalidated and a new request-reset is required.
+ *
+ * NOTE: This is an in-process Map (suitable for single-instance dev/demo).
+ * For production multi-instance deployments, replace with Redis.
+ */
+const MAX_OTP_ATTEMPTS = 5;
+
+interface OtpEntry {
+    otp: string;
+    expiresAt: number;
+    identifier: string;
+    attempts: number; // V3: brute-force counter
+}
+
+const otpStore: Map<string, OtpEntry> = new Map();
+
+// Cleanup expired OTPs periodically to prevent memory leaks
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of otpStore.entries()) {
+        if (now > entry.expiresAt) otpStore.delete(key);
+    }
+}, 5 * 60 * 1000); // Every 5 minutes
 
 /**
- * POST /api/auth/request-reset
- * Request password reset - sends OTP to email/phone
+ * POST /api/password-reset/request-reset
+ * Request password reset — sends OTP to email/phone
  */
 router.post(
     '/request-reset',
-    [
-        body('identifier').notEmpty().withMessage('Email or phone number is required'),
-    ],
+    [body('identifier').notEmpty().withMessage('Email or phone number is required')],
     async (req: Request, res: Response) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -33,7 +57,6 @@ router.post(
         const { identifier } = req.body;
 
         try {
-            // Check if user exists
             const isEmail = identifier.includes('@');
             const query = isEmail
                 ? 'SELECT id, email, phone_number FROM users WHERE email = $1'
@@ -41,40 +64,36 @@ router.post(
 
             const result = await pool.query(query, [identifier]);
 
+            // Always return the same response whether user exists or not (prevents user enumeration)
+            const GENERIC_RESPONSE = { message: 'If the account exists, an OTP has been sent.' };
+
             if (result.rows.length === 0) {
-                // Don't reveal if user exists for security
-                return res.status(200).json({
-                    message: 'If the account exists, an OTP has been sent.',
-                });
+                return res.status(200).json(GENERIC_RESPONSE);
             }
 
-            const user = result.rows[0];
             const otp = generateOTP();
             const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-            // Store OTP
-            otpStore.set(identifier, { otp, expiresAt, identifier });
+            // Store OTP with attempt counter initialized to 0
+            otpStore.set(identifier, { otp, expiresAt, identifier, attempts: 0 });
 
-            // Demo mode: log OTP to console, don't send email/SMS
+            // Demo mode: log OTP to console, return in response for testing
             if (demoConfig.isDemoMode()) {
                 demoConfig.log(`OTP for ${identifier}`, otp);
                 return res.status(200).json({
                     message: 'OTP sent successfully',
-                    dev_otp: otp, // Always show in demo mode
+                    dev_otp: otp, // Only in demo mode
                 });
             }
 
-            // Production: Send OTP via email/SMS
-            console.log(`[OTP] ${identifier}: ${otp}`);
+            // V2 FIX: In production, NEVER return the OTP in the response.
+            // Log to server console only (for development debugging via server logs).
+            // In a real production deployment, integrate with email/SMS provider here.
+            console.log(`[OTP] Generated for ${identifier} (integrate email/SMS service)`);
+            // TODO: await emailService.sendOTP(user.email, otp);
+            // TODO: await smsService.sendOTP(user.phone_number, otp);
 
-            // TODO: Integrate with email/SMS service
-            // await sendOTP(user.email || user.phone_number, otp);
-
-            res.status(200).json({
-                message: 'OTP sent successfully',
-                // For development only - remove in production
-                dev_otp: process.env.NODE_ENV === 'development' ? otp : undefined,
-            });
+            return res.status(200).json(GENERIC_RESPONSE);
         } catch (error) {
             console.error('Request reset error:', error);
             res.status(500).json({ message: 'Failed to process request' });
@@ -83,7 +102,7 @@ router.post(
 );
 
 /**
- * POST /api/auth/verify-otp
+ * POST /api/password-reset/verify-otp
  * Verify OTP for password reset
  */
 router.post(
@@ -109,10 +128,7 @@ router.post(
                     process.env.JWT_SECRET!,
                     { expiresIn: '30m' }
                 );
-                return res.status(200).json({
-                    message: 'OTP verified successfully',
-                    resetToken,
-                });
+                return res.status(200).json({ message: 'OTP verified successfully', resetToken });
             }
 
             const storedData = otpStore.get(identifier);
@@ -121,27 +137,39 @@ router.post(
                 return res.status(400).json({ message: 'Invalid or expired OTP' });
             }
 
+            // V3 FIX: Check brute-force attempt counter BEFORE validating OTP
+            if (storedData.attempts >= MAX_OTP_ATTEMPTS) {
+                otpStore.delete(identifier); // Invalidate after max attempts
+                return res.status(429).json({
+                    message: 'Too many failed attempts. Please request a new OTP.',
+                });
+            }
+
             if (Date.now() > storedData.expiresAt) {
                 otpStore.delete(identifier);
                 return res.status(400).json({ message: 'OTP has expired' });
             }
 
             if (storedData.otp !== otp) {
-                return res.status(400).json({ message: 'Invalid OTP' });
+                // V3: Increment attempt counter on failure
+                storedData.attempts += 1;
+                const remainingAttempts = MAX_OTP_ATTEMPTS - storedData.attempts;
+                return res.status(400).json({
+                    message: `Invalid OTP. ${remainingAttempts} attempt${remainingAttempts !== 1 ? 's' : ''} remaining.`,
+                });
             }
 
-            // Generate reset token (valid for 30 minutes)
+            // OTP is valid — generate reset token and remove OTP from store
             const resetToken = jwt.sign(
                 { identifier },
                 process.env.JWT_SECRET!,
                 { expiresIn: '30m' }
             );
 
-            // Keep OTP for password reset step
-            res.status(200).json({
-                message: 'OTP verified successfully',
-                resetToken,
-            });
+            // Consume the OTP immediately (single-use)
+            otpStore.delete(identifier);
+
+            return res.status(200).json({ message: 'OTP verified successfully', resetToken });
         } catch (error) {
             console.error('Verify OTP error:', error);
             res.status(500).json({ message: 'Failed to verify OTP' });
@@ -150,7 +178,7 @@ router.post(
 );
 
 /**
- * POST /api/auth/reset-password
+ * POST /api/password-reset/reset-password
  * Reset password with verified token
  */
 router.post(
@@ -170,15 +198,9 @@ router.post(
         const { resetToken, newPassword } = req.body;
 
         try {
-            // Verify reset token
-            const decoded = jwt.verify(
-                resetToken,
-                process.env.JWT_SECRET!
-            ) as { identifier: string };
-
+            const decoded = jwt.verify(resetToken, process.env.JWT_SECRET!) as { identifier: string };
             const { identifier } = decoded;
 
-            // Check if user exists
             const isEmail = identifier.includes('@');
             const query = isEmail
                 ? 'SELECT id FROM users WHERE email = $1'
@@ -191,29 +213,22 @@ router.post(
             }
 
             const userId = result.rows[0].id;
-
-            // Hash new password
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-            // Update password
-            await pool.query('UPDATE users SET password = $1 WHERE id = $2', [
-                hashedPassword,
-                userId,
-            ]);
+            // Update password AND increment token_version to invalidate all existing sessions
+            // This ensures that after a password reset, all previously issued JWTs are rejected
+            await pool.query(
+                'UPDATE users SET password = $1, token_version = COALESCE(token_version, 0) + 1 WHERE id = $2',
+                [hashedPassword, userId]
+            );
 
-            // Clear OTP
-            otpStore.delete(identifier);
-
-            res.status(200).json({
-                message: 'Password reset successfully',
-            });
+            return res.status(200).json({ message: 'Password reset successfully' });
         } catch (error: any) {
             console.error('Reset password error:', error);
 
             if (error.name === 'JsonWebTokenError') {
                 return res.status(400).json({ message: 'Invalid reset token' });
             }
-
             if (error.name === 'TokenExpiredError') {
                 return res.status(400).json({ message: 'Reset token has expired' });
             }
@@ -224,7 +239,7 @@ router.post(
 );
 
 /**
- * POST /api/auth/resend-otp
+ * POST /api/password-reset/resend-otp
  * Resend OTP for password reset
  */
 router.post(
@@ -239,43 +254,33 @@ router.post(
         const { identifier } = req.body;
 
         try {
-            // Check if user exists
             const isEmail = identifier.includes('@');
             const query = isEmail
-                ? 'SELECT id, email, phone_number FROM users WHERE email = $1'
-                : 'SELECT id, email, phone_number FROM users WHERE phone_number = $1';
+                ? 'SELECT id FROM users WHERE email = $1'
+                : 'SELECT id FROM users WHERE phone_number = $1';
 
             const result = await pool.query(query, [identifier]);
 
+            // Always return same response (prevents user enumeration)
             if (result.rows.length === 0) {
-                return res.status(200).json({
-                    message: 'If the account exists, an OTP has been sent.',
-                });
+                return res.status(200).json({ message: 'If the account exists, an OTP has been sent.' });
             }
 
             const otp = generateOTP();
-            const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+            const expiresAt = Date.now() + 10 * 60 * 1000;
 
-            // Update OTP
-            otpStore.set(identifier, { otp, expiresAt, identifier });
+            // Reset attempt counter on resend
+            otpStore.set(identifier, { otp, expiresAt, identifier, attempts: 0 });
 
-            // Demo mode: log OTP
             if (demoConfig.isDemoMode()) {
                 demoConfig.log(`OTP resent for ${identifier}`, otp);
-                return res.status(200).json({
-                    message: 'OTP resent successfully',
-                    dev_otp: otp,
-                });
+                return res.status(200).json({ message: 'OTP resent successfully', dev_otp: otp });
             }
 
-            console.log(`[OTP RESEND] ${identifier}: ${otp}`);
+            // V2 FIX: Never return OTP in production response
+            console.log(`[OTP RESEND] Generated for ${identifier}`);
 
-            // TODO: Send OTP via email/SMS
-
-            res.status(200).json({
-                message: 'OTP resent successfully',
-                dev_otp: process.env.NODE_ENV === 'development' ? otp : undefined,
-            });
+            return res.status(200).json({ message: 'OTP resent successfully' });
         } catch (error) {
             console.error('Resend OTP error:', error);
             res.status(500).json({ message: 'Failed to resend OTP' });

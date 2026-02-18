@@ -1,14 +1,38 @@
 import { Request, Response, NextFunction } from 'express';
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+/**
+ * V7 FIX: Global error handler.
+ * - In production: returns a generic message — never exposes err.message or stack traces.
+ * - In development: returns full error details for debugging.
+ * This prevents information disclosure attacks where attackers probe error messages
+ * to learn about the system's internals (DB schema, file paths, library versions).
+ */
 export const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
-    console.error(`[Global Error] ${req.method} ${req.url}:`, err);
+    // Always log the full error internally for observability
+    console.error(`[Error] ${req.method} ${req.url}:`, err);
 
-    const statusCode = err.statusCode || 500;
-    const message = err.message || 'Internal Server Error';
+    const statusCode = err.statusCode || err.status || 500;
 
-    res.status(statusCode).json({
+    if (IS_PRODUCTION) {
+        // Never leak internal error details in production
+        const safeMessage = statusCode < 500
+            ? err.message || 'Request failed'  // 4xx: safe to show client errors
+            : 'An unexpected error occurred. Please try again.'; // 5xx: always generic
+
+        return res.status(statusCode).json({
+            success: false,
+            error: safeMessage,
+            statusCode,
+        });
+    }
+
+    // Development: full details for debugging
+    return res.status(statusCode).json({
         success: false,
-        error: message,
-        statusCode: statusCode
+        error: err.message || 'Internal Server Error',
+        statusCode,
+        stack: err.stack,
     });
 };

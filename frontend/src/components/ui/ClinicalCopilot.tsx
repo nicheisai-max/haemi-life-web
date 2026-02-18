@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, AlertTriangle, Lightbulb, Zap, X, ChevronRight, BrainCircuit } from 'lucide-react';
 import { GlassCard } from './GlassCard';

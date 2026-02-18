@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -107,7 +107,10 @@ export const Signup: React.FC = () => {
                     variant="ghost"
                     size="icon"
                     className="absolute left-0 top-0 -mt-16 h-8 w-8 border border-gray-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm rounded-full"
-                    onClick={() => setStep('role')}
+                    onClick={() => {
+                        setStep('role');
+                        setSelectedRole(null);
+                    }}
                 >
                     <ArrowLeft className="h-4 w-4" />
                 </Button>

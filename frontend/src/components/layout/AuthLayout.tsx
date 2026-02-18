@@ -22,7 +22,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
     showLogoInHeader = true
 }) => {
     return (
-        <div className="flex min-h-screen w-full bg-background overflow-hidden relative">
+        <div className="flex min-h-screen w-full bg-background relative">
             {/* Visual Section (Left) - Visible only on Desktop (LG+) via CSS hidden/block */}
             {/* This section contains MARKETING/BRANDING text only. It is NOT the auth header. */}
             <div className="hidden lg:block lg:w-1/2 relative bg-background overflow-hidden border-r">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, Check, Info, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,7 +31,7 @@ const getTimeAgo = (dateString: string) => {
         interval = Math.floor(seconds / 60);
         if (interval > 1) return interval + " mins ago";
         return "Just now";
-    } catch (e) {
+    } catch {
         return "Recently";
     }
 };

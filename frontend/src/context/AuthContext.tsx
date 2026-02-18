@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
 import { authService } from '../services/auth.service';
@@ -17,140 +17,163 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-    // Default to true to prevent dashboard flash
-    const [isVerifying, setIsVerifying] = useState<boolean>(true);
-    // isLoading is now synonymous with isVerifying for backward compatibility, but we track verification explicitly
-    const isLoading = isVerifying;
+    const [token, setToken] = useState<string | null>(null);
 
+    /**
+     * isInitializing: true ONLY during the very first app load while we verify
+     * the stored token with the backend. Once the initial check completes (success
+     * or failure), this is permanently set to false for the lifetime of the session.
+     *
+     * CRITICAL: This flag must NEVER be set back to true after login/logout.
+     * It is only used to prevent a flash of the login page on app load when
+     * the user already has a valid session.
+     */
+    const [isInitializing, setIsInitializing] = useState<boolean>(true);
+
+    // ─── Global unauthorized event handler ───────────────────────────────────
+    // Handles 401/403 responses from any API call via the axios interceptor.
     useEffect(() => {
-        const handleUnauthorized = (e: any) => {
-            const failingToken = e.detail?.token;
+        const handleUnauthorized = (e: Event) => {
+            const detail = (e as CustomEvent).detail || {};
+            const failingToken = detail.token;
             const currentToken = localStorage.getItem('token');
 
-            // ATOMIC SESSION SYNC:
-            // Only wipe state if the token that failed is actually the one we are currently using.
-            // If failingToken is null (old behavior) or matches current, we wipe.
-            // If they don't match, it's a "ghost" rejection from a previous session.
+            // 1. If we're already unauthenticated, there's nothing to reset.
+            if (!currentToken && !user && !token) return;
+
+            // 2. Only wipe state if the failing token matches the current one.
+            // Prevents ghost rejections from stale in-flight requests.
             if (failingToken && failingToken !== currentToken) {
-                console.warn('Sync Conflict: Ignoring unauthorized event for stale session.');
+                console.warn('[Auth] Ignoring unauthorized event for stale token.');
                 return;
             }
 
-            console.log('Session invalid: Performing authenticated state reset.');
-            setUser(null);
-            setToken(null);
+            console.log('[Auth] Session invalidated by server. Resetting state.');
+
+            // Wipe everything synchronously to ensure next render is clean
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            setIsVerifying(false);
+            setToken(null);
+            setUser(null);
+            setIsInitializing(false);
         };
 
         window.addEventListener('auth:unauthorized', handleUnauthorized as EventListener);
         return () => window.removeEventListener('auth:unauthorized', handleUnauthorized as EventListener);
     }, []);
 
-    // ZERO-TRUST SESSION VERIFICATION
+    // ─── Initial session verification (runs once on app mount) ───────────────
     useEffect(() => {
         const initSession = async () => {
-            const initialToken = localStorage.getItem('token');
+            const storedToken = localStorage.getItem('token');
 
-            if (!initialToken) {
-                // No token found, immediate guest state
-                setUser(null);
-                setToken(null);
-                setIsVerifying(false);
+            if (!storedToken) {
+                // No stored token — user is a guest. Done initializing.
+                setIsInitializing(false);
                 return;
             }
 
             try {
-                // Verify with backend
+                // Verify the stored token is still valid with the backend.
                 const { user: verifiedUser } = await authService.verifySession();
 
-                // ATOMIC SESSION SYNC check:
-                // If the token changed during the verification request (e.g. user logged in manually),
-                // do NOT overwrite the new session data with this background result.
+                // Check if the token changed while we were verifying (e.g., user
+                // logged in on another tab). If so, discard this stale result.
                 const currentToken = localStorage.getItem('token');
-                if (initialToken !== currentToken) {
-                    console.warn('Sync Conflict: Session verification finished for a discarded token.');
+                if (storedToken !== currentToken) {
+                    console.warn('[Auth] Token changed during verification. Discarding stale result.');
                     return;
                 }
 
+                // Token is valid — restore the session.
                 setUser(verifiedUser);
-                setToken(initialToken);
+                setToken(storedToken);
                 localStorage.setItem('user', JSON.stringify(verifiedUser));
-            } catch (error: any) {
-                console.error('Session verification failed:', error);
-
-                // ATOMIC SESSION SYNC check for failure path
+            } catch (error) {
+                const storedError = error as { response?: { status: number } };
                 const currentToken = localStorage.getItem('token');
-                if (initialToken !== currentToken) return;
 
-                if (error.response?.status === 401 || error.response?.status === 403) {
+                // Only clear state if the token we verified is still the current one.
+                if (storedToken !== currentToken) return;
+
+                if (storedError.response?.status === 401 || storedError.response?.status === 403) {
+                    // Token is definitively invalid — clear everything.
                     localStorage.removeItem('token');
                     localStorage.removeItem('user');
                     setToken(null);
                     setUser(null);
                 } else {
-                    console.warn('Server unreachable, keeping session for retry...');
+                    // Network error / server down — keep the stored token for retry.
+                    // The user will be re-verified on next app load.
+                    console.warn('[Auth] Server unreachable during init. Keeping stored session.');
+                    const cachedUser = localStorage.getItem('user');
+                    if (cachedUser) {
+                        try {
+                            setUser(JSON.parse(cachedUser));
+                            setToken(storedToken);
+                        } catch {
+                            // Corrupt cache — clear it.
+                            localStorage.removeItem('user');
+                        }
+                    }
                 }
             } finally {
-                // Final safety check before ending loading state
-                const currentToken = localStorage.getItem('token');
-                if (initialToken === currentToken) {
-                    setIsVerifying(false);
-                }
+                // Always mark initialization as complete, regardless of outcome.
+                // This is the ONLY place isInitializing is set to false during startup.
+                setIsInitializing(false);
             }
         };
 
         initSession();
+    }, []); // Runs exactly once on mount.
+
+    // ─── Login ────────────────────────────────────────────────────────────────
+    const login = useCallback(async (credentials: LoginCredentials) => {
+        const { token: newToken, user: newUser } = await authService.login(credentials);
+
+        // Persist to storage FIRST so any concurrent checks see the new token.
+        localStorage.setItem('token', newToken);
+        localStorage.setItem('user', JSON.stringify(newUser));
+
+        // Update React state. These are batched by React 18 automatically.
+        setToken(newToken);
+        setUser(newUser);
+        // isInitializing stays false — it was already set to false during initSession.
+        // No need to touch it here.
     }, []);
 
-    const login = async (credentials: LoginCredentials) => {
-        // When manual login starts, we don't necessarily want to set isVerifying=true 
-        // if it's already verifying, but we do want to ensure the UI shows a loader.
-        try {
-            const { token: newToken, user: newUser } = await authService.login(credentials);
+    // ─── Signup ───────────────────────────────────────────────────────────────
+    const signup = useCallback(async (credentials: SignupCredentials) => {
+        const { token: newToken, user: newUser } = await authService.signup(credentials);
 
-            // Manual login always takes precedence. We set these first to 
-            // trigger the Atomic Sync mismatch in any pending background tasks.
-            localStorage.setItem('token', newToken);
-            localStorage.setItem('user', JSON.stringify(newUser));
+        localStorage.setItem('token', newToken);
+        localStorage.setItem('user', JSON.stringify(newUser));
 
-            setToken(newToken);
-            setUser(newUser);
-        } catch (error) {
-            console.error('Login failed', error);
-            throw error;
-        } finally {
-            setIsVerifying(false);
-        }
-    };
+        setToken(newToken);
+        setUser(newUser);
+    }, []);
 
-    const signup = async (credentials: SignupCredentials) => {
-        try {
-            const { token: newToken, user: newUser } = await authService.signup(credentials);
-
-            localStorage.setItem('token', newToken);
-            localStorage.setItem('user', JSON.stringify(newUser));
-
-            setToken(newToken);
-            setUser(newUser);
-        } catch (error) {
-            console.error('Signup failed', error);
-            throw error;
-        } finally {
-            setIsVerifying(false);
-        }
-    };
-
-    const logout = () => {
+    // ─── Logout ───────────────────────────────────────────────────────────────
+    const logout = useCallback(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setToken(null);
         setUser(null);
-        // Clear verify state
-        setIsVerifying(false);
-    };
+        // isInitializing stays false — no need to re-initialize.
+    }, []);
+
+    /**
+     * isAuthenticated: true if and only if we have a verified user object.
+     *
+     * PRODUCTION RULE: This is intentionally decoupled from isInitializing.
+     * After login() resolves, user is set synchronously in the same React batch.
+     * isAuthenticated becomes true immediately — no race condition possible.
+     *
+     * isInitializing (exposed as isLoading) is ONLY used by ProtectedRoute to
+     * show a loading screen during the initial app-load verification. It does
+     * NOT gate isAuthenticated.
+     */
+    const isAuthenticated = !!user;
 
     return (
         <AuthContext.Provider value={{
@@ -159,8 +182,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             login,
             signup,
             logout,
-            isLoading, // Kept for backward compat, mapped to isVerifying
-            isAuthenticated: !!user && !isVerifying, // Only true if user exists AND verified
+            isLoading: isInitializing,
+            isAuthenticated,
         }}>
             {children}
         </AuthContext.Provider>
