@@ -346,17 +346,17 @@ export const ChatHub: React.FC = () => {
                     className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-[380px] sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5"
                 >
                     {/* --- Helper: Header --- */}
-                    <div className="shrink-0 bg-white/95 dark:bg-[#1a1c23]/95 backdrop-blur z-20">
-                        <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100 dark:border-white/5">
-                            <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="shrink-0 bg-[#026355] dark:bg-[#1a1c23]/95 backdrop-blur z-20">
+                        <div className="px-5 py-4 flex items-center justify-between border-b border-white/10 dark:border-white/5">
+                            <div className="flex items-center gap-3">
                                 {view !== 'contacts' && (
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 -ml-1 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                        className="h-8 w-8 rounded-full text-white/80 hover:bg-white/10 dark:hover:bg-slate-800 transition-colors shrink-0"
                                         onClick={() => setView('contacts')}
                                     >
-                                        <ChevronLeft className="h-5 w-5" />
+                                        <ChevronLeft className="h-5 w-5 text-white" />
                                     </Button>
                                 )}
 
@@ -367,20 +367,20 @@ export const ChatHub: React.FC = () => {
                                             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#1a1c23] rounded-full"></span>
                                         </div>
                                         <div className="flex flex-col truncate">
-                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">
+                                            <h3 className="text-sm font-bold text-white truncate leading-tight">
                                                 {getOtherParticipant(activeConversation).name}
                                             </h3>
-                                            <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium truncate leading-tight">
+                                            <span className="text-[11px] text-teal-100 dark:text-teal-400 font-medium truncate leading-tight capitalize">
                                                 {getOtherParticipant(activeConversation).role}
                                             </span>
                                         </div>
                                     </div>
                                 ) : view === 'new-chat' ? (
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">New Message</h3>
+                                    <h3 className="text-lg font-bold text-white tracking-tight">New Message</h3>
                                 ) : (
                                     <div className="flex flex-col">
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-none">Messages</h3>
-                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1">
+                                        <h3 className="text-lg font-bold text-white tracking-tight leading-none">Messages</h3>
+                                        <span className="text-[11px] text-teal-100/80 dark:text-slate-400 font-medium mt-1">
                                             {filteredConversations.length} {filteredConversations.length === 1 ? 'conversation' : 'conversations'}
                                         </span>
                                     </div>
@@ -391,7 +391,7 @@ export const ChatHub: React.FC = () => {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                    className="h-8 w-8 rounded-full text-white/60 hover:bg-white/10 dark:hover:bg-white/5 transition-colors"
                                     onClick={() => setIsMinimized(true)}
                                 >
                                     <Minus className="h-4 w-4" />
@@ -399,7 +399,7 @@ export const ChatHub: React.FC = () => {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                                    className="h-8 w-8 rounded-full text-white/60 hover:text-white hover:bg-white/10 dark:hover:bg-rose-500/10 transition-colors"
                                     onClick={toggleChat}
                                 >
                                     <X className="h-4 w-4" />
@@ -409,8 +409,8 @@ export const ChatHub: React.FC = () => {
 
                         {/* Encryption Banner */}
                         <div className="py-2 bg-slate-100/80 dark:bg-black/40 border-b border-slate-200/50 dark:border-white/5 flex items-center justify-center gap-2 backdrop-blur-md">
-                            <ShieldCheck className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest text-center">
+                            <ShieldCheck className="h-3 w-3 text-slate-900/60 dark:text-slate-400" />
+                            <span className="text-[10px] font-bold text-slate-900 dark:text-slate-300 uppercase tracking-widest text-center">
                                 End-to-end Encrypted
                             </span>
                         </div>
