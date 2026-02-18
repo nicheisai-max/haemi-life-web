@@ -1,4 +1,4 @@
-import { Loader2, Activity } from 'lucide-react';
+
 import { Logo } from './Logo';
 
 interface MedicalLoaderProps {
@@ -11,25 +11,33 @@ export const MedicalLoader: React.FC<MedicalLoaderProps> = ({
     fullPage = false
 }) => {
     const content = (
-        <div className="flex flex-col items-center justify-center p-8 space-y-6 text-center animate-in fade-in duration-700">
+        <div className="flex flex-col items-center justify-center p-8 space-y-8 text-center animate-in fade-in zoom-in-95 duration-500">
             <div className="relative">
-                <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-110 animate-pulse" />
-                <div className="relative bg-background rounded-full p-4 border border-primary/10 shadow-xl">
-                    <Logo size="md" />
+                {/* Subtle Glow Background */}
+                <div className="absolute inset-0 bg-primary/20 blur-[40px] rounded-full scale-150 animate-pulse functionality-reduced-motion:animate-none" />
+
+                {/* Main Logo Container */}
+                <div className="relative bg-background/80 backdrop-blur-xl rounded-[28px] p-6 border border-white/10 shadow-2xl ring-1 ring-black/5">
+                    <Logo size="auth" />
                 </div>
-                <div className="absolute -bottom-2 -right-2 bg-primary rounded-full p-1.5 shadow-lg animate-bounce">
-                    <Activity size={14} className="text-white" />
+
+                {/* Status Indicator (Subtle Pulse instead of Bounce) */}
+                <div className="absolute -bottom-2 -right-2 bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-lg border border-slate-100 dark:border-slate-800 flex items-center justify-center">
+                    <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                    </span>
                 </div>
             </div>
 
-            <div className="space-y-2">
-                <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-4 w-4 text-primary animate-spin" />
-                    <p className="text-sm font-bold tracking-widest text-primary uppercase">
+            <div className="space-y-3">
+                <div className="flex flex-col items-center justify-center gap-1.5">
+                    <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
                         Haemi Life Core
-                    </p>
+                    </h3>
+                    <div className="h-0.5 w-12 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
                 </div>
-                <p className="text-muted-foreground font-medium text-sm max-w-[200px]">
+                <p className="text-slate-500 dark:text-slate-400 font-medium text-sm animate-pulse">
                     {message}
                 </p>
             </div>

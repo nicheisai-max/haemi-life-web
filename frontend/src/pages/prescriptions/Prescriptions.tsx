@@ -4,29 +4,79 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getMyPrescriptions, type Prescription } from '../../services/prescription.service';
-import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2 } from 'lucide-react';
+import { getMyRecords, uploadRecord, deleteRecord, type MedicalRecord } from '../../services/record.service';
+import { useConfirm } from '@/context/AlertDialogContext';
+import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, UploadCloud, Trash2, Download, Image as ImageIcon, File } from 'lucide-react';
+import { MedicalLoader } from '../../components/ui/MedicalLoader';
 
 import { TransitionItem } from '../../components/layout/PageTransition';
 
 export const Prescriptions: React.FC = () => {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+    const [uploadedRecords, setUploadedRecords] = useState<MedicalRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
+    const { confirm } = useConfirm();
 
     useEffect(() => {
-        fetchPrescriptions();
+        fetchAllData();
     }, []);
 
-    const fetchPrescriptions = async () => {
+    const fetchAllData = async () => {
         try {
             setLoading(true);
-            const data = await getMyPrescriptions();
-            setPrescriptions(data);
+            const [prescriptionsData, recordsData] = await Promise.all([
+                getMyPrescriptions(),
+                getMyRecords()
+            ]);
+            setPrescriptions(prescriptionsData);
+            setUploadedRecords(recordsData);
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load prescriptions');
+            setError(err.response?.data?.message || 'Failed to load data');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        setUploading(true);
+        try {
+            for (const file of Array.from(files)) {
+                // Ideally, we might want to tag this as a prescription if the backend supported it.
+                // For now, we upload it as a generic record which is displayed here.
+                const newRecord = await uploadRecord(file);
+                setUploadedRecords(prev => [newRecord, ...prev]);
+            }
+        } catch (error: any) {
+            console.error('Error uploading file:', error);
+            setError(error.message || 'Failed to upload file');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleDeleteRecord = async (id: string) => {
+        const isConfirmed = await confirm({
+            title: 'Delete Prescription File',
+            message: 'Are you sure you want to delete this uploaded prescription file? This action cannot be undone.',
+            type: 'error',
+            confirmText: 'Delete File',
+            cancelText: 'Cancel'
+        });
+
+        if (isConfirmed) {
+            try {
+                await deleteRecord(id);
+                setUploadedRecords(prev => prev.filter(r => r.id !== id));
+            } catch (error: any) {
+                console.error('Error deleting record:', error);
+                setError(error.message || 'Failed to delete file');
+            }
         }
     };
 
@@ -37,6 +87,12 @@ export const Prescriptions: React.FC = () => {
             case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-900';
             default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
         }
+    };
+
+    const getFileIcon = (type: string) => {
+        if (type.includes('pdf')) return <FileText className="h-5 w-5" />;
+        if (type.includes('image')) return <ImageIcon className="h-5 w-5" />;
+        return <File className="h-5 w-5" />;
     };
 
     if (loading) {
@@ -57,9 +113,35 @@ export const Prescriptions: React.FC = () => {
 
     return (
         <div className="container mx-auto p-4 md:p-8 max-w-[1920px]">
-            <TransitionItem className="mb-8">
-                <h1 className="text-3xl font-bold text-foreground mb-2">My Prescriptions</h1>
-                <p className="text-muted-foreground text-lg">View your prescription history and details</p>
+            <TransitionItem className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-foreground mb-2">My Prescriptions</h1>
+                    <p className="text-muted-foreground text-lg">View your digital and uploaded prescriptions</p>
+                </div>
+                <div>
+                    <label htmlFor="prescription-upload" className="cursor-pointer">
+                        <Button
+                            variant="default"
+                            disabled={uploading}
+                            className="gap-2 bg-[#0E6B74] hover:bg-[#083E44] text-white shadow-lg shadow-teal-900/20"
+                            asChild
+                        >
+                            <span>
+                                {uploading ? <MedicalLoader /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
+                                {uploading ? 'Uploading...' : 'Upload Prescription'}
+                            </span>
+                        </Button>
+                        <input
+                            id="prescription-upload"
+                            type="file"
+                            multiple
+                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                            disabled={uploading}
+                        />
+                    </label>
+                </div>
             </TransitionItem>
 
             {error && (
@@ -71,56 +153,108 @@ export const Prescriptions: React.FC = () => {
                 </Alert>
             )}
 
-            <TransitionItem className={`grid grid-cols-1 ${selectedPrescription ? 'lg:grid-cols-[1fr_400px]' : ''} gap-8 transition-all duration-300`}>
-                {/* Prescriptions List */}
-                <div className="space-y-4">
-                    {prescriptions.length === 0 ? (
-                        <Card className="p-12 text-center flex flex-col items-center justify-center text-muted-foreground">
-                            <FileText className="h-16 w-16 opacity-30 mb-4" />
-                            <p>No prescriptions found</p>
-                        </Card>
-                    ) : (
-                        prescriptions.map((prescription) => (
-                            <Card
-                                key={prescription.id}
-                                className={`group p-0 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md border-2 ${selectedPrescription?.id === prescription.id ? 'border-primary ring-1 ring-primary/20' : 'border-transparent hover:border-border'}`}
-                                onClick={() => setSelectedPrescription(prescription)}
-                            >
-                                <div className="p-5 flex gap-5 items-start">
-                                    <div className="shrink-0 w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300">
-                                        <Pill className="h-7 w-7" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                                            <h3 className="text-lg font-semibold text-foreground truncate">
-                                                Dr. {prescription.doctor_name || 'Unknown'}
-                                            </h3>
-                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide border ${getStatusStyles(prescription.status)}`}>
-                                                {prescription.status}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
-                                            <Calendar className="h-3.5 w-3.5" />
-                                            <span>
-                                                {new Date(prescription.created_at).toLocaleDateString('en-US', {
-                                                    month: 'long',
-                                                    day: 'numeric',
-                                                    year: 'numeric'
-                                                })}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-sm font-medium text-foreground/80">
-                                            <Stethoscope className="h-4 w-4 text-primary/70" />
-                                            <span>{prescription.medication_count || 0} medication{(prescription.medication_count || 0) !== 1 ? 's' : ''}</span>
-                                        </div>
-                                    </div>
-                                </div>
+            <div className={`grid grid-cols-1 ${selectedPrescription ? 'lg:grid-cols-[1fr_400px]' : ''} gap-8 transition-all duration-300`}>
+                <div className="space-y-8">
+                    {/* Digital Prescriptions Section */}
+                    <div className="space-y-4">
+                        <h2 className="text-xl font-semibold flex items-center gap-2">
+                            <Pill className="h-5 w-5 text-primary" />
+                            Digital Prescriptions
+                        </h2>
+                        {prescriptions.length === 0 ? (
+                            <Card className="p-8 text-center flex flex-col items-center justify-center text-muted-foreground bg-muted/5 border-dashed">
+                                <FileText className="h-12 w-12 opacity-30 mb-3" />
+                                <p>No digital prescriptions from doctors</p>
                             </Card>
-                        ))
-                    )}
+                        ) : (
+                            <div className="grid gap-4">
+                                {prescriptions.map((prescription) => (
+                                    <Card
+                                        key={prescription.id}
+                                        className={`group p-0 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md border-2 ${selectedPrescription?.id === prescription.id ? 'border-primary ring-1 ring-primary/20' : 'border-transparent hover:border-border'}`}
+                                        onClick={() => setSelectedPrescription(prescription)}
+                                    >
+                                        <div className="p-5 flex gap-5 items-start">
+                                            <div className="shrink-0 w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300">
+                                                <Pill className="h-7 w-7" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                                    <h3 className="text-lg font-semibold text-foreground truncate">
+                                                        Dr. {prescription.doctor_name || 'Unknown'}
+                                                    </h3>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide border ${getStatusStyles(prescription.status)}`}>
+                                                        {prescription.status}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                                                    <Calendar className="h-3.5 w-3.5" />
+                                                    <span>
+                                                        {new Date(prescription.created_at).toLocaleDateString('en-US', {
+                                                            month: 'long',
+                                                            day: 'numeric',
+                                                            year: 'numeric'
+                                                        })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-sm font-medium text-foreground/80">
+                                                    <Stethoscope className="h-4 w-4 text-primary/70" />
+                                                    <span>{prescription.medication_count || 0} medication{(prescription.medication_count || 0) !== 1 ? 's' : ''}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Uploaded Prescriptions Section */}
+                    <div className="space-y-4">
+                        <h2 className="text-xl font-semibold flex items-center gap-2">
+                            <UploadCloud className="h-5 w-5 text-primary" />
+                            Uploaded Prescriptions
+                        </h2>
+                        {uploadedRecords.length === 0 ? (
+                            <Card className="p-8 text-center flex flex-col items-center justify-center text-muted-foreground bg-muted/5 border-dashed">
+                                <UploadCloud className="h-12 w-12 opacity-30 mb-3" />
+                                <p>No uploaded prescription files</p>
+                            </Card>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {uploadedRecords.map((record) => (
+                                    <Card key={record.id} className="group p-4 flex items-start gap-4 transition-all hover:shadow-md hover:border-primary/50">
+                                        <div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                            {getFileIcon(record.file_type)}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-semibold truncate mb-1 text-sm" title={record.name}>{record.name}</h4>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <span>{record.file_size}</span>
+                                                <span className="w-1 h-1 rounded-full bg-muted-foreground/40"></span>
+                                                <span>{new Date(record.uploaded_at).toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" asChild>
+                                                <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${record.file_path}`} download target="_blank" rel="noopener noreferrer">
+                                                    <Download className="h-4 w-4" />
+                                                    <span className="sr-only">Download</span>
+                                                </a>
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteRecord(record.id)}>
+                                                <Trash2 className="h-4 w-4" />
+                                                <span className="sr-only">Delete</span>
+                                            </Button>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Details Panel */}
+                {/* Details Panel for Digital Prescriptions */}
                 {selectedPrescription && (
                     <div className="relative">
                         <div className="lg:sticky lg:top-24 h-fit bg-background lg:bg-transparent">
@@ -216,7 +350,7 @@ export const Prescriptions: React.FC = () => {
                         </div>
                     </div>
                 )}
-            </TransitionItem>
+            </div>
         </div>
     );
 };

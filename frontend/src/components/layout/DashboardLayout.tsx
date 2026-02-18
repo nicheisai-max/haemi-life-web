@@ -10,8 +10,12 @@ interface DashboardLayoutProps {
 import { ChatHub } from '../ui/ChatHub';
 import { Footer } from './Footer';
 import { Sidebar } from './Sidebar';
+import { useAuth } from '../../context/AuthContext';
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+
     return (
         <div className="min-h-screen bg-background flex flex-col transition-colors duration-300 overflow-x-hidden pt-[72px]">
             <Navbar />
@@ -27,7 +31,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             <div className="lg:pl-[260px]">
                 <Footer />
             </div>
-            <ChatHub />
+            {!isAdmin && <ChatHub />}
         </div>
     );
 };

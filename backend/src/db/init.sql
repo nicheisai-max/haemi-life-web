@@ -14,8 +14,9 @@ DROP TABLE IF EXISTS analytics_daily_visits CASCADE;
 DROP TABLE IF EXISTS revenue_stats CASCADE;
 DROP TABLE IF EXISTS notifications CASCADE;
 -- Table 'medical_records' should stay persistent for files
--- DROP TABLE IF EXISTS medical_records CASCADE;
+DROP TABLE IF EXISTS medical_records CASCADE;
 DROP TABLE IF EXISTS prescription_items CASCADE;
+
 DROP TABLE IF EXISTS prescriptions CASCADE;
 DROP TABLE IF EXISTS appointments CASCADE;
 DROP TABLE IF EXISTS pharmacies CASCADE;
@@ -42,9 +43,18 @@ CREATE TABLE IF NOT EXISTS users (
     id_number VARCHAR(50),
     is_active BOOLEAN DEFAULT true, -- Deprecated, use status
     is_verified BOOLEAN DEFAULT false,
+    profile_image VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Schema Migration (Ensure column exists for existing DBs - Idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image') THEN
+        ALTER TABLE users ADD COLUMN profile_image VARCHAR(255);
+    END IF;
+END $$;
 
 -- Audit Logs (Compulsory for Compliance)
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -217,11 +227,18 @@ CREATE TABLE IF NOT EXISTS medical_records (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
+    record_type VARCHAR(100) NOT NULL, -- e.g. 'Lab Result', 'Prescription', 'Radiology'
+    doctor_name VARCHAR(255),
+    facility_name VARCHAR(255),
+    date_of_service DATE,
+    status VARCHAR(50) DEFAULT 'Final', -- 'Preliminary', 'Final', 'Amended'
+    notes TEXT,
     file_path VARCHAR(255) NOT NULL,
     file_type VARCHAR(100),
     file_size VARCHAR(50),
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 
 -- 3. Stored Procedures (The "Golden Path" Logic)
 
@@ -232,14 +249,23 @@ CREATE OR REPLACE PROCEDURE sp_create_user(
     p_phone VARCHAR,
     p_password_hash VARCHAR,
     p_role VARCHAR,
-    p_id_number VARCHAR DEFAULT NULL
+    p_id_number VARCHAR DEFAULT NULL,
+    p_profile_image VARCHAR DEFAULT NULL
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    INSERT INTO users (name, email, phone_number, password, role, id_number, is_verified)
-    VALUES (p_name, p_email, p_phone, p_password_hash, p_role, p_id_number, true)
-    ON CONFLICT (email) DO NOTHING; -- Emails must be unique
+    INSERT INTO users (name, email, phone_number, password, role, id_number, is_verified, profile_image)
+    VALUES (p_name, p_email, p_phone, p_password_hash, p_role, p_id_number, true, p_profile_image)
+    ON CONFLICT (email) DO UPDATE 
+    SET password = EXCLUDED.password,
+        name = EXCLUDED.name,
+        phone_number = EXCLUDED.phone_number,
+        profile_image = EXCLUDED.profile_image
+    WHERE users.password IS DISTINCT FROM EXCLUDED.password 
+       OR users.name IS DISTINCT FROM EXCLUDED.name
+       OR users.phone_number IS DISTINCT FROM EXCLUDED.phone_number
+       OR users.profile_image IS DISTINCT FROM EXCLUDED.profile_image;
 END;
 $$;
 
@@ -273,39 +299,39 @@ BEGIN
     END IF;
 
     -- 3. Create Admin User
-    CALL sp_create_user('Admin Kgosi', 'admin@haemilife.com', '+26771234567', p_password_hash, 'admin');
+    CALL sp_create_user('Admin Kgosi', 'admin@haemilife.com', '+26771234567', p_password_hash, 'admin', NULL, '/uploads/admin/admin.png');
 
     -- 4. Create Specialists (The Advanced Medical Network)
     -- Dr. Thabo (Cardiologist - Gaborone)
-    CALL sp_create_user('Dr. Thabo Sekgwi', 'thabo.sekgwi@haemilife.com', '+26771000001', p_password_hash, 'doctor');
+    CALL sp_create_user('Dr. Thabo Sekgwi', 'thabo.sekgwi@haemilife.com', '+26771000001', p_password_hash, 'doctor', NULL, '/uploads/doctors/doctor_01.jpg');
     SELECT id INTO v_doctor_id FROM users WHERE email = 'thabo.sekgwi@haemilife.com';
     INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
     VALUES (v_doctor_id, 'Cardiologist', 'BW-MD-2010-0982', 15, 'Lead cardiologist specializing in interventional procedures. 15 years experience at Princess Marina Hospital.', 450.00, true)
     ON CONFLICT (user_id) DO NOTHING;
 
     -- Dr. Lerato (Pediatrician - Maun)
-    CALL sp_create_user('Dr. Lerato Molefe', 'lerato.molefe@haemilife.com', '+26771000002', p_password_hash, 'doctor');
+    CALL sp_create_user('Dr. Lerato Molefe', 'lerato.molefe@haemilife.com', '+26771000002', p_password_hash, 'doctor', NULL, '/uploads/doctors/doctor_02.png');
     SELECT id INTO v_doctor_id FROM users WHERE email = 'lerato.molefe@haemilife.com';
     INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
     VALUES (v_doctor_id, 'Pediatrician', 'BW-MD-2015-1123', 8, 'Dedicated pediatrician serving the North-West community. Resident doctor at Letsholathebe II Memorial.', 350.00, true)
     ON CONFLICT (user_id) DO NOTHING;
 
     -- Dr. Kagiso (Psychiatrist - Francistown)
-    CALL sp_create_user('Dr. Kagiso Dube', 'kagiso.dube@haemilife.com', '+26771000003', p_password_hash, 'doctor');
+    CALL sp_create_user('Dr. Kagiso Dube', 'kagiso.dube@haemilife.com', '+26771000003', p_password_hash, 'doctor', NULL, NULL);
     SELECT id INTO v_doctor_id FROM users WHERE email = 'kagiso.dube@haemilife.com';
     INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
     VALUES (v_doctor_id, 'Psychiatrist', 'BW-MD-2012-4432', 12, 'Mental health advocate specializing in adult psychiatry and CBT.', 400.00, true)
     ON CONFLICT (user_id) DO NOTHING;
 
     -- Dr. Neo (Obstetrician - Kasane)
-    CALL sp_create_user('Dr. Neo Balopi', 'neo.balopi@haemilife.com', '+26771000004', p_password_hash, 'doctor');
+    CALL sp_create_user('Dr. Neo Balopi', 'neo.balopi@haemilife.com', '+26771000004', p_password_hash, 'doctor', NULL, '/uploads/doctors/doctor_03.png');
     SELECT id INTO v_doctor_id FROM users WHERE email = 'neo.balopi@haemilife.com';
     INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
     VALUES (v_doctor_id, 'Obstetrician', 'BW-MD-2018-7762', 6, 'Providing comprehensive maternal healthcare in the Chobe region.', 300.00, true)
     ON CONFLICT (user_id) DO NOTHING;
 
     -- Dr. Mpho (Existing General Practitioner - Gaborone)
-    CALL sp_create_user('Dr. Mpho Modise', 'doctor@haemilife.com', '+26772123456', p_password_hash, 'doctor');
+    CALL sp_create_user('Dr. Mpho Modise', 'doctor@haemilife.com', '+26772123456', p_password_hash, 'doctor', NULL, '/uploads/doctors/doctor_01.jpg');
     SELECT id INTO v_doctor_id FROM users WHERE email = 'doctor@haemilife.com';
     INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, consultation_fee, is_verified, bio)
     VALUES (v_doctor_id, 'General Practitioner', 'BW-GP-2018-1234', 6, 250.00, true, 'Senior GP focused on family medicine and preventive care.')
@@ -319,10 +345,10 @@ BEGIN
     (v_doctor_id, 'friday', '08:00'::TIME, '17:00'::TIME);
 
     -- 5. Create Pharmacist (Keitumetse)
-    CALL sp_create_user('Keitumetse Gaosekwe', 'pharmacist@haemilife.com', '+26775123456', p_password_hash, 'pharmacist');
+    CALL sp_create_user('Keitumetse Gaosekwe', 'pharmacist@haemilife.com', '+26775123456', p_password_hash, 'pharmacist', NULL, '/uploads/pharmacies/pharmacy_01.jpg');
 
     -- 6. Create Patient (Tebogo)
-    CALL sp_create_user('Tebogo Motswana', 'patient@haemilife.com', '+26773123456', p_password_hash, 'patient', '123456789');
+    CALL sp_create_user('Tebogo Motswana', 'patient@haemilife.com', '+26773123456', p_password_hash, 'patient', '123456789', '/uploads/patients/patient_01.jpg');
     SELECT id INTO v_patient_id FROM users WHERE email = 'patient@haemilife.com';
 
     -- 7. Create Appointment

@@ -62,7 +62,10 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
 }));
 
-app.use(helmet());
+app.use(helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: false, // Disable for demo/investor mode to allow external assets & rapid UI dev
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // ─── V5 FIX: Tiered rate limiters — demo-safe but production-hardened ────────

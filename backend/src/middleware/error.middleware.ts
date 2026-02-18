@@ -13,7 +13,15 @@ export const globalErrorHandler = (err: any, req: Request, res: Response, next: 
     // Always log the full error internally for observability
     console.error(`[Error] ${req.method} ${req.url}:`, err);
 
-    const statusCode = err.statusCode || err.status || 500;
+    let statusCode = err.statusCode || err.status || 500;
+
+    // Handle Multer specific errors
+    if (err.name === 'MulterError') {
+        statusCode = 400;
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            err.message = 'File too large. Maximum size allowed is 10MB.';
+        }
+    }
 
     if (IS_PRODUCTION) {
         // Never leak internal error details in production

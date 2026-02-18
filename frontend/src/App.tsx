@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { NetworkStatusProvider } from './context/NetworkStatus';
 import { SessionManagerProvider } from './context/SessionManager';
+import { AlertDialogProvider } from './context/AlertDialogContext';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { ScrollToTop } from './components/utils/ScrollToTop';
@@ -113,7 +114,6 @@ const AppRoutes = () => {
 
             {/* Lazy Loaded Routes */}
             <Route path={PATHS.HELP} element={<Help />} />
-            <Route path={PATHS.CONSENT} element={<TelemedicineConsent />} />
             <Route path={PATHS.ONBOARDING} element={<Onboarding />} />
             <Route
               path="/dashboard/*"
@@ -122,6 +122,18 @@ const AppRoutes = () => {
                   <DashboardLayout>
                     <PageTransition>
                       <RoleBasedDashboard />
+                    </PageTransition>
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={PATHS.CONSENT}
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <PageTransition>
+                      <TelemedicineConsent />
                     </PageTransition>
                   </DashboardLayout>
                 </ProtectedRoute>
@@ -361,14 +373,16 @@ const App: React.FC = () => {
         <AuthProvider>
           <ThemeProvider>
             <ToastProvider>
-              <NetworkStatusProvider>
-                <SessionManagerProvider>
-                  <LanguageProvider>
-                    <ScrollToTop />
-                    <AppRoutes />
-                  </LanguageProvider>
-                </SessionManagerProvider>
-              </NetworkStatusProvider>
+              <AlertDialogProvider>
+                <NetworkStatusProvider>
+                  <SessionManagerProvider>
+                    <LanguageProvider>
+                      <ScrollToTop />
+                      <AppRoutes />
+                    </LanguageProvider>
+                  </SessionManagerProvider>
+                </NetworkStatusProvider>
+              </AlertDialogProvider>
             </ToastProvider>
           </ThemeProvider>
         </AuthProvider>

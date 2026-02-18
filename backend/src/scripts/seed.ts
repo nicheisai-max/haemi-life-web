@@ -1,6 +1,97 @@
 import { pool } from '../config/db';
 import bcrypt from 'bcrypt';
 
+const seedMedicalRecords = async (client: any, patientId: string) => {
+    console.log('📂 Seeding Medical Records for Patient:', patientId);
+
+    // Clear existing records for this patient to avoid duplicates if re-seeding without full wipe
+    await client.query('DELETE FROM medical_records WHERE patient_id = $1', [patientId]);
+
+    const records = [
+        {
+            name: "Full Blood Count (FBC) Report",
+            record_type: "Lab Result",
+            doctor_name: "Dr. Thabo Kgosi",
+            facility_name: "Princess Marina Hospital",
+            date_of_service: "2025-11-15",
+            status: "Final",
+            notes: "HbA1c levels slightly elevated (6.2%). Lipid profile within normal range.",
+            file_path: "uploads/medical_records/demo_fbc_report.pdf",
+            file_type: "application/pdf",
+            file_size: "1.2 MB"
+        },
+        {
+            name: "Chest X-Ray (PA View)",
+            record_type: "Radiology",
+            doctor_name: "Dr. Lerato Molefe",
+            facility_name: "Bokamoso Private Hospital",
+            date_of_service: "2026-01-10",
+            status: "Final",
+            notes: "Clear lung fields. No evidence of consolidation or pleural effusion.",
+            file_path: "uploads/medical_records/demo_chest_xray.jpg",
+            file_type: "image/jpeg",
+            file_size: "3.5 MB"
+        },
+        {
+            name: "Annual General Checkup Summary",
+            record_type: "Clinical Note",
+            doctor_name: "Dr. Neo Mousi",
+            facility_name: "Maun General Hospital",
+            date_of_service: "2025-08-22",
+            status: "Final",
+            notes: "Patient in good general health. BP 120/80. BMI 24.5.",
+            file_path: "uploads/medical_records/demo_checkup_summary.pdf",
+            file_type: "application/pdf",
+            file_size: "850 KB"
+        },
+        {
+            name: "Dermatology Consultation",
+            record_type: "Specialist Report",
+            doctor_name: "Dr. Kagiso Dube",
+            facility_name: "Phakalane Specialist Clinic",
+            date_of_service: "2025-12-05",
+            status: "Final",
+            notes: "Treatment for localized dermatitis initiated. Follow-up in 3 months.",
+            file_path: "uploads/medical_records/demo_derm_report.pdf",
+            file_type: "application/pdf",
+            file_size: "1.0 MB"
+        },
+        {
+            name: "COVID-19 Vaccination Certificate",
+            record_type: "Immunization",
+            doctor_name: "Ministry of Health",
+            facility_name: "Sir Ketumile Masire Teaching Hospital",
+            date_of_service: "2024-05-20",
+            status: "Verified",
+            notes: "Booster dose administered.",
+            file_path: "uploads/medical_records/demo_vaccine_cert.pdf",
+            file_type: "application/pdf",
+            file_size: "500 KB"
+        }
+    ];
+
+    for (const record of records) {
+        await client.query(`
+            INSERT INTO medical_records 
+            (patient_id, name, record_type, doctor_name, facility_name, date_of_service, status, notes, file_path, file_type, file_size)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [
+            patientId,
+            record.name,
+            record.record_type,
+            record.doctor_name,
+            record.facility_name,
+            record.date_of_service,
+            record.status,
+            record.notes,
+            record.file_path,
+            record.file_type,
+            record.file_size
+        ]);
+    }
+    console.log(`✅ Seeded ${records.length} medical records.`);
+};
+
 const seed = async () => {
     const client = await pool.connect();
 
@@ -10,6 +101,10 @@ const seed = async () => {
 
         // --- 1. Clean up existing data ---
         console.log('🧹 Cleaning up old doctor data...');
+        // Note: We don't delete all users here to preserve the patient if possible,
+        // but if the patient doesn't exist, we can't seed records.
+        // Assuming init.sql or manual signup created the patient.
+
         await client.query(`DELETE FROM doctor_profiles`);
         await client.query(`DELETE FROM users WHERE role = 'doctor'`);
 
@@ -169,6 +264,30 @@ const seed = async () => {
             }
 
             console.log(`✅ Created Specialist: ${doc.name} (${doc.specialization})`);
+        }
+
+        // --- 4. Seed Medical Records for Default Patient ---
+        // --- 4. Seed Medical Records for Default Patient ---
+        let patientId;
+        const patientRes = await client.query("SELECT id FROM users WHERE email = 'patient@haemilife.com'");
+
+        if (patientRes.rows.length > 0) {
+            patientId = patientRes.rows[0].id;
+            console.log('🔄 Patient exists, updating password to ensure access...');
+            await client.query('UPDATE users SET password = $1 WHERE id = $2', [passwordHash, patientId]);
+        } else {
+            console.log('⚠️ Patient not found, creating default patient (Tebogo)...');
+            const newPatient = await client.query(`
+                INSERT INTO users (name, email, password, role, phone_number, id_number, status, is_verified)
+                VALUES ($1, $2, $3, 'patient', $4, $5, 'ACTIVE', true)
+                RETURNING id
+            `, ['Tebogo Motswana', 'patient@haemilife.com', passwordHash, '+26773123456', '123456789']);
+            patientId = newPatient.rows[0].id;
+            console.log('✅ Created Patient: Tebogo Motswana');
+        }
+
+        if (patientId) {
+            await seedMedicalRecords(client, patientId);
         }
 
         await client.query('COMMIT');

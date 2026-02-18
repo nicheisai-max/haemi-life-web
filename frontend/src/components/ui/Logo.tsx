@@ -2,7 +2,7 @@ import React from 'react';
 import logoImg from '../../assets/images/haemi_life_logo.png';
 
 interface LogoProps {
-    size?: 'sm' | 'md' | 'auth' | 'lg' | 'xl' | 'xxl';
+    size?: 'sm' | 'md' | 'nav' | 'auth' | 'lg' | 'xl' | 'xxl';
     className?: string;
 }
 
@@ -10,6 +10,7 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '' }) => {
     const heightMap = {
         sm: '28px',
         md: '32px',
+        nav: '48px',
         auth: '60px',
         lg: '64px',
         xl: '96px',

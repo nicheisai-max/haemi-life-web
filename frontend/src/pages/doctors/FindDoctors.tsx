@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { getDoctors, getSpecializations } from '../../services/doctor.service';
 import type { DoctorProfile } from '../../services/doctor.service';
-import { AlertCircle, Search, SearchX, User, BadgeCheck, BadgeInfo, Briefcase, Info, Calendar, ChevronDown, CheckCircle } from 'lucide-react';
+import { AlertCircle, Search, SearchX, User, BadgeCheck, BadgeInfo, Briefcase, ChevronDown, CheckCircle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MedicalLoader } from '../../components/ui/MedicalLoader';
 import { TransitionItem } from '../../components/layout/PageTransition';
@@ -76,7 +76,7 @@ export const FindDoctors: React.FC = () => {
     };
 
     const handleBookAppointment = (doctorId: string | number) => {
-        navigate(PATHS.PATIENT.BOOK_APPOINTMENT, { state: { doctorId: doctorId.toString() } });
+        navigate(`${PATHS.PATIENT.BOOK_APPOINTMENT}?doctorId=${doctorId}`);
     };
 
     if (loading) {
@@ -213,7 +213,7 @@ export const FindDoctors: React.FC = () => {
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     layout
                                 >
-                                    <Card className="group h-full hover:shadow-xl transition-all duration-300 border-border/60 hover:border-primary/20 bg-card overflow-hidden">
+                                    <Card className="group h-full hover:shadow-xl dark:hover:shadow-primary/5 transition-all duration-300 border-border/60 hover:border-primary/20 dark:hover:border-primary/50 bg-card dark:hover:bg-slate-800/50 overflow-hidden">
                                         <CardHeader className="flex flex-row justify-between items-start pb-2">
                                             <div className="w-16 h-16 rounded-full bg-primary/10 dark:bg-primary/5 flex items-center justify-center text-primary border-2 border-primary/30 dark:border-primary/40 shadow-lg dark:shadow-primary/20 ring-2 ring-primary/10 dark:ring-primary/15 transition-transform group-hover:scale-110 duration-300">
                                                 <User className="h-8 w-8" />
@@ -252,21 +252,21 @@ export const FindDoctors: React.FC = () => {
                                             </div>
                                         </CardContent>
 
-                                        <CardFooter className="flex flex-col gap-3 pt-2">
-                                            <Button
-                                                variant="outline"
-                                                className="w-full justify-center group-hover:bg-primary/5 group-hover:text-primary group-hover:border-primary/20 rounded-lg h-10"
-                                            >
-                                                <Info className="h-4 w-4 mr-2" />
-                                                View Profile
-                                            </Button>
-                                            <Button
-                                                className="w-full justify-center shadow-sm group-hover:shadow-md transition-all rounded-lg h-10"
-                                                onClick={() => handleBookAppointment(doctor.id)}
-                                            >
-                                                <Calendar className="h-4 w-4 mr-2" />
-                                                Book Appointment
-                                            </Button>
+                                        <CardFooter className="flex flex-col gap-3 pt-4 border-t border-border/40">
+                                            <div className="flex w-full gap-3">
+                                                <Button
+                                                    variant="outline"
+                                                    className="flex-1 justify-center rounded-xl h-11 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-foreground font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                                >
+                                                    View Profile
+                                                </Button>
+                                                <Button
+                                                    className="flex-1 justify-center rounded-xl h-11 bg-[#0E6B74] text-white hover:bg-[#083E44] dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90 shadow-lg shadow-teal-900/20 hover:shadow-xl hover:shadow-teal-900/30 transition-all font-semibold border border-transparent hover:scale-[1.02] active:scale-[0.98]"
+                                                    onClick={() => handleBookAppointment(doctor.id)}
+                                                >
+                                                    Book Now
+                                                </Button>
+                                            </div>
                                         </CardFooter>
                                     </Card>
                                 </motion.div>

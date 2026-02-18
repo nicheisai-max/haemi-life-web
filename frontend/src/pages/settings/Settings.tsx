@@ -335,7 +335,7 @@ export const Settings: React.FC = () => {
                                 <div className="font-medium text-destructive">Deactivate Account</div>
                                 <p className="text-sm text-muted-foreground">Temporarily disable your account</p>
                             </div>
-                            <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2">
+                            <Button variant="outline" className="h-[44px] w-[140px] border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2">
                                 <Power className="h-4 w-4" />
                                 Deactivate
                             </Button>
@@ -346,9 +346,9 @@ export const Settings: React.FC = () => {
                                 <div className="font-medium text-destructive">Delete Account</div>
                                 <p className="text-sm text-muted-foreground">Permanently delete your account and all data</p>
                             </div>
-                            <Button variant="destructive" className="gap-2">
+                            <Button variant="destructive" className="h-[44px] w-[140px] gap-2 text-white">
                                 <Trash2 className="h-4 w-4" />
-                                Delete Account
+                                Delete
                             </Button>
                         </div>
                     </div>

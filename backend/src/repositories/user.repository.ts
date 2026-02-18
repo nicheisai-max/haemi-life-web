@@ -12,6 +12,7 @@ export interface User {
     status: string;
     is_active: boolean;
     token_version: number;
+    profile_image: string | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -42,7 +43,7 @@ export class UserRepository {
 
     async findById(id: string): Promise<User | null> {
         const result = await this.db.query(
-            'SELECT id, name, email, phone_number, role, id_number, status, is_active, created_at, token_version FROM users WHERE id = $1',
+            'SELECT id, name, email, phone_number, role, id_number, status, is_active, created_at, token_version, profile_image FROM users WHERE id = $1',
             [id]
         );
         return result.rows[0] || null;
@@ -55,7 +56,7 @@ export class UserRepository {
             `INSERT INTO users (
                 name, phone_number, email, password, role, id_number, created_at, updated_at, status
             ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), 'ACTIVE') 
-            RETURNING id, email, role, name, phone_number, status`,
+            RETURNING id, email, role, name, phone_number, status, profile_image`,
             [name, phone_number, email || null, password, role, id_number || null]
         );
         return result.rows[0];
@@ -63,8 +64,16 @@ export class UserRepository {
 
     async updateProfile(userId: string, data: { name: string, email: string, phone_number: string }): Promise<User> {
         const result = await this.db.query(
-            'UPDATE users SET name = $1, email = $2, phone_number = $3, updated_at = NOW() WHERE id = $4 RETURNING id, name, email, phone_number, role',
+            'UPDATE users SET name = $1, email = $2, phone_number = $3, updated_at = NOW() WHERE id = $4 RETURNING id, name, email, phone_number, role, profile_image',
             [data.name, data.email, data.phone_number, userId]
+        );
+        return result.rows[0];
+    }
+
+    async updateProfileImage(userId: string, imagePath: string): Promise<User> {
+        const result = await this.db.query(
+            'UPDATE users SET profile_image = $1, updated_at = NOW() WHERE id = $2 RETURNING id, name, email, phone_number, role, profile_image',
+            [imagePath, userId]
         );
         return result.rows[0];
     }

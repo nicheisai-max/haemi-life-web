@@ -7,7 +7,14 @@ export interface MedicalRecord {
     file_type: string;
     file_size: string;
     uploaded_at: string;
+    record_type?: string;
+    doctor_name?: string;
+    facility_name?: string;
+    date_of_service?: string;
+    status?: string;
+    notes?: string;
 }
+
 
 export const getMyRecords = async (): Promise<MedicalRecord[]> => {
     const response = await api.get('/records');

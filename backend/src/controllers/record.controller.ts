@@ -37,10 +37,11 @@ export const uploadRecord = async (req: Request, res: Response) => {
         const fileSize = (size / 1024).toFixed(2) + ' KB';
 
         const result = await pool.query(`
-            INSERT INTO medical_records (patient_id, name, file_path, file_type, file_size)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO medical_records (patient_id, name, file_path, file_type, file_size, record_type, status, notes)
+            VALUES ($1, $2, $3, $4, $5, 'Patient Upload', 'Pending Review', 'Uploaded by patient')
             RETURNING *
         `, [patientId, originalname, filePath, mimetype, fileSize]);
+
 
         res.status(201).json({
             message: 'Medical record uploaded successfully',

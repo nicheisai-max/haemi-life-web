@@ -9,7 +9,7 @@ import type { Prescription } from '../../services/prescription.service';
 import {
     Plus, Calendar, FileText, FolderOpen, AlertCircle,
     ThermometerSun, Search, History, Settings as SettingsIcon,
-    CalendarX, Clock, ArrowRight, Heart, Activity
+    CalendarX, Clock, Heart, Activity
 } from 'lucide-react';
 import { PATHS } from '../../routes/paths';
 import { GradientMesh } from '@/components/ui/GradientMesh';
@@ -110,7 +110,7 @@ export const PatientDashboard = () => {
                     </div>
                     <Button
                         size="sm"
-                        className="bg-white text-teal-900 hover:bg-white/90 shadow-lg px-6 h-10 text-sm font-bold rounded-xl border-none whitespace-nowrap transition-transform active:scale-95"
+                        className="bg-white dark:bg-white text-teal-900 dark:text-teal-900 hover:bg-teal-50 dark:hover:bg-teal-50 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] px-6 h-10 text-sm font-bold rounded-xl border-none whitespace-nowrap transition-all duration-300 hover:scale-105 active:scale-95"
                         onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
                     >
                         <Plus className="h-4 w-4 mr-2" />
@@ -248,22 +248,22 @@ export const PatientDashboard = () => {
                 <div className="lg:col-span-4 space-y-6">
 
                     {/* Appointments List */}
-                    <section className="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col h-full shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-                            <h2 className="font-bold text-slate-900 dark:text-white text-sm">Upcoming</h2>
-                            <Button variant="ghost" size="sm" className="h-6 text-xs text-primary hover:text-primary-700 px-2" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
+                    <section className="bg-white dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col h-full shadow-sm overflow-hidden backdrop-blur-sm">
+                        <div className="p-4 border-b border-transparent flex items-center justify-between">
+                            <h2 className="font-bold text-slate-900 dark:text-white text-sm tracking-wide">Upcoming</h2>
+                            <Button variant="ghost" size="sm" className="h-6 text-[10px] font-semibold text-primary/80 hover:text-primary px-2 uppercase tracking-wider" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
                                 View All
                             </Button>
                         </div>
 
-                        <div className="p-3 space-y-3 flex-1">
+                        <div className="p-2 space-y-1 flex-1">
                             {loading ? (
                                 <div className="flex justify-center p-8">
                                     <MedicalLoader message="Syncing records..." />
                                 </div>
                             ) : upcomingAppointments.length === 0 ? (
                                 <div className="text-center py-8 px-4 flex flex-col items-center">
-                                    <CalendarX className="h-10 w-10 text-slate-300 dark:text-slate-700 mb-2" />
+                                    <CalendarX className="h-10 w-10 text-slate-300 dark:text-slate-700 mb-2 opacity-50" />
                                     <p className="text-sm font-medium text-slate-600 dark:text-slate-400">No appointments</p>
                                     <Button variant="link" size="sm" className="text-primary text-xs h-auto p-0 mt-1" onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}>Book now</Button>
                                 </div>
@@ -272,28 +272,20 @@ export const PatientDashboard = () => {
                                     const dateInfo = formatDate(appointment.appointment_date);
                                     const isToday = new Date(appointment.appointment_date).toDateString() === new Date().toDateString();
                                     return (
-                                        <div key={appointment.id} className={`flex gap-3 p-3 rounded-xl border transition-all hover:shadow-sm ${isToday ? 'bg-primary/5 border-primary/20' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
-                                            <div className="flex flex-col items-center justify-center min-w-[50px] bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 h-14">
-                                                <span className="text-lg font-bold text-slate-900 dark:text-white leading-none">{dateInfo.day}</span>
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase">{dateInfo.month}</span>
+                                        <div key={appointment.id} className={`flex gap-3 p-3 rounded-xl transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 group cursor-pointer ${isToday ? 'bg-primary/5' : 'bg-transparent'}`} onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}>
+                                            <div className="flex flex-col items-center justify-center min-w-[44px] w-11 h-11 bg-slate-100 dark:bg-slate-800/50 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
+                                                <span className="text-sm font-bold text-slate-900 dark:text-white leading-none">{dateInfo.day}</span>
+                                                <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{dateInfo.month}</span>
                                             </div>
-                                            <div className="flex-1 min-w-0">
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
                                                 <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{appointment.other_party_name || 'Doctor'}</h3>
-                                                <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                                                    <span className="flex items-center gap-1">
+                                                <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                                    <span className="flex items-center gap-1 group-hover:text-primary transition-colors">
                                                         <Clock className="h-3 w-3" /> {formatTime(appointment.appointment_time)}
                                                     </span>
-                                                    {isToday && <span className="text-primary font-bold px-1.5 py-0.5 bg-primary/10 rounded ml-auto">TODAY</span>}
+                                                    {isToday && <span className="text-primary font-bold px-1.5 py-0.5 bg-primary/10 rounded ml-auto text-[9px]">TODAY</span>}
                                                 </div>
                                             </div>
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="h-8 w-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
-                                                onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}
-                                            >
-                                                <ArrowRight className="h-4 w-4" />
-                                            </Button>
                                         </div>
                                     );
                                 })

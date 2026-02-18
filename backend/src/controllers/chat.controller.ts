@@ -68,7 +68,7 @@ export const getConversations = async (req: Request, res: Response) => {
                 c.last_message_at,
                 MAX(m.content) as last_message,
                 (
-                    SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role))
+                    SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role, 'profile_image', u.profile_image))
                     FROM conversation_participants cp2
                     JOIN users u ON cp2.user_id = u.id
                     WHERE cp2.conversation_id = c.id AND u.id != $1

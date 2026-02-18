@@ -12,6 +12,7 @@ export interface UserProfile {
     role: string;
     id_number?: string;
     is_active: boolean;
+    profile_image: string | null;
     created_at: string;
 }
 
@@ -44,8 +45,21 @@ export const changePassword = async (data: ChangePasswordData) => {
     return response.data;
 };
 
+// Upload profile image
+export const uploadProfileImage = async (file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await api.post('/auth/profile-image', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+    return response.data;
+};
+
 export default {
     getProfile,
     updateProfile,
-    changePassword
+    changePassword,
+    uploadProfileImage
 };

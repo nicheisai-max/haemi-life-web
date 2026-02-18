@@ -6,18 +6,22 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, CheckCircle2, Pencil, Save, Shield, Calendar, BadgeCheck, Settings as SettingsIcon, Lock, User } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Pencil, Save, Shield, Calendar, BadgeCheck, Settings as SettingsIcon, Lock, User, Camera, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { getProfile, updateProfile } from '../../services/user.service';
+import { getProfile, updateProfile, uploadProfileImage } from '../../services/user.service';
 import type { UserProfile } from '../../services/user.service';
 import { profileUpdateSchema, type ProfileUpdateFormData } from '../../lib/validation/profile.schema';
+import { useAuth } from '../../context/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 
 export const Profile: React.FC = () => {
     const navigate = useNavigate();
+    const { refreshUser } = useAuth();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
     const [editing, setEditing] = useState(false);
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -49,6 +53,27 @@ export const Profile: React.FC = () => {
             setGeneralError(err.response?.data?.message || 'Failed to load profile');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setUploading(true);
+            setGeneralError(null);
+            await uploadProfileImage(file);
+            await refreshUser(); // Refresh auth state
+            await fetchProfile(); // Refresh local profile state
+            setSuccess('Profile image updated successfully!');
+            setTimeout(() => setSuccess(null), 3000);
+        } catch (err: any) {
+            console.error('[Profile] Upload error:', err.response?.data);
+            const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to upload image';
+            setGeneralError(errorMsg);
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -115,22 +140,54 @@ export const Profile: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8">
                 {/* Left: Profile Info */}
                 <Card className="p-6">
-                    <div className="flex items-center justify-between mb-6 pb-4 border-b">
-                        <h2 className="text-xl font-semibold flex items-center gap-2">
-                            <User className="h-5 w-5 text-primary" />
-                            Personal Information
-                        </h2>
+                    <div className="flex flex-col md:flex-row items-center gap-6 mb-8 pb-6 border-b">
+                        <div className="relative group">
+                            <Avatar className="h-24 w-24 ring-4 ring-background shadow-lg border">
+                                <AvatarImage
+                                    src={profile?.profile_image ? (profile.profile_image.startsWith('http') ? profile.profile_image : `http://localhost:5000${profile.profile_image}`) : ''}
+                                    alt={profile?.name}
+                                />
+                                <AvatarFallback className="bg-primary/5 text-primary text-2xl font-bold">
+                                    {profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || <User />}
+                                </AvatarFallback>
+                            </Avatar>
+                            <label
+                                htmlFor="avatar-upload"
+                                className="absolute bottom-0 right-0 p-1.5 bg-primary text-primary-foreground rounded-full cursor-pointer shadow-md hover:scale-110 transition-transform duration-200 ring-2 ring-background"
+                            >
+                                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                                <input
+                                    id="avatar-upload"
+                                    type="file"
+                                    className="hidden"
+                                    accept="image/*"
+                                    onChange={handleImageUpload}
+                                    disabled={uploading}
+                                />
+                            </label>
+                        </div>
+                        <div className="text-center md:text-left">
+                            <h2 className="text-2xl font-bold mb-1">{profile?.name}</h2>
+                            <p className="text-muted-foreground flex items-center justify-center md:justify-start gap-2">
+                                <Shield className="h-4 w-4" />
+                                <span className="capitalize">{profile?.role}</span>
+                            </p>
+                        </div>
                         {!editing && (
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setEditing(true)}
-                                className="gap-2"
+                                className="md:ml-auto gap-2"
                             >
                                 <Pencil className="h-4 w-4" />
-                                Edit
+                                Edit Basic Info
                             </Button>
                         )}
+                    </div>
+
+                    <div className="mb-4">
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Personal Details</h3>
                     </div>
 
                     <Form {...form}>

@@ -7,6 +7,7 @@ export interface User {
     name: string;
     role: UserRole;
     id_number?: string | null;
+    profile_image?: string | null;
 }
 
 export interface AuthResponse {

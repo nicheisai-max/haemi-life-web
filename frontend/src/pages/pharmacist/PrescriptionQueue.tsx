@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useConfirm } from '@/context/AlertDialogContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -42,8 +43,17 @@ export const PrescriptionQueue: React.FC = () => {
         }
     };
 
+    const { confirm } = useConfirm();
     const handleReject = async (prescriptionId: number) => {
-        if (!confirm('Are you sure you want to reject this prescription?')) return;
+        const isConfirmed = await confirm({
+            title: 'Reject Prescription',
+            message: 'Are you sure you want to reject this prescription? This action cannot be undone.',
+            type: 'warning',
+            confirmText: 'Reject Prescription',
+            cancelText: 'Cancel'
+        });
+
+        if (!isConfirmed) return;
 
         try {
             setProcessing(prescriptionId.toString());

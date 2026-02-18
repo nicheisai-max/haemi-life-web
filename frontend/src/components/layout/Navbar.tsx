@@ -10,7 +10,6 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -61,6 +60,12 @@ export const Navbar: React.FC = () => {
     const getUserImage = () => {
         if (!user) return '';
 
+        // Prioritize DB image
+        if (user.profile_image) {
+            return `http://localhost:5000${user.profile_image}`;
+        }
+
+        // Fallback to current hardcoded logic (Zero-Regression)
         switch (user.role) {
             case 'admin':
                 return adminImg;
@@ -88,7 +93,7 @@ export const Navbar: React.FC = () => {
                         className="flex items-center gap-2 transition-opacity hover:opacity-90 px-4"
                         aria-label="Haemi Life Home"
                     >
-                        <Logo size="md" />
+                        <Logo size="nav" />
                     </Link>
                 </div>
 
@@ -126,33 +131,59 @@ export const Navbar: React.FC = () => {
                                 </Avatar>
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuLabel className="font-normal">
+                        <DropdownMenuContent align="end" className="w-64 rounded-3xl p-1.5 bg-[#1e1e1e]/95 backdrop-blur-xl border-white/5 shadow-2xl mt-2">
+                            <DropdownMenuLabel className="font-normal px-4 py-3.5">
                                 <div className="flex flex-col space-y-1">
-                                    <p className="text-sm font-medium leading-none">{user?.name}</p>
-                                    <p className="text-xs leading-none text-muted-foreground capitalize">{user?.role}</p>
+                                    <p className="text-sm font-semibold leading-none text-white tracking-wide">{user?.name}</p>
+                                    <p className="text-[10px] leading-none text-gray-400 font-medium tracking-wider uppercase opacity-80 mt-1">{user?.role}</p>
                                 </div>
                             </DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => navigate('/profile')}>
-                                <UserIcon className="mr-2 h-4 w-4" aria-hidden="true" />
-                                <span className="cursor-pointer">Profile</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                                <div className="mr-2 h-4 w-4 flex items-center justify-center">
-                                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4"><path d="M0 3.5C0 2.67157 0.671573 2 1.5 2H6.5C7.32843 2 8 2.67157 8 3.5V6.5C8 7.32843 7.32843 8 6.5 8H1.5C0.671573 8 0 7.32843 0 6.5V3.5ZM9 3.5C9 2.67157 9.67157 2 10.5 2H13.5C14.3284 2 15 2.67157 15 3.5V6.5C15 7.32843 14.3284 8 13.5 8H10.5C9.67157 8 9 7.32843 9 6.5V3.5ZM0 10.5C0 9.67157 0.671573 9 1.5 9H6.5C7.32843 9 8 9.67157 8 10.5V13.5C8 14.3284 7.32843 15 6.5 15H1.5C0.671573 15 0 14.3284 0 13.5V10.5ZM9 10.5C9 9.67157 9.67157 9 10.5 9H13.5C14.3284 9 15 9.67157 15 10.5V13.5C15 14.3284 14.3284 15 13.5 15H10.5C9.67157 15 9 14.3284 9 13.5V10.5Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
-                                </div>
-                                <span className="cursor-pointer">Dashboard</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => navigate('/settings')}>
-                                <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
-                                <span className="cursor-pointer">Settings</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
-                                <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
-                                <span>Log out</span>
-                            </DropdownMenuItem>
+
+                            <div className="flex flex-col gap-0.5 px-0.5">
+                                <DropdownMenuItem
+                                    onClick={() => navigate('/profile')}
+                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-white/5 hover:bg-white/5 transition-all duration-200"
+                                >
+                                    <div className="mr-3 flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
+                                        <UserIcon className="h-4.5 w-4.5 text-gray-400 group-hover:text-primary transition-colors" />
+                                    </div>
+                                    <span className="text-sm text-gray-200 font-medium group-hover:text-white transition-colors">Profile</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                    onClick={() => navigate('/dashboard')}
+                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-white/5 hover:bg-white/5 transition-all duration-200"
+                                >
+                                    <div className="mr-3 flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
+                                        <svg width="18" height="18" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5 text-gray-400 group-hover:text-primary transition-colors">
+                                            <path d="M0 3.5C0 2.67157 0.671573 2 1.5 2H6.5C7.32843 2 8 2.67157 8 3.5V6.5C8 7.32843 7.32843 8 6.5 8H1.5C0.671573 8 0 7.32843 0 6.5V3.5ZM9 3.5C9 2.67157 9.67157 2 10.5 2H13.5C14.3284 2 15 2.67157 15 3.5V6.5C15 7.32843 14.3284 8 13.5 8H10.5C9.67157 8 9 7.32843 9 6.5V3.5ZM0 10.5C0 9.67157 0.671573 9 1.5 9H6.5C7.32843 9 8 9.67157 8 10.5V13.5C8 14.3284 7.32843 15 6.5 15H1.5C0.671573 15 0 14.3284 0 13.5V10.5ZM9 10.5C9 9.67157 9.67157 9 10.5 9H13.5C14.3284 9 15 9.67157 15 10.5V13.5C15 14.3284 14.3284 15 13.5 15H10.5C9.67157 15 9 14.3284 9 13.5V10.5Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path>
+                                        </svg>
+                                    </div>
+                                    <span className="text-sm text-gray-200 font-medium group-hover:text-white transition-colors">Dashboard</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                    onClick={() => navigate('/settings')}
+                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-white/5 hover:bg-white/5 transition-all duration-200"
+                                >
+                                    <div className="mr-3 flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
+                                        <Settings className="h-4.5 w-4.5 text-gray-400 group-hover:text-primary transition-colors" />
+                                    </div>
+                                    <span className="text-sm text-gray-200 font-medium group-hover:text-white transition-colors">Settings</span>
+                                </DropdownMenuItem>
+                            </div>
+
+                            <div className="px-0.5 mt-1.5 pt-1.5 border-t border-white/5">
+                                <DropdownMenuItem
+                                    onClick={handleLogout}
+                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-red-500/10 hover:bg-red-500/10 transition-all duration-200"
+                                >
+                                    <div className="mr-3 flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
+                                        <LogOut className="h-4.5 w-4.5 text-red-400 group-hover:text-red-300 transition-colors" />
+                                    </div>
+                                    <span className="text-sm text-red-400 font-medium group-hover:text-red-300 transition-colors">Log out</span>
+                                </DropdownMenuItem>
+                            </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>

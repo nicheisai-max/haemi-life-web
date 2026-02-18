@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Video, ShieldCheck, AlertTriangle, MonitorPlay, Wifi, Lock, CheckCircle2, X } from 'lucide-react';
+import { Video, ShieldCheck, AlertTriangle, MonitorPlay, Wifi, Lock, CheckCircle2, X, ArrowLeft } from 'lucide-react';
 import { telemedicineConsentSchema, type TelemedicineConsentFormData } from '../../lib/validation/legal.schema';
 
 import { SignaturePad } from '@/components/ui/SignaturePad';
@@ -36,11 +36,22 @@ export const TelemedicineConsent: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-background py-8 px-4">
+        <div className="relative min-h-screen bg-background p-6 md:p-12">
+            {/* Premium Back Button */}
+            <div className="absolute top-8 left-8 z-50">
+                <button
+                    onClick={() => navigate(-1)}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-full bg-background/80 md:bg-card/50 backdrop-blur-xl border border-border/50 shadow-lg hover:shadow-primary/20 hover:border-primary/50 transition-all duration-300 hover:scale-105 active:scale-95"
+                >
+                    <ArrowLeft className="h-4 w-4 text-foreground/70 group-hover:text-primary transition-colors" strokeWidth={2.5} />
+                    <span className="text-sm font-bold text-foreground/70 group-hover:text-primary transition-colors">Go Back</span>
+                </button>
+            </div>
+
             <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
                 <div className="text-center space-y-4">
                     <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                        <Video className="h-8 w-8" />
+                        <Video className="h-8 w-8" strokeWidth={2.5} />
                     </div>
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-foreground">Telemedicine Consultation Consent</h1>
@@ -51,7 +62,7 @@ export const TelemedicineConsent: React.FC = () => {
                 <Card className="p-6 md:p-10 space-y-8">
                     <section className="space-y-3">
                         <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                            <MonitorPlay className="h-5 w-5 text-primary" />
+                            <MonitorPlay className="h-5 w-5 text-primary" strokeWidth={2.5} />
                             What is Telemedicine?
                         </h2>
                         <p className="text-muted-foreground leading-relaxed pl-7">
@@ -62,7 +73,7 @@ export const TelemedicineConsent: React.FC = () => {
 
                     <section className="space-y-3">
                         <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                            <CheckCircle2 className="h-5 w-5 text-primary" />
+                            <CheckCircle2 className="h-5 w-5 text-primary" strokeWidth={2.5} />
                             Benefits of Telemedicine
                         </h2>
                         <ul className="list-disc pl-11 space-y-2 text-muted-foreground">
@@ -75,7 +86,7 @@ export const TelemedicineConsent: React.FC = () => {
 
                     <section className="space-y-3">
                         <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-orange-500" />
+                            <AlertTriangle className="h-5 w-5 text-orange-600" strokeWidth={2.5} />
                             Limitations and Risks
                         </h2>
                         <p className="text-muted-foreground pl-7 mb-2">By accepting this consent, you acknowledge the following limitations:</p>
@@ -105,7 +116,7 @@ export const TelemedicineConsent: React.FC = () => {
 
                     <section className="space-y-3">
                         <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                            <CheckCircle2 className="h-5 w-5 text-primary" />
+                            <CheckCircle2 className="h-5 w-5 text-primary" strokeWidth={2.5} />
                             Your Responsibilities
                         </h2>
                         <p className="text-muted-foreground pl-7 mb-2">As a patient using telemedicine services, you agree to:</p>
@@ -120,7 +131,7 @@ export const TelemedicineConsent: React.FC = () => {
 
                     <section className="space-y-3">
                         <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                            <Lock className="h-5 w-5 text-primary" />
+                            <Lock className="h-5 w-5 text-primary" strokeWidth={2.5} />
                             Privacy and Confidentiality
                         </h2>
                         <div className="space-y-3 pl-7">
@@ -138,7 +149,7 @@ export const TelemedicineConsent: React.FC = () => {
 
                     <section className="space-y-3">
                         <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                            <Wifi className="h-5 w-5 text-primary" />
+                            <Wifi className="h-5 w-5 text-primary" strokeWidth={2.5} />
                             Technical Requirements
                         </h2>
                         <p className="text-muted-foreground pl-7 mb-2">For the best telemedicine experience, ensure you have:</p>

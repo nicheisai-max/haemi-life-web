@@ -9,6 +9,7 @@ interface AuthContextType {
     login: (credentials: LoginCredentials) => Promise<void>;
     signup: (credentials: SignupCredentials) => Promise<void>;
     logout: () => void;
+    refreshUser: () => Promise<void>;
     isLoading: boolean;
     isAuthenticated: boolean;
 }
@@ -135,6 +136,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAuthState({ user: null, token: null });
     }, []);
 
+    const refreshUser = useCallback(async () => {
+        const storedToken = localStorage.getItem('token');
+        if (!storedToken) return;
+
+        try {
+            const { user: verifiedUser } = await authService.verifySession();
+            setAuthState({ user: verifiedUser, token: storedToken });
+            localStorage.setItem('user', JSON.stringify(verifiedUser));
+        } catch (error) {
+            console.error('[Auth] Failed to refresh user:', error);
+        }
+    }, []);
+
     const isAuthenticated = !!authState.user;
 
     return (
@@ -144,6 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             login,
             signup,
             logout,
+            refreshUser,
             isLoading: isInitializing,
             isAuthenticated,
         }}>

@@ -4,7 +4,8 @@ import {
     MessageSquare, X, Minus,
     ChevronLeft,
     ShieldCheck, Search, CheckCheck,
-    Paperclip, Send, FileText, Plus, UserPlus
+    Paperclip, Send, FileText, Plus, UserPlus,
+    MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat, type Conversation } from '../../hooks/useChat';
@@ -14,12 +15,14 @@ import api from '../../services/api';
 import type { DoctorProfile } from '../../services/doctor.service';
 import doctor01 from '../../assets/images/doctors/doctor_01.jpg';
 import doctor02 from '../../assets/images/doctors/doctor_02.png';
+import doctor03 from '../../assets/images/doctors/doctor_03.png';
 
 // Override helper to get images
 const getDoctorImage = (name: string) => {
     if (!name) return undefined;
-    if (name.includes('Dr. Sarah')) return doctor01;
-    if (name.includes('Dr. Michael')) return doctor02;
+    if (name.includes('Dr. Thabo') || name.includes('Kgosi')) return doctor01;
+    if (name.includes('Dr. Lorato') || name.includes('Molefe')) return doctor02;
+    if (name.includes('Dr. Neo') || name.includes('Mousi')) return doctor03;
     // Fallback deterministic mapping for demo
     if (name.length % 2 === 0) return doctor01;
     return doctor02;
@@ -149,9 +152,12 @@ export const ChatHub: React.FC = () => {
 
     const getOtherParticipant = (conversation: Conversation) => {
         const other = (conversation.participants && Array.isArray(conversation.participants))
-            ? conversation.participants.find(p => p.id !== user?.id) || { name: 'Unknown', role: 'Unknown', id: 'unknown' }
-            : { name: 'Unknown', role: 'Unknown', id: 'unknown' };
-        return { ...other, image: getDoctorImage(other.name) };
+            ? conversation.participants.find(p => p.id !== user?.id) || { name: 'Unknown', role: 'Unknown', id: 'unknown', profile_image: undefined }
+            : { name: 'Unknown', role: 'Unknown', id: 'unknown', profile_image: undefined };
+
+        // Use DB image first, then fallback to local mapping (fail-safe), then undefined
+        const dbImage = other.profile_image ? `http://localhost:5000${other.profile_image}` : undefined;
+        return { ...other, image: dbImage || getDoctorImage(other.name) };
     };
 
     const filteredConversations = useMemo(() => conversations.filter(c => {
@@ -171,23 +177,34 @@ export const ChatHub: React.FC = () => {
         return format(date, 'HH:mm');
     };
 
+
+
     // --- Render Minimized State ---
     if (!isOpen && !isMinimized) {
         return (
             <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
+                initial={{ scale: 0, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 260, damping: 20 }}
                 className="fixed bottom-6 right-6 z-[60]"
             >
+                {/* Pulse Effect */}
+                <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-teal-400 opacity-20 duration-1000"></span>
+
                 <Button
                     onClick={toggleChat}
-                    className="h-14 w-14 rounded-full bg-gradient-to-tr from-teal-500 to-emerald-500 shadow-lg shadow-teal-500/30 p-0 flex items-center justify-center group border-[3px] border-white dark:border-slate-800"
+                    className="relative h-16 w-16 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 shadow-2xl shadow-teal-500/40 p-0 flex items-center justify-center group border border-white/20 dark:border-white/10 overflow-hidden"
                     aria-label="Open chat"
                 >
-                    <MessageSquare className="h-6 w-6 text-white group-hover:scale-110 transition-transform" />
+                    {/* Inner Glow */}
+                    <div className="absolute inset-0 bg-white/20 blur-xl group-hover:bg-white/30 transition-all duration-500" />
+
+                    <MessageCircle className="relative h-8 w-8 text-white drop-shadow-md group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
+
                     {conversations.some(c => parseInt(c.unread_count) > 0) && (
-                        <span className="absolute top-0 right-0 h-4 w-4 bg-red-500 rounded-full border-2 border-white dark:border-slate-800" />
+                        <span className="absolute top-3 right-3 h-3.5 w-3.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 shadow-sm z-10" />
                     )}
                 </Button>
             </motion.div>
@@ -197,22 +214,24 @@ export const ChatHub: React.FC = () => {
     if (isMinimized) {
         return (
             <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
+                initial={{ scale: 0, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 260, damping: 20 }}
                 className="fixed bottom-6 right-6 z-[60]"
             >
                 <Button
                     onClick={() => setIsMinimized(false)}
-                    className="h-14 w-14 rounded-full bg-white dark:bg-slate-800 shadow-lg p-0 flex items-center justify-center group border-[3px] border-slate-100 dark:border-slate-700 overflow-hidden"
+                    className="h-16 w-16 rounded-full bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/50 p-0 flex items-center justify-center group border border-slate-200 dark:border-slate-700 overflow-hidden"
                 >
                     {activeConversation ? (
-                        <Avatar name={getOtherParticipant(activeConversation).name} image={getOtherParticipant(activeConversation).image} size="md" className="h-full w-full rounded-none" />
+                        <Avatar name={getOtherParticipant(activeConversation).name} image={getOtherParticipant(activeConversation).image} size="md" className="h-full w-full rounded-none opacity-90 group-hover:opacity-100 transition-opacity" />
                     ) : (
-                        <MessageSquare className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+                        <MessageCircle className="h-8 w-8 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
                     )}
                     {conversations.some(c => parseInt(c.unread_count) > 0) && (
-                        <span className="absolute top-0 right-0 h-4 w-4 bg-red-500 rounded-full border-2 border-white" />
+                        <span className="absolute top-3 right-3 h-3.5 w-3.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 z-10" />
                     )}
                 </Button>
             </motion.div>
@@ -237,17 +256,17 @@ export const ChatHub: React.FC = () => {
                     animate={{ y: 0, opacity: 1, scale: 1 }}
                     exit={{ y: 20, opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="pointer-events-auto bg-white dark:bg-slate-950 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-[380px] sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden"
+                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-[380px] sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5"
                 >
                     {/* --- Helper: Header --- */}
-                    <div className="shrink-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur z-20 border-b border-slate-100 dark:border-slate-800">
-                        <div className="px-4 py-3 flex items-center justify-between">
+                    <div className="shrink-0 bg-white/95 dark:bg-[#1a1c23]/95 backdrop-blur z-20">
+                        <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100 dark:border-white/5">
                             <div className="flex items-center gap-3 overflow-hidden">
                                 {view !== 'contacts' && (
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 -ml-1 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                        className="h-8 w-8 -ml-1 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                         onClick={() => setView('contacts')}
                                     >
                                         <ChevronLeft className="h-5 w-5" />
@@ -258,24 +277,24 @@ export const ChatHub: React.FC = () => {
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="relative shrink-0">
                                             <Avatar name={getOtherParticipant(activeConversation).name} image={getOtherParticipant(activeConversation).image} size="sm" />
-                                            <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 border border-white dark:border-slate-950 rounded-full"></span>
+                                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#1a1c23] rounded-full"></span>
                                         </div>
                                         <div className="flex flex-col truncate">
-                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">
                                                 {getOtherParticipant(activeConversation).name}
                                             </h3>
-                                            <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium truncate">
+                                            <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium truncate leading-tight">
                                                 {getOtherParticipant(activeConversation).role}
                                             </span>
                                         </div>
                                     </div>
                                 ) : view === 'new-chat' ? (
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">New Message</h3>
+                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">New Message</h3>
                                 ) : (
                                     <div className="flex flex-col">
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Messages</h3>
-                                        <span className="text-[11px] text-slate-500 font-medium">
-                                            {conversations.length} conversations
+                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-none">Messages</h3>
+                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1">
+                                            {Math.min(filteredConversations.length, 3)} conversations
                                         </span>
                                     </div>
                                 )}
@@ -285,7 +304,7 @@ export const ChatHub: React.FC = () => {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                    className="h-8 w-8 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
                                     onClick={() => setIsMinimized(true)}
                                 >
                                     <Minus className="h-4 w-4" />
@@ -293,7 +312,7 @@ export const ChatHub: React.FC = () => {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                                    className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                                     onClick={toggleChat}
                                 >
                                     <X className="h-4 w-4" />
@@ -302,9 +321,9 @@ export const ChatHub: React.FC = () => {
                         </div>
 
                         {/* Encryption Banner */}
-                        <div className="py-1 bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-center gap-1.5">
-                            <ShieldCheck className="h-2.5 w-2.5 text-slate-400" />
-                            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
+                        <div className="py-2 bg-slate-100/80 dark:bg-black/40 border-b border-slate-200/50 dark:border-white/5 flex items-center justify-center gap-2 backdrop-blur-md">
+                            <ShieldCheck className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest text-center">
                                 End-to-end Encrypted
                             </span>
                         </div>
@@ -347,7 +366,7 @@ export const ChatHub: React.FC = () => {
                                                 <p className="text-xs text-slate-500 mt-1">Start a consultation or chat with a doctor.</p>
                                             </div>
                                         ) : (
-                                            filteredConversations.map(conv => {
+                                            filteredConversations.slice(0, 3).map(conv => {
                                                 const other = getOtherParticipant(conv);
                                                 return (
                                                     <button

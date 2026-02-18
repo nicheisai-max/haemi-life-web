@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useConfirm } from '../../context/AlertDialogContext';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '@/components/ui/card';
@@ -62,8 +63,18 @@ export const Appointments: React.FC = () => {
         setFilteredAppointments(filtered);
     };
 
+    const { confirm } = useConfirm();
+
     const handleCancel = async (appointmentId: number) => {
-        if (!confirm('Are you sure you want to cancel this appointment?')) return;
+        const isConfirmed = await confirm({
+            title: 'Cancel Appointment',
+            message: 'Are you sure you want to cancel this appointment? This action cannot be undone.',
+            type: 'warning',
+            confirmText: 'Yes, Cancel It',
+            cancelText: 'No, Keep It'
+        });
+
+        if (!isConfirmed) return;
 
         try {
             await cancelAppointment(appointmentId);

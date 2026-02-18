@@ -119,7 +119,7 @@ export const login = async (req: Request, res: Response) => {
             { expiresIn: '12h' }
         );
 
-        res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, status: user.status } });
+        res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, status: user.status, profile_image: user.profile_image } });
     } catch (error) {
         logger.error('Login server error', { error, identifier });
         res.status(500).json({ message: 'Server error' });
@@ -157,6 +157,34 @@ export const updateProfile = async (req: any, res: Response) => {
     } catch (error) {
         console.error('Error updating profile:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const uploadProfileImage = async (req: any, res: Response) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const userId = req.user.id;
+        const imagePath = `/uploads/profiles/${req.file.filename}`;
+
+        const updatedUser = await userRepository.updateProfileImage(userId, imagePath);
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({
+            message: 'Profile image updated successfully',
+            user: updatedUser
+        });
+    } catch (error: any) {
+        console.error('Error uploading profile image:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error during upload process'
+        });
     }
 };
 
