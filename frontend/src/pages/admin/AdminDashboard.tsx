@@ -10,7 +10,7 @@ import { GradientMesh } from '@/components/ui/GradientMesh';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { TransitionItem } from '../../components/layout/PageTransition';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
-import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
 import { IconWrapper } from '@/components/ui/IconWrapper';
 import { PATHS } from '../../routes/paths';
@@ -70,12 +70,12 @@ export const AdminDashboard: React.FC = () => {
 
     return (
         <main className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8">
-            {/* Hero Section */}
-            <TransitionItem className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
-                <GradientMesh variant="accent" className="opacity-40" />
+            {/* Hero Section - Standardized Premium Style */}
+            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+                <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-bold border border-indigo-500/30 backdrop-blur-sm">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
                             <ShieldCheck className="h-3 w-3" aria-hidden="true" />
                             ADMINISTRATOR ACCESS
                         </div>
@@ -84,7 +84,7 @@ export const AdminDashboard: React.FC = () => {
                         </h1>
                         <p className="text-white/80 text-lg font-medium leading-relaxed">
                             {loading
-                                ? <MedicalLoader message="Monitoring system health..." />
+                                ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
                                 : `Platform is operating normally. All services are online.`
                             }
                         </p>
@@ -92,7 +92,7 @@ export const AdminDashboard: React.FC = () => {
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
                             size="lg"
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto"
+                            className="bg-white dark:bg-white text-teal-900 dark:text-teal-900 hover:bg-teal-50 dark:hover:bg-teal-50 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
                             onClick={() => navigate(PATHS.ADMIN.USERS)}
                         >
                             <Users className="h-5 w-5" aria-hidden="true" />
@@ -118,7 +118,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={Globe} variant="primary" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <MedicalLoader message="Counting..." /> : "12,450"}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : "12,450"}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Total Users</div>
                         </div>
@@ -130,7 +130,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={Activity} variant="success" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <MedicalLoader message="Syncing..." /> : "99.9%"}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : "99.9%"}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">System Uptime</div>
                         </div>
@@ -142,7 +142,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <MedicalLoader message="Auditing..." /> : "3"}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : "3"}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pending Alerts</div>
                         </div>

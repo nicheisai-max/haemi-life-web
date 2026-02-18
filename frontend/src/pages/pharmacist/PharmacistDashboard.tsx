@@ -7,7 +7,7 @@ import {
     Filter, RefreshCw
 } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
-import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
 import { IconWrapper } from '@/components/ui/IconWrapper';
 import { PATHS } from '../../routes/paths';
@@ -53,12 +53,12 @@ export const PharmacistDashboard = () => {
 
     return (
         <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
-            {/* Hero Section */}
-            <TransitionItem className="relative overflow-hidden rounded-3xl border bg-teal-900 text-white shadow-xl">
-                <GradientMesh variant="primary" className="opacity-40" />
+            {/* Hero Section - Standardized Premium Style */}
+            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+                <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-200 text-[11px] font-bold border border-teal-500/30 backdrop-blur-sm">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
                             <Package className="h-3 w-3" aria-hidden="true" />
                             PHARMACY DISPENSARY
                         </div>
@@ -67,7 +67,7 @@ export const PharmacistDashboard = () => {
                         </h1>
                         <p className="text-white/80 text-lg font-medium leading-relaxed">
                             {loading
-                                ? <MedicalLoader message="Scanning pharmacy hub..." />
+                                ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
                                 : `You have ${pendingOrders.length} prescriptions pending verification and dispensing.`
                             }
                         </p>
@@ -75,7 +75,7 @@ export const PharmacistDashboard = () => {
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
                             size="lg"
-                            className="bg-teal-500 hover:bg-teal-600 text-white shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto"
+                            className="bg-white dark:bg-white text-teal-900 dark:text-teal-900 hover:bg-teal-50 dark:hover:bg-teal-50 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
                             onClick={() => navigate(PATHS.PHARMACIST.DISPENSE)}
                         >
                             <QrCode className="h-5 w-5" aria-hidden="true" />
@@ -102,14 +102,13 @@ export const PharmacistDashboard = () => {
                 </TransitionItem>
             )}
 
-            {/* Stats Grid */}
             <section className="grid grid-cols-1 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
                     <DashboardCard className="flex items-center gap-5 hover:border-teal-500/50 transition-colors cursor-default">
                         <IconWrapper icon={Receipt} variant="primary" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <MedicalLoader message="Verifying..." /> : pendingOrders.length}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : pendingOrders.length}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Active Queue</div>
                         </div>
@@ -121,7 +120,7 @@ export const PharmacistDashboard = () => {
                         <IconWrapper icon={CheckCircle2} variant="success" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <MedicalLoader message="Finalizing..." /> : completedOrdersValue}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : completedOrdersValue}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Dispensed Today</div>
                         </div>
@@ -133,7 +132,7 @@ export const PharmacistDashboard = () => {
                         <IconWrapper icon={Truck} variant="warning" className="h-14 w-14" iconClassName="h-7 w-7" />
                         <div>
                             <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <MedicalLoader message="Tracking..." /> : "12"}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : "12"}
                             </div>
                             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stock Arrivals</div>
                         </div>
@@ -160,7 +159,7 @@ export const PharmacistDashboard = () => {
                     <div className="space-y-3 flex-1">
                         {loading ? (
                             <div className="flex justify-center p-12 h-full items-center">
-                                <MedicalLoader message="Syncing dispense queue..." />
+                                <PremiumLoader size="md" />
                             </div>
                         ) : pendingOrders.length === 0 ? (
                             <DashboardCard className="text-center text-muted-foreground flex flex-col items-center justify-center h-[300px] border-dashed">

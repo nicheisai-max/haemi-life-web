@@ -10,12 +10,15 @@ export interface Message {
     conversation_id: string;
     sender_id: string;
     content: string;
-    attachment_url?: string;
-    attachment_type?: 'image' | 'pdf' | 'document';
+    message_type: 'text' | 'file';
+    attachments?: { url: string; type: string; size: number }[];
     is_read: boolean;
     created_at: string;
     sender_name?: string;
-    isMe?: boolean; // Calculated on frontend
+    isMe?: boolean;
+    reactions?: { type: string; userId: string }[];
+    reply_to?: { id: string; content: string; sender_name: string };
+    reply_to_id?: string;
 }
 
 export interface Conversation {
@@ -23,8 +26,8 @@ export interface Conversation {
     updated_at: string;
     last_message_at: string;
     last_message?: string;
-    participants: { id: string; name: string; role: string }[];
-    unread_count: string; // comes as string from count(*)
+    participants: { id: string; name: string; role: string; profile_image?: string }[];
+    unread_count: string;
 }
 
 export const useChat = () => {
@@ -74,32 +77,31 @@ export const useChat = () => {
 
     useEffect(() => {
         if (user && token) {
-            const newSocket = io(SOCKET_URL, {
-                auth: { token },
+            const newSocket = io(SOCKET_URL, { auth: { token } });
+
+            newSocket.on('connect', () => console.log('Chat socket connected'));
+
+            // Real-time Reaction Handler
+            newSocket.on('message_reaction', ({ messageId, userId, reactionType, action }: any) => {
+                setMessages(prev => prev.map(msg => {
+                    if (msg.id === messageId) {
+                        const reactions = msg.reactions || [];
+                        if (action === 'added') {
+                            const filtered = reactions.filter(r => r.userId !== userId);
+                            return { ...msg, reactions: [...filtered, { type: reactionType, userId }] };
+                        } else {
+                            return { ...msg, reactions: reactions.filter(r => !(r.userId === userId && r.type === reactionType)) };
+                        }
+                    }
+                    return msg;
+                }));
             });
 
-            newSocket.on('connect', () => {
-                console.log('Chat socket connected');
-            });
-
-            newSocket.on('receive_message', (message: Message) => {
-                // We use functional update to access latest state if needed,
-                // BUT `activeConversation` might be stale in closure if we don't depend on it.
-                // A better approach is to check message.conversation_id against a Ref or just
-                // append if it matches.
-
-                setMessages((prev: Message[]) => {
-                    if (prev.find(m => m.id === message.id)) return prev;
-
-                    // Logic: If we are in the conversation, show it.
-                    // But we don't know *inside* this callback which conversation is active unless we depend on it.
-                    // If we add `activeConversation` to dependency, we re-connect socket on switch.
-                    // That is acceptable for now or we use a ref.
-                    return prev;
-                });
-
-                // If we trigger a fetch, we get fresh data anyway.
-                fetchConversations();
+            // Real-time Deletion Handler
+            newSocket.on('message_deleted', ({ messageId, forEveryone }: any) => {
+                if (forEveryone) {
+                    setMessages(prev => prev.filter(msg => msg.id !== messageId));
+                }
             });
 
             newSocket.on('user_typing', ({ userId, isTyping }: { userId: string, isTyping: boolean }) => {
@@ -111,46 +113,43 @@ export const useChat = () => {
             });
 
             setSocket(newSocket);
-
-            return () => {
-                newSocket.disconnect();
-            };
+            return () => { newSocket.disconnect(); };
         }
-    }, [user, token, fetchConversations]); // Removing activeConversation to avoid reconnects.
+    }, [user, token]);
 
-    // Allow updating messages when activeConversation changes or we receive events
+    // Message Receive Handler
     useEffect(() => {
         if (!socket) return;
-
         const handler = (message: Message) => {
+            console.log('Incoming message via socket:', message.id, message.content);
             if (activeConversation && message.conversation_id === activeConversation.id) {
                 setMessages((prev: Message[]) => {
-                    if (prev.find(m => m.id === message.id)) return prev;
+                    const isDuplicate = prev.some(m => String(m.id) === String(message.id));
+                    if (isDuplicate) {
+                        console.warn('Duplicate message ignored:', message.id);
+                        return prev;
+                    }
                     return [...prev, { ...message, isMe: message.sender_id === user?.id }];
                 });
-
-                // Mark read if window focused? For now, automatic read on receive if active.
                 api.put(`/chat/conversations/${activeConversation.id}/read`).catch(console.error);
             }
+            fetchConversations();
         };
-
         socket.on('receive_message', handler);
-        return () => {
-            socket.off('receive_message', handler);
-        };
-    }, [socket, activeConversation, user]);
+        return () => { socket.off('receive_message', handler); };
+    }, [socket, activeConversation, user, fetchConversations]);
 
 
     // Send Message
-    const sendMessage = async (content: string, conversationId: string, attachmentUrl?: string, attachmentType?: string) => {
+    const sendMessage = async (content: string, conversationId: string, attachmentUrl?: string, attachmentType?: string, replyToId?: string) => {
         try {
             await api.post('/chat/messages', {
                 conversationId,
                 content,
-                attachmentUrl,
-                attachmentType
+                messageType: attachmentUrl ? 'file' : 'text',
+                attachment: attachmentUrl ? { url: attachmentUrl, type: attachmentType } : undefined,
+                replyToId
             });
-            // Socket will receive the message back and update UI via the handler
         } catch (error) {
             console.error('Failed to send message', error);
         }
@@ -202,6 +201,44 @@ export const useChat = () => {
         }
     };
 
+    // Delete Message (Optimistic + API)
+    const deleteMessage = async (messageId: string, forEveryone: boolean) => {
+        const previousMessages = [...messages];
+        // Optimistic update
+        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+
+        try {
+            await api.post(`/chat/messages/${messageId}/delete`, { forEveryone });
+        } catch (error) {
+            console.error('Failed to delete message:', error);
+            // Revert on failure
+            setMessages(previousMessages);
+        }
+    };
+
+    const reactToMessage = async (messageId: string, reactionType: string) => {
+        const previousMessages = [...messages];
+        setMessages(prev => prev.map(msg => {
+            if (msg.id === messageId) {
+                const reactions = msg.reactions || [];
+                const existing = reactions.find(r => r.userId === user?.id && r.type === reactionType);
+                if (existing) {
+                    return { ...msg, reactions: reactions.filter(r => r.userId !== user?.id) };
+                } else {
+                    const withoutMyReactions = reactions.filter(r => r.userId !== user?.id);
+                    return { ...msg, reactions: [...withoutMyReactions, { type: reactionType, userId: user?.id! }] };
+                }
+            }
+            return msg;
+        }));
+
+        try {
+            await api.post(`/chat/messages/${messageId}/react`, { reactionType });
+        } catch (error) {
+            setMessages(previousMessages);
+        }
+    };
+
     return {
         conversations,
         activeConversation,
@@ -214,6 +251,8 @@ export const useChat = () => {
         startNewConversation,
         emitTyping,
         uploadAttachment,
+        deleteMessage,
+        reactToMessage,
         user
     };
 };

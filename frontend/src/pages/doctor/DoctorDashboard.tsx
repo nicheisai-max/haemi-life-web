@@ -18,7 +18,7 @@ import { PATHS } from '../../routes/paths';
 import { ClinicalCopilot } from '@/components/ui/ClinicalCopilot';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
 import { AnimatedEmptyState } from '@/components/ui/AnimatedEmptyState';
-import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
 
 const CLINICAL_VOLUME_DATA = [
@@ -111,24 +111,24 @@ export const DoctorDashboard = () => {
         <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
             <ClinicalCopilot isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
 
-            {/* Hero Section */}
-            <TransitionItem className="relative overflow-hidden rounded-3xl border bg-slate-900 text-white shadow-xl">
-                <GradientMesh variant="secondary" className="opacity-40" />
+            {/* Hero Section - Standardized Premium Style */}
+            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+                <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-[11px] font-bold border border-teal-500/30 backdrop-blur-sm">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
                             <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                             </span>
                             STATUS: ON-DUTY
                         </div>
                         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-                            Dr. {user?.name?.split(' ')[0]}
+                            {user?.name?.startsWith('Dr. ') ? user.name : `Dr. ${user?.name}`}
                         </h1>
                         <div className="text-white/80 text-lg font-medium leading-relaxed max-w-xl">
                             {loading
-                                ? <MedicalLoader message="Analyzing census..." />
+                                ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
                                 : `You have ${todayAppointments.length} patients scheduled for today. Your vitals dashboard is trending positive.`
                             }
                         </div>
@@ -137,7 +137,7 @@ export const DoctorDashboard = () => {
                         <Button
                             size="lg"
                             variant="outline"
-                            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/30 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto"
+                            className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto"
                             onClick={() => setIsCopilotOpen(true)}
                         >
                             <BrainCircuit className="h-5 w-5" aria-hidden="true" />
@@ -145,7 +145,7 @@ export const DoctorDashboard = () => {
                         </Button>
                         <Button
                             size="lg"
-                            className="bg-teal-500 hover:bg-teal-600 text-white shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto"
+                            className="bg-white dark:bg-white text-teal-900 dark:text-teal-900 hover:bg-teal-50 dark:hover:bg-teal-50 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
                             onClick={() => navigate('/appointments')}
                         >
                             <CalendarCheck className="h-5 w-5" aria-hidden="true" />
@@ -172,7 +172,7 @@ export const DoctorDashboard = () => {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
-                                {loading ? "-" : todayAppointments.length}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : todayAppointments.length}
                             </div>
                             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-teal-600 transition-colors">Today's Census</div>
                         </div>
@@ -186,7 +186,7 @@ export const DoctorDashboard = () => {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
-                                {loading ? "-" : pendingReviews}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : pendingReviews}
                             </div>
                             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 transition-colors">Completed Notes</div>
                         </div>
@@ -200,7 +200,7 @@ export const DoctorDashboard = () => {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
-                                {loading ? "-" : patientCount}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : patientCount}
                             </div>
                             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-blue-600 transition-colors">Total Panel</div>
                         </div>
@@ -326,7 +326,7 @@ export const DoctorDashboard = () => {
                     <div className="space-y-4 flex-1">
                         {loading ? (
                             <div className="flex justify-center p-12 h-full items-center">
-                                <MedicalLoader message="Retrieving schedule..." />
+                                <PremiumLoader size="md" />
                             </div>
                         ) : todayAppointments.length === 0 ? (
                             <AnimatedEmptyState

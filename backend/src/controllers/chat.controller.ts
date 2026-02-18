@@ -115,19 +115,47 @@ export const getMessages = async (req: Request, res: Response) => {
             `
             SELECT 
                 m.id, 
+                m.conversation_id,
                 m.content, 
                 m.sender_id, 
                 m.created_at, 
-                m.attachment_url, 
-                m.attachment_type,
+                m.message_type,
                 m.is_read,
-                u.name as sender_name
+                m.reply_to_id,
+                (
+                    SELECT json_build_object('id', rm.id, 'content', rm.content, 'sender_name', ru.name)
+                    FROM messages rm
+                    JOIN users ru ON rm.sender_id = ru.id
+                    WHERE rm.id = m.reply_to_id
+                ) as reply_to,
+                u.name as sender_name,
+                COALESCE(
+                    (
+                        SELECT json_agg(json_build_object('url', ma.file_url, 'type', ma.file_type, 'size', ma.file_size))
+                        FROM message_attachments ma
+                        WHERE ma.message_id = m.id
+                    ),
+                    '[]'::json
+                ) as attachments,
+                COALESCE(
+                    (
+                        SELECT json_agg(json_build_object('type', mr.reaction_type, 'userId', mr.user_id))
+                        FROM message_reactions mr
+                        WHERE mr.message_id = m.id
+                    ),
+                    '[]'::json
+                ) as reactions
             FROM messages m
             JOIN users u ON m.sender_id = u.id
             WHERE m.conversation_id = $1
+              AND m.is_deleted = false
+              AND NOT EXISTS (
+                  SELECT 1 FROM deleted_messages dm 
+                  WHERE dm.message_id = m.id AND dm.user_id = $2
+              )
             ORDER BY m.created_at ASC
             `,
-            [conversationId]
+            [conversationId, userId]
         );
 
         res.json(result.rows);
@@ -141,45 +169,90 @@ export const getMessages = async (req: Request, res: Response) => {
 // For this refactor, we'll assume conversation creation happens via a separate 'startConversation' or checked here.
 export const sendMessage = async (req: Request, res: Response) => {
     const senderId = (req as any).user.id;
-    const { conversationId, content, attachmentUrl, attachmentType } = req.body;
+    const { conversationId, content, messageType = 'text', attachment } = req.body;
 
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN');
+
         // Verify membership
-        const membershipCheck = await pool.query(
+        const membershipCheck = await client.query(
             'SELECT 1 FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2',
             [conversationId, senderId]
         );
 
         if (membershipCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(403).json({ message: 'Not authorized to send to this conversation' });
         }
 
-        const result = await pool.query(
+        console.log(`[CHAT] Attempting to send message to conv ${conversationId} from user ${senderId}`);
+        const msgResult = await client.query(
             `
-            INSERT INTO messages (conversation_id, sender_id, content, attachment_url, attachment_type)
+            INSERT INTO messages (conversation_id, sender_id, content, message_type, reply_to_id)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING *
             `,
-            [conversationId, senderId, content, attachmentUrl, attachmentType]
+            [conversationId, senderId, content, messageType, req.body.replyToId]
         );
 
+        const newMessage = msgResult.rows[0];
+
+        // Fetch reply_to metadata for the broadcast/response
+        if (req.body.replyToId) {
+            const replyResult = await client.query(
+                `
+                SELECT rm.id, rm.content, ru.name as sender_name
+                FROM messages rm
+                JOIN users ru ON rm.sender_id = ru.id
+                WHERE rm.id = $1
+                `,
+                [req.body.replyToId]
+            );
+            if (replyResult.rows.length > 0) {
+                newMessage.reply_to = replyResult.rows[0];
+            }
+        }
+
+        // Handle attachment if any
+        if (attachment && (attachment.url || attachment.path)) {
+            await client.query(
+                `
+                INSERT INTO message_attachments (message_id, file_url, file_type, file_size)
+                VALUES ($1, $2, $3, $4)
+                `,
+                [newMessage.id, attachment.url || attachment.path, attachment.type, attachment.size]
+            );
+            newMessage.attachments = [{ url: attachment.url || attachment.path, type: attachment.type, size: attachment.size }];
+        } else {
+            newMessage.attachments = [];
+        }
+
+        newMessage.reactions = [];
+
         // Update conversation last_message_at
-        await pool.query(
-            'UPDATE conversations SET last_message_at = NOW() WHERE id = $1',
+        await client.query(
+            'UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1',
             [conversationId]
         );
 
-        const newMessage = result.rows[0];
+        await client.query('COMMIT');
 
         // Emit socket event to room (conversationId)
         if (io) {
-            io.to(conversationId).emit('receive_message', newMessage);
+            io.to(conversationId).emit('receive_message', {
+                ...newMessage,
+                sender_name: (req as any).user.name
+            });
         }
 
         res.status(201).json(newMessage);
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('Error sending message:', error);
         res.status(500).json({ message: 'Server error' });
+    } finally {
+        client.release();
     }
 };
 
@@ -244,6 +317,116 @@ export const markAsRead = async (req: Request, res: Response) => {
         res.sendStatus(200);
     } catch (error) {
         console.error('Error marking read:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// React to a Message
+export const reactToMessage = async (req: Request, res: Response) => {
+    const userId = (req as any).user.id;
+    const { messageId } = req.params;
+    const { reactionType } = req.body; // e.g. 'like', 'love'
+
+    try {
+        // Find conversation ID and verify participation
+        const msgResult = await pool.query(
+            `SELECT m.conversation_id FROM messages m 
+             JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id 
+             WHERE m.id = $1 AND cp.user_id = $2`,
+            [messageId, userId]
+        );
+
+        if (msgResult.rows.length === 0) {
+            return res.status(403).json({ message: 'Not authorized or message not found' });
+        }
+
+        const conversationId = msgResult.rows[0].conversation_id;
+
+        // Check if user already has THIS reaction
+        const existing = await pool.query(
+            'SELECT 1 FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND reaction_type = $3',
+            [messageId, userId, reactionType]
+        );
+
+        if (existing.rows.length > 0) {
+            // TOGGLE: Remove reaction
+            await pool.query(
+                'DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND reaction_type = $3',
+                [messageId, userId, reactionType]
+            );
+            if (io) io.to(conversationId).emit('message_reaction', { messageId, userId, reactionType, action: 'removed' });
+        } else {
+            // TOGGLE: Add or update (one reaction per user per message - if they want to switch, we delete all then add)
+            // But requirement says "Allow user to change reaction", let's clear existing and add new
+            await pool.query('DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2', [messageId, userId]);
+            await pool.query(
+                'INSERT INTO message_reactions (message_id, user_id, reaction_type) VALUES ($1, $2, $3)',
+                [messageId, userId, reactionType]
+            );
+            if (io) io.to(conversationId).emit('message_reaction', { messageId, userId, reactionType, action: 'added' });
+        }
+
+        res.sendStatus(200);
+    } catch (error) {
+        console.error('Error reacting to message:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Delete Message
+export const deleteMessage = async (req: Request, res: Response) => {
+    const userId = (req as any).user.id;
+    const { messageId } = req.params;
+    const { forEveryone } = req.body;
+
+    try {
+        // Verify participation
+        const msgCheck = await pool.query(
+            `SELECT m.* FROM messages m 
+             JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id 
+             WHERE m.id = $1 AND cp.user_id = $2`,
+            [messageId, userId]
+        );
+
+        if (msgCheck.rows.length === 0) {
+            return res.status(403).json({ message: 'Not authorized or message not found' });
+        }
+
+        const message = msgCheck.rows[0];
+        const conversationId = message.conversation_id;
+
+        if (forEveryone) {
+            if (message.sender_id !== userId) {
+                return res.status(403).json({ message: 'Only sender can delete for everyone' });
+            }
+
+            // Hard delete attachments first
+            const attachments = await pool.query('SELECT file_url FROM message_attachments WHERE message_id = $1', [messageId]);
+            for (const att of attachments.rows) {
+                const filePath = path.join(__dirname, '../../', att.file_url);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            }
+
+            // Update database: is_deleted = true or hard delete? 
+            // Requirement says: "Delete physical file... remove record". 
+            // Let's hard delete for production cleanliness if for everyone.
+            await pool.query('DELETE FROM messages WHERE id = $1', [messageId]);
+
+            if (io) io.to(conversationId).emit('message_deleted', { messageId, forEveryone: true });
+        } else {
+            // Delete for me
+            await pool.query(
+                `INSERT INTO deleted_messages (message_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                [messageId, userId]
+            );
+            // No broadcast needed usually, but can emit to user room if multi-device sync desired.
+        }
+
+        res.sendStatus(200);
+    } catch (error) {
+        console.error('Error deleting message:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

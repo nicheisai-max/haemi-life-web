@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.middleware';
-import { getConversations, getMessages, sendMessage, startConversation, markAsRead, uploadAttachment, upload } from '../controllers/chat.controller';
+import { getConversations, getMessages, sendMessage, startConversation, markAsRead, uploadAttachment, upload, reactToMessage, deleteMessage } from '../controllers/chat.controller';
 
 const router = Router();
 
@@ -21,5 +21,11 @@ router.post('/conversations', authenticateToken, startConversation);
 
 // Mark as read
 router.put('/conversations/:conversationId/read', authenticateToken, markAsRead);
+
+// React to a message
+router.post('/messages/:messageId/react', authenticateToken, reactToMessage);
+
+// Delete a message
+router.post('/messages/:messageId/delete', authenticateToken, deleteMessage);
 
 export default router;

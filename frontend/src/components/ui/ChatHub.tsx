@@ -5,10 +5,10 @@ import {
     ChevronLeft,
     ShieldCheck, Search, CheckCheck,
     Paperclip, Send, FileText, Plus, UserPlus,
-    MessageCircle
+    MessageCircle, Reply
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useChat, type Conversation } from '../../hooks/useChat';
+import { useChat, type Conversation, type Message } from '../../hooks/useChat';
 import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
 import api from '../../services/api';
@@ -64,6 +64,58 @@ const Avatar: React.FC<{ name: string; image?: string; size?: 'xs' | 'sm' | 'md'
     );
 };
 
+// --- Reaction Icon Helper ---
+const ReactionIcon: React.FC<{ type: string; className?: string }> = ({ type, className = "h-3 w-3" }) => {
+    switch (type) {
+        case 'thumbs_up': return (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
+                <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+            </svg>
+        );
+        case 'love': return (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.84-8.84 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+        );
+        case 'appreciation': return (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
+                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
+                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v11" />
+                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+            </svg>
+        );
+        case 'acknowledgement': return (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                <line x1="9" y1="9" x2="9.01" y2="9" />
+                <line x1="15" y1="9" x2="15.01" y2="9" />
+            </svg>
+        );
+        case 'noted': return (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="16" r="2" />
+                <line x1="9" y1="9" x2="9.01" y2="9" />
+                <line x1="15" y1="9" x2="15.01" y2="9" />
+            </svg>
+        );
+        case 'agreement': return (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
+                <path d="m11 17 2 2 6-6" />
+                <path d="m18 14 1.5 1.5" />
+                <path d="m15 11 1.5 1.5" />
+                <path d="M5 10a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h3.14l1.2-1.2a2 2 0 0 1 1.44-.57L14 15.2M14 15.2c1-.1 1.8-.8 2-1.8.3-1.4-.7-2.6-2-2.6M14 15.2l1.3-3.7" />
+                <path d="M8 15V8a2 2 0 0 1 2-2h1c.6 0 1.2.2 1.6.6l1.4 1.4" />
+            </svg>
+        );
+        default: return null;
+    }
+};
+
+import { ChatContextMenu } from './ChatContextMenu'; // Import Context Menu
+
 // --- Main Chat Hub ---
 export const ChatHub: React.FC = () => {
     const { user } = useAuth();
@@ -75,7 +127,9 @@ export const ChatHub: React.FC = () => {
         selectConversation,
         sendMessage,
         uploadAttachment,
-        startNewConversation
+        startNewConversation,
+        deleteMessage, // Destructure new functions
+        reactToMessage
     } = useChat();
 
     const [isOpen, setIsOpen] = useState(false);
@@ -85,9 +139,40 @@ export const ChatHub: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [doctors, setDoctors] = useState<DoctorProfile[]>([]); // List of doctors for new chat
     const [doctorSearch, setDoctorSearch] = useState('');
+    const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+    };
+
+    // Context Menu State
+    const [contextMenu, setContextMenu] = useState<{
+        isOpen: boolean;
+        x: number;
+        y: number;
+        messageId: string;
+        isMe: boolean;
+    }>({
+        isOpen: false,
+        x: 0,
+        y: 0,
+        messageId: '',
+        isMe: false
+    });
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // Handlers for Context Menu
+    const handleDeleteMessage = (messageId: string, forEveryone: boolean) => {
+        deleteMessage(messageId, forEveryone);
+        setContextMenu(prev => ({ ...prev, isOpen: false }));
+    };
+
+    const handleReaction = (messageId: string, reactionType: string) => {
+        reactToMessage(messageId, reactionType);
+        setContextMenu(prev => ({ ...prev, isOpen: false }));
+    };
 
     // Initial Load
     useEffect(() => {
@@ -144,19 +229,21 @@ export const ChatHub: React.FC = () => {
 
     const handleSendMessage = () => {
         if (!newMessage.trim() || !activeConversation) return;
-        sendMessage(newMessage, activeConversation.id);
+        sendMessage(newMessage, activeConversation.id, undefined, undefined, replyingTo?.id);
         setNewMessage('');
+        setReplyingTo(null);
         // Keep focus
         setTimeout(() => inputRef.current?.focus(), 10);
     };
 
     const getOtherParticipant = (conversation: Conversation) => {
         const other = (conversation.participants && Array.isArray(conversation.participants))
-            ? conversation.participants.find(p => p.id !== user?.id) || { name: 'Unknown', role: 'Unknown', id: 'unknown', profile_image: undefined }
-            : { name: 'Unknown', role: 'Unknown', id: 'unknown', profile_image: undefined };
+            ? conversation.participants.find(p => p.id !== user?.id) || { name: 'Unknown', role: 'Unknown', id: 'unknown' }
+            : { name: 'Unknown', role: 'Unknown', id: 'unknown' };
 
-        // Use DB image first, then fallback to local mapping (fail-safe), then undefined
-        const dbImage = other.profile_image ? `http://localhost:5000${other.profile_image}` : undefined;
+        // Cast to any to safely access profile_image from dynamic participant data
+        const participant = other as any;
+        const dbImage = participant.profile_image ? `http://localhost:5000${participant.profile_image}` : undefined;
         return { ...other, image: dbImage || getDoctorImage(other.name) };
     };
 
@@ -294,7 +381,7 @@ export const ChatHub: React.FC = () => {
                                     <div className="flex flex-col">
                                         <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-none">Messages</h3>
                                         <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1">
-                                            {Math.min(filteredConversations.length, 3)} conversations
+                                            {filteredConversations.length} {filteredConversations.length === 1 ? 'conversation' : 'conversations'}
                                         </span>
                                     </div>
                                 )}
@@ -366,7 +453,7 @@ export const ChatHub: React.FC = () => {
                                                 <p className="text-xs text-slate-500 mt-1">Start a consultation or chat with a doctor.</p>
                                             </div>
                                         ) : (
-                                            filteredConversations.slice(0, 3).map(conv => {
+                                            filteredConversations.map(conv => {
                                                 const other = getOtherParticipant(conv);
                                                 return (
                                                     <button
@@ -489,45 +576,122 @@ export const ChatHub: React.FC = () => {
                                                 initial={{ opacity: 0, y: 10 }}
                                                 animate={{ opacity: 1, y: 0 }}
                                                 key={msg.id || idx}
+                                                id={`msg-${msg.id}`}
                                                 className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
                                             >
                                                 <div
-                                                    className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm relative ${msg.isMe
+                                                    onContextMenu={(e) => {
+                                                        e.preventDefault();
+                                                        setContextMenu({
+                                                            isOpen: true,
+                                                            x: e.clientX,
+                                                            y: e.clientY,
+                                                            messageId: msg.id,
+                                                            isMe: msg.isMe || false
+                                                        });
+                                                    }}
+                                                    className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm relative cursor-context-menu group ${msg.isMe
                                                         ? 'bg-teal-600 text-white rounded-tr-none'
                                                         : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
                                                         }`}
                                                 >
-                                                    {msg.attachment_url && (
-                                                        <div className="mb-2 -mx-1 -mt-1">
-                                                            {msg.attachment_type === 'image' ? (
+                                                    {/* Reply Preview in Bubble (Enhanced WhatsApp Style) */}
+                                                    {msg.reply_to && (
+                                                        <div
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const element = document.getElementById(`msg-${msg.reply_to_id}`);
+                                                                if (element) {
+                                                                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                    element.classList.add('ring-2', 'ring-teal-500', 'ring-offset-2');
+                                                                    setTimeout(() => element.classList.remove('ring-2', 'ring-teal-500', 'ring-offset-2'), 2000);
+                                                                }
+                                                            }}
+                                                            className={`mb-2 p-2 rounded-xl border-l-[3px] text-[11px] cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${msg.isMe
+                                                                ? 'bg-black/10 border-white/40 text-teal-50'
+                                                                : 'bg-slate-50 dark:bg-slate-900/50 border-teal-500 text-slate-600 dark:text-slate-400'
+                                                                }`}
+                                                        >
+                                                            <div className="flex items-center justify-between mb-0.5">
+                                                                <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
+                                                                    {msg.reply_to.sender_name}
+                                                                </p>
+                                                                <Reply className="h-2.5 w-2.5 opacity-60" />
+                                                            </div>
+                                                            <p className="line-clamp-2 opacity-80 italic">
+                                                                {msg.reply_to.content}
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {msg.attachments && msg.attachments.length > 0 && msg.attachments.map((att, i) => (
+                                                        <div key={i} className="mb-2 -mx-1 -mt-1">
+                                                            {att.type?.startsWith('image') ? (
                                                                 <img
-                                                                    src={`http://localhost:5000${msg.attachment_url}`}
+                                                                    src={`http://localhost:5000${att.url}`}
                                                                     alt="Attachment"
                                                                     className="rounded-xl w-full max-h-48 object-cover border border-white/20"
-                                                                    onClick={() => window.open(`http://localhost:5000${msg.attachment_url}`, '_blank')}
+                                                                    onClick={() => window.open(`http://localhost:5000${att.url}`, '_blank')}
                                                                 />
                                                             ) : (
                                                                 <a
-                                                                    href={`http://localhost:5000${msg.attachment_url}`}
+                                                                    href={`http://localhost:5000${att.url}`}
                                                                     target="_blank"
                                                                     rel="noreferrer"
-                                                                    className={`flex items-center gap-2 p-2 rounded-lg bg-black/10 transition-colors border border-black/5 ${msg.isMe ? 'text-white' : 'text-slate-700'}`}
+                                                                    className={`flex items-center gap-2 p-3 rounded-xl bg-black/10 transition-colors border border-black/5 ${msg.isMe ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}
                                                                 >
-                                                                    <FileText className="h-4 w-4" />
-                                                                    <span className="text-xs truncate max-w-[150px]">{msg.content || "File"}</span>
+                                                                    <div className="h-8 w-8 rounded-lg bg-black/10 flex items-center justify-center shrink-0">
+                                                                        <FileText className="h-4 w-4" />
+                                                                    </div>
+                                                                    <div className="min-w-0 pr-2">
+                                                                        <p className="text-[11px] font-bold truncate opacity-90">DOCUMENT</p>
+                                                                        <span className="text-[10px] break-all opacity-70">View Attachment</span>
+                                                                    </div>
                                                                 </a>
+                                                            )}
+                                                        </div>
+                                                    ))}
+
+                                                    <p className="whitespace-pre-wrap break-words leading-relaxed font-medium">
+                                                        {msg.content}
+                                                    </p>
+
+                                                    {/* Reactions Display (Polished Round UI - Hanging Position) */}
+                                                    {msg.reactions && msg.reactions.length > 0 && (
+                                                        <div
+                                                            className={`absolute -bottom-4 ${msg.isMe ? '-right-1' : '-left-1'} flex items-center bg-white dark:bg-slate-900 rounded-full ${(msg.reactions || []).length > 1 ? 'px-2 py-1' : 'w-8 h-8 flex items-center justify-center'} shadow-[0_8px_20px_rgba(0,0,0,0.18)] border border-slate-200/60 dark:border-teal-500/40 z-[20] transition-all hover:scale-110 active:scale-95 cursor-pointer group/reaction`}
+                                                        >
+                                                            <div className={`flex ${(msg.reactions || []).length > 1 ? '-space-x-1.5' : ''} ${(msg.reactions || []).length > 1 ? 'mr-1.5' : ''}`}>
+                                                                {/* Stacking unique reactions */}
+                                                                {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 3).map((type, i) => (
+                                                                    <div
+                                                                        key={type}
+                                                                        className={`rounded-full flex items-center justify-center transition-colors ${(msg.reactions || []).length > 1 ? 'h-5 w-5 border-[1.5px] border-white dark:border-slate-900 shadow-sm' : 'h-7 w-7'
+                                                                            } ${(msg.reactions || []).some(r => r.type === type && r.userId === user?.id)
+                                                                                ? 'bg-teal-50 dark:bg-teal-500/20'
+                                                                                : 'bg-transparent'
+                                                                            }`}
+                                                                        style={{ zIndex: 10 - i }}
+                                                                    >
+                                                                        <ReactionIcon type={type} className={`${(msg.reactions || []).length > 1 ? 'h-3 w-3' : 'h-4.5 w-4.5'} ${(msg.reactions || []).some(r => r.type === type && r.userId === user?.id)
+                                                                            ? 'text-teal-600 dark:text-teal-400'
+                                                                            : 'text-slate-500 dark:text-slate-400'
+                                                                            }`} />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            {(msg.reactions || []).length > 1 && (
+                                                                <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-200 pr-0.5">
+                                                                    {(msg.reactions || []).length}
+                                                                </span>
                                                             )}
                                                         </div>
                                                     )}
 
-                                                    <p className="whitespace-pre-wrap break-words leading-relaxed">
-                                                        {msg.content}
-                                                    </p>
-
-                                                    <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${msg.isMe ? 'text-teal-100' : 'text-slate-400'}`}>
-                                                        <span>{getFormattedTime(msg.created_at)}</span>
+                                                    <div className={`flex items-center justify-end gap-1.5 mt-2 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
+                                                        <span className="font-semibold">{getFormattedTime(msg.created_at)}</span>
                                                         {msg.isMe && (
-                                                            <CheckCheck className="h-3 w-3 opacity-90" />
+                                                            <CheckCheck className="h-4 w-4 text-white drop-shadow-md brightness-110 animate-in fade-in zoom-in duration-300" strokeWidth={2.8} />
                                                         )}
                                                     </div>
                                                 </div>
@@ -535,8 +699,36 @@ export const ChatHub: React.FC = () => {
                                         ))}
                                     </div>
 
-                                    {/* Input Area - Sticky Bottom */}
+                                    {/* Input Area - Sticky Bottom with Reply Preview */}
                                     <div className="p-3 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 shrink-0 z-10 w-full relative">
+                                        <AnimatePresence>
+                                            {replyingTo && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                                    className="mb-3 bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur rounded-2xl border-l-4 border-teal-500 overflow-hidden shadow-sm"
+                                                >
+                                                    <div className="p-3 flex items-start gap-3 relative">
+                                                        <div className="flex-1 min-w-0 pr-6">
+                                                            <p className="text-[11px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                                                                <Reply className="h-3 w-3" />
+                                                                Replying to {replyingTo.sender_name}
+                                                            </p>
+                                                            <p className="text-sm text-slate-600 dark:text-slate-400 truncate">
+                                                                {replyingTo.content}
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setReplyingTo(null)}
+                                                            className="absolute top-2 right-2 h-6 w-6 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
+                                                        >
+                                                            <X className="h-3.5 w-3.5 text-slate-500" />
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                         <div className="flex items-end gap-2">
                                             <input
                                                 type="file"
@@ -583,6 +775,28 @@ export const ChatHub: React.FC = () => {
                                             </Button>
                                         </div>
                                     </div>
+
+                                    {/* Context Menu */}
+                                    {contextMenu.isOpen && (
+                                        <ChatContextMenu
+                                            x={contextMenu.x}
+                                            y={contextMenu.y}
+                                            isMe={contextMenu.isMe}
+                                            onClose={() => setContextMenu({ ...contextMenu, isOpen: false })}
+                                            onDeleteForMe={() => handleDeleteMessage(contextMenu.messageId, false)}
+                                            onDeleteForEveryone={() => handleDeleteMessage(contextMenu.messageId, true)}
+                                            onReact={(reactionType) => handleReaction(contextMenu.messageId, reactionType)}
+                                            onReply={() => {
+                                                const msg = messages.find(m => m.id === contextMenu.messageId);
+                                                if (msg) setReplyingTo(msg);
+                                                inputRef.current?.focus();
+                                            }}
+                                            onCopy={() => {
+                                                const msg = messages.find(m => m.id === contextMenu.messageId);
+                                                if (msg) copyToClipboard(msg.content);
+                                            }}
+                                        />
+                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>
