@@ -109,9 +109,12 @@
   --color-info: #2563EB;
   --color-info: #2563EB;
   --color-info-bg: #DBEAFE;
-  
+
   /* Task: Login Fallback Background */
   --color-login-bg: #037b77;
+
+  /* Premium Gradients */
+  --primary-gradient: linear-gradient(135deg, #064E4D 0%, #148C8B 100%);
 }
 
 .dark {
@@ -145,9 +148,10 @@
   --muted-foreground: #A7DAD5;
   /* Improved readability for Dark subtext */
 
-  --accent: #133338;
-  /* Dark-Elevated */
-  --accent-foreground: #E6F4F3;
+  --accent: rgba(255, 255, 255, 0.15);
+  /* Slightly more opaque for better definition */
+  --accent-foreground: #FFFFFF;
+  /* Hard-enforced pure white */
 
   --destructive: #DC2626;
   --destructive-foreground: #FFFFFF;
@@ -186,6 +190,14 @@
   --color-error-bg: #7F1D1D;
   --color-info: #2563EB;
   --color-info-bg: #1E3A8A;
+
+  /* High Contrast Dark Mode Primary Gradient (Per User Request) */
+  /* Cyan-400 (#22D3EE) to White (#FFFFFF) */
+  --primary-gradient: linear-gradient(135deg, #22D3EE 0%, #FFFFFF 100%);
+  --primary: #22D3EE;
+  /* Match start of gradient */
+  --primary-foreground: #083344;
+  /* Deep Slate/Cyan for readability on bright gradient */
 }
 
 @layer base {

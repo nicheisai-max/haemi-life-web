@@ -39,22 +39,32 @@ export const upload = multer({
 });
 
 // Upload Attachment Endpoint
-export const uploadAttachment = (req: Request, res: Response) => {
+export const uploadAttachment = async (req: Request, res: Response) => {
     if (!req.file) {
         return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Return the URL to the file
-    // Assumes server is running on same host/port or behind proxy
-    // In production, might want 'process.env.BASE_URL'
-    const fileUrl = `/uploads/${req.file.filename}`;
+    try {
+        const result = await pool.query(
+            'INSERT INTO temp_attachments (data, mime, name) VALUES ($1, $2, $3) RETURNING id',
+            [req.file.buffer, req.file.mimetype, req.file.originalname]
+        );
 
-    res.json({
-        url: fileUrl,
-        type: req.file.mimetype.startsWith('image/') ? 'image' : 'document',
-        originalName: req.file.originalname
-    });
+        const tempId = result.rows[0].id;
+        const virtualUrl = `/api/files/temp/${tempId}`;
+
+        res.json({
+            url: virtualUrl,
+            tempId: tempId,
+            type: req.file.mimetype.startsWith('image/') ? 'image' : 'document',
+            originalName: req.file.originalname
+        });
+    } catch (error) {
+        console.error('Error in uploadAttachment:', error);
+        res.status(500).json({ message: 'Error staging attachment' });
+    }
 };
+
 
 // Get all conversations for the current user
 export const getConversations = async (req: Request, res: Response) => {
@@ -243,17 +253,47 @@ export const sendMessage = async (req: Request, res: Response) => {
         }
 
         // Handle attachment if any
-        if (attachment && (attachment.url || attachment.path)) {
+        if (attachment && attachment.url) {
+            let attachmentData = null;
+            let attachmentMime = attachment.type;
+            let attachmentName = attachment.originalName || 'attachment';
+
+            // Check if it's a temp virtual URL
+            if (attachment.url.startsWith('/api/files/temp/')) {
+                const tempId = attachment.url.split('/').pop();
+                const tempResult = await client.query(
+                    'SELECT data, mime, name FROM temp_attachments WHERE id = $1',
+                    [tempId]
+                );
+                if (tempResult.rows.length > 0) {
+                    attachmentData = tempResult.rows[0].data;
+                    attachmentMime = tempResult.rows[0].mime;
+                    attachmentName = tempResult.rows[0].name;
+
+                    // Clean up temp storage
+                    await client.query('DELETE FROM temp_attachments WHERE id = $1', [tempId]);
+                }
+            }
+
             await client.query(
                 `
-                INSERT INTO message_attachments (message_id, file_url, file_type, file_size)
-                VALUES ($1, $2, $3, $4)
+                UPDATE messages 
+                SET attachment_url = $1, 
+                    attachment_type = $2, 
+                    attachment_data = $3, 
+                    attachment_mime = $4, 
+                    attachment_name = $5
+                WHERE id = $6
                 `,
-                [newMessage.id, attachment.url || attachment.path, attachment.type, attachment.size]
+                [attachment.url, attachment.type, attachmentData, attachmentMime, attachmentName, newMessage.id]
             );
-            newMessage.attachments = [{ url: attachment.url || attachment.path, type: attachment.type, size: attachment.size }];
-        } else {
-            newMessage.attachments = [];
+
+            newMessage.attachment_url = `/api/files/message/${newMessage.id}`;
+            newMessage.attachment_type = attachment.type;
+
+            newMessage.attachment_data = attachmentData;
+            newMessage.attachment_mime = attachmentMime;
+            newMessage.attachment_name = attachmentName;
         }
 
         newMessage.reactions = [];
@@ -432,19 +472,24 @@ export const deleteMessage = async (req: Request, res: Response) => {
                 return res.status(403).json({ message: 'Only sender can delete for everyone' });
             }
 
-            // Hard delete attachments first
-            const attachments = await pool.query('SELECT file_url FROM message_attachments WHERE message_id = $1', [messageId]);
-            for (const att of attachments.rows) {
-                const filePath = path.join(__dirname, '../../', att.file_url);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
+            // Hard delete attachments first (Legacy logic - only if table exists)
+            try {
+                const attachments = await pool.query('SELECT attachment_url FROM messages WHERE id = $1', [messageId]);
+                for (const att of attachments.rows) {
+                    if (att.attachment_url && !att.attachment_url.startsWith('/api/files/')) {
+                        const filePath = path.join(__dirname, '../../', att.attachment_url);
+                        if (fs.existsSync(filePath)) {
+                            fs.unlinkSync(filePath);
+                        }
+                    }
                 }
+            } catch (err) {
+                console.warn('Legacy attachment cleanup skipped or failed.', err);
             }
 
-            // Update database: is_deleted = true or hard delete? 
-            // Requirement says: "Delete physical file... remove record". 
-            // Let's hard delete for production cleanliness if for everyone.
+            // Update database: hard delete message (which removes BYTEA data atomically)
             await pool.query('DELETE FROM messages WHERE id = $1', [messageId]);
+
 
             if (io) io.to(conversationId).emit('message_deleted', { messageId, forEveryone: true });
         } else {

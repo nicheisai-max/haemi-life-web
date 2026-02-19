@@ -13,12 +13,42 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { changePassword } from '../../services/user.service';
 import { changePasswordSchema, type ChangePasswordFormData } from '../../lib/validation/auth.schema';
 import { preferencesSchema, type PreferencesFormData } from '../../lib/validation/preferences.schema';
+import { adminSettingsService } from '../../services/admin.service';
+import { Clock } from 'lucide-react';
 
 export const Settings: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [sessionTimeout, setSessionTimeout] = useState<number>(60);
+    const [isSavingTimeout, setIsSavingTimeout] = useState(false);
+    const isAdmin = user?.role === 'admin';
+
+    React.useEffect(() => {
+        if (isAdmin) {
+            adminSettingsService.getSessionTimeout()
+                .then(data => setSessionTimeout(data.timeout))
+                .catch(err => console.error('Failed to load session timeout', err));
+        }
+    }, [isAdmin]);
+
+    const onUpdateTimeout = async () => {
+        try {
+            setIsSavingTimeout(true);
+            setGeneralError(null);
+            setSuccess(null);
+
+            await adminSettingsService.updateSessionTimeout(sessionTimeout);
+
+            setSuccess('Session timeout updated successfully!');
+            setTimeout(() => setSuccess(null), 3000);
+        } catch (err: any) {
+            setGeneralError(err.response?.data?.message || 'Failed to update session timeout');
+        } finally {
+            setIsSavingTimeout(false);
+        }
+    };
 
     const form = useForm<ChangePasswordFormData>({
         resolver: zodResolver(changePasswordSchema),
@@ -319,6 +349,54 @@ export const Settings: React.FC = () => {
                         </form>
                     </Form>
                 </Card>
+
+                {/* Admin Session Management */}
+                {isAdmin && (
+                    <Card className="p-6 h-full flex flex-col border-primary/20 bg-primary/5">
+                        <div className="mb-6 pb-4 border-b border-primary/10">
+                            <h2 className="text-xl font-semibold flex items-center gap-2">
+                                <Clock className="h-5 w-5 text-primary" />
+                                Session Management
+                            </h2>
+                        </div>
+
+                        <div className="space-y-4 flex-1">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                    Global Session Timeout (Minutes)
+                                </label>
+                                <div className="flex gap-4">
+                                    <Input
+                                        type="number"
+                                        min={5}
+                                        max={1440}
+                                        value={sessionTimeout}
+                                        onChange={(e) => setSessionTimeout(parseInt(e.target.value))}
+                                        className="bg-background"
+                                    />
+                                    <Button
+                                        onClick={onUpdateTimeout}
+                                        disabled={isSavingTimeout || sessionTimeout < 5 || sessionTimeout > 1440}
+                                        className="h-[44px] min-w-[100px]"
+                                    >
+                                        {isSavingTimeout ? 'Saving...' : 'Save'}
+                                    </Button>
+                                </div>
+                                <p className="text-[0.8rem] text-muted-foreground mt-2">
+                                    Minimum: 5 mins | Maximum: 1440 mins (24h)
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-sm">
+                            <p className="font-semibold flex items-center gap-2 mb-1">
+                                <Shield className="h-4 w-4" />
+                                Security Note
+                            </p>
+                            Changes will apply to all roles for newly issued sessions.
+                        </div>
+                    </Card>
+                )}
 
                 {/* Danger Zone */}
                 <Card className="p-6 border-destructive/50 bg-destructive/5">

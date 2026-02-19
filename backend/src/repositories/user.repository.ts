@@ -70,13 +70,14 @@ export class UserRepository {
         return result.rows[0];
     }
 
-    async updateProfileImage(userId: string, imagePath: string): Promise<User> {
+    async updateProfileImage(userId: string, imageBuffer: Buffer, mimeType: string): Promise<User> {
         const result = await this.db.query(
-            'UPDATE users SET profile_image = $1, updated_at = NOW() WHERE id = $2 RETURNING id, name, email, phone_number, role, profile_image',
-            [imagePath, userId]
+            'UPDATE users SET profile_image_data = $1, profile_image_mime = $2, updated_at = NOW() WHERE id = $3 RETURNING id, name, email, phone_number, role, profile_image, profile_image_mime',
+            [imageBuffer, mimeType, userId]
         );
         return result.rows[0];
     }
+
 
     async updatePassword(userId: string, hashedPassword: string): Promise<void> {
         await this.db.query(

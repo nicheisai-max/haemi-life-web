@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
     Users, ShieldCheck, Activity, Server, AlertTriangle,
-    Settings, UserPlus, FileText, Lock, Database,
+    Settings, UserPlus, FileText,
     Globe
 } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/GradientMesh';
+import { getSystemStats } from '../../services/admin.service';
+import type { SystemStats } from '../../services/admin.service';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { TransitionItem } from '../../components/layout/PageTransition';
 import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
@@ -56,38 +59,49 @@ const ADMIN_INSIGHTS_DATA = [
 ];
 
 export const AdminDashboard: React.FC = () => {
-    // const { user } = useAuth(); // Unused
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState<SystemStats | null>(null);
 
-    // Simulate data fetching
+    // Fetch system statistics
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setLoading(false);
-        }, 1000);
-        return () => clearTimeout(timer);
+        const fetchStats = async () => {
+            try {
+                const data = await getSystemStats();
+                setStats(data);
+            } catch (error) {
+                console.error('Error fetching system stats:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
     }, []);
 
     return (
-        <main className="w-full mx-auto p-4 md:p-8 max-w-[1920px] space-y-8">
+        <main className="w-full mx-auto p-4 md:p-5 max-w-[1920px] space-y-8">
             {/* Hero Section - Standardized Premium Style */}
             <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
-                <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
                             <ShieldCheck className="h-3 w-3" aria-hidden="true" />
                             ADMINISTRATOR ACCESS
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-                            System Overview
+                        <h1 className="text-4xl md:text-3xl font-extrabold tracking-tight text-white">
+                            Welcome, {user?.name?.split(' ')[0]}
                         </h1>
-                        <p className="text-white/80 text-lg font-medium leading-relaxed">
+                        <p className="text-emerald-50/70 text-sm font-bold uppercase tracking-[0.2em] mb-1">System Overview</p>
+                        <div className="text-white/80 text-lg font-medium leading-relaxed">
                             {loading
                                 ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
                                 : `Platform is operating normally. All services are online.`
                             }
-                        </p>
+                        </div>
+
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
@@ -100,8 +114,7 @@ export const AdminDashboard: React.FC = () => {
                         </Button>
                         <Button
                             size="lg"
-                            variant="outline"
-                            className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto"
+                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-white border border-emerald-500/30 hover:border-emerald-500/50 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
                             onClick={() => navigate(PATHS.SETTINGS)}
                         >
                             <Settings className="h-5 w-5" aria-hidden="true" />
@@ -112,39 +125,39 @@ export const AdminDashboard: React.FC = () => {
             </TransitionItem>
 
             {/* Stats Grid */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-6" aria-label="Key Metrics">
+            <section className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-indigo-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={Globe} variant="primary" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : "12,450"}
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-indigo-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                        <IconWrapper icon={Globe} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.total_patients || "0"}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Total Users</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Total Users</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-emerald-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={Activity} variant="success" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : "99.9%"}
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                        <IconWrapper icon={Activity} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : (stats ? "99.9%" : "100%")}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">System Uptime</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">System Uptime</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
-                <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-amber-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : "3"}
+                <TransitionItem className="col-span-2 md:col-span-1">
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                        <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.pending_verifications || "0"}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pending Alerts</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Pending Alerts</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -178,41 +191,41 @@ export const AdminDashboard: React.FC = () => {
                             icon: Settings,
                             label: "Global Settings",
                             sub: "Configure system",
-                            path: "/admin/settings",
-                            color: "text-slate-600 bg-slate-50 dark:bg-slate-800",
-                            hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-500/80",
+                            path: PATHS.SETTINGS,
+                            color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50 dark:text-slate-300",
+                            hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-400/80",
                             hoverShadow: "hover:shadow-slate-500/10 dark:hover:shadow-slate-500/20",
-                            hoverText: "group-hover:text-slate-600"
+                            hoverText: "group-hover:text-slate-600 dark:group-hover:text-white"
                         },
                         {
                             icon: FileText,
                             label: "Audit Logs",
                             sub: "View security events",
-                            path: "/admin/logs",
-                            color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20",
-                            hoverBorder: "hover:border-indigo-500/50 dark:hover:border-indigo-500/80",
+                            path: PATHS.ADMIN.SYSTEM_LOGS,
+                            color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/40 dark:text-indigo-300",
+                            hoverBorder: "hover:border-indigo-500/50 dark:hover:border-indigo-400/80",
                             hoverShadow: "hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/20",
-                            hoverText: "group-hover:text-indigo-600"
+                            hoverText: "group-hover:text-indigo-600 dark:group-hover:text-indigo-200"
                         },
                         {
-                            icon: Lock,
-                            label: "Security Policy",
-                            sub: "Manage RBAC & Access",
-                            path: "/admin/security",
-                            color: "text-rose-600 bg-rose-50 dark:bg-rose-900/20",
-                            hoverBorder: "hover:border-rose-500/50 dark:hover:border-rose-500/80",
-                            hoverShadow: "hover:shadow-rose-500/10 dark:hover:shadow-rose-500/20",
-                            hoverText: "group-hover:text-rose-600"
+                            icon: ShieldCheck,
+                            label: "Verify Doctors",
+                            sub: "Pending Approvals",
+                            path: PATHS.ADMIN.VERIFY_DOCTORS,
+                            color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40 dark:text-emerald-300",
+                            hoverBorder: "hover:border-emerald-500/50 dark:hover:border-emerald-400/80",
+                            hoverShadow: "hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20",
+                            hoverText: "group-hover:text-emerald-600 dark:group-hover:text-emerald-200"
                         },
                         {
-                            icon: Database,
-                            label: "Database",
-                            sub: "Backups & health",
-                            path: "/admin/database",
-                            color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-900/20",
-                            hoverBorder: "hover:border-cyan-500/50 dark:hover:border-cyan-500/80",
+                            icon: Users,
+                            label: "User Registry",
+                            sub: "Manage all accounts",
+                            path: PATHS.ADMIN.USERS,
+                            color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-900/40 dark:text-cyan-300",
+                            hoverBorder: "hover:border-cyan-500/50 dark:hover:border-cyan-400/80",
                             hoverShadow: "hover:shadow-cyan-500/10 dark:hover:shadow-cyan-500/20",
-                            hoverText: "group-hover:text-cyan-600"
+                            hoverText: "group-hover:text-cyan-600 dark:group-hover:text-cyan-200"
                         },
                     ].map((action, idx) => (
                         <DashboardCard

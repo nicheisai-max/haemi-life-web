@@ -6,7 +6,9 @@ import {
     getAllUsers,
     updateUserStatus,
     getSystemStats,
-    getAuditLogs
+    getAuditLogs,
+    getSessionTimeout,
+    updateSessionTimeout
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -21,5 +23,7 @@ router.get('/users', getAllUsers);
 router.put('/users/:id/status', updateUserStatus);
 router.get('/system-stats', getSystemStats);
 router.get('/audit-logs', getAuditLogs);
+router.get('/settings/session-timeout', getSessionTimeout);
+router.put('/settings/session-timeout', updateSessionTimeout);
 
 export default router;

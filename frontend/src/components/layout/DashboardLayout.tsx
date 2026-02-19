@@ -23,7 +23,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             <div className="flex flex-1 w-full max-w-[1920px] mx-auto">
                 <Sidebar />
                 <main className="flex-1 w-full min-w-0 pb-12 lg:pl-[260px]">
-                    <div className="w-full px-4 md:px-8 py-8">
+                    <div className="w-full px-4 md:px-5 py-8">
                         {children}
                     </div>
                 </main>

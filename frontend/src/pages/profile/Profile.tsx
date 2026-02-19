@@ -144,7 +144,8 @@ export const Profile: React.FC = () => {
                         <div className="relative group">
                             <Avatar className="h-24 w-24 ring-4 ring-background shadow-lg border">
                                 <AvatarImage
-                                    src={profile?.profile_image ? (profile.profile_image.startsWith('http') ? profile.profile_image : `http://localhost:5000${profile.profile_image}`) : ''}
+                                    src={profile?.id ? `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/profile/${profile.id}` : ''}
+
                                     alt={profile?.name}
                                 />
                                 <AvatarFallback className="bg-primary/5 text-primary text-2xl font-bold">

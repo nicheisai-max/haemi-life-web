@@ -60,25 +60,31 @@ export const Navbar: React.FC = () => {
     const getUserImage = () => {
         if (!user) return '';
 
-        // Prioritize DB image
-        if (user.profile_image) {
-            return `http://localhost:5000${user.profile_image}`;
+        // Prioritize Secure API Endpoint (BYTEA or Legacy Redirection)
+        const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
+        const apiImage = `${baseUrl}/api/files/profile/${user.id}`;
+
+        // However, we only return the API image if we aren't using a default asset.
+        // For the investor demo, the default assets are imported as variables like 'patientImg'.
+        // To maintain "Zero-Breakage", if the API returns 404, the browser will show a broken image.
+        // So we should check if the user actually has any image associated.
+        // But since we want to be "Industry Grade", we'll return the API URL and let the backend 
+        // handle the fallback to the static /uploads/ path if it exists.
+
+        // If user has NO image at all in the DB, use local imported assets.
+        if (!user.profile_image && !user.profile_image_mime) {
+            switch (user.role) {
+                case 'admin': return adminImg;
+                case 'doctor': return doctorImg;
+                case 'patient': return patientImg;
+                case 'pharmacist': return pharmacistImg;
+                default: return patientImg;
+            }
         }
 
-        // Fallback to current hardcoded logic (Zero-Regression)
-        switch (user.role) {
-            case 'admin':
-                return adminImg;
-            case 'doctor':
-                return doctorImg;
-            case 'patient':
-                return patientImg;
-            case 'pharmacist':
-                return pharmacistImg;
-            default:
-                return ''; // Fallback to initials
-        }
+        return apiImage;
     };
+
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 w-full border-b border-border/40 bg-background/95 dark:bg-[#131314]/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 dark:border-white/5 h-[72px] flex items-center shadow-sm">

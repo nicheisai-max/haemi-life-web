@@ -8,7 +8,9 @@ export interface User {
     role: UserRole;
     id_number?: string | null;
     profile_image?: string | null;
+    profile_image_mime?: string | null;
 }
+
 
 export interface AuthResponse {
     token: string;

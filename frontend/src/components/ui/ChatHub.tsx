@@ -269,8 +269,9 @@ export const ChatHub: React.FC = () => {
 
         // Cast to any to safely access profile_image from dynamic participant data
         const participant = other as any;
-        const dbImage = participant.profile_image ? `http://localhost:5000${participant.profile_image}` : undefined;
-        return { ...other, image: dbImage || getDoctorImage(other.name) };
+        const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
+        const dbImage = `${baseUrl}/api/files/profile/${participant.id}`;
+        return { ...other, image: dbImage };
     };
 
     const filteredConversations = useMemo(() => conversations.filter(c => {
@@ -660,14 +661,14 @@ export const ChatHub: React.FC = () => {
                                                         <div key={i} className="mb-2 -mx-1 -mt-1">
                                                             {att.type?.startsWith('image') ? (
                                                                 <img
-                                                                    src={`http://localhost:5000${att.url}`}
+                                                                    src={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`}
                                                                     alt="Attachment"
                                                                     className="rounded-xl w-full max-h-48 object-cover border border-white/20"
-                                                                    onClick={() => window.open(`http://localhost:5000${att.url}`, '_blank')}
+                                                                    onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`, '_blank')}
                                                                 />
                                                             ) : (
                                                                 <a
-                                                                    href={`http://localhost:5000${att.url}`}
+                                                                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`}
                                                                     target="_blank"
                                                                     rel="noreferrer"
                                                                     className={`flex items-center gap-2 p-3 rounded-xl bg-black/10 transition-colors border border-black/5 ${msg.isMe ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}

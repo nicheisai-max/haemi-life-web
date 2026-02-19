@@ -19,6 +19,9 @@ import { logger } from './utils/logger';
 // Load environment variables first
 dotenv.config();
 
+// Force restart trigger
+
+
 import { pool } from './config/db';
 import authRoutes from './routes/auth.routes';
 import doctorRoutes from './routes/doctor.routes';
@@ -32,6 +35,8 @@ import analyticsRoutes from './routes/analytics.routes';
 import passwordResetRoutes from './routes/password-reset.routes';
 import clinicalCopilotRoutes from './routes/clinical-copilot.routes';
 import commonRoutes from './routes/common.routes';
+import fileRoutes from './routes/file.routes';
+
 
 // --- Production Hardening: Fail-Fast Environment Check ---
 const REQUIRED_ENV = ['JWT_SECRET', 'DB_PASSWORD', 'GEMINI_API_KEY'];
@@ -167,6 +172,8 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
 app.use('/api/clinical-copilot', clinicalCopilotRoutes); // NEW: Clinical Copilot Secure Route
 app.use('/api/common', commonRoutes);
+app.use('/api/files', fileRoutes);
+
 
 // Serve uploaded files
 // NOTE: V12 (Auth-gating) is deferred to production deployment (signed URLs/Cookies)

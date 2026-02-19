@@ -17,6 +17,7 @@ import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { TransitionItem } from '../../components/layout/PageTransition';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
+import { IconWrapper } from '@/components/ui/IconWrapper';
 
 // REALISTIC BOTSWANA CONTEXT DATA
 const HEALTH_TRENDS_DATA = [
@@ -72,33 +73,26 @@ export const PatientDashboard = () => {
         });
     };
 
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Good Morning';
-        if (hour < 18) return 'Good Afternoon';
-        return 'Good Evening';
-    };
+
 
     const upcomingAppointments = appointments.filter(a => a.status === 'scheduled').slice(0, 3);
     const activePrescriptions = prescriptions.filter(p => p.status === 'pending' || p.status === 'filled');
 
     return (
 
-        <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
+        <main className="w-full mx-auto p-4 md:p-5 pb-16 md:pb-20 max-w-[1600px] space-y-6">
             {/* Hero Section - Compact */}
             <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
-                <div className="relative z-10 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
-                                {getGreeting()}, {user?.name?.split(' ')[0]}
-                            </h1>
-                            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/20 text-emerald-100 text-xs font-bold border border-emerald-500/30">
-                                <Heart className="h-3 w-3 fill-current" />
-                                <span>Active Member</span>
-                            </div>
+                <div className="relative z-10 p-5 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="space-y-3">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/20 text-emerald-100 text-xs font-bold border border-emerald-500/30">
+                            <Heart className="h-3 w-3 fill-current" />
+                            <span>Active Member</span>
                         </div>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
+                            Welcome, {user?.name?.split(' ')[0]}
+                        </h1>
                         <p className="text-white/80 text-sm md:text-base font-medium max-w-xl">
                             {loading
                                 ? "Loading your health status..."
@@ -127,45 +121,39 @@ export const PatientDashboard = () => {
                 </TransitionItem>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <TransitionItem className="flex flex-col lg:flex-row gap-6 items-stretch">
                 {/* LEFT COLUMN (8/12) */}
-                <div className="lg:col-span-8 space-y-6">
+                <div className="w-full lg:w-[66.66%] flex flex-col h-full space-y-6">
 
                     {/* Key Metrics - Compact Grid */}
-                    <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <section className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-primary/50 dark:hover:border-primary/80 hover:shadow-lg hover:shadow-primary/10 dark:hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
-                            <div className="p-4 rounded-2xl bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                                <Calendar className="h-7 w-7" />
-                            </div>
-                            <div className="flex flex-col items-center gap-2">
-                                <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                            <IconWrapper icon={Calendar} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                            <div className="flex flex-col items-center gap-1.5">
+                                <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
                                     {loading ? "-" : upcomingAppointments.length}
                                 </div>
-                                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-primary transition-colors">Bookings</div>
+                                <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-primary transition-colors">Bookings</div>
                             </div>
                         </DashboardCard>
 
                         <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
-                            <div className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                                <FileText className="h-7 w-7" />
-                            </div>
-                            <div className="flex flex-col items-center gap-2">
-                                <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                            <IconWrapper icon={FileText} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                            <div className="flex flex-col items-center gap-1.5">
+                                <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
                                     {loading ? "-" : activePrescriptions.length}
                                 </div>
-                                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-emerald-500 transition-colors">Scripts</div>
+                                <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-emerald-500 transition-colors">Scripts</div>
                             </div>
                         </DashboardCard>
 
-                        <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 dark:hover:border-amber-500/80 hover:shadow-lg hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
-                            <div className="p-4 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
-                                <FolderOpen className="h-7 w-7" />
-                            </div>
-                            <div className="flex flex-col items-center gap-2">
-                                <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                        <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 dark:hover:border-amber-500/80 hover:shadow-lg hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer col-span-2 md:col-span-1" noPadding>
+                            <IconWrapper icon={FolderOpen} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                            <div className="flex flex-col items-center gap-1.5">
+                                <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
                                     {loading ? "-" : appointments.length}
                                 </div>
-                                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-amber-500 transition-colors">Total Visits</div>
+                                <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-amber-500 transition-colors">Total Visits</div>
                             </div>
                         </DashboardCard>
                     </section>
@@ -184,8 +172,10 @@ export const PatientDashboard = () => {
                         />
                     </section>
 
+                    <div className="flex-1" />
+
                     {/* Quick Actions - 4 Col Grid */}
-                    <section>
+                    <section className="mt-auto">
                         <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-3 flex items-center gap-2">
                             Quick Actions
                         </h2>
@@ -245,18 +235,17 @@ export const PatientDashboard = () => {
                 </div>
 
                 {/* RIGHT COLUMN (4/12) */}
-                <div className="lg:col-span-4 space-y-6">
+                <div className="w-full lg:w-[33.33%] flex flex-col h-full space-y-6">
 
                     {/* Appointments List */}
-                    <section className="bg-white dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col h-full shadow-sm overflow-hidden backdrop-blur-sm">
-                        <div className="p-4 border-b border-transparent flex items-center justify-between">
+                    <section className="bg-white dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-slate-800 flex-1 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
+                        <div className="p-6 border-b border-transparent flex items-center justify-between">
                             <h2 className="font-bold text-slate-900 dark:text-white text-sm tracking-wide">Upcoming</h2>
                             <Button variant="ghost" size="sm" className="h-6 text-[10px] font-semibold text-primary/80 hover:text-primary px-2 uppercase tracking-wider" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
                                 View All
                             </Button>
                         </div>
-
-                        <div className="p-2 space-y-1 flex-1">
+                        <div className="p-6 pt-0 space-y-4 flex-1 overflow-y-auto min-h-0">
                             {loading ? (
                                 <div className="flex justify-center p-8">
                                     <MedicalLoader message="Syncing records..." />
@@ -310,7 +299,7 @@ export const PatientDashboard = () => {
                     </section>
 
                 </div>
-            </div>
+            </TransitionItem>
         </main>
     );
 };

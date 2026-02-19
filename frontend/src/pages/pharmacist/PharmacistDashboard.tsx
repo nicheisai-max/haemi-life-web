@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
     Pill, Receipt, ClipboardList, CheckCircle2, AlertOctagon,
@@ -24,7 +25,7 @@ const INVENTORY_METRICS = [
 ];
 
 export const PharmacistDashboard = () => {
-    // const { user } = useAuth(); // Unused
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [loading, setLoading] = useState(true);
@@ -52,19 +53,20 @@ export const PharmacistDashboard = () => {
     const completedOrdersValue = prescriptions.filter(p => p.status === 'filled').length;
 
     return (
-        <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
+        <main className="w-full mx-auto p-4 md:p-5 pb-16 md:pb-20 max-w-[1600px] space-y-6">
             {/* Hero Section - Standardized Premium Style */}
             <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
-                <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
                             <Package className="h-3 w-3" aria-hidden="true" />
                             PHARMACY DISPENSARY
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-                            Dispensing Queue
+                        <h1 className="text-4xl md:text-3xl font-extrabold tracking-tight text-white">
+                            Welcome, {user?.name?.split(' ')[0]}
                         </h1>
+                        <p className="text-emerald-50/70 text-sm font-bold uppercase tracking-[0.2em] mb-1">Dispensing Queue</p>
                         <p className="text-white/80 text-lg font-medium leading-relaxed">
                             {loading
                                 ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
@@ -102,39 +104,39 @@ export const PharmacistDashboard = () => {
                 </TransitionItem>
             )}
 
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-6" aria-label="Key Metrics">
+            <section className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-teal-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={Receipt} variant="primary" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-teal-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                        <IconWrapper icon={Receipt} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : pendingOrders.length}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Active Queue</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Active Queue</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-emerald-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={CheckCircle2} variant="success" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                        <IconWrapper icon={CheckCircle2} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : completedOrdersValue}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Dispensed Today</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Dispensed Today</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
-                <TransitionItem>
-                    <DashboardCard className="flex items-center gap-5 hover:border-amber-500/50 transition-colors cursor-default">
-                        <IconWrapper icon={Truck} variant="warning" className="h-14 w-14" iconClassName="h-7 w-7" />
-                        <div>
-                            <div className="text-4xl font-bold tracking-tight text-foreground">
+                <TransitionItem className="col-span-2 md:col-span-1">
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                        <IconWrapper icon={Truck} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : "12"}
                             </div>
-                            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stock Arrivals</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Stock Arrivals</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>

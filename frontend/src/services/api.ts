@@ -180,7 +180,7 @@ api.interceptors.response.use(
             // If the 401 response came from a request that was sent with a token 
             // different from the current one, ignore it. This prevents ghost 
             // rejections from stale in-flight requests during a new login transition.
-            if (requestToken && requestToken !== currentToken) {
+            if (requestToken !== currentToken) {
                 console.warn('[API] Ignoring 401 for stale/mismatched token. New session preserved.');
                 return Promise.reject(error);
             }

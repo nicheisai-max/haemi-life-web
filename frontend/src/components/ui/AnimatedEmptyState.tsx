@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import { Button } from './button';
 import type { LucideIcon } from 'lucide-react';
 import { PlusCircle } from 'lucide-react';
@@ -11,6 +12,7 @@ interface AnimatedEmptyStateProps {
     actionLabel?: string;
     onAction?: () => void;
     suggestion?: string;
+    variant?: 'full' | 'minimal';
 }
 
 export const AnimatedEmptyState: React.FC<AnimatedEmptyStateProps> = ({
@@ -19,13 +21,17 @@ export const AnimatedEmptyState: React.FC<AnimatedEmptyStateProps> = ({
     icon: Icon,
     actionLabel,
     onAction,
-    suggestion
+    suggestion,
+    variant = 'full'
 }) => {
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center p-12 text-center rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50"
+            className={cn(
+                "flex flex-col items-center justify-center p-8 md:p-12 text-center",
+                variant === 'full' && "rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50"
+            )}
         >
             <div className="relative mb-6">
                 <motion.div

@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
+import { systemSettingsRepository } from '../repositories/system_settings.repository';
 import { logger } from '../utils/logger';
 import { auditService } from '../services/audit.service';
 
@@ -108,6 +109,10 @@ export const login = async (req: Request, res: Response) => {
 
         logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
 
+        // Fetch dynamic session timeout from DB (fallback to 60m)
+        const timeoutStr = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
+        const timeoutMinutes = parseInt(timeoutStr || '60');
+
         const token = jwt.sign(
             {
                 id: user.id,
@@ -116,7 +121,7 @@ export const login = async (req: Request, res: Response) => {
                 token_version: user.token_version // CRITICAL: Bind token to specific version
             },
             process.env.JWT_SECRET as string,
-            { expiresIn: '12h' }
+            { expiresIn: `${timeoutMinutes}m` }
         );
 
         res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, status: user.status, profile_image: user.profile_image } });
@@ -167,9 +172,12 @@ export const uploadProfileImage = async (req: any, res: Response) => {
         }
 
         const userId = req.user.id;
-        const imagePath = `/uploads/profiles/${req.file.filename}`;
+        const updatedUser = await userRepository.updateProfileImage(
+            userId,
+            req.file.buffer,
+            req.file.mimetype
+        );
 
-        const updatedUser = await userRepository.updateProfileImage(userId, imagePath);
 
         if (!updatedUser) {
             return res.status(404).json({ message: 'User not found' });

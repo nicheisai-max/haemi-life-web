@@ -43,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if (!currentToken && !authState.user && !authState.token) return;
 
-            if (failingToken && failingToken !== currentToken) {
+            if (failingToken !== undefined && failingToken !== currentToken) {
                 console.warn('[Auth] Ignoring unauthorized event for stale token.');
                 return;
             }

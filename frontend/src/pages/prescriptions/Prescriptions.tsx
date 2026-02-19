@@ -123,7 +123,7 @@ export const Prescriptions: React.FC = () => {
                         <Button
                             variant="default"
                             disabled={uploading}
-                            className="gap-2 bg-[#0E6B74] hover:bg-[#083E44] text-white shadow-lg shadow-teal-900/20"
+                            className="gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
                             asChild
                         >
                             <span>

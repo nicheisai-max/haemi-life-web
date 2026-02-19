@@ -20,6 +20,7 @@ import { PredictiveInsights } from '@/components/ui/PredictiveInsights';
 import { AnimatedEmptyState } from '@/components/ui/AnimatedEmptyState';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
+import { IconWrapper } from '@/components/ui/IconWrapper';
 
 const CLINICAL_VOLUME_DATA = [
     { name: '08:00', patients: 3 },
@@ -108,13 +109,13 @@ export const DoctorDashboard = () => {
     const pendingReviews = appointments.filter(a => a.status === 'completed').length;
 
     return (
-        <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
+        <main className="w-full mx-auto p-4 md:p-5 pb-16 md:pb-20 max-w-[1600px] space-y-6">
             <ClinicalCopilot isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
 
             {/* Hero Section - Standardized Premium Style */}
             <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
-                <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
                             <span className="relative flex h-2 w-2">
@@ -123,8 +124,8 @@ export const DoctorDashboard = () => {
                             </span>
                             STATUS: ON-DUTY
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-                            {user?.name?.startsWith('Dr. ') ? user.name : `Dr. ${user?.name}`}
+                        <h1 className="text-4xl md:text-3xl font-extrabold tracking-tight text-white">
+                            Welcome, {user?.name?.startsWith('Dr. ') ? user.name : `Dr. ${user?.name}`}
                         </h1>
                         <div className="text-white/80 text-lg font-medium leading-relaxed max-w-xl">
                             {loading
@@ -170,45 +171,39 @@ export const DoctorDashboard = () => {
             )}
 
             {/* Stats Grid */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-6" aria-label="Key Metrics">
+            <section className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-teal-500/50 dark:hover:border-teal-500/80 hover:shadow-lg hover:shadow-teal-500/10 dark:hover:shadow-teal-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
-                        <div className="p-4 rounded-2xl bg-teal-500/10 text-teal-600 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors">
-                            <Users className="h-7 w-7" />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                        <IconWrapper icon={Users} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : todayAppointments.length}
                             </div>
-                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-teal-600 transition-colors">Today's Census</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-teal-600 transition-colors">Today's Census</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
-                        <div className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                            <ClipboardCheck className="h-7 w-7" />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                        <IconWrapper icon={ClipboardCheck} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : pendingReviews}
                             </div>
-                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 transition-colors">Completed Notes</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-emerald-600 transition-colors">Completed Notes</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
-                <TransitionItem>
+                <TransitionItem className="col-span-2 md:col-span-1">
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-blue-500/50 dark:hover:border-blue-500/80 hover:shadow-lg hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
-                        <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                            <Contact className="h-7 w-7" />
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                        <IconWrapper icon={Contact} variant="accent" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
+                        <div className="flex flex-col items-center gap-1.5">
+                            <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : patientCount}
                             </div>
-                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider group-hover:text-blue-600 transition-colors">Total Panel</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-blue-600 transition-colors">Total Panel</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -234,10 +229,10 @@ export const DoctorDashboard = () => {
             </TransitionItem>
 
             {/* Main Content Split */}
-            <TransitionItem className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
-                {/* Left: Quick Actions */}
-                <div className="space-y-8 flex flex-col h-full">
-                    <section className="flex-1 flex flex-col">
+            <TransitionItem className="flex flex-col lg:flex-row gap-8 items-stretch min-h-[500px]">
+                {/* Left: Quick Actions + Clinical Snapshot */}
+                <div className="flex flex-col w-full lg:w-[60%] h-full">
+                    <section className="mb-8">
                         <h2 className="text-xl font-bold mb-4 text-foreground">Quick Actions</h2>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             {[
@@ -293,11 +288,13 @@ export const DoctorDashboard = () => {
                         </div>
                     </section>
 
-                    <section className="mt-8">
+                    <div className="flex-1" />
+
+                    <section className="mt-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-bold text-foreground">Clinical Snapshot</h2>
                         </div>
-                        <DashboardCard className="bg-gradient-to-br from-teal-600 to-teal-800 text-white p-6 flex items-center justify-between shadow-lg border-teal-500/20 relative overflow-hidden group hover:shadow-teal-500/20 transition-all">
+                        <DashboardCard className="bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-between shadow-lg border-teal-500/20 relative overflow-hidden group hover:shadow-teal-500/20 transition-all" noPadding={false}>
                             <GradientMesh variant="primary" className="opacity-20 mix-blend-overlay" />
                             <div className="space-y-4 relative z-10 w-full">
                                 <h3 className="text-lg font-bold flex items-center gap-2 text-teal-50">
@@ -322,7 +319,7 @@ export const DoctorDashboard = () => {
                 </div>
 
                 {/* Right: Today's Schedule */}
-                <div className="flex flex-col h-full">
+                <div className="flex flex-col w-full lg:w-[40%] h-full">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-foreground">Today's Schedule</h2>
                         <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-primary font-semibold" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
@@ -330,64 +327,69 @@ export const DoctorDashboard = () => {
                         </Button>
                     </div>
 
-                    <div className="space-y-4 flex-1">
-                        {loading ? (
-                            <div className="flex justify-center p-12 h-full items-center">
-                                <PremiumLoader size="md" />
-                            </div>
-                        ) : todayAppointments.length === 0 ? (
-                            <AnimatedEmptyState
-                                title="No Consultations Today"
-                                description="Your clinical schedule is currently clear."
-                                icon={CalendarX}
-                                suggestion="Consider opening 2 emergency slots."
-                                actionLabel="View Full Calendar"
-                                onAction={() => navigate(PATHS.PATIENT.APPOINTMENTS)}
-                            />
-                        ) : (
-                            todayAppointments.map((appointment) => {
-                                const time = formatTime(appointment.appointment_time);
-                                return (
-                                    <DashboardCard key={appointment.id} className="group p-4 flex items-center gap-4 transition-all hover:border-primary/50 hover:bg-muted/30">
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-xl p-3 min-w-[70px] text-center shrink-0 border border-blue-100 dark:border-blue-900/50">
-                                            <span className="block text-lg font-bold leading-none">{time.split(' ')[0]}</span>
-                                            <span className="block text-xs font-bold uppercase mt-1">{time.split(' ')[1]}</span>
-                                        </div>
-
-                                        <div className="shrink-0 relative">
-                                            <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
-                                                <AvatarImage
-                                                    src={`/images/patients/${appointment.other_party_name?.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`}
-                                                    alt={appointment.other_party_name || 'Patient'}
-                                                />
-                                                <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                                    {appointment.other_party_name?.slice(0, 2).toUpperCase() || 'PT'}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="absolute -bottom-1 -right-1 bg-amber-400 w-2.5 h-2.5 rounded-full border-2 border-white"></div>
-                                        </div>
-
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <h3 className="font-semibold truncate text-foreground">{appointment.other_party_name || 'Patient'}</h3>
+                    <div className="flex-1 bg-white dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
+                        <div className="p-6 flex-1 overflow-y-auto min-h-0">
+                            {loading ? (
+                                <div className="flex justify-center p-12 h-full items-center">
+                                    <PremiumLoader size="md" />
+                                </div>
+                            ) : todayAppointments.length === 0 ? (
+                                <div className="h-full flex items-center justify-center">
+                                    <AnimatedEmptyState
+                                        title="No Consultations Today"
+                                        description="Your clinical schedule is currently clear."
+                                        icon={CalendarX}
+                                        suggestion="Consider opening 2 emergency slots."
+                                        actionLabel="View Full Calendar"
+                                        onAction={() => navigate(PATHS.PATIENT.APPOINTMENTS)}
+                                        variant="minimal"
+                                    />
+                                </div>
+                            ) : (
+                                todayAppointments.map((appointment) => {
+                                    const time = formatTime(appointment.appointment_time);
+                                    return (
+                                        <DashboardCard key={appointment.id} className="group p-4 flex items-center gap-4 transition-all hover:border-primary/50 hover:bg-muted/30">
+                                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-xl p-3 min-w-[70px] text-center shrink-0 border border-blue-100 dark:border-blue-900/50">
+                                                <span className="block text-lg font-bold leading-none">{time.split(' ')[0]}</span>
+                                                <span className="block text-xs font-bold uppercase mt-1">{time.split(' ')[1]}</span>
                                             </div>
-                                            <p className="text-sm text-muted-foreground truncate flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-primary/40"></span>
-                                                {appointment.reason}
-                                            </p>
-                                        </div>
-                                        <Button
-                                            size="sm"
-                                            className="h-9 w-9 p-0 rounded-full shrink-0 shadow-sm"
-                                            onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}
-                                        >
-                                            <Play className="h-3.5 w-3.5 ml-0.5" />
-                                            <span className="sr-only">Start Consultation</span>
-                                        </Button>
-                                    </DashboardCard>
-                                );
-                            })
-                        )}
+
+                                            <div className="shrink-0 relative">
+                                                <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                                                    <AvatarImage
+                                                        src={`/images/patients/${appointment.other_party_name?.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`}
+                                                        alt={appointment.other_party_name || 'Patient'}
+                                                    />
+                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                        {appointment.other_party_name?.slice(0, 2).toUpperCase() || 'PT'}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="absolute -bottom-1 -right-1 bg-amber-400 w-2.5 h-2.5 rounded-full border-2 border-white"></div>
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <h3 className="font-semibold truncate text-foreground">{appointment.other_party_name || 'Patient'}</h3>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground truncate flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-primary/40"></span>
+                                                    {appointment.reason}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                className="h-9 w-9 p-0 rounded-full shrink-0 shadow-sm"
+                                                onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}
+                                            >
+                                                <Play className="h-3.5 w-3.5 ml-0.5" />
+                                                <span className="sr-only">Start Consultation</span>
+                                            </Button>
+                                        </DashboardCard>
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
                 </div>
             </TransitionItem>

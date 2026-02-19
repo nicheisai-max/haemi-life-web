@@ -120,7 +120,7 @@ export const Appointments: React.FC = () => {
                 </div>
                 <Button
                     variant="default"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
                     onClick={() => navigate('/book-appointment')}
                 >
                     <Plus className="h-5 w-5" />

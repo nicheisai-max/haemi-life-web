@@ -1,8 +1,27 @@
 import api from './api';
 
-// =====================================================
-// ADMIN API SERVICE
-// =====================================================
+export interface AuditLog {
+    id: number;
+    user_id: number;
+    action: string;
+    entity_type: string;
+    entity_id: number;
+    details: any;
+    ip_address: string;
+    created_at: string;
+    user_name?: string;
+    user_email?: string;
+}
+
+export interface UserListItem {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    phone_number: string;
+    is_active: boolean;
+    created_at: string;
+}
 
 export interface PendingVerification {
     id: number;
@@ -10,20 +29,10 @@ export interface PendingVerification {
     email: string;
     phone_number: string;
     created_at: string;
-    specialization?: string;
-    license_number?: string;
-    years_of_experience?: number;
-    bio?: string;
-}
-
-export interface UserListItem {
-    id: number;
-    name: string;
-    email?: string;
-    phone_number: string;
-    role: string;
-    is_active: boolean;
-    created_at: string;
+    specialization: string;
+    license_number: string;
+    years_of_experience: number;
+    bio: string;
 }
 
 export interface SystemStats {
@@ -35,65 +44,46 @@ export interface SystemStats {
     active_users: number;
 }
 
-export interface AuditLog {
-    id: number;
-    user_id: number;
-    action: string;
-    entity_type?: string;
-    entity_id?: number;
-    details?: any;
-    ip_address?: string;
-    created_at: string;
-    user_name?: string;
-    user_email?: string;
-    user_role?: string;
-}
-
-// Get pending doctor verifications
-export const getPendingVerifications = async () => {
-    const response = await api.get('/admin/pending-verifications');
-    return response.data as PendingVerification[];
-};
-
-// Verify or reject a doctor
-export const verifyDoctor = async (id: number, verified: boolean) => {
-    const response = await api.put(`/admin/verify-doctor/${id}`, { verified });
+// Named exports for components that expect direct imports
+export const getAuditLogs = async (limit = 50, offset = 0): Promise<AuditLog[]> => {
+    const response = await api.get<AuditLog[]>('/admin/audit-logs', { params: { limit, offset } });
     return response.data;
 };
 
-// Get all users with filters
-export const getAllUsers = async (params?: {
-    role?: string;
-    is_active?: boolean;
-    search?: string;
-}) => {
-    const response = await api.get('/admin/users', { params });
-    return response.data as UserListItem[];
-};
-
-// Update user status (activate/deactivate)
-export const updateUserStatus = async (id: number, is_active: boolean) => {
-    const response = await api.put(`/admin/users/${id}/status`, { is_active });
+export const getAllUsers = async (params?: { role?: string; is_active?: boolean; search?: string }): Promise<UserListItem[]> => {
+    const response = await api.get<UserListItem[]>('/admin/users', { params });
     return response.data;
 };
 
-// Get system statistics
-export const getSystemStats = async () => {
-    const response = await api.get('/admin/system-stats');
-    return response.data as SystemStats;
+export const updateUserStatus = async (userId: number, is_active: boolean): Promise<{ message: string; user: any }> => {
+    const response = await api.put<{ message: string; user: any }>(`/admin/users/${userId}/status`, { is_active });
+    return response.data;
 };
 
-// Get audit logs
-export const getAuditLogs = async (params?: { limit?: number; offset?: number }) => {
-    const response = await api.get('/admin/audit-logs', { params });
-    return response.data as AuditLog[];
+export const getPendingVerifications = async (): Promise<PendingVerification[]> => {
+    const response = await api.get<PendingVerification[]>('/admin/pending-verifications');
+    return response.data;
 };
 
-export default {
-    getPendingVerifications,
-    verifyDoctor,
-    getAllUsers,
-    updateUserStatus,
-    getSystemStats,
-    getAuditLogs
+export const verifyDoctor = async (id: number, verified: boolean): Promise<{ message: string; profile: any }> => {
+    const response = await api.put<{ message: string; profile: any }>(`/admin/verify-doctor/${id}`, { verified });
+    return response.data;
+};
+
+export const getSystemStats = async (): Promise<SystemStats> => {
+    const response = await api.get<SystemStats>('/admin/system-stats');
+    return response.data;
+};
+
+// Object-based export for backward compatibility
+export const adminSettingsService = {
+    getSessionTimeout: async (): Promise<{ timeout: number }> => {
+        const response = await api.get<{ timeout: number }>('/admin/settings/session-timeout');
+        return response.data;
+    },
+
+    updateSessionTimeout: async (timeout: number): Promise<{ message: string; timeout: number }> => {
+        const response = await api.put<{ message: string; timeout: number }>('/admin/settings/session-timeout', { timeout });
+        return response.data;
+    }
 };

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
+import { systemSettingsRepository } from '../repositories/system_settings.repository';
 
 // Get pending doctor verifications (Admin only)
 export const getPendingVerifications = async (req: Request, res: Response) => {
@@ -203,3 +204,35 @@ export const getAuditLogs = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Error fetching audit logs' });
     }
 };
+
+// Get current session timeout (Admin only)
+export const getSessionTimeout = async (req: Request, res: Response) => {
+    try {
+        const timeout = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
+        res.json({ timeout: parseInt(timeout || '60') });
+    } catch (error) {
+        console.error('Error fetching session timeout:', error);
+        res.status(500).json({ message: 'Error fetching session timeout' });
+    }
+};
+
+// Update session timeout (Admin only)
+export const updateSessionTimeout = async (req: Request, res: Response) => {
+    try {
+        const { timeout } = req.body;
+
+        // Validation: 5 to 1440 minutes
+        const timeoutNum = parseInt(timeout);
+        if (isNaN(timeoutNum) || timeoutNum < 5 || timeoutNum > 1440) {
+            return res.status(400).json({ message: 'Invalid timeout value. Must be between 5 and 1440 minutes.' });
+        }
+
+        await systemSettingsRepository.updateSetting('SESSION_TIMEOUT_MINUTES', timeoutNum.toString());
+
+        res.json({ message: 'Session timeout updated successfully', timeout: timeoutNum });
+    } catch (error) {
+        console.error('Error updating session timeout:', error);
+        res.status(500).json({ message: 'Error updating session timeout' });
+    }
+};
+

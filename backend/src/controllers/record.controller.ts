@@ -32,15 +32,15 @@ export const uploadRecord = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'No file uploaded' });
         }
 
-        const { originalname, filename, mimetype, size } = file;
-        const filePath = `uploads/medical_records/${filename}`;
+        const { originalname, mimetype, size, buffer } = file;
         const fileSize = (size / 1024).toFixed(2) + ' KB';
 
         const result = await pool.query(`
-            INSERT INTO medical_records (patient_id, name, file_path, file_type, file_size, record_type, status, notes)
-            VALUES ($1, $2, $3, $4, $5, 'Patient Upload', 'Pending Review', 'Uploaded by patient')
+            INSERT INTO medical_records (patient_id, name, file_path, file_data, file_mime, file_size, record_type, status, notes)
+            VALUES ($1, $2, 'DB_ONLY', $3, $4, $5, 'Patient Upload', 'Pending Review', 'Uploaded by patient')
             RETURNING *
-        `, [patientId, originalname, filePath, mimetype, fileSize]);
+        `, [patientId, originalname, buffer, mimetype, fileSize]);
+
 
 
         res.status(201).json({
@@ -75,11 +75,18 @@ export const deleteRecord = async (req: Request, res: Response) => {
         // Delete from database
         await pool.query('DELETE FROM medical_records WHERE id = $1', [id]);
 
-        // Delete from physical storage
-        const absolutePath = path.resolve(filePath);
-        if (fs.existsSync(absolutePath)) {
-            fs.unlinkSync(absolutePath);
+        // Delete from physical storage only if it's a legacy file
+        if (filePath && filePath !== 'DB_ONLY') {
+            try {
+                const absolutePath = path.resolve(filePath);
+                if (fs.existsSync(absolutePath)) {
+                    fs.unlinkSync(absolutePath);
+                }
+            } catch (err) {
+                console.warn(`Could not delete physical file: ${filePath}`, err);
+            }
         }
+
 
         res.json({ message: 'Medical record deleted successfully' });
     } catch (error) {

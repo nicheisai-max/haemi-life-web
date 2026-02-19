@@ -4,11 +4,12 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     UploadCloud, FileText, Image as ImageIcon, Download, Trash2, FolderOpen, File,
-    Search, Filter, Calendar, User, Building2, Stethoscope, ShieldCheck, Activity, Pill
+    Search, Calendar, Building2, Stethoscope, ShieldCheck, Activity, Pill
 } from 'lucide-react';
+
 import { MedicalLoader } from '../../components/ui/MedicalLoader';
 import { getMyRecords, uploadRecord, deleteRecord } from '../../services/record.service';
 import type { MedicalRecord } from '../../services/record.service';
@@ -142,7 +143,7 @@ export const MedicalRecords: React.FC = () => {
                         <Button
                             variant="default"
                             disabled={uploading}
-                            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+                            className="gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
                             asChild
                         >
                             <span>
@@ -220,9 +221,9 @@ export const MedicalRecords: React.FC = () => {
                                     <Card className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full">
                                         {/* Left Accent Strip */}
                                         <div className={`w-full md:w-1.5 h-1.5 md:h-auto ${record.record_type === 'Lab Result' ? 'bg-purple-500' :
-                                                record.record_type === 'Radiology' ? 'bg-blue-500' :
-                                                    record.record_type === 'Immunization' ? 'bg-emerald-500' :
-                                                        'bg-slate-400'
+                                            record.record_type === 'Radiology' ? 'bg-blue-500' :
+                                                record.record_type === 'Immunization' ? 'bg-emerald-500' :
+                                                    'bg-slate-400'
                                             }`} />
 
                                         <div className="flex-1 p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
@@ -275,16 +276,17 @@ export const MedicalRecords: React.FC = () => {
                                             {/* Actions */}
                                             <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-border/50">
                                                 <Button variant="outline" size="sm" className="hidden md:flex gap-2" asChild>
-                                                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${record.file_path}`} download target="_blank" rel="noopener noreferrer">
+                                                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/record/${record.id}`} download target="_blank" rel="noopener noreferrer">
                                                         <Download className="h-4 w-4" />
                                                         Download
                                                     </a>
                                                 </Button>
                                                 <Button variant="outline" size="icon" className="md:hidden h-9 w-9" asChild>
-                                                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${record.file_path}`} download target="_blank" rel="noopener noreferrer">
+                                                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/record/${record.id}`} download target="_blank" rel="noopener noreferrer">
                                                         <Download className="h-4 w-4" />
                                                     </a>
                                                 </Button>
+
 
                                                 {record.record_type === 'Patient Upload' && (
                                                     <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteRecord(record.id)}>
