@@ -53,22 +53,24 @@ import { DoctorPatientList } from './pages/doctor/DoctorPatientList';
 const LoadingFallback = () => <MedicalLoader fullPage message="Securing clinical data..." />;
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { authStatus } = useAuth();
   const location = useLocation();
 
-  // During initial app-load verification, show a loader.
-  // NEVER redirect during this phase — the user may be authenticated
-  // but the async verification hasn't completed yet.
-  if (isLoading) {
+  // 1. Initial Synchronous Initialization Phase
+  // NEVER redirect during this phase. The app is still reading storage or 
+  // waiting for the first mount cycle to settle.
+  if (authStatus === 'initializing') {
     return <LoadingFallback />;
   }
 
-  // Verification complete. If not authenticated, redirect to login.
-  if (!isAuthenticated) {
+  // 2. Deterministic Unauthenticated State
+  // Only redirect if we are CERTAIN the user has no valid session.
+  if (authStatus === 'unauthenticated') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Authenticated — render the protected content.
+  // 3. Authenticated State
+  // Guaranteed session exists — render the protected content.
   return children;
 };
 

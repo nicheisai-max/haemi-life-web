@@ -41,9 +41,9 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 
         try {
             // ULTRA-STRICT PRODUCTION LOCKDOWN: 
-            // 1. Fetch user status, role, and inactivity data from DB
+            // 1. Fetch user status, role, token_version, and inactivity data from DB
             const userResult = await pool.query(
-                `SELECT status, role, last_activity, 
+                `SELECT status, role, token_version, last_activity, 
                 (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
                 FROM users WHERE id = $1`,
                 [decoded.id]
@@ -58,6 +58,18 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
             }
 
             const userData = userResult.rows[0];
+
+            // 2. Token Version Validation (Revocation Check)
+            // If the token's version doesn't match the DB, the session was revoked.
+            if (decoded.token_version !== undefined && userData.token_version !== undefined) {
+                if (decoded.token_version !== userData.token_version) {
+                    return res.status(401).json({
+                        success: false,
+                        error: 'Session revoked. Please log in again.',
+                        statusCode: 401,
+                    });
+                }
+            }
 
             // 2. Status Validation (Standardized)
             if (userData.status !== 'ACTIVE') {
