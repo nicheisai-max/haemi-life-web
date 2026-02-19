@@ -8,6 +8,7 @@ import {
     CheckCircle2, Mic, MicOff, Video, VideoOff, PhoneOff,
     ShieldCheck, Settings, AlertCircle, Info, User, ArrowLeft
 } from 'lucide-react';
+import { PremiumLoader } from '../ui/PremiumLoader';
 import { MedicalLoader } from '../ui/MedicalLoader';
 import appointmentService from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
@@ -321,7 +322,8 @@ export const VideoConsultation: React.FC = () => {
                         <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
                     ) : (
                         <div className="text-center">
-                            <MedicalLoader message="Waiting for Specialist..." />
+                            <PremiumLoader />
+                            <p className="font-semibold mt-4 text-foreground">Waiting for Specialist...</p>
                             <p className="text-neutral-400 mt-2">{appointment?.doctor_name} is being notified of your arrival.</p>
 
                             <div className="mt-12 p-6 rounded-2xl bg-white/5 border border-white/5 max-w-sm mx-auto flex items-center gap-4 text-left">

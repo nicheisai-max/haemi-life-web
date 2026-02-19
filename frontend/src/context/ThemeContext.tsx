@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useLayoutEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 type Theme = 'light' | 'dark';
@@ -31,7 +31,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const root = window.document.documentElement;
 
         // If it's an auth page, FORCE 'light' regardless of 'theme' state

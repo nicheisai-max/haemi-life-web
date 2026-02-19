@@ -99,7 +99,12 @@ export const getAllUsers = async (req: Request, res: Response) => {
 
         query += ' ORDER BY created_at DESC';
 
+        console.log('getAllUsers request query:', req.query);
+        console.log('Generated SQL:', query);
+        console.log('Params:', params);
+
         const result = await pool.query(query, params);
+        console.log('Rows returned:', result.rows.length);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching users:', error);

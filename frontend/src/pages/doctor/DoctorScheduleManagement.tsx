@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { getDoctorSchedule, updateDoctorSchedule } from '../../services/doctor.service';
 import { Save, AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
 import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
 
@@ -109,7 +110,7 @@ export const DoctorScheduleManagement: React.FC = () => {
                     >
                         {form.formState.isSubmitting ? (
                             <>
-                                <MedicalLoader />
+                                <PremiumLoader size="xs" />
                                 Saving...
                             </>
                         ) : (

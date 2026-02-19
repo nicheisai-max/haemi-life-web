@@ -5,11 +5,13 @@ import { cn } from '@/lib/utils';
 interface PremiumLoaderProps {
     size?: 'xs' | 'sm' | 'md' | 'lg';
     className?: string;
+    bubbleClassName?: string;
 }
 
 export const PremiumLoader: React.FC<PremiumLoaderProps> = ({
     size = 'md',
-    className
+    className,
+    bubbleClassName
 }) => {
     const sizeMap = {
         xs: { container: 'h-4 w-12', bubble: 'h-1.5 w-1.5', gap: 'gap-0.5' },
@@ -47,7 +49,8 @@ export const PremiumLoader: React.FC<PremiumLoaderProps> = ({
                     variants={bubbleVariants}
                     animate="animate"
                     className={cn(
-                        "rounded-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.2)]",
+                        "rounded-full shadow-[0_0_10px_rgba(var(--primary),0.2)]",
+                        bubbleClassName ? bubbleClassName : "bg-primary",
                         currentSize.bubble
                     )}
                 />

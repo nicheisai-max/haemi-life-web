@@ -10,7 +10,7 @@ export const getMyRecords = async (req: Request, res: Response) => {
         const patientId = user.id;
 
         const result = await pool.query(
-            'SELECT * FROM medical_records WHERE patient_id = $1 ORDER BY uploaded_at DESC',
+            'SELECT * FROM medical_records WHERE patient_id = $1 AND deleted_at IS NULL ORDER BY uploaded_at DESC',
             [patientId]
         );
 
@@ -72,21 +72,11 @@ export const deleteRecord = async (req: Request, res: Response) => {
 
         const filePath = recordCheck.rows[0].file_path;
 
-        // Delete from database
-        await pool.query('DELETE FROM medical_records WHERE id = $1', [id]);
+        // Soft delete: Update deleted_at timestamp
+        await pool.query('UPDATE medical_records SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
 
-        // Delete from physical storage only if it's a legacy file
-        if (filePath && filePath !== 'DB_ONLY') {
-            try {
-                const absolutePath = path.resolve(filePath);
-                if (fs.existsSync(absolutePath)) {
-                    fs.unlinkSync(absolutePath);
-                }
-            } catch (err) {
-                console.warn(`Could not delete physical file: ${filePath}`, err);
-            }
-        }
-
+        // Enterprise Compliance: Do NOT delete physical files.
+        // We preserve them for audit and recovery purposes.
 
         res.json({ message: 'Medical record deleted successfully' });
     } catch (error) {

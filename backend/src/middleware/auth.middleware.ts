@@ -16,6 +16,8 @@ interface AuthRequest extends Request {
  * A bad JWT means we don't know who the user is → 401 is correct.
  * 403 is reserved for role/permission failures (see requireRole below).
  */
+import { pool } from '../config/db';
+
 export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -28,17 +30,46 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
         });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET!, (err: any, decoded: any) => {
+    jwt.verify(token, process.env.JWT_SECRET!, async (err: any, decoded: any) => {
         if (err) {
-            // Both expired and invalid tokens → 401, not 403
             return res.status(401).json({
                 success: false,
                 error: 'Invalid or expired session. Please log in again.',
                 statusCode: 401,
             });
         }
-        req.user = decoded;
-        next();
+
+        try {
+            // Enterprise Mode: Check if user is active in DB
+            const userResult = await pool.query('SELECT is_active, role FROM users WHERE id = $1', [decoded.id]);
+
+            if (userResult.rows.length === 0) {
+                return res.status(401).json({
+                    success: false,
+                    error: 'User not found.',
+                    statusCode: 401,
+                });
+            }
+
+            if (!userResult.rows[0].is_active) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Your account has been deactivated. Please contact administrator.',
+                    statusCode: 403,
+                });
+            }
+
+            // Update request user with latest role from DB just in case
+            req.user = { ...decoded, role: userResult.rows[0].role };
+            next();
+        } catch (dbError) {
+            console.error('Auth middleware DB error:', dbError);
+            return res.status(500).json({
+                success: false,
+                error: 'Internal server error during authentication.',
+                statusCode: 500,
+            });
+        }
     });
 };
 

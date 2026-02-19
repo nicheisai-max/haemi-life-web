@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 
 export type AlertType = 'info' | 'success' | 'warning' | 'error' | 'confirm';
 
@@ -17,7 +18,7 @@ export interface AlertOptions {
 interface GlobalAlertDialogProps {
     isOpen: boolean;
     options: AlertOptions;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
     onCancel: () => void;
 }
 
@@ -27,6 +28,17 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
     onConfirm,
     onCancel
 }) => {
+    const [isLoading, setIsLoading] = React.useState(false);
+
+    const handleConfirm = async () => {
+        setIsLoading(true);
+        try {
+            await Promise.resolve(onConfirm());
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const {
         title,
         message,
@@ -91,15 +103,16 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                     <motion.svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
-                        className="h-10 w-10 text-rose-600 dark:text-rose-400 stroke-[3px]"
+                        className="h-12 w-12 text-[#DC2626] drop-shadow-md"
                         initial="hidden"
                         animate="visible"
                     >
-                        <motion.circle cx="12" cy="12" r="10" className="stroke-rose-600/20 dark:stroke-rose-400/20 fill-none" />
+                        <motion.circle cx="12" cy="12" r="12" className="fill-red-100 dark:fill-red-900/20" />
                         <motion.path
                             d="M15 9l-6 6M9 9l6 6"
                             fill="none"
                             stroke="currentColor"
+                            strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             variants={draw}
@@ -131,7 +144,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
     const getPrimaryButtonClass = () => {
         switch (type) {
             case 'error':
-                return "bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-500/20 border-t border-white/20";
+                return "bg-[#DC2626] hover:bg-red-700 text-white shadow-lg shadow-red-500/10 border-t border-white/10";
             case 'warning':
                 return "bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-500/20 border-t border-white/20";
             case 'success':
@@ -159,8 +172,8 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                         initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
                         animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
                         exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        onClick={type === 'confirm' ? onCancel : onConfirm}
-                        className="absolute inset-0 bg-slate-900/40 transition-all"
+                        onClick={!isLoading ? onCancel : undefined}
+                        className={`absolute inset-0 bg-slate-900/40 transition-all ${isLoading ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                     />
 
                     {/* Modal */}
@@ -202,20 +215,29 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
 
                             {/* Actions */}
                             <div className="flex w-full gap-3 pt-2">
-                                {(type === 'confirm' || type === 'warning') && (
+                                {(type === 'confirm' || type === 'warning' || type === 'error') && (
                                     <Button
                                         variant="outline"
                                         onClick={onCancel}
-                                        className="flex-1 h-12 rounded-xl border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-base font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                        disabled={isLoading}
+                                        className="flex-1 h-12 rounded-xl border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-base font-medium transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {cancelText}
                                     </Button>
                                 )}
                                 <Button
-                                    onClick={onConfirm}
-                                    className={`flex-1 h-12 rounded-xl text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] ${getPrimaryButtonClass()}`}
+                                    onClick={handleConfirm}
+                                    disabled={isLoading}
+                                    className={`flex-1 h-12 rounded-xl text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${getPrimaryButtonClass()}`}
                                 >
-                                    {confirmText}
+                                    {isLoading ? (
+                                        <div className="flex items-center gap-2">
+                                            <PremiumLoader size="xs" bubbleClassName="bg-white" />
+                                            <span>Processing...</span>
+                                        </div>
+                                    ) : (
+                                        confirmText
+                                    )}
                                 </Button>
                             </div>
                         </div>

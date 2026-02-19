@@ -10,6 +10,7 @@ import {
     Search, Calendar, Building2, Stethoscope, ShieldCheck, Activity, Pill
 } from 'lucide-react';
 
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { MedicalLoader } from '../../components/ui/MedicalLoader';
 import { getMyRecords, uploadRecord, deleteRecord } from '../../services/record.service';
 import type { MedicalRecord } from '../../services/record.service';
@@ -86,26 +87,29 @@ export const MedicalRecords: React.FC = () => {
         }
     };
 
-    const handleDeleteRecord = async (id: string) => {
-        const isConfirmed = await confirm({
+    const handleDeleteRecord = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+
+        await confirm({
             title: 'Delete Record',
             message: 'Are you sure you want to delete this medical record? This action cannot be undone and may affect your clinical history.',
             type: 'error',
             confirmText: 'Delete Record',
-            cancelText: 'Cancel'
-        });
-
-        if (isConfirmed) {
-            try {
-                await deleteRecord(id);
-                setRecords(prev => prev.filter(r => r.id !== id));
-            } catch (error) {
-                console.error('Error deleting record:', error);
+            cancelText: 'Cancel',
+            onAsyncConfirm: async () => {
+                try {
+                    await deleteRecord(id);
+                    setRecords(prev => prev.filter(r => r.id !== id));
+                } catch (error) {
+                    console.error('Error deleting record:', error);
+                    // Could add toast/error state here
+                }
             }
-        }
+        });
     };
 
-    const getFileIcon = (type: string) => {
+    const getFileIcon = (type: string | null | undefined) => {
+        if (!type) return <File className="h-5 w-5" />;
         if (type.includes('pdf')) return <FileText className="h-5 w-5" />;
         if (type.includes('image')) return <ImageIcon className="h-5 w-5" />;
         return <File className="h-5 w-5" />;
@@ -147,7 +151,7 @@ export const MedicalRecords: React.FC = () => {
                             asChild
                         >
                             <span>
-                                {uploading ? <MedicalLoader /> : <UploadCloud className="h-4 w-4 mr-2" />}
+                                {uploading ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2" />}
                                 {uploading ? 'Uploading...' : 'Upload Record'}
                             </span>
                         </Button>
@@ -289,7 +293,7 @@ export const MedicalRecords: React.FC = () => {
 
 
                                                 {record.record_type === 'Patient Upload' && (
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteRecord(record.id)}>
+                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={(e) => handleDeleteRecord(e, record.id)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 )}

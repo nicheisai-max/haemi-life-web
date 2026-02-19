@@ -7,7 +7,7 @@ import { getMyPrescriptions, type Prescription } from '../../services/prescripti
 import { getMyRecords, uploadRecord, deleteRecord, type MedicalRecord } from '../../services/record.service';
 import { useConfirm } from '@/context/AlertDialogContext';
 import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, UploadCloud, Trash2, Download, Image as ImageIcon, File } from 'lucide-react';
-import { MedicalLoader } from '../../components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 
 import { TransitionItem } from '../../components/layout/PageTransition';
 
@@ -60,24 +60,25 @@ export const Prescriptions: React.FC = () => {
         }
     };
 
-    const handleDeleteRecord = async (id: string) => {
-        const isConfirmed = await confirm({
+    const handleDeleteRecord = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+
+        await confirm({
             title: 'Delete Prescription File',
             message: 'Are you sure you want to delete this uploaded prescription file? This action cannot be undone.',
             type: 'error',
             confirmText: 'Delete File',
-            cancelText: 'Cancel'
-        });
-
-        if (isConfirmed) {
-            try {
-                await deleteRecord(id);
-                setUploadedRecords(prev => prev.filter(r => r.id !== id));
-            } catch (error: any) {
-                console.error('Error deleting record:', error);
-                setError(error.message || 'Failed to delete file');
+            cancelText: 'Cancel',
+            onAsyncConfirm: async () => {
+                try {
+                    await deleteRecord(id);
+                    setUploadedRecords(prev => prev.filter(r => r.id !== id));
+                } catch (error: any) {
+                    console.error('Error deleting record:', error);
+                    setError(error.message || 'Failed to delete file');
+                }
             }
-        }
+        });
     };
 
     const getStatusStyles = (status: string) => {
@@ -89,7 +90,8 @@ export const Prescriptions: React.FC = () => {
         }
     };
 
-    const getFileIcon = (type: string) => {
+    const getFileIcon = (type: string | null | undefined) => {
+        if (!type) return <File className="h-5 w-5" />;
         if (type.includes('pdf')) return <FileText className="h-5 w-5" />;
         if (type.includes('image')) return <ImageIcon className="h-5 w-5" />;
         return <File className="h-5 w-5" />;
@@ -127,7 +129,7 @@ export const Prescriptions: React.FC = () => {
                             asChild
                         >
                             <span>
-                                {uploading ? <MedicalLoader /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
+                                {uploading ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
                                 {uploading ? 'Uploading...' : 'Upload Prescription'}
                             </span>
                         </Button>
@@ -242,7 +244,7 @@ export const Prescriptions: React.FC = () => {
                                                     <span className="sr-only">Download</span>
                                                 </a>
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteRecord(record.id)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={(e) => handleDeleteRecord(e, record.id)}>
                                                 <Trash2 className="h-4 w-4" />
                                                 <span className="sr-only">Delete</span>
                                             </Button>

@@ -15,7 +15,7 @@ import { PATHS } from '../../routes/paths';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { PremiumAreaChart } from '@/components/charts/PremiumAreaChart';
 import { TransitionItem } from '../../components/layout/PageTransition';
-import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DashboardCard } from '@/components/ui/DashboardCard';
 import { IconWrapper } from '@/components/ui/IconWrapper';
 
@@ -248,7 +248,8 @@ export const PatientDashboard = () => {
                         <div className="p-6 pt-0 space-y-4 flex-1 overflow-y-auto min-h-0">
                             {loading ? (
                                 <div className="flex justify-center p-8">
-                                    <MedicalLoader message="Syncing records..." />
+                                    <PremiumLoader size="xs" />
+                                    <span className="ml-2 text-sm text-muted-foreground">Syncing records...</span>
                                 </div>
                             ) : upcomingAppointments.length === 0 ? (
                                 <div className="text-center py-8 px-4 flex flex-col items-center">

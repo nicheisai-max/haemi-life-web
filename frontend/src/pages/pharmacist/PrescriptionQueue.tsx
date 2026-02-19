@@ -8,6 +8,7 @@ import { getPendingPrescriptions, updatePrescriptionStatus } from '../../service
 import type { Prescription } from '../../services/prescription.service';
 import { AlertCircle, X, CheckCircle2, AlertTriangle, Clock, Calendar, Pill, Check } from 'lucide-react';
 import { MedicalLoader } from '../../components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 
 export const PrescriptionQueue: React.FC = () => {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
@@ -166,11 +167,13 @@ export const PrescriptionQueue: React.FC = () => {
                                             className="flex-1 md:w-full justify-center shadow-sm"
                                         >
                                             {processing === prescription.id.toString() ? (
-                                                <MedicalLoader />
+                                                <PremiumLoader size="xs" />
                                             ) : (
-                                                <Check className="h-4 w-4 mr-2" />
+                                                <>
+                                                    <Check className="h-4 w-4 mr-2" />
+                                                    Fill
+                                                </>
                                             )}
-                                            Fill
                                         </Button>
                                         <Button
                                             variant="outline"

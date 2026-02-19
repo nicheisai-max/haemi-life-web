@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { GradientMesh } from '@/components/ui/GradientMesh';
 import { getPrescriptionById, updatePrescriptionStatus } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
-import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { useToast } from '../../context/ToastContext';
 import { PATHS } from '../../routes/paths';
 
@@ -87,7 +87,7 @@ const DispensePrescription: React.FC = () => {
                                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                     />
                                     <Button size="icon" onClick={handleSearch} disabled={loading}>
-                                        {loading ? <MedicalLoader /> : <Search className="h-4 w-4" />}
+                                        {loading ? <PremiumLoader size="xs" /> : <Search className="h-4 w-4" />}
                                     </Button>
                                 </div>
                             </div>
@@ -176,7 +176,7 @@ const DispensePrescription: React.FC = () => {
                                         onClick={handleDispense}
                                         disabled={dispensing || prescription.status === 'filled'}
                                     >
-                                        {dispensing ? <MedicalLoader message="Dispensing..." /> : <CheckCircle className="h-5 w-5" />}
+                                        {dispensing ? <PremiumLoader size="xs" /> : <CheckCircle className="h-4 w-4 mr-2" />}
                                         {prescription.status === 'filled' ? 'Already Dispensed' : 'Dispense Now'}
                                     </Button>
                                 </div>

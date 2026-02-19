@@ -15,7 +15,7 @@ import { bookAppointmentSchema, type BookAppointmentFormData } from '../../lib/v
 import type { DoctorProfile } from '../../services/doctor.service';
 import type { AvailableSlots } from '../../services/appointment.service';
 import { CheckCircle, AlertTriangle, User, Calendar, Clock } from 'lucide-react';
-import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DateScroller } from '@/components/ui/DateScroller';
 import { TimeGrid } from '@/components/ui/TimeGrid';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -275,7 +275,7 @@ export const BookAppointment: React.FC = () => {
                             >
                                 {form.formState.isSubmitting ? (
                                     <>
-                                        <MedicalLoader />
+                                        <PremiumLoader size="xs" />
                                         Booking...
                                     </>
                                 ) : (

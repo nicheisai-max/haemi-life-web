@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useConfirm } from '@/context/AlertDialogContext';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { getAllUsers, updateUserStatus } from '../../services/admin.service';
 import type { UserListItem } from '../../services/admin.service';
 import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail } from 'lucide-react';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<UserListItem[]>([]);
@@ -17,6 +19,8 @@ export const UserManagement: React.FC = () => {
     const [processing, setProcessing] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+    const { confirm } = useConfirm();
 
     useEffect(() => {
         fetchUsers();
@@ -24,7 +28,7 @@ export const UserManagement: React.FC = () => {
 
     useEffect(() => {
         applyFilters();
-    }, [searchTerm, roleFilter, users]);
+    }, [searchTerm, roleFilter, statusFilter, users]);
 
     const fetchUsers = async () => {
         try {
@@ -55,20 +59,36 @@ export const UserManagement: React.FC = () => {
             filtered = filtered.filter(user => user.role === roleFilter);
         }
 
+        // Status filter
+        if (statusFilter !== 'all') {
+            const isActive = statusFilter === 'active';
+            filtered = filtered.filter(user => user.is_active === isActive);
+        }
+
         setFilteredUsers(filtered);
     };
 
-    const handleToggleStatus = async (userId: number, currentStatus: boolean) => {
-        try {
-            setProcessing(userId);
-            // Service expects (id, is_active)
-            await updateUserStatus(userId, !currentStatus);
-            await fetchUsers();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to update user status');
-        } finally {
-            setProcessing(null);
-        }
+    const handleToggleStatus = async (userId: number, currentStatus: boolean, userName: string) => {
+        const action = currentStatus ? 'deactivate' : 'activate';
+
+        await confirm({
+            title: `${action.charAt(0).toUpperCase() + action.slice(1)} User`,
+            message: `Are you sure you want to ${action} ${userName}? ${currentStatus ? 'They will lose access immediately.' : 'They will regain access.'}`,
+            type: currentStatus ? 'error' : 'warning',
+            confirmText: `${action.charAt(0).toUpperCase() + action.slice(1)} User`,
+            cancelText: 'Cancel',
+            onAsyncConfirm: async () => {
+                try {
+                    setProcessing(userId);
+                    await updateUserStatus(userId, !currentStatus);
+                    await fetchUsers();
+                } catch (err: any) {
+                    setError(err.response?.data?.message || 'Failed to update user status');
+                } finally {
+                    setProcessing(null);
+                }
+            }
+        });
     };
 
     const getRoleIcon = (role: string) => {
@@ -154,6 +174,22 @@ export const UserManagement: React.FC = () => {
                     </button>
                 ))}
             </div>
+
+            <div className="flex flex-wrap gap-2 pt-2 border-t">
+                <span className="text-sm text-muted-foreground self-center mr-2">Status:</span>
+                {(['all', 'active', 'inactive'] as const).map(status => (
+                    <button
+                        key={status}
+                        onClick={() => setStatusFilter(status)}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors border ${statusFilter === status
+                            ? 'bg-secondary text-secondary-foreground border-secondary'
+                            : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                            }`}
+                    >
+                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </button>
+                ))}
+            </div>
         </Card>
 
         {/* Users Table */}
@@ -167,7 +203,7 @@ export const UserManagement: React.FC = () => {
                             <TableHead className="hidden md:table-cell">Contact</TableHead>
                             <TableHead className="hidden md:table-cell">Joined</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            <TableHead className="text-left">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -211,22 +247,28 @@ export const UserManagement: React.FC = () => {
                                             {user.is_active ? 'Active' : 'Inactive'}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell className="text-left">
                                         <Button
                                             size="sm"
-                                            variant={user.is_active ? "ghost" : "default"}
-                                            className={user.is_active ? "text-destructive hover:text-destructive hover:bg-destructive/10" : "bg-green-600 hover:bg-green-700"}
-                                            onClick={() => handleToggleStatus(user.id, user.is_active)}
+                                            className={user.is_active
+                                                ? "user-action-btn user-action-btn-deactivate"
+                                                : "user-action-btn user-action-btn-activate"
+                                            }
+                                            onClick={() => handleToggleStatus(user.id, user.is_active, user.name)}
                                             disabled={processing === user.id}
                                         >
                                             {processing === user.id ? (
-                                                <MedicalLoader />
-                                            ) : user.is_active ? (
-                                                <ShieldAlert className="h-4 w-4 mr-2" />
+                                                <PremiumLoader size="xs" bubbleClassName="bg-white" />
                                             ) : (
-                                                <Shield className="h-4 w-4 mr-2" />
+                                                <div className="flex items-center gap-1.5">
+                                                    {user.is_active ? (
+                                                        <ShieldAlert className="h-3.5 w-3.5" />
+                                                    ) : (
+                                                        <Shield className="h-3.5 w-3.5" />
+                                                    )}
+                                                    <span>{user.is_active ? 'Deactivate' : 'Activate'}</span>
+                                                </div>
                                             )}
-                                            {user.is_active ? 'Deactivate' : 'Activate'}
                                         </Button>
                                     </TableCell>
                                 </TableRow>
