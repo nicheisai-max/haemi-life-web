@@ -138,7 +138,13 @@ export const DoctorDashboard = () => {
                             size="lg"
                             variant="outline"
                             className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto"
-                            onClick={() => setIsCopilotOpen(true)}
+                            onClick={() => {
+                                // Coordination: Close chathub when opening copilot
+                                if (!isCopilotOpen) {
+                                    window.dispatchEvent(new CustomEvent('haemi-close-chathub'));
+                                }
+                                setIsCopilotOpen(true);
+                            }}
                         >
                             <BrainCircuit className="h-5 w-5" aria-hidden="true" />
                             AI Copilot
@@ -231,9 +237,9 @@ export const DoctorDashboard = () => {
             <TransitionItem className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
                 {/* Left: Quick Actions */}
                 <div className="space-y-8 flex flex-col h-full">
-                    <section className="flex-1">
+                    <section className="flex-1 flex flex-col">
                         <h2 className="text-xl font-bold mb-4 text-foreground">Quick Actions</h2>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 h-full">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             {[
                                 {
                                     icon: UserPlus,
@@ -287,29 +293,30 @@ export const DoctorDashboard = () => {
                         </div>
                     </section>
 
-                    <section className="mt-auto">
-                        <h2 className="text-xl font-bold mb-4 text-foreground flex items-center justify-between">
-                            Clinical Snapshot
-                        </h2>
-                        <DashboardCard className="bg-gradient-to-br from-indigo-500 to-purple-700 text-white p-6 flex items-center justify-between shadow-lg border-none relative overflow-hidden">
-                            <GradientMesh variant="subtle" className="opacity-30" />
-                            <div className="space-y-3 relative z-10">
-                                <h3 className="text-lg font-bold flex items-center gap-2">
-                                    <Stethoscope className="h-5 w-5" />
-                                    Daily rounds
+                    <section className="mt-8">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-foreground">Clinical Snapshot</h2>
+                        </div>
+                        <DashboardCard className="bg-gradient-to-br from-teal-600 to-teal-800 text-white p-6 flex items-center justify-between shadow-lg border-teal-500/20 relative overflow-hidden group hover:shadow-teal-500/20 transition-all">
+                            <GradientMesh variant="primary" className="opacity-20 mix-blend-overlay" />
+                            <div className="space-y-4 relative z-10 w-full">
+                                <h3 className="text-lg font-bold flex items-center gap-2 text-teal-50">
+                                    <Stethoscope className="h-5 w-5 text-teal-200" />
+                                    Daily Rounds
                                 </h3>
-                                <div className="space-y-1 text-indigo-100">
-                                    <p className="flex items-center gap-3">
-                                        <span className="font-bold text-white text-2xl">{appointments.filter(a => new Date(a.appointment_date).toDateString() === new Date().toDateString()).length}</span>
-                                        <span className="text-sm opacity-80">Check-ins today</span>
-                                    </p>
-                                    <p className="flex items-center gap-3">
-                                        <span className="font-bold text-white text-2xl">{pendingReviews}</span>
-                                        <span className="text-sm opacity-80">Pending Sign-off</span>
-                                    </p>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <p className="text-3xl font-bold text-white tracking-tight">{appointments.filter(a => new Date(a.appointment_date).toDateString() === new Date().toDateString()).length}</p>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-teal-100/70">Check-ins</p>
+                                    </div>
+                                    <div className="space-y-1 border-l border-teal-500/30 pl-4">
+                                        <p className="text-3xl font-bold text-white tracking-tight">{pendingReviews}</p>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-teal-100/70">Pending Sign-off</p>
+                                    </div>
                                 </div>
                             </div>
-                            <CalendarIcon className="h-24 w-24 opacity-10 absolute -right-6 -bottom-6 rotate-[-15deg]" />
+                            <CalendarIcon className="h-32 w-32 opacity-10 text-teal-100 absolute -right-8 -bottom-8 rotate-[-15deg] group-hover:scale-110 transition-transform duration-500" />
                         </DashboardCard>
                     </section>
                 </div>

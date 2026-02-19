@@ -107,7 +107,11 @@
   --color-error: #DC2626;
   --color-error-bg: #FEE2E2;
   --color-info: #2563EB;
+  --color-info: #2563EB;
   --color-info-bg: #DBEAFE;
+  
+  /* Task: Login Fallback Background */
+  --color-login-bg: #037b77;
 }
 
 .dark {

@@ -21,7 +21,7 @@ export const LanguageSelector: React.FC = () => {
     const currentLang = languages.find(l => l.code === language);
 
     return (
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="ghost"

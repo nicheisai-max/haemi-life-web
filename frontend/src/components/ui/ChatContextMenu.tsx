@@ -72,7 +72,7 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
                 style={{ top: adjustedY, left: adjustedX }}
-                className="fixed z-[100] w-56 flex flex-col bg-white dark:bg-[#1e293b] rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden font-sans"
+                className="fixed z-[100] w-56 flex flex-col bg-white dark:bg-[#1e293b] rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden font-sans pointer-events-auto"
             >
                 {/* Reaction Bar */}
                 <div className="p-3 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700/50 grid grid-cols-6 gap-2 place-items-center">

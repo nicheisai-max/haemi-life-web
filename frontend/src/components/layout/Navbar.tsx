@@ -131,57 +131,57 @@ export const Navbar: React.FC = () => {
                                 </Avatar>
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-64 rounded-3xl p-1.5 bg-[#1e1e1e]/95 backdrop-blur-xl border-white/5 shadow-2xl mt-2">
+                        <DropdownMenuContent align="end" className="w-64 rounded-3xl p-1.5 bg-white/95 dark:bg-[#1e1e1e]/95 backdrop-blur-xl border-slate-200 dark:border-white/5 shadow-2xl mt-2 transition-all">
                             <DropdownMenuLabel className="font-normal px-4 py-3.5">
                                 <div className="flex flex-col space-y-1">
-                                    <p className="text-sm font-semibold leading-none text-white tracking-wide">{user?.name}</p>
-                                    <p className="text-[10px] leading-none text-gray-400 font-medium tracking-wider uppercase opacity-80 mt-1">{user?.role}</p>
+                                    <p className="text-sm font-semibold leading-none text-slate-900 dark:text-white tracking-wide">{user?.name}</p>
+                                    <p className="text-[10px] leading-none text-slate-500 dark:text-gray-400 font-medium tracking-wider uppercase opacity-80 mt-1">{user?.role}</p>
                                 </div>
                             </DropdownMenuLabel>
 
                             <div className="flex flex-col gap-0.5 px-0.5">
                                 <DropdownMenuItem
                                     onClick={() => navigate('/profile')}
-                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-white/5 hover:bg-white/5 transition-all duration-200"
+                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-slate-100 dark:focus:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/5 transition-all duration-200"
                                 >
                                     <div className="mr-3 flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
-                                        <UserIcon className="h-4.5 w-4.5 text-gray-400 group-hover:text-primary transition-colors" />
+                                        <UserIcon className="h-4.5 w-4.5 text-slate-500 dark:text-gray-400 group-hover:text-primary transition-colors" />
                                     </div>
-                                    <span className="text-sm text-gray-200 font-medium group-hover:text-white transition-colors">Profile</span>
+                                    <span className="text-sm text-slate-700 dark:text-gray-200 font-medium group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Profile</span>
                                 </DropdownMenuItem>
 
                                 <DropdownMenuItem
                                     onClick={() => navigate('/dashboard')}
-                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-white/5 hover:bg-white/5 transition-all duration-200"
+                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-slate-100 dark:focus:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/5 transition-all duration-200"
                                 >
                                     <div className="mr-3 flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
-                                        <svg width="18" height="18" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5 text-gray-400 group-hover:text-primary transition-colors">
-                                            <path d="M0 3.5C0 2.67157 0.671573 2 1.5 2H6.5C7.32843 2 8 2.67157 8 3.5V6.5C8 7.32843 7.32843 8 6.5 8H1.5C0.671573 8 0 7.32843 0 6.5V3.5ZM9 3.5C9 2.67157 9.67157 2 10.5 2H13.5C14.3284 2 15 2.67157 15 3.5V6.5C15 7.32843 14.3284 8 13.5 8H10.5C9.67157 8 9 7.32843 9 6.5V3.5ZM0 10.5C0 9.67157 0.671573 9 1.5 9H6.5C7.32843 9 8 9.67157 8 10.5V13.5C8 14.3284 7.32843 15 6.5 15H1.5C0.671573 15 0 14.3284 0 13.5V10.5ZM9 10.5C9 9.67157 9.67157 9 10.5 9H13.5C14.3284 9 15 9.67157 15 10.5V13.5C15 14.3284 14.3284 15 13.5 15H10.5C9.67157 15 9 14.3284 9 13.5V10.5Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path>
+                                        <svg width="18" height="18" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5 text-slate-500 dark:text-gray-400 group-hover:text-primary transition-colors">
+                                            <path d="M0 3.5C0 2.67157 0.671573 2 1.5 2H6.5C7.32843 2 8 2.67157 8 3.5V6.5C8 7.32843 7.32843 8 6.5 8H1.5C0.671573 8 0 7.32843 0 6.5V3.5ZM9 3.5C9 2.67157 9.67157 2 10.5 2H13.5C14.3284 2 15 2.67157 15 3.5V6.5C15 7.32843 14.3284 8 13.5 8H10.5C9.67157 8 9 7.32843 9 6.5V3.5ZM0 10.5C0 9.67157 0.671573 9 1.5 9H6.5C7.32843 9 8 9.67157 8 10.5V13.5C8 14.3284 7.32843 15 6.5 15H1.5C0.671573 15 0 14.3284 0 13.5V10.5ZM9 10.5C9 9.67157 9.67157 9 10.5 9H13.5C14.3284 9 15 9.67157 15 10.5V13.5C15 14.3284 14.4 15 13.5 15H10.5C9.67157 15 9 14.3284 9 13.5V10.5Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path>
                                         </svg>
                                     </div>
-                                    <span className="text-sm text-gray-200 font-medium group-hover:text-white transition-colors">Dashboard</span>
+                                    <span className="text-sm text-slate-700 dark:text-gray-200 font-medium group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Dashboard</span>
                                 </DropdownMenuItem>
 
                                 <DropdownMenuItem
                                     onClick={() => navigate('/settings')}
-                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-white/5 hover:bg-white/5 transition-all duration-200"
+                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-slate-100 dark:focus:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/5 transition-all duration-200"
                                 >
                                     <div className="mr-3 flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
-                                        <Settings className="h-4.5 w-4.5 text-gray-400 group-hover:text-primary transition-colors" />
+                                        <Settings className="h-4.5 w-4.5 text-slate-500 dark:text-gray-400 group-hover:text-primary transition-colors" />
                                     </div>
-                                    <span className="text-sm text-gray-200 font-medium group-hover:text-white transition-colors">Settings</span>
+                                    <span className="text-sm text-slate-700 dark:text-gray-200 font-medium group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Settings</span>
                                 </DropdownMenuItem>
                             </div>
 
-                            <div className="px-0.5 mt-1.5 pt-1.5 border-t border-white/5">
+                            <div className="px-0.5 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-white/5">
                                 <DropdownMenuItem
                                     onClick={handleLogout}
-                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-red-500/10 hover:bg-red-500/10 transition-all duration-200"
+                                    className="group flex items-center px-3 py-2.5 rounded-2xl cursor-pointer focus:bg-red-50 dark:focus:bg-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-200"
                                 >
                                     <div className="mr-3 flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
-                                        <LogOut className="h-4.5 w-4.5 text-red-400 group-hover:text-red-300 transition-colors" />
+                                        <LogOut className="h-4.5 w-4.5 text-red-500 dark:text-red-400 group-hover:text-red-600 dark:group-hover:text-red-300 transition-colors" />
                                     </div>
-                                    <span className="text-sm text-red-400 font-medium group-hover:text-red-300 transition-colors">Log out</span>
+                                    <span className="text-sm text-red-500 dark:text-red-400 font-medium group-hover:text-red-600 dark:group-hover:text-red-300 transition-colors">Log out</span>
                                 </DropdownMenuItem>
                             </div>
                         </DropdownMenuContent>

@@ -16,6 +16,8 @@ import type { DoctorProfile } from '../../services/doctor.service';
 import doctor01 from '../../assets/images/doctors/doctor_01.jpg';
 import doctor02 from '../../assets/images/doctors/doctor_02.png';
 import doctor03 from '../../assets/images/doctors/doctor_03.png';
+import { useLocation } from 'react-router-dom';
+import { useClickOutside } from '../../hooks/useClickOutside';
 
 // Override helper to get images
 const getDoctorImage = (name: string) => {
@@ -119,6 +121,10 @@ import { ChatContextMenu } from './ChatContextMenu'; // Import Context Menu
 // --- Main Chat Hub ---
 export const ChatHub: React.FC = () => {
     const { user } = useAuth();
+    const location = useLocation(); // Hook for route changes
+    // Close on click outside using robust capture-phase hook
+    const containerRef = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+
     const {
         conversations,
         activeConversation,
@@ -206,7 +212,27 @@ export const ChatHub: React.FC = () => {
         }
     }, [messages, view, isOpen]);
 
-    const toggleChat = () => setIsOpen(!isOpen);
+    // Auto-close on route change
+    useEffect(() => {
+        setIsOpen(false);
+    }, [location.pathname]);
+
+    const toggleChat = () => {
+        if (!isOpen) {
+            // Close clinical copilot if it's open
+            window.dispatchEvent(new CustomEvent('haemi-close-copilot'));
+        }
+        setIsOpen(!isOpen);
+    };
+
+    // Coordination: Listen for event to close chathub (e.g. from ClinicalCopilot)
+    useEffect(() => {
+        const handleCloseChatHub = () => {
+            setIsOpen(false);
+        };
+        window.addEventListener('haemi-close-chathub', handleCloseChatHub);
+        return () => window.removeEventListener('haemi-close-chathub', handleCloseChatHub);
+    }, []);
 
     const handleSelectConversation = (conversation: Conversation) => {
         selectConversation(conversation);
@@ -263,6 +289,10 @@ export const ChatHub: React.FC = () => {
         const date = new Date(dateString);
         return format(date, 'HH:mm');
     };
+
+
+
+    // Close on click outside using robust capture-phase hook
 
 
 
@@ -327,7 +357,7 @@ export const ChatHub: React.FC = () => {
 
     // --- Render Main Window ---
     return (
-        <div className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-4 pointer-events-none font-sans">
+        <div ref={containerRef} className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-4 pointer-events-none font-sans">
             <style>
                 {`
                     .chat-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -339,6 +369,8 @@ export const ChatHub: React.FC = () => {
             <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                     key="chat-window"
+                    drag
+                    dragMomentum={false}
                     initial={{ y: 20, opacity: 0, scale: 0.95 }}
                     animate={{ y: 0, opacity: 1, scale: 1 }}
                     exit={{ y: 20, opacity: 0, scale: 0.95 }}
@@ -776,33 +808,37 @@ export const ChatHub: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Context Menu */}
-                                    {contextMenu.isOpen && (
-                                        <ChatContextMenu
-                                            x={contextMenu.x}
-                                            y={contextMenu.y}
-                                            isMe={contextMenu.isMe}
-                                            onClose={() => setContextMenu({ ...contextMenu, isOpen: false })}
-                                            onDeleteForMe={() => handleDeleteMessage(contextMenu.messageId, false)}
-                                            onDeleteForEveryone={() => handleDeleteMessage(contextMenu.messageId, true)}
-                                            onReact={(reactionType) => handleReaction(contextMenu.messageId, reactionType)}
-                                            onReply={() => {
-                                                const msg = messages.find(m => m.id === contextMenu.messageId);
-                                                if (msg) setReplyingTo(msg);
-                                                inputRef.current?.focus();
-                                            }}
-                                            onCopy={() => {
-                                                const msg = messages.find(m => m.id === contextMenu.messageId);
-                                                if (msg) copyToClipboard(msg.content);
-                                            }}
-                                        />
-                                    )}
+
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
                 </motion.div>
             </AnimatePresence>
-        </div>
+
+            {/* Context Menu - Moved outside to escape overflow/transform clipping */}
+            {contextMenu.isOpen && (
+                <ChatContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    isMe={contextMenu.isMe}
+                    onClose={() => setContextMenu({ ...contextMenu, isOpen: false })}
+                    onDeleteForMe={() => handleDeleteMessage(contextMenu.messageId, false)}
+                    onDeleteForEveryone={() => handleDeleteMessage(contextMenu.messageId, true)}
+                    onReact={(reactionType) => handleReaction(contextMenu.messageId, reactionType)}
+                    onReply={() => {
+                        const msg = (messages || []).find(m => m.id === contextMenu.messageId);
+                        if (msg) {
+                            setReplyingTo(msg);
+                            setTimeout(() => inputRef.current?.focus(), 10);
+                        }
+                    }}
+                    onCopy={() => {
+                        const msg = (messages || []).find(m => m.id === contextMenu.messageId);
+                        if (msg) copyToClipboard(msg.content);
+                    }}
+                />
+            )}
+        </div >
     );
 };

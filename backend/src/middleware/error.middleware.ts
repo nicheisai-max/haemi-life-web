@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
+import { logger } from '../utils/logger';
+
 /**
  * V7 FIX: Global error handler.
  * - In production: returns a generic message — never exposes err.message or stack traces.
@@ -10,8 +12,8 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
  * to learn about the system's internals (DB schema, file paths, library versions).
  */
 export const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
-    // Always log the full error internally for observability
-    console.error(`[Error] ${req.method} ${req.url}:`, err);
+    // Always log the full error internally for observability using secure logger
+    logger.error(`[Error] ${req.method} ${req.url}:`, { error: err.message, stack: err.stack, body: req.body });
 
     let statusCode = err.statusCode || err.status || 500;
 

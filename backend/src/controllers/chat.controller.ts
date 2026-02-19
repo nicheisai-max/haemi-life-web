@@ -4,6 +4,7 @@ import { io } from '../app';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { encrypt, decrypt } from '../utils/security';
 
 // Configure Multer Storage
 const storage = multer.diskStorage({
@@ -66,7 +67,13 @@ export const getConversations = async (req: Request, res: Response) => {
                 c.id, 
                 c.updated_at,
                 c.last_message_at,
-                MAX(m.content) as last_message,
+                (
+                    SELECT content 
+                    FROM messages m 
+                    WHERE m.conversation_id = c.id 
+                    ORDER BY m.created_at DESC 
+                    LIMIT 1
+                ) as last_message,
                 (
                     SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role, 'profile_image', u.profile_image))
                     FROM conversation_participants cp2
@@ -80,7 +87,6 @@ export const getConversations = async (req: Request, res: Response) => {
                 ) as unread_count
             FROM conversations c
             JOIN conversation_participants cp ON c.id = cp.conversation_id
-            LEFT JOIN messages m ON c.id = m.conversation_id AND m.created_at = c.last_message_at
             WHERE cp.user_id = $1
             GROUP BY c.id
             ORDER BY c.last_message_at DESC
@@ -88,7 +94,13 @@ export const getConversations = async (req: Request, res: Response) => {
             [userId]
         );
 
-        res.json(result.rows);
+        // Decrypt last message content if present
+        const conversations = result.rows.map(conv => ({
+            ...conv,
+            last_message: conv.last_message ? decrypt(conv.last_message) : null
+        }));
+
+        res.json(conversations);
     } catch (error) {
         console.error('Error fetching conversations:', error);
         res.status(500).json({ message: 'Server error' });
@@ -158,7 +170,17 @@ export const getMessages = async (req: Request, res: Response) => {
             [conversationId, userId]
         );
 
-        res.json(result.rows);
+        // Decrypt messages content and reply_to content
+        const messages = result.rows.map(msg => ({
+            ...msg,
+            content: msg.content ? decrypt(msg.content) : msg.content,
+            reply_to: msg.reply_to ? {
+                ...msg.reply_to,
+                content: msg.reply_to.content ? decrypt(msg.reply_to.content) : msg.reply_to.content
+            } : null
+        }));
+
+        res.json(messages);
     } catch (error) {
         console.error('Error fetching messages:', error);
         res.status(500).json({ message: 'Server error' });
@@ -186,14 +208,16 @@ export const sendMessage = async (req: Request, res: Response) => {
             return res.status(403).json({ message: 'Not authorized to send to this conversation' });
         }
 
-        console.log(`[CHAT] Attempting to send message to conv ${conversationId} from user ${senderId}`);
+        // Encrypt content before storage
+        const encryptedContent = content ? encrypt(content) : content;
+
         const msgResult = await client.query(
             `
             INSERT INTO messages (conversation_id, sender_id, content, message_type, reply_to_id)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING *
             `,
-            [conversationId, senderId, content, messageType, req.body.replyToId]
+            [conversationId, senderId, encryptedContent, messageType, req.body.replyToId]
         );
 
         const newMessage = msgResult.rows[0];
@@ -210,7 +234,11 @@ export const sendMessage = async (req: Request, res: Response) => {
                 [req.body.replyToId]
             );
             if (replyResult.rows.length > 0) {
-                newMessage.reply_to = replyResult.rows[0];
+                const replyTo = replyResult.rows[0];
+                newMessage.reply_to = {
+                    ...replyTo,
+                    content: replyTo.content ? decrypt(replyTo.content) : replyTo.content
+                };
             }
         }
 
@@ -237,6 +265,10 @@ export const sendMessage = async (req: Request, res: Response) => {
         );
 
         await client.query('COMMIT');
+
+        // Decrypt content for response and socket emission
+        // We stored encrypted, so decrypt it back for the user/socket
+        newMessage.content = content; // Optimistic: we know what we sent
 
         // Emit socket event to room (conversationId)
         if (io) {

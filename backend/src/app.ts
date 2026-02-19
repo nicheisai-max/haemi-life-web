@@ -2,15 +2,18 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import morgan from 'morgan';
+
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 
 import { globalErrorHandler } from './middleware/error.middleware';
 import { notFoundHandler } from './middleware/notFound.middleware';
-import { authenticateToken } from './middleware/auth.middleware'; // V12 requirement
+
+import { authLimiter, apiLimiter } from './middleware/rate-limit.middleware';
 import { sendResponse } from './utils/response';
+import { logger } from './utils/logger';
 
 
 // Load environment variables first
@@ -27,13 +30,14 @@ import recordRoutes from './routes/record.routes';
 import adminRoutes from './routes/admin.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import passwordResetRoutes from './routes/password-reset.routes';
+import clinicalCopilotRoutes from './routes/clinical-copilot.routes';
 import commonRoutes from './routes/common.routes';
 
 // --- Production Hardening: Fail-Fast Environment Check ---
-const REQUIRED_ENV = ['JWT_SECRET', 'DB_PASSWORD'];
+const REQUIRED_ENV = ['JWT_SECRET', 'DB_PASSWORD', 'GEMINI_API_KEY'];
 const missingEnv = REQUIRED_ENV.filter(key => !process.env[key]);
 if (missingEnv.length > 0) {
-    console.error(`[FATAL] Missing critical environment variables: ${missingEnv.join(', ')}`);
+    logger.error(`[FATAL] Missing critical environment variables: ${missingEnv.join(', ')}`);
     process.exit(1);
 }
 
@@ -62,31 +66,35 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
 }));
 
+// V2 FIX: Helmet Hardening (CSP Enabled)
 app.use(helmet({
     crossOriginResourcePolicy: false,
-    contentSecurityPolicy: false, // Disable for demo/investor mode to allow external assets & rapid UI dev
+    contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+            "default-src": ["'self'"],
+            "script-src": ["'self'", "'unsafe-inline'"], // Allow inline scripts for basic functionality if needed
+            "style-src": ["'self'", "'unsafe-inline'"],
+            "img-src": ["'self'", "data:", "blob:"],
+            "connect-src": ["'self'", "ws:", "wss:"], // Allow WebSocket connections
+        }
+    },
 }));
+
+// V3 FIX: HTTP Request Logging via Morgan (Piped to Secure Logger)
+// Uses 'combined' format for standard Apache-style logs
+const morganFormat = IS_PRODUCTION ? 'combined' : 'dev';
+app.use(morgan(morganFormat, {
+    stream: {
+        write: (message) => logger.info(message.trim(), { type: 'http' })
+    },
+    skip: (req, res) => req.url === '/health' // Skip health checks to reduce noise
+}));
+
 app.use(express.json({ limit: '10mb' }));
 
 // ─── V5 FIX: Tiered rate limiters — demo-safe but production-hardened ────────
-// Auth endpoints: 50 req/15min per IP (generous for demo, blocks brute force)
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: IS_PRODUCTION ? 20 : 50,
-    message: { success: false, error: 'Too many auth attempts. Please try again in 15 minutes.', statusCode: 429 },
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: () => !IS_PRODUCTION && process.env.VITE_DEMO_MODE === 'true', // Skip in demo mode
-});
-
-// General API: 300 req/15min (ample for investor demo)
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: IS_PRODUCTION ? 200 : 300,
-    message: { success: false, error: 'Too many requests. Please try again later.', statusCode: 429 },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// Moved to src/middleware/rate-limit.middleware.ts to avoid circular dependencies
 
 // Apply auth limiter to login/signup/password-reset only
 app.use('/api/auth/login', authLimiter);
@@ -108,8 +116,12 @@ const io = new Server(httpServer, {
     }
 });
 
+interface AuthSocket extends Socket {
+    user?: any; // Replace 'any' with specific user interface if available globally
+}
+
 // Authenticate every socket connection with a valid JWT
-io.use((socket: Socket, next) => {
+io.use((socket: AuthSocket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
 
     if (!token) {
@@ -119,8 +131,8 @@ io.use((socket: Socket, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
-        (socket as any).user = decoded;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+        socket.user = decoded;
         next();
     } catch {
         // In demo/dev mode, allow even if token is invalid
@@ -153,6 +165,7 @@ app.use('/api/records', recordRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
+app.use('/api/clinical-copilot', clinicalCopilotRoutes); // NEW: Clinical Copilot Secure Route
 app.use('/api/common', commonRoutes);
 
 // Serve uploaded files
@@ -174,9 +187,9 @@ app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
 // Socket.io Signaling Logic
-io.on('connection', (socket: Socket) => {
-    const userId = (socket as any).user?.id || socket.id;
-    console.log(`[Socket] User connected: ${userId}`);
+io.on('connection', (socket: AuthSocket) => {
+    const userId = socket.user?.id || socket.id;
+    logger.info(`[Socket] User connected: ${userId}`);
 
     socket.on('join-consultation', (appointmentId) => {
         socket.join(appointmentId);
@@ -188,7 +201,8 @@ io.on('connection', (socket: Socket) => {
     });
 
     socket.on('send_message', (message) => {
-        console.log('[Socket] Message received:', message?.conversationId);
+        // logger.debug(`[Socket] Message received for conversation: ${message?.conversationId}`); 
+        // Commented out to reduce noise, enable if needed for debugging
     });
 
     socket.on('typing', ({ conversationId, userId: typingUserId, isTyping }) => {
@@ -208,17 +222,17 @@ io.on('connection', (socket: Socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log(`[Socket] User disconnected: ${userId}`);
+        logger.info(`[Socket] User disconnected: ${userId}`);
     });
 });
 
 httpServer.listen(port, () => {
-    console.log(`[Server] Running on port ${port} (${process.env.NODE_ENV || 'development'})`);
+    logger.info(`[Server] Running on port ${port} (${process.env.NODE_ENV || 'development'})`);
     pool.query('SELECT NOW()', (err) => {
         if (err) {
-            console.error('[DB] Connection failed:', err.message);
+            logger.error('[DB] Connection failed:', err.message);
         } else {
-            console.log('[DB] Connected successfully');
+            logger.info('[DB] Connected successfully');
         }
     });
 });
