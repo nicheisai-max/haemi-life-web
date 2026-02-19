@@ -40,30 +40,50 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
         }
 
         try {
-            // Enterprise Mode: Check if user is active in DB
-            // P1 FIX: Standardize on 'status' column to match Login logic.
-            // Some seeded users have status='ACTIVE' but is_active=false. 
-            // We must use 'status' as the primary source of truth.
-            const userResult = await pool.query('SELECT status, role FROM users WHERE id = $1', [decoded.id]);
+            // ULTRA-STRICT PRODUCTION LOCKDOWN: 
+            // 1. Fetch user status, role, and inactivity data from DB
+            const userResult = await pool.query(
+                `SELECT status, role, last_activity, 
+                (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
+                FROM users WHERE id = $1`,
+                [decoded.id]
+            );
 
             if (userResult.rows.length === 0) {
                 return res.status(401).json({
                     success: false,
-                    error: 'User not found.',
+                    error: 'User session invalid. Please log in again.',
                     statusCode: 401,
                 });
             }
 
-            if (userResult.rows[0].status !== 'ACTIVE') {
+            const userData = userResult.rows[0];
+
+            // 2. Status Validation (Standardized)
+            if (userData.status !== 'ACTIVE') {
                 return res.status(403).json({
                     success: false,
-                    error: 'Your account is not active. Please contact administrator.',
+                    error: `Account is ${userData.status.toLowerCase()}. Please contact administrator.`,
                     statusCode: 403,
                 });
             }
 
-            // Update request user with latest role from DB just in case
-            req.user = { ...decoded, role: userResult.rows[0].role };
+            // 3. Backend Inactivity Enforcement (60 Minute Threshold)
+            // This is the absolute source of truth that cannot be bypassed by frontend tampering.
+            const timeoutMinutes = 60;
+            if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
+                return res.status(401).json({
+                    success: false,
+                    error: 'Session expired due to inactivity. Please log in again.',
+                    statusCode: 401,
+                });
+            }
+
+            // 4. Update activity heartbeat (Sliding Expiration)
+            await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [decoded.id]);
+
+            // Update request user with latest role from DB
+            req.user = { ...decoded, role: userData.role };
             next();
         } catch (dbError) {
             console.error('Auth middleware DB error:', dbError);
