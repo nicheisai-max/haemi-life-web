@@ -40,8 +40,9 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
 
     // Adjust position to keep within viewport
     // Menu width w-56 (14rem = 224px)
-    // Menu height approx 300px
-    const menuWidth = 240;
+    // Adjust position to keep within viewport
+    // Menu width matching w-[280px] below
+    const menuWidth = 280;
     const menuHeight = 320;
 
     let adjustedX = x;
@@ -72,27 +73,28 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
                 style={{ top: adjustedY, left: adjustedX }}
-                className="fixed z-[100] w-56 flex flex-col bg-white dark:bg-[#1e293b] rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden font-sans pointer-events-auto"
+
+                className="fixed z-[100] w-[280px] flex flex-col bg-white dark:bg-[#1e293b] rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden font-sans pointer-events-auto"
             >
-                {/* Reaction Bar */}
-                <div className="p-3 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700/50 grid grid-cols-6 gap-2 place-items-center">
+                {/* Reaction Bar - Microsoft Teams Style */}
+                <div className="p-2 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-start gap-2">
                     {[
-                        { id: 'thumbs_up', icon: <ThumbUpIcon />, label: 'Like' },
-                        { id: 'love', icon: <HeartIcon />, label: 'Love' },
-                        { id: 'appreciation', icon: <AppreciationIcon />, label: 'Pray' },
-                        { id: 'acknowledgement', icon: <SmileIcon />, label: 'Smile' },
-                        { id: 'noted', icon: <SurpriseIcon />, label: 'Wow' },
-                        { id: 'agreement', icon: <HandshakeIcon />, label: 'Deal' },
+                        { id: 'like', emoji: '👍', label: 'Like' },
+                        { id: 'love', emoji: '❤️', label: 'Love' },
+                        { id: 'laugh', emoji: '😂', label: 'Laugh' },
+                        { id: 'wow', emoji: '😲', label: 'Wow' },
+                        { id: 'sad', emoji: '😢', label: 'Sad' },
+                        { id: 'angry', emoji: '😡', label: 'Angry' },
                     ].map((reaction) => (
                         <button
                             key={reaction.id}
                             onClick={() => { onReact(reaction.id); onClose(); }}
-                            className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-full transition-all hover:scale-110 active:scale-95 group relative"
+                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all hover:scale-125 active:scale-95 group relative flex items-center justify-center transform origin-bottom"
                             title={reaction.label}
                         >
-                            <div className="w-6 h-6 text-slate-500 dark:text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
-                                {reaction.icon}
-                            </div>
+                            <span className="text-lg leading-none filter drop-shadow-sm group-hover:drop-shadow-md transition-all select-none">
+                                {reaction.emoji}
+                            </span>
                         </button>
                     ))}
                 </div>
@@ -139,54 +141,3 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
     );
 };
 
-// --- Custom Emojis (SVG) - Consistent Professional Family ---
-// StrokeWidth: 2, same visual weight, healthcare tone
-
-const ThumbUpIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-    </svg>
-);
-
-const HeartIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.84-8.84 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-    </svg>
-);
-
-const AppreciationIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
-        <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v11" />
-        <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
-        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
-    </svg>
-);
-
-const SmileIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-        <line x1="9" y1="9" x2="9.01" y2="9" />
-        <line x1="15" y1="9" x2="15.01" y2="9" />
-    </svg>
-);
-
-const SurpriseIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <circle cx="12" cy="16" r="2" />
-        <line x1="9" y1="9" x2="9.01" y2="9" />
-        <line x1="15" y1="9" x2="15.01" y2="9" />
-    </svg>
-);
-
-const HandshakeIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m11 17 2 2 6-6" />
-        <path d="m18 14 1.5 1.5" />
-        <path d="m15 11 1.5 1.5" />
-        <path d="M5 10a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h3.14l1.2-1.2a2 2 0 0 1 1.44-.57L14 15.2M14 15.2c1-.1 1.8-.8 2-1.8.3-1.4-.7-2.6-2-2.6M14 15.2l1.3-3.7" />
-        <path d="M8 15V8a2 2 0 0 1 2-2h1c.6 0 1.2.2 1.6.6l1.4 1.4" />
-    </svg>
-);

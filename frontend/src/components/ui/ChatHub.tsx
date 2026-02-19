@@ -66,53 +66,22 @@ const Avatar: React.FC<{ name: string; image?: string; size?: 'xs' | 'sm' | 'md'
     );
 };
 
-// --- Reaction Icon Helper ---
-const ReactionIcon: React.FC<{ type: string; className?: string }> = ({ type, className = "h-3 w-3" }) => {
+// --- Reaction Icon Helper (Updated to Teams-style Emojis) ---
+const ReactionIcon: React.FC<{ type: string; className?: string }> = ({ type, className = "text-lg" }) => {
+    // Map both old IDs (fallback) and new IDs to Emojis
     switch (type) {
-        case 'thumbs_up': return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
-                <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-            </svg>
-        );
-        case 'love': return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.84-8.84 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-        );
-        case 'appreciation': return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
-                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
-                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v11" />
-                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
-                <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
-            </svg>
-        );
-        case 'acknowledgement': return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
-                <circle cx="12" cy="12" r="10" />
-                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                <line x1="9" y1="9" x2="9.01" y2="9" />
-                <line x1="15" y1="9" x2="15.01" y2="9" />
-            </svg>
-        );
-        case 'noted': return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
-                <circle cx="12" cy="12" r="10" />
-                <circle cx="12" cy="16" r="2" />
-                <line x1="9" y1="9" x2="9.01" y2="9" />
-                <line x1="15" y1="9" x2="15.01" y2="9" />
-            </svg>
-        );
-        case 'agreement': return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={className}>
-                <path d="m11 17 2 2 6-6" />
-                <path d="m18 14 1.5 1.5" />
-                <path d="m15 11 1.5 1.5" />
-                <path d="M5 10a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h3.14l1.2-1.2a2 2 0 0 1 1.44-.57L14 15.2M14 15.2c1-.1 1.8-.8 2-1.8.3-1.4-.7-2.6-2-2.6M14 15.2l1.3-3.7" />
-                <path d="M8 15V8a2 2 0 0 1 2-2h1c.6 0 1.2.2 1.6.6l1.4 1.4" />
-            </svg>
-        );
-        default: return null;
+        case 'like':
+        case 'thumbs_up': return <span className={className}>👍</span>;
+        case 'love': return <span className={className}>❤️</span>;
+        case 'laugh':
+        case 'appreciation': return <span className={className}>😂</span>; // Map appreciation to laugh for now or 👏 if preferred
+        case 'wow':
+        case 'noted': return <span className={className}>😲</span>;
+        case 'sad':
+        case 'acknowledgement': return <span className={className}>😢</span>;
+        case 'angry':
+        case 'agreement': return <span className={className}>😡</span>;
+        default: return <span className={className}>👍</span>;
     }
 };
 
@@ -689,32 +658,25 @@ export const ChatHub: React.FC = () => {
                                                         {msg.content}
                                                     </p>
 
-                                                    {/* Reactions Display (Polished Round UI - Hanging Position) */}
+                                                    {/* Reactions Display (Teams-style Pill) */}
                                                     {msg.reactions && msg.reactions.length > 0 && (
                                                         <div
-                                                            className={`absolute -bottom-4 ${msg.isMe ? '-right-1' : '-left-1'} flex items-center bg-white dark:bg-slate-900 rounded-full ${(msg.reactions || []).length > 1 ? 'px-2 py-1' : 'w-8 h-8 flex items-center justify-center'} shadow-[0_8px_20px_rgba(0,0,0,0.18)] border border-slate-200/60 dark:border-teal-500/40 z-[20] transition-all hover:scale-110 active:scale-95 cursor-pointer group/reaction`}
+                                                            className={`absolute -bottom-3 ${msg.isMe ? '-right-1' : '-left-1'} flex items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-md border border-slate-200/50 dark:border-slate-700/50 z-[20] transition-all hover:scale-105 cursor-pointer group/reaction`}
                                                         >
-                                                            <div className={`flex ${(msg.reactions || []).length > 1 ? '-space-x-1.5' : ''} ${(msg.reactions || []).length > 1 ? 'mr-1.5' : ''}`}>
+                                                            <div className="flex -space-x-1">
                                                                 {/* Stacking unique reactions */}
-                                                                {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 3).map((type, i) => (
+                                                                {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
                                                                     <div
                                                                         key={type}
-                                                                        className={`rounded-full flex items-center justify-center transition-colors ${(msg.reactions || []).length > 1 ? 'h-5 w-5 border-[1.5px] border-white dark:border-slate-900 shadow-sm' : 'h-7 w-7'
-                                                                            } ${(msg.reactions || []).some(r => r.type === type && r.userId === user?.id)
-                                                                                ? 'bg-teal-50 dark:bg-teal-500/20'
-                                                                                : 'bg-transparent'
-                                                                            }`}
+                                                                        className="relative z-10"
                                                                         style={{ zIndex: 10 - i }}
                                                                     >
-                                                                        <ReactionIcon type={type} className={`${(msg.reactions || []).length > 1 ? 'h-3 w-3' : 'h-4.5 w-4.5'} ${(msg.reactions || []).some(r => r.type === type && r.userId === user?.id)
-                                                                            ? 'text-teal-600 dark:text-teal-400'
-                                                                            : 'text-slate-500 dark:text-slate-400'
-                                                                            }`} />
+                                                                        <ReactionIcon type={type} className="text-sm leading-none filter drop-shadow-sm" />
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                             {(msg.reactions || []).length > 1 && (
-                                                                <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-200 pr-0.5">
+                                                                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 ml-1">
                                                                     {(msg.reactions || []).length}
                                                                 </span>
                                                             )}
