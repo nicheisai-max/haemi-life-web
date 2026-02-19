@@ -8,7 +8,7 @@ export const Onboarding: React.FC = () => {
 
     useEffect(() => {
         // Check if user has already seen onboarding
-        const seen = localStorage.getItem('hasSeenOnboarding');
+        const seen = sessionStorage.getItem('hasSeenOnboarding');
         if (seen === 'true') {
             setHasSeenOnboarding(true);
             navigate('/dashboard');
@@ -16,7 +16,7 @@ export const Onboarding: React.FC = () => {
     }, [navigate]);
 
     const completeOnboarding = () => {
-        localStorage.setItem('hasSeenOnboarding', 'true');
+        sessionStorage.setItem('hasSeenOnboarding', 'true');
         navigate('/dashboard');
     };
 

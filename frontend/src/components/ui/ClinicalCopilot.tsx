@@ -221,7 +221,7 @@ export const ClinicalCopilot: React.FC<ClinicalCopilotProps> = ({ isOpen, onClos
                                     setIsLoading(true);
 
                                     try {
-                                        const token = localStorage.getItem('token'); // Simplistic token retrieval
+                                        const token = sessionStorage.getItem('token'); // Isolated token retrieval
                                         const response = await fetch('http://localhost:5000/api/clinical-copilot/chat', {
                                             method: 'POST',
                                             headers: {

@@ -17,9 +17,9 @@ interface ExtendedRequestConfig extends InternalAxiosRequestConfig {
     __retryCount?: number;
 }
 
-// V11 FIX: Routes that must NEVER be cached in localStorage.
+// V11 FIX: Routes that must NEVER be cached in sessionStorage.
 // These contain PHI (Protected Health Information), auth tokens, or sensitive
-// admin data. Caching them in localStorage risks exposure via XSS or shared devices.
+// admin data. Caching them in sessionStorage risks exposure via XSS or shared devices.
 const SENSITIVE_ROUTE_PATTERNS = [
     '/auth/',
     '/admin/',
@@ -84,7 +84,7 @@ function getFromCache(cacheKey: string, url?: string): any | null {
     if (isSensitiveRoute(url)) return null;
 
     const storageKey = CACHE_KEY_PREFIX + btoa(cacheKey);
-    const cachedStr = localStorage.getItem(storageKey);
+    const cachedStr = sessionStorage.getItem(storageKey);
 
     if (cachedStr) {
         try {
@@ -92,10 +92,10 @@ function getFromCache(cacheKey: string, url?: string): any | null {
             if (Date.now() - cached.timestamp < CACHE_DURATION) {
                 return cached.data;
             } else {
-                localStorage.removeItem(storageKey);
+                sessionStorage.removeItem(storageKey);
             }
         } catch (e) {
-            localStorage.removeItem(storageKey);
+            sessionStorage.removeItem(storageKey);
         }
     }
     return null;
@@ -110,7 +110,7 @@ function saveToCache(cacheKey: string, data: any, url?: string): void {
 
     const storageKey = CACHE_KEY_PREFIX + btoa(cacheKey);
     const cacheData = { data, timestamp: Date.now() };
-    localStorage.setItem(storageKey, JSON.stringify(cacheData));
+    sessionStorage.setItem(storageKey, JSON.stringify(cacheData));
 }
 
 // Show toast notification for retry
@@ -127,14 +127,14 @@ function showRetryToast(retryCount: number, maxRetries: number): void {
 // Add a request interceptor to include the auth token
 api.interceptors.request.use(
     (config: ExtendedRequestConfig) => {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
 
         // CRITICAL: Stamp the token used for THIS request onto the config.
         // This allows the response interceptor to identify which token caused
-        // a 401 — even if localStorage has been updated by a concurrent login.
+        // a 401 — even if sessionStorage has been updated by a concurrent login.
         config.__requestToken = token || null;
 
         // For GET requests, check cache (skip sensitive routes)
@@ -174,7 +174,7 @@ api.interceptors.response.use(
         // 1. Handle 401 Unauthorized
         if (error.response && error.response.status === 401) {
             const requestToken = config.__requestToken || null;
-            const currentToken = localStorage.getItem('token');
+            const currentToken = sessionStorage.getItem('token');
 
             // CRITICAL ENTERPRISE FIX: Scoped Token Rejection
             // If the 401 response came from a request that was sent with a token 
@@ -198,8 +198,8 @@ api.interceptors.response.use(
             }));
 
             // Clear local storage immediately
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
 
             // Reset flag after a delay to allow UI to settle and redirects to happen
             setTimeout(() => { isResetting = false; }, 2000);

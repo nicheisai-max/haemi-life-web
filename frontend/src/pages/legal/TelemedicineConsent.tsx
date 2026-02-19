@@ -24,8 +24,8 @@ export const TelemedicineConsent: React.FC = () => {
 
     const onSubmit = (data: TelemedicineConsentFormData) => {
         if (data.accepted && data.signature) {
-            // Store consent in localStorage
-            localStorage.setItem('telemedicine_consent', JSON.stringify({
+            // Store consent in sessionStorage
+            sessionStorage.setItem('telemedicine_consent', JSON.stringify({
                 status: 'accepted',
                 signature: data.signature,
                 timestamp: new Date().toISOString()

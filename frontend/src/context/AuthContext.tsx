@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const handleUnauthorized = (e: Event) => {
             const detail = (e as CustomEvent).detail || {};
             const failingToken = detail.token;
-            const currentToken = localStorage.getItem('token');
+            const currentToken = sessionStorage.getItem('token');
 
             if (!currentToken && !authState.user && !authState.token) return;
 
@@ -50,8 +50,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             console.log('[Auth] Session invalidated by server. Resetting state.');
 
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
             setAuthState({ user: null, token: null });
             setIsInitializing(false);
         };
@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // ─── Initial session verification (runs once on app mount) ───────────────
     useEffect(() => {
         const initSession = async () => {
-            const storedToken = localStorage.getItem('token');
+            const storedToken = sessionStorage.getItem('token');
 
             if (!storedToken) {
                 setIsInitializing(false);
@@ -72,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             try {
                 const { user: verifiedUser } = await authService.verifySession();
-                const currentToken = localStorage.getItem('token');
+                const currentToken = sessionStorage.getItem('token');
 
                 if (storedToken !== currentToken) {
                     console.warn('[Auth] Token changed during verification. Discarding stale result.');
@@ -80,25 +80,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
 
                 setAuthState({ user: verifiedUser, token: storedToken });
-                localStorage.setItem('user', JSON.stringify(verifiedUser));
+                sessionStorage.setItem('user', JSON.stringify(verifiedUser));
             } catch (error) {
                 const storedError = error as { response?: { status: number } };
-                const currentToken = localStorage.getItem('token');
+                const currentToken = sessionStorage.getItem('token');
 
                 if (storedToken !== currentToken) return;
 
                 if (storedError.response?.status === 401 || storedError.response?.status === 403) {
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
+                    sessionStorage.removeItem('token');
+                    sessionStorage.removeItem('user');
                     setAuthState({ user: null, token: null });
                 } else {
                     console.warn('[Auth] Server unreachable during init. Keeping stored session.');
-                    const cachedUser = localStorage.getItem('user');
+                    const cachedUser = sessionStorage.getItem('user');
                     if (cachedUser) {
                         try {
                             setAuthState({ user: JSON.parse(cachedUser), token: storedToken });
                         } catch {
-                            localStorage.removeItem('user');
+                            sessionStorage.removeItem('user');
                         }
                     }
                 }
@@ -113,8 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const login = useCallback(async (credentials: LoginCredentials) => {
         const { token: newToken, user: newUser } = await authService.login(credentials);
 
-        localStorage.setItem('token', newToken);
-        localStorage.setItem('user', JSON.stringify(newUser));
+        sessionStorage.setItem('token', newToken);
+        sessionStorage.setItem('user', JSON.stringify(newUser));
 
         // Atomic state update
         setAuthState({ user: newUser, token: newToken });
@@ -123,27 +123,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const signup = useCallback(async (credentials: SignupCredentials) => {
         const { token: newToken, user: newUser } = await authService.signup(credentials);
 
-        localStorage.setItem('token', newToken);
-        localStorage.setItem('user', JSON.stringify(newUser));
+        sessionStorage.setItem('token', newToken);
+        sessionStorage.setItem('user', JSON.stringify(newUser));
 
         // Atomic state update
         setAuthState({ user: newUser, token: newToken });
     }, []);
 
     const logout = useCallback(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
         setAuthState({ user: null, token: null });
     }, []);
 
     const refreshUser = useCallback(async () => {
-        const storedToken = localStorage.getItem('token');
+        const storedToken = sessionStorage.getItem('token');
         if (!storedToken) return;
 
         try {
             const { user: verifiedUser } = await authService.verifySession();
             setAuthState({ user: verifiedUser, token: storedToken });
-            localStorage.setItem('user', JSON.stringify(verifiedUser));
+            sessionStorage.setItem('user', JSON.stringify(verifiedUser));
         } catch (error) {
             console.error('[Auth] Failed to refresh user:', error);
         }

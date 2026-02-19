@@ -26,7 +26,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Actually it is, but let's be safe.
         if (isAuthPage(window.location.pathname)) return 'light';
 
-        const savedTheme = localStorage.getItem('theme') as Theme;
+        const savedTheme = sessionStorage.getItem('theme') as Theme;
         if (savedTheme) return savedTheme;
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
@@ -42,7 +42,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } else {
             root.classList.remove('light', 'dark');
             root.classList.add(theme);
-            localStorage.setItem('theme', theme);
+            sessionStorage.setItem('theme', theme);
         }
 
     }, [theme, location.pathname]);

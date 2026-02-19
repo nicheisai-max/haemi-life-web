@@ -45,12 +45,12 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [language, setLanguage] = useState<Language>(() => {
-        const saved = localStorage.getItem('haemi_language');
+        const saved = sessionStorage.getItem('haemi_language');
         return (saved as Language) || 'en';
     });
 
     useEffect(() => {
-        localStorage.setItem('haemi_language', language);
+        sessionStorage.setItem('haemi_language', language);
         document.documentElement.lang = language;
     }, [language]);
 
