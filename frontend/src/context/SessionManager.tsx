@@ -64,6 +64,16 @@ export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ 
         };
     }, [isAuthenticated, updateActivity]);
 
+    // P1 FIX: Reset idle timer the moment user becomes authenticated.
+    // This prevents "inheriting" idle time spent on the login page.
+    useEffect(() => {
+        if (isAuthenticated) {
+            console.log('[SessionManager] User authenticated. Resetting idle timer.');
+            setLastActivity(Date.now());
+            setShowWarning(false);
+        }
+    }, [isAuthenticated]);
+
     // Check for idle timeout
     useEffect(() => {
         if (!isAuthenticated) return;

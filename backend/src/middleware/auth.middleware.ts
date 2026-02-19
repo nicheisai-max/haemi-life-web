@@ -41,7 +41,10 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 
         try {
             // Enterprise Mode: Check if user is active in DB
-            const userResult = await pool.query('SELECT is_active, role FROM users WHERE id = $1', [decoded.id]);
+            // P1 FIX: Standardize on 'status' column to match Login logic.
+            // Some seeded users have status='ACTIVE' but is_active=false. 
+            // We must use 'status' as the primary source of truth.
+            const userResult = await pool.query('SELECT status, role FROM users WHERE id = $1', [decoded.id]);
 
             if (userResult.rows.length === 0) {
                 return res.status(401).json({
@@ -51,10 +54,10 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
                 });
             }
 
-            if (!userResult.rows[0].is_active) {
+            if (userResult.rows[0].status !== 'ACTIVE') {
                 return res.status(403).json({
                     success: false,
-                    error: 'Your account has been deactivated. Please contact administrator.',
+                    error: 'Your account is not active. Please contact administrator.',
                     statusCode: 403,
                 });
             }

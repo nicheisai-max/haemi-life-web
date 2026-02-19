@@ -245,6 +245,7 @@ export const verifySession = async (req: any, res: Response) => {
         // When a user changes their password or an admin revokes a session,
         // token_version is incremented in the DB. Any JWT with an older version
         // is immediately rejected, even if it hasn't expired yet.
+        // V6 FIX: Token version check — detects revoked tokens.
         if (tokenVersion !== undefined && user.token_version !== undefined) {
             if (tokenVersion !== user.token_version) {
                 logger.auth('Token version mismatch — session revoked', { userId, tokenVersion, dbVersion: user.token_version });

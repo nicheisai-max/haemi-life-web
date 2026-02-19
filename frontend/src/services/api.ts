@@ -191,7 +191,7 @@ api.interceptors.response.use(
             }
 
             isResetting = true;
-            console.log('[API] Unauthorized detected for current session. Triggering state reset.');
+            console.log('[API] Unauthorized (401) detected. Triggering state reset.');
 
             window.dispatchEvent(new CustomEvent('auth:unauthorized', {
                 detail: { token: requestToken }
