@@ -19,7 +19,7 @@ export const GradientMesh: React.FC<GradientMeshProps> = ({
         secondary: "from-teal-500/10 via-emerald-500/5 to-indigo-500/10",
         accent: "from-rose-500/10 via-orange-500/5 to-amber-500/10",
         subtle: "from-slate-500/5 via-transparent to-slate-500/5",
-        brand: "from-[#0E6B74]/10 via-[#1BA7A6]/5 to-[#6ED3C4]/10",
+        brand: "from-primary-800/10 via-primary-600/5 to-primary-400/10",
     };
 
     return (

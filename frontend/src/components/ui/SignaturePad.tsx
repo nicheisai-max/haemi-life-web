@@ -248,7 +248,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
 
                 {/* DRAW MODE */}
                 <div className={cn("relative group transition-opacity duration-300", activeTab === 'draw' ? "block" : "hidden")}>
-                    <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-20 pointer-events-none" />
+                    <div className="absolute inset-0 bg-[radial-gradient(var(--border)_1px,transparent_1px)] [background-size:16px_16px] opacity-20 pointer-events-none" />
                     <canvas
                         ref={canvasRef}
                         width={500}

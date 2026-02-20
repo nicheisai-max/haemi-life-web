@@ -21,6 +21,15 @@ export default {
             fontFamily: {
                 sans: ["Roboto", "sans-serif"],
             },
+            fontSize: {
+                // Hierarchical Scale
+                "h1": ["var(--font-h1)", { lineHeight: "var(--lh-h1)", letterSpacing: "-0.02em", fontWeight: "700" }],
+                "h2": ["var(--font-h2)", { lineHeight: "var(--lh-h2)", letterSpacing: "-0.01em", fontWeight: "700" }],
+                "h3": ["var(--font-h3)", { lineHeight: "var(--lh-h3)", letterSpacing: "-0.01em", fontWeight: "600" }],
+                "h4": ["var(--font-h4)", { lineHeight: "var(--lh-h4)", letterSpacing: "0em", fontWeight: "600" }],
+                "h5": ["var(--font-h5)", { lineHeight: "var(--lh-body)", letterSpacing: "0em", fontWeight: "500" }],
+                "h6": ["var(--font-h6)", { lineHeight: "var(--lh-body)", letterSpacing: "0.01em", fontWeight: "500" }],
+            },
             colors: {
                 border: "var(--border)",
                 input: "var(--input)",
@@ -30,6 +39,15 @@ export default {
                 primary: {
                     DEFAULT: "var(--primary)",
                     foreground: "var(--primary-foreground)",
+                    900: "var(--primary-900)",
+                    800: "var(--primary-800)",
+                    700: "var(--primary-700)",
+                    600: "var(--primary-600)",
+                    500: "var(--primary-500)",
+                    400: "var(--primary-400)",
+                    300: "var(--primary-300)",
+                    200: "var(--primary-200)",
+                    100: "var(--primary-100)",
                 },
                 secondary: {
                     DEFAULT: "var(--secondary)",

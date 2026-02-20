@@ -87,7 +87,7 @@ export const Navbar: React.FC = () => {
 
 
     return (
-        <nav className="fixed top-0 left-0 right-0 z-50 w-full border-b border-border/40 bg-background/95 dark:bg-[#131314]/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 dark:border-white/5 h-[72px] flex items-center shadow-sm">
+        <nav className="fixed top-0 left-0 right-0 z-50 w-full border-b border-border/40 bg-background/95 dark:bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 dark:border-white/5 h-[72px] flex items-center shadow-sm">
             <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
 
                 {/* Left: Logo */}

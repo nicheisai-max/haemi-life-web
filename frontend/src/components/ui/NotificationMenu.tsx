@@ -108,7 +108,7 @@ export const NotificationMenu: React.FC = () => {
                     )}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[340px] p-0 overflow-hidden border-border/10 shadow-2xl bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md rounded-2xl">
+            <DropdownMenuContent align="end" className="w-[340px] p-0 overflow-hidden border-border/10 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl">
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-border/5 flex items-center justify-between bg-white/50 dark:bg-white/5">
                     <h4 className="font-bold text-base tracking-tight text-slate-900 dark:text-slate-100 italic-none">Notifications</h4>

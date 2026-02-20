@@ -1,8 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, Info, CheckCircle2, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PremiumLoader } from '@/components/ui/PremiumLoader';
 
 export type AlertType = 'info' | 'success' | 'warning' | 'error' | 'confirm';
 
@@ -99,11 +98,12 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                     </motion.svg>
                 );
             case 'error':
+            case 'destructive': // Handle alias if used
                 return (
                     <motion.svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
-                        className="h-12 w-12 text-[#DC2626] drop-shadow-md"
+                        className="h-12 w-12 text-destructive drop-shadow-md"
                         initial="hidden"
                         animate="visible"
                     >
@@ -136,21 +136,11 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                     </motion.div>
                 );
             case 'info':
-            default:
                 return <Info className="h-10 w-10 text-blue-500 stroke-[2.5px]" />;
-        }
-    };
-
-    const getPrimaryButtonClass = () => {
-        switch (type) {
-            case 'error':
-                return "bg-[#DC2626] hover:bg-red-700 text-white shadow-lg shadow-red-500/10 border-t border-white/10";
-            case 'warning':
-                return "bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-500/20 border-t border-white/20";
-            case 'success':
-                return "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 border-t border-white/20";
             default:
-                return "bg-[#0E6B74] hover:bg-[#083E44] text-white shadow-lg shadow-teal-900/20 border-t border-white/20";
+                return (
+                    <HelpCircle className="h-12 w-12 text-primary-800 dark:text-primary-400 drop-shadow-md" />
+                );
         }
     };
 
@@ -185,13 +175,13 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                         className="relative w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-[32px] shadow-2xl overflow-hidden border border-white/50 dark:border-slate-700/50 ring-1 ring-black/5 dark:ring-white/5"
                     >
                         {/* Decorative Top Highlight */}
-                        <div className={`absolute top-0 left-0 right-0 h-1.5 ${type === 'error' ? 'bg-rose-500' : type === 'warning' ? 'bg-amber-500' : type === 'success' ? 'bg-emerald-500' : 'bg-[#0E6B74]'}`} />
+                        <div className={`absolute top-0 left-0 right-0 h-1.5 ${type === 'error' ? 'bg-rose-500' : type === 'warning' ? 'bg-amber-500' : type === 'success' ? 'bg-emerald-500' : 'bg-primary-800'}`} />
 
                         <div className="flex flex-col items-center text-center p-8 space-y-6 pt-10">
                             {/* Icon Container */}
                             <div className="relative">
                                 {/* Glow Effect */}
-                                <div className={`absolute inset-0 blur-3xl opacity-30 scale-150 ${type === 'error' ? 'bg-rose-500' : type === 'warning' ? 'bg-amber-500' : type === 'success' ? 'bg-emerald-500' : 'bg-teal-500'}`} />
+                                <div className={`absolute inset-0 blur-3xl opacity-30 scale-150 ${type === 'error' ? 'bg-rose-500' : type === 'warning' ? 'bg-amber-500' : type === 'success' ? 'bg-emerald-500' : 'bg-primary-500'}`} />
 
                                 <motion.div
                                     initial={{ scale: 0.5, opacity: 0 }}
@@ -220,7 +210,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                                         variant="outline"
                                         onClick={onCancel}
                                         disabled={isLoading}
-                                        className="flex-1 h-12 rounded-xl border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-base font-medium transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex-1 h-12 rounded-xl text-base font-medium"
                                     >
                                         {cancelText}
                                     </Button>
@@ -228,16 +218,11 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                                 <Button
                                     onClick={handleConfirm}
                                     disabled={isLoading}
-                                    className={`flex-1 h-12 rounded-xl text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${getPrimaryButtonClass()}`}
+                                    isLoading={isLoading}
+                                    variant={type === 'error' ? 'destructive' : type === 'warning' ? 'default' : type === 'success' ? 'default' : 'default'}
+                                    className={`flex-1 h-12 rounded-xl text-base font-semibold ${type === 'warning' ? 'bg-amber-600 hover:bg-amber-700' : type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : type === 'confirm' ? 'bg-primary-800 hover:bg-primary-900' : ''}`}
                                 >
-                                    {isLoading ? (
-                                        <div className="flex items-center gap-2">
-                                            <PremiumLoader size="xs" bubbleClassName="bg-white" />
-                                            <span>Processing...</span>
-                                        </div>
-                                    ) : (
-                                        confirmText
-                                    )}
+                                    {confirmText}
                                 </Button>
                             </div>
                         </div>

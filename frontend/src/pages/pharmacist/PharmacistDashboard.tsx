@@ -55,7 +55,7 @@ export const PharmacistDashboard = () => {
     return (
         <main className="w-full mx-auto p-4 md:p-5 pb-16 md:pb-20 max-w-[1600px] space-y-6">
             {/* Hero Section - Standardized Premium Style */}
-            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary-800 to-primary-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
@@ -77,7 +77,7 @@ export const PharmacistDashboard = () => {
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
                             size="lg"
-                            className="bg-white dark:bg-white text-teal-900 dark:text-teal-900 hover:bg-teal-50 dark:hover:bg-teal-50 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
+                            className="bg-white text-primary-900 hover:bg-primary-50 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto"
                             onClick={() => navigate(PATHS.PHARMACIST.DISPENSE)}
                         >
                             <QrCode className="h-5 w-5" aria-hidden="true" />
@@ -106,7 +106,7 @@ export const PharmacistDashboard = () => {
 
             <section className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
-                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-teal-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-primary-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
                         <IconWrapper icon={Receipt} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
@@ -171,8 +171,8 @@ export const PharmacistDashboard = () => {
                             </DashboardCard>
                         ) : (
                             pendingOrders.map((prescription) => (
-                                <DashboardCard key={prescription.id} className="group p-4 flex items-center gap-4 transition-all hover:border-teal-500/50">
-                                    <div className="bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 rounded-lg p-2 min-w-[60px] text-center shrink-0 border border-teal-100 dark:border-teal-900/50">
+                                <DashboardCard key={prescription.id} className="group p-4 flex items-center gap-4 transition-all hover:border-primary-500/50">
+                                    <div className="bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-lg p-2 min-w-[60px] text-center shrink-0 border border-primary-100 dark:border-primary-900/50">
                                         <span className="block text-xs font-bold uppercase tracking-wider">New</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -183,7 +183,7 @@ export const PharmacistDashboard = () => {
                                             <span>Dr. {prescription.doctor_name || 'N/A'}</span>
                                         </p>
                                     </div>
-                                    <Button variant="default" size="sm" className="action-btn bg-teal-600 hover:bg-teal-700 shadow-sm" onClick={() => navigate(PATHS.PHARMACIST.PRESCRIPTION_DETAIL(prescription.id))}>
+                                    <Button variant="default" size="sm" className="action-btn shadow-sm" onClick={() => navigate(PATHS.PHARMACIST.PRESCRIPTION_DETAIL(prescription.id))}>
                                         Process
                                     </Button>
                                 </DashboardCard>
@@ -215,31 +215,27 @@ export const PharmacistDashboard = () => {
                                     icon: Pill,
                                     label: "Stock Check",
                                     path: "/inventory/check",
-                                    color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
-                                    hoverBorder: "hover:border-blue-500/50 dark:hover:border-blue-500/80",
-                                    hoverShadow: "hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20",
-                                    hoverText: "group-hover:text-blue-600"
+                                    variant: "accent"
                                 },
                                 {
                                     icon: History,
                                     label: "Logs",
                                     path: "/history",
-                                    color: "text-slate-600 bg-slate-50 dark:bg-slate-800",
-                                    hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-500/80",
-                                    hoverShadow: "hover:shadow-slate-500/10 dark:hover:shadow-slate-500/20",
-                                    hoverText: "group-hover:text-slate-600"
+                                    variant: "neutral"
                                 },
                             ].map((action, idx) => (
                                 <DashboardCard
                                     key={idx}
-                                    className={`flex flex-col items-center justify-center gap-3 p-4 cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:shadow-lg h-28 ${action.hoverBorder} ${action.hoverShadow}`}
+                                    className={`flex flex-col items-center justify-center gap-3 p-4 cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:shadow-lg h-28`}
                                     onClick={() => navigate(action.path)}
                                     noPadding
                                 >
-                                    <div className={`p-3 rounded-full ${action.color} group-hover:scale-110 transition-transform duration-300`}>
-                                        <action.icon className="h-6 w-6" />
-                                    </div>
-                                    <span className={`font-semibold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wide transition-colors ${action.hoverText}`}>{action.label}</span>
+                                    <IconWrapper
+                                        icon={action.icon}
+                                        variant={action.variant as any}
+                                        className="group-hover:scale-110 transition-transform duration-300"
+                                    />
+                                    <span className={`font-semibold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wide transition-colors group-hover:text-foreground`}>{action.label}</span>
                                 </DashboardCard>
                             ))}
                         </div>

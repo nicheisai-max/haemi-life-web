@@ -34,17 +34,17 @@ export const PremiumStatCard: React.FC<PremiumStatCardProps> = ({
     className,
     onClick
 }) => {
-    // Haemi Life Brand Gradient: linear-gradient(135deg, #0E6B74 → #1BA7A6 → #6ED3C4)
-    const brandGradient = "bg-gradient-to-br from-[#0E6B74] via-[#1BA7A6] to-[#6ED3C4]";
+    // Haemi Life Brand Gradient: Primary-800 -> Primary-600 -> Primary-400
+    const brandGradient = "bg-gradient-to-br from-primary-800 via-primary-600 to-primary-400";
 
     // Subtle background for the 'default' variant card
     const cardBg = variant === 'default'
-        ? "bg-white dark:bg-[#0F1C1F] border-slate-100 dark:border-[#1F3B40] shadow-sm hover:shadow-md"
+        ? "bg-white dark:bg-card border-slate-100 dark:border-border shadow-sm hover:shadow-md"
         : `${brandGradient} text-white border-none shadow-lg`;
 
     // Icon Styles
     const iconContainer = variant === 'default'
-        ? `${brandGradient} text-white shadow-lg shadow-[#1BA7A6]/20`
+        ? `${brandGradient} text-white shadow-lg shadow-primary-600/20`
         : "bg-white/20 text-white backdrop-blur-md border border-white/20";
 
     return (
