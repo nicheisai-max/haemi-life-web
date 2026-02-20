@@ -118,8 +118,10 @@
   --primary-100: #ECFCFA;
 
   /* Typography Scale - Premium Institutional Standard (GLOBAL) */
-  --font-h1: 3.5rem;
-  --font-h2: 2.5rem;
+  --font-h1: 2.25rem;
+  /* 36px - Standardized for KPIs */
+  --font-h2: 1.875rem;
+  /* 30px - Balanced hierarchy */
   --font-h3: 1.75rem;
   --font-h4: 1.25rem;
 
@@ -128,6 +130,13 @@
 
   /* Auth Layout Fallback */
   --color-login-bg: #02625a;
+
+  /* Global Form Element Tokens (Sleek Enhancement) */
+  --input-height: 3rem;
+  /* 48px */
+  --input-radius: 4px;
+  /* Sleek, less rounded */
+  --input-px: 1rem;
 }
 
 .dark {
@@ -209,6 +218,44 @@
     font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* GLOBAL FORM ELEMENT STANDARDS - SLEEK PREMIUM V1 */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    height: var(--input-height) !important;
+    border-radius: var(--input-radius) !important;
+    padding-left: var(--input-px);
+    padding-right: var(--input-px);
+    border: 1px solid var(--border) !important;
+    @apply bg-background transition-all duration-200 outline-none;
+  }
+
+  /* Support for shadcn/ui and other components that might use height: 10px or similar */
+  .h-10 {
+    height: var(--input-height) !important;
+  }
+
+  /* Force absolute roundness for square-intent elements (Navbar/Icons) */
+  .rounded-full.h-10 {
+    width: var(--input-height) !important;
+    aspect-ratio: 1 / 1 !important;
+    padding: 0 !important;
+  }
+
+  textarea {
+    height: auto !important;
+    min-height: calc(var(--input-height) * 2.5) !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    @apply border-primary ring-1 ring-primary/20;
+    box-shadow: 0 0 0 1px var(--primary) !important;
   }
 }
 

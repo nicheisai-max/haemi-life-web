@@ -81,11 +81,10 @@ h4,
 
 /* 6. Auth Branding - Premium Styling */
 .auth-branding-title {
-    font-size: 3rem !important;
-    /* 48px */
-    font-weight: 600 !important;
-    white-space: nowrap !important;
-    line-height: 1.2 !important;
-    letter-spacing: -0.025em !important;
+    font-size: clamp(2rem, 4vw, 3.5rem) !important;
+    font-weight: 700 !important;
+    white-space: normal !important;
+    line-height: 1.1 !important;
+    letter-spacing: -0.035em !important;
     font-family: 'Roboto', system-ui, -apple-system, sans-serif !important;
 }

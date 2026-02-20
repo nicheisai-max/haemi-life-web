@@ -31,13 +31,13 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                     alt="Authentication Background"
                     className="absolute inset-0 w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-black/20" /> {/* Subtle overlay for text contrast */}
+                <div className="absolute inset-0 bg-black/30" /> {/* Deeper overlay for high contrast wrapping */}
 
-                <div className="absolute bottom-[10%] left-[10%] right-[10%] text-white z-20">
-                    <h2 className="auth-branding-title mb-6 drop-shadow-lg">
+                <div className="absolute bottom-[12%] left-[10%] right-[10%] text-white z-20">
+                    <h2 className="auth-branding-title mb-6 drop-shadow-2xl max-w-[90%] md:max-w-2xl">
                         {brandingTitle || "Your Health, Reimagined."}
                     </h2>
-                    <p className="text-lg md:text-xl text-white/95 font-medium max-w-lg leading-relaxed drop-shadow-md">
+                    <p className="text-lg md:text-xl text-white/95 font-medium max-w-lg leading-relaxed drop-shadow-lg opacity-90">
                         {brandingSubtitle || "Experience the future of healthcare management with Haemi Life."}
                     </p>
                 </div>
