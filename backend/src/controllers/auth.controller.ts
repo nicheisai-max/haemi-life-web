@@ -39,7 +39,52 @@ export const signup = async (req: Request, res: Response) => {
 
             await client.query('COMMIT');
 
-            res.status(201).json({ message: 'User created successfully', user: newUser });
+            // Generate Access Token (15m)
+            const accessToken = jwt.sign(
+                {
+                    id: newUser.id,
+                    email: newUser.email,
+                    role: newUser.role,
+                    token_version: newUser.token_version
+                },
+                process.env.JWT_SECRET as string,
+                { expiresIn: '15m' }
+            );
+
+            // Generate Refresh Token (7d)
+            const refreshToken = jwt.sign(
+                {
+                    id: newUser.id,
+                    token_version: newUser.token_version
+                },
+                process.env.JWT_SECRET as string,
+                { expiresIn: '7d' }
+            );
+
+            // Send Refresh Token as HTTP-Only Cookie
+            res.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            });
+
+            // Update activity heartbeat on signup
+            await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [newUser.id]);
+
+            res.status(201).json({
+                message: 'User created successfully',
+                token: accessToken,
+                user: {
+                    id: newUser.id,
+                    email: newUser.email,
+                    role: newUser.role,
+                    name: newUser.name,
+                    status: newUser.status,
+                    initials: newUser.initials,
+                    profile_image: newUser.profile_image
+                }
+            });
         } catch (e) {
             await client.query('ROLLBACK');
             throw e;
@@ -256,14 +301,12 @@ export const refreshToken = async (req: Request, res: Response) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-        // Return 200 OK with authenticated: false instead of 401 to prevent browser console error spam on boot
         return res.status(200).json({ authenticated: false, message: 'No active session' });
     }
 
     try {
         const decoded: any = jwt.verify(refreshToken, process.env.JWT_SECRET as string);
 
-        // Verify user exists and token version matches
         const user = await userRepository.findById(decoded.id);
 
         if (!user || user.status !== 'ACTIVE') {
@@ -271,25 +314,39 @@ export const refreshToken = async (req: Request, res: Response) => {
             return res.status(200).json({ authenticated: false, message: 'Invalid session' });
         }
 
+        // Session Replay Protection
         if (decoded.token_version !== user.token_version) {
+            // If a token reuse is detected, invalidate all current sessions for the user
+            await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [user.id]);
             res.clearCookie('refreshToken');
-            return res.status(200).json({ authenticated: false, message: 'Session revoked' });
+            return res.status(200).json({ authenticated: false, message: 'Session revoked due to reuse detection' });
         }
 
-        // Issue new Access Token (15m)
+        // Token Rotation: Increment version and issue new refresh token
+        const newVersion = user.token_version + 1;
+        await pool.query(
+            'UPDATE users SET token_version = $1, last_activity = CURRENT_TIMESTAMP WHERE id = $2',
+            [newVersion, user.id]
+        );
+
         const accessToken = jwt.sign(
-            {
-                id: user.id,
-                email: user.email,
-                role: user.role,
-                token_version: user.token_version
-            },
+            { id: user.id, email: user.email, role: user.role, token_version: newVersion },
             process.env.JWT_SECRET as string,
             { expiresIn: '15m' }
         );
 
-        // Update activity heartbeat on refresh
-        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        const newRefreshToken = jwt.sign(
+            { id: user.id, token_version: newVersion },
+            process.env.JWT_SECRET as string,
+            { expiresIn: '7d' }
+        );
+
+        res.cookie('refreshToken', newRefreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
 
         res.json({ authenticated: true, token: accessToken });
     } catch (error) {
@@ -305,9 +362,19 @@ export const logout = async (req: Request, res: Response) => {
 
 export const verifySession = async (req: any, res: Response) => {
     try {
-        // Just verify the access token from the middleware
         const user = req.user;
         res.json({ message: 'Session valid', user });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const getMe = async (req: any, res: Response) => {
+    try {
+        res.json({
+            authenticated: !!req.user,
+            user: req.user || null
+        });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }

@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { login, signup, getProfile, updateProfile, changePassword, verifySession, uploadProfileImage, refreshToken, logout } from '../controllers/auth.controller';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { login, signup, getProfile, updateProfile, changePassword, verifySession, getMe, uploadProfileImage, refreshToken, logout } from '../controllers/auth.controller';
+import { authenticateToken, relaxedAuthenticateToken } from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { loginSchema, signupSchema } from '../schemas/auth.schema';
@@ -18,5 +18,6 @@ router.put('/change-password', authenticateToken, changePassword);
 router.post('/refresh-token', refreshToken);
 router.post('/logout', logout);
 router.get('/verify', authenticateToken, verifySession);
+router.get('/me', relaxedAuthenticateToken, getMe);
 
 export default router;

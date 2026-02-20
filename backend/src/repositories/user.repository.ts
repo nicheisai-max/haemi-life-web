@@ -57,7 +57,7 @@ export class UserRepository {
             `INSERT INTO users (
                 name, phone_number, email, password, role, id_number, created_at, updated_at, status
             ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), 'ACTIVE') 
-            RETURNING id, email, role, name, phone_number, initials, status, profile_image`,
+            RETURNING id, email, role, name, phone_number, initials, status, profile_image, token_version`,
             [name, phone_number, email || null, password, role, id_number || null]
         );
         return result.rows[0];

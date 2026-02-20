@@ -32,67 +32,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authStatus: 'initializing' // Always start initializing
     });
 
-    // ─── Global unauthorized event handler ───────────────────────────────────
+    // ─── BroadcastChannel for Cross-Tab Sync ───────────────────────────────
     useEffect(() => {
+        const authChannel = new BroadcastChannel('haemi_auth_sync');
+
+        const handleMessage = (event: MessageEvent) => {
+            const { type, payload } = event.data;
+
+            if (type === 'LOGOUT') {
+                console.log('[Auth] Synchronizing logout across tabs.');
+                setAccessToken(null);
+                sessionStorage.removeItem('user');
+                setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
+            } else if (type === 'LOGIN') {
+                console.log('[Auth] Synchronizing login across tabs.');
+                const { user, token } = payload;
+                setAccessToken(token);
+                sessionStorage.setItem('user', JSON.stringify(user));
+                setAuthState({ user, token, authStatus: 'authenticated' });
+            }
+        };
+
         const handleUnauthorized = () => {
             console.log('[Auth] Session invalidated (Global Event).');
             setAccessToken(null);
             sessionStorage.removeItem('user');
             setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
+            authChannel.postMessage({ type: 'LOGOUT' });
         };
 
+        authChannel.onmessage = handleMessage;
         window.addEventListener('auth:unauthorized', handleUnauthorized);
-        return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+
+        return () => {
+            authChannel.close();
+            window.removeEventListener('auth:unauthorized', handleUnauthorized);
+        };
     }, []);
 
-    // ─── Initial Boot (Silent Refresh) ──────────────────────────────────────
+    // ─── Initial Boot (Authentication Discovery) ────────────────────────────
     useEffect(() => {
         let mounted = true;
 
         const initAuth = async () => {
             try {
-                // Attempt to refresh token using HTTP-Only cookie
-                // Backend now returns 200 OK with { authenticated: false } for guests to keep console clean
-                const response = await authService.refreshToken();
+                // Discovery Phase: hit the relaxed endpoint to check for existing sessions silently.
+                // This NEVER returns a 401, keeping the console 100% clean for guests.
+                const { user, authenticated } = await authService.getMe();
 
-                if (!response.authenticated || !response.token) {
-                    console.log('[Auth] Guest user: No active session found.');
-                    if (mounted) {
-                        setAuthState({
-                            user: null,
-                            token: null,
-                            authStatus: 'unauthenticated'
-                        });
-                    }
-                    return; // Stop initialization cleanly
-                }
-
-                // If successful, we get a new access token
-                setAccessToken(response.token);
-
-                // We can hydrate user from sessionStorage for UI speed, 
-                // OR fetch profile. Let's start with verifying session to get fresh user data.
-                const { user } = await authService.verifySession();
-
-                if (mounted) {
+                if (authenticated && user && mounted) {
                     setAuthState({
                         user,
-                        token: response.token,
+                        token: null,
                         authStatus: 'authenticated'
+                    });
+                } else if (mounted) {
+                    setAuthState({
+                        user: null,
+                        token: null,
+                        authStatus: 'unauthenticated'
                     });
                 }
             } catch (error: any) {
-                // Normal flow: User is simply not logged in (or session expired)
-                // We only log if it's NOT a standard 401 Unauthorized, to keep the console clean for unauthenticated users.
-                if (error?.response?.status !== 401) {
-                    console.error('[Auth] Session initialization error:', error);
-                } else {
-                    console.log('[Auth] No active session found on boot.');
-                }
-
                 if (mounted) {
                     setAuthState({
-                        user: null, // Clear user even if storage had it
+                        user: null,
                         token: null,
                         authStatus: 'unauthenticated'
                     });
@@ -113,6 +117,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionStorage.setItem('user', JSON.stringify(newUser));
 
         setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated' });
+
+        // Broadcast to other tabs
+        const authChannel = new BroadcastChannel('haemi_auth_sync');
+        authChannel.postMessage({ type: 'LOGIN', payload: { user: newUser, token: newToken } });
+        authChannel.close();
     }, []);
 
     const signup = useCallback(async (credentials: SignupCredentials) => {
@@ -134,6 +143,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             token: null,
             authStatus: 'unauthenticated'
         });
+
+        // Broadcast to other tabs
+        const authChannel = new BroadcastChannel('haemi_auth_sync');
+        authChannel.postMessage({ type: 'LOGOUT' });
+        authChannel.close();
 
         try {
             await authService.logout();

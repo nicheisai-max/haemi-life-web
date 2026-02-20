@@ -112,6 +112,57 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 };
 
 /**
+ * Relaxed Authentication Middleware (Discovery)
+ * NEVER returns 401/403. Used for endpoints like /auth/me to check session status silently.
+ */
+export const relaxedAuthenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return next();
+
+    jwt.verify(token, process.env.JWT_SECRET!, async (err: any, decoded: any) => {
+        if (err) return next();
+
+        try {
+            const userResult = await pool.query(
+                `SELECT name, initials, profile_image, status, role, token_version, last_activity, 
+                (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
+                FROM users WHERE id = $1`,
+                [decoded.id]
+            );
+
+            if (userResult.rows.length === 0) return next();
+
+            const userData = userResult.rows[0];
+
+            if (decoded.token_version !== undefined && userData.token_version !== undefined) {
+                if (decoded.token_version !== userData.token_version) return next();
+            }
+
+            if (userData.status !== 'ACTIVE') return next();
+
+            const timeoutMinutes = 60;
+            if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
+                return next();
+            }
+
+            req.user = {
+                ...decoded,
+                role: userData.role,
+                name: userData.name,
+                initials: userData.initials,
+                profile_image: userData.profile_image,
+                status: userData.status
+            };
+            next();
+        } catch (dbError) {
+            next();
+        }
+    });
+};
+
+/**
  * requireRole: Single-role guard. Returns 403 (Forbidden) when role doesn't match.
  * V8 FIX: Does NOT expose the user's current role in the response body.
  */

@@ -17,6 +17,10 @@ export const authService = {
         const response = await api.get<{ user: User }>('/auth/verify');
         return response.data;
     },
+    getMe: async (): Promise<{ user: User | null; authenticated: boolean }> => {
+        const response = await api.get<{ user: User | null; authenticated: boolean }>('/auth/me');
+        return response.data;
+    },
     refreshToken: async (): Promise<{ token?: string; authenticated: boolean }> => {
         // Use raw axios to bypass global interceptors for the refresh token endpoint
         // This prevents loud 401 errors in the console when the user is simply not logged in

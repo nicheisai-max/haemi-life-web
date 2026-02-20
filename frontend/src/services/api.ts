@@ -26,7 +26,6 @@ interface ExtendedRequestConfig extends InternalAxiosRequestConfig {
     _retry?: boolean; // Standard axios retry flag
 }
 
-// V11 FIX: Routes that must NEVER be cached in sessionStorage.
 const SENSITIVE_ROUTE_PATTERNS = [
     '/auth/',
     '/admin/',
@@ -38,7 +37,7 @@ const SENSITIVE_ROUTE_PATTERNS = [
 ];
 
 function isSensitiveRoute(url: string | undefined): boolean {
-    if (!url) return true; // Default to sensitive if URL unknown
+    if (!url) return true;
     return SENSITIVE_ROUTE_PATTERNS.some(pattern => url.includes(pattern));
 }
 
@@ -148,9 +147,17 @@ api.interceptors.request.use(
     }
 );
 
-// Refresh Token Logic
+// Refresh Token State
 let isRefreshing = false;
 let failedQueue: any[] = [];
+
+// Session Management Helper
+const clearAuthSession = () => {
+    isRefreshing = false;
+    setAccessToken(null);
+    sessionStorage.removeItem('user');
+    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+};
 
 const processQueue = (error: any, token: string | null = null) => {
     failedQueue.forEach(prom => {
@@ -182,67 +189,51 @@ api.interceptors.response.use(
 
         if (!originalRequest) return Promise.reject(error);
 
-        // 1. Handle 401 Unauthorized (Silent Refresh)
+        // Authentication Interceptor (Silent Refresh)
         if (error.response?.status === 401 && !originalRequest._retry) {
+            if (originalRequest.url?.includes('/auth/refresh-token')) {
+                clearAuthSession();
+                return Promise.reject(error);
+            }
+
             if (isRefreshing) {
-                // If already refreshing, queue this request
-                return new Promise(function (resolve, reject) {
+                return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
                 }).then(token => {
-                    originalRequest.headers.Authorization = 'Bearer ' + token;
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
                     return api(originalRequest);
-                }).catch(err => {
-                    return Promise.reject(err);
-                });
+                }).catch(err => Promise.reject(err));
             }
 
             originalRequest._retry = true;
             isRefreshing = true;
 
             try {
-                // Call refresh endpoint directly (bypassing interceptors to avoid loops)
-                // Note: We use a separate axios call or fetch to keep it clean.
-                // Since this `api` instance has interceptors, we should disable them or use a fresh one?
-                // Actually, `api.post('/auth/refresh-token')` might trigger this interceptor again if it 401s.
-                // Valid concern. But `/refresh-token` uses Cookies, so it shouldn't send Bearer.
-                // However, if `/refresh-token` fails with 401, it will enter this block again?
-                // originalRequest._retry prevents infinite loop for the *original* request.
-                // But we need to make sure the *refresh* request doesn't trigger this.
-                // We'll filter by URL.
-
-                if (originalRequest.url?.includes('/auth/refresh-token')) {
-                    // Refresh failed. Hard logout.
-                    isRefreshing = false;
-                    setAccessToken(null);
-                    sessionStorage.clear(); // V12 FIX: Nuclear flush on refresh failure
-                    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
-                    return Promise.reject(error);
-                }
-
-                const response = await axios.post<{ authenticated: boolean; token?: string }>(`${API_URL}/auth/refresh-token`, {}, {
-                    withCredentials: true // Important for cookie
-                });
+                const response = await axios.post<{ authenticated: boolean; token?: string }>(
+                    `${API_URL}/auth/refresh-token`,
+                    {},
+                    { withCredentials: true }
+                );
 
                 if (!response.data.authenticated || !response.data.token) {
-                    throw new Error('Session invalid');
+                    throw new Error('Unauthenticated');
                 }
 
                 const { token } = response.data;
                 setAccessToken(token);
-
                 processQueue(null, token);
                 isRefreshing = false;
 
-                // Update header and retry original
-                originalRequest.headers.Authorization = 'Bearer ' + token;
+                originalRequest.headers.Authorization = `Bearer ${token}`;
                 return api(originalRequest);
-
             } catch (err) {
                 processQueue(err, null);
-                isRefreshing = false;
-                setAccessToken(null);
-                sessionStorage.clear(); // V12 FIX: Nuclear flush on catastrophic failure
-                window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+                // Fail-safe: Only clear session if this wasn't an intentional discovery attempt
+                if (!originalRequest.url?.includes('/auth/me')) {
+                    clearAuthSession();
+                } else {
+                    isRefreshing = false;
+                }
                 return Promise.reject(err);
             }
         }
