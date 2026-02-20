@@ -110,7 +110,7 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
                         <div className="mb-8 p-6 bg-white/20 rounded-full backdrop-blur-md">
                             {currentSlide.icon}
                         </div>
-                        <h2 className="text-4xl font-extrabold mb-4 tracking-tight drop-shadow-sm">
+                        <h2 className="text-h1 mb-4 drop-shadow-sm">
                             Haemi Life
                         </h2>
                         <div className="w-24 h-1.5 bg-white/30 rounded-full overflow-hidden">
@@ -140,7 +140,7 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
                         <span className="text-primary font-bold tracking-widest uppercase text-xs mb-4">
                             Step {index + 1} of {slides.length}
                         </span>
-                        <h3 className="text-3xl md:text-5xl font-black mb-6 tracking-tight text-foreground leading-tight">
+                        <h3 className="text-h1 mb-6 text-foreground leading-tight">
                             {currentSlide.title}
                         </h3>
                         <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">

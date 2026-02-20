@@ -6,20 +6,27 @@ const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/ap
 // @ts-ignore
 const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 
+// Memory Token Storage (Closure)
+let accessToken: string | null = null;
+
+export const setAccessToken = (token: string | null) => {
+    accessToken = token;
+};
+
+export const getAccessToken = () => accessToken;
+
 // Cache for successful GET responses
 const CACHE_KEY_PREFIX = 'haemi_api_cache_';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Custom interface for request configuration with our metadata
 interface ExtendedRequestConfig extends InternalAxiosRequestConfig {
-    __requestToken?: string | null;
     __cachedData?: unknown;
     __retryCount?: number;
+    _retry?: boolean; // Standard axios retry flag
 }
 
 // V11 FIX: Routes that must NEVER be cached in sessionStorage.
-// These contain PHI (Protected Health Information), auth tokens, or sensitive
-// admin data. Caching them in sessionStorage risks exposure via XSS or shared devices.
 const SENSITIVE_ROUTE_PATTERNS = [
     '/auth/',
     '/admin/',
@@ -30,16 +37,13 @@ const SENSITIVE_ROUTE_PATTERNS = [
     '/password-reset/',
 ];
 
-// Flag to prevent multiple unauthorized events from firing simultaneously
-let isResetting = false;
-
 function isSensitiveRoute(url: string | undefined): boolean {
     if (!url) return true; // Default to sensitive if URL unknown
     return SENSITIVE_ROUTE_PATTERNS.some(pattern => url.includes(pattern));
 }
 
 // Retry configuration
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 2;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
 
 const api = axios.create({
@@ -53,6 +57,7 @@ const api = axios.create({
             'Expires': '0',
         } : {}),
     },
+    withCredentials: true, // Ensure cookies are sent
     timeout: 10000, // 10 second timeout
 });
 
@@ -64,8 +69,7 @@ function getRetryDelay(retryCount: number): number {
 // Check if error is retryable
 function isRetryableError(error: AxiosError): boolean {
     if (!error.response) {
-        // Network errors, timeouts
-        return true;
+        return true; // Network errors
     }
     // Retry on 5xx server errors and 429 rate limit
     return error.response.status >= 500 || error.response.status === 429;
@@ -78,9 +82,7 @@ function getCacheKey(config: AxiosRequestConfig): string {
 
 // Check cache for valid response
 function getFromCache(cacheKey: string, url?: string): any | null {
-    // BYPASS CACHE IN DEMO MODE
     if (IS_DEMO_MODE) return null;
-    // V11: Never cache sensitive routes
     if (isSensitiveRoute(url)) return null;
 
     const storageKey = CACHE_KEY_PREFIX + btoa(cacheKey);
@@ -103,9 +105,7 @@ function getFromCache(cacheKey: string, url?: string): any | null {
 
 // Save response to cache
 function saveToCache(cacheKey: string, data: any, url?: string): void {
-    // DISABLE CACHE WRITE IN DEMO MODE
     if (IS_DEMO_MODE) return;
-    // V11: Never cache sensitive routes
     if (isSensitiveRoute(url)) return;
 
     const storageKey = CACHE_KEY_PREFIX + btoa(cacheKey);
@@ -127,15 +127,10 @@ function showRetryToast(retryCount: number, maxRetries: number): void {
 // Add a request interceptor to include the auth token
 api.interceptors.request.use(
     (config: ExtendedRequestConfig) => {
-        const token = sessionStorage.getItem('token');
-        if (token && config.headers) {
-            config.headers.Authorization = `Bearer ${token}`;
+        // Use memory token
+        if (accessToken && config.headers) {
+            config.headers.Authorization = `Bearer ${accessToken}`;
         }
-
-        // CRITICAL: Stamp the token used for THIS request onto the config.
-        // This allows the response interceptor to identify which token caused
-        // a 401 — even if sessionStorage has been updated by a concurrent login.
-        config.__requestToken = token || null;
 
         // For GET requests, check cache (skip sensitive routes)
         if (config.method?.toLowerCase() === 'get') {
@@ -153,6 +148,22 @@ api.interceptors.request.use(
     }
 );
 
+// Refresh Token Logic
+let isRefreshing = false;
+let failedQueue: any[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+
+    failedQueue = [];
+};
+
 // Enhanced response interceptor with retry logic and caching
 api.interceptors.response.use(
     async (response) => {
@@ -167,79 +178,103 @@ api.interceptors.response.use(
         return response;
     },
     async (error: AxiosError) => {
-        const config = error.config as ExtendedRequestConfig | undefined;
+        const originalRequest = error.config as ExtendedRequestConfig;
 
-        if (!config) return Promise.reject(error);
+        if (!originalRequest) return Promise.reject(error);
 
-        // 1. Handle 401 Unauthorized
-        if (error.response && error.response.status === 401) {
-            const requestToken = config.__requestToken || null;
-            const currentToken = sessionStorage.getItem('token');
-
-            // CRITICAL ENTERPRISE FIX: Scoped Token Rejection
-            // If the 401 response came from a request that was sent with a token 
-            // different from the current one, ignore it. This prevents ghost 
-            // rejections from stale in-flight requests during a new login transition.
-            if (requestToken !== currentToken) {
-                console.warn('[API] Ignoring 401 for stale/mismatched token. New session preserved.');
-                return Promise.reject(error);
+        // 1. Handle 401 Unauthorized (Silent Refresh)
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            if (isRefreshing) {
+                // If already refreshing, queue this request
+                return new Promise(function (resolve, reject) {
+                    failedQueue.push({ resolve, reject });
+                }).then(token => {
+                    originalRequest.headers.Authorization = 'Bearer ' + token;
+                    return api(originalRequest);
+                }).catch(err => {
+                    return Promise.reject(err);
+                });
             }
 
-            // If we're already resetting, ignore concurrent triggers.
-            if (isResetting) {
-                return Promise.reject(error);
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                // Call refresh endpoint directly (bypassing interceptors to avoid loops)
+                // Note: We use a separate axios call or fetch to keep it clean.
+                // Since this `api` instance has interceptors, we should disable them or use a fresh one?
+                // Actually, `api.post('/auth/refresh-token')` might trigger this interceptor again if it 401s.
+                // Valid concern. But `/refresh-token` uses Cookies, so it shouldn't send Bearer.
+                // However, if `/refresh-token` fails with 401, it will enter this block again?
+                // originalRequest._retry prevents infinite loop for the *original* request.
+                // But we need to make sure the *refresh* request doesn't trigger this.
+                // We'll filter by URL.
+
+                if (originalRequest.url?.includes('/auth/refresh-token')) {
+                    // Refresh failed. Hard logout.
+                    isRefreshing = false;
+                    setAccessToken(null);
+                    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+                    return Promise.reject(error);
+                }
+
+                const response = await axios.post(`${API_URL}/auth/refresh-token`, {}, {
+                    withCredentials: true // Important for cookie
+                });
+
+                const { token } = response.data;
+                setAccessToken(token);
+
+                processQueue(null, token);
+                isRefreshing = false;
+
+                // Update header and retry original
+                originalRequest.headers.Authorization = 'Bearer ' + token;
+                return api(originalRequest);
+
+            } catch (err) {
+                processQueue(err, null);
+                isRefreshing = false;
+                setAccessToken(null);
+                window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+                return Promise.reject(err);
             }
-
-            isResetting = true;
-            console.log('[API] Unauthorized (401) detected. Triggering state reset.');
-
-            window.dispatchEvent(new CustomEvent('auth:unauthorized', {
-                detail: { token: requestToken }
-            }));
-
-            // Clear local storage immediately
-            sessionStorage.removeItem('token');
-            sessionStorage.removeItem('user');
-
-            // Reset flag after a delay to allow UI to settle and redirects to happen
-            setTimeout(() => { isResetting = false; }, 2000);
-
-            return Promise.reject(error);
         }
 
         // Initialize retry count
-        if (config.__retryCount === undefined) {
-            config.__retryCount = 0;
+        if (originalRequest.__retryCount === undefined) {
+            originalRequest.__retryCount = 0;
         }
 
         // Check if we should retry
-        if (config.__retryCount >= MAX_RETRIES || !isRetryableError(error)) {
-            if (config.method?.toLowerCase() === 'get') {
-                const cacheKey = getCacheKey(config);
+        if (originalRequest.__retryCount >= MAX_RETRIES || !isRetryableError(error)) {
+            // Check cache fallback
+            if (originalRequest.method?.toLowerCase() === 'get') {
+                const cacheKey = getCacheKey(originalRequest);
                 const cachedData = getFromCache(cacheKey);
                 if (cachedData) {
                     const event = new CustomEvent('showToast', {
                         detail: { message: 'Showing offline data', type: 'warning' },
                     });
                     window.dispatchEvent(event);
-                    return Promise.resolve({ data: cachedData, status: 200, config });
+                    return Promise.resolve({ data: cachedData, status: 200, config: originalRequest });
                 }
             }
             return Promise.reject(error);
         }
 
         // Increment retry count
-        config.__retryCount += 1;
+        originalRequest.__retryCount += 1;
 
         // Show retry toast
-        showRetryToast(config.__retryCount, MAX_RETRIES);
+        showRetryToast(originalRequest.__retryCount, MAX_RETRIES);
 
-        // Wait before retrying (exponential backoff)
-        const delay = getRetryDelay(config.__retryCount);
+        // Wait before retrying
+        const delay = getRetryDelay(originalRequest.__retryCount);
         await new Promise(resolve => setTimeout(resolve, delay));
 
         // Retry the request
-        return api(config);
+        return api(originalRequest);
     }
 );
 

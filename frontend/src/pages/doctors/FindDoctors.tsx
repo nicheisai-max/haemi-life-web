@@ -81,17 +81,17 @@ export const FindDoctors: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="max-w-[1920px] mx-auto p-8 flex justify-center items-center min-h-[400px]">
+            <div className="pt-8 flex justify-center items-center min-h-96">
                 <MedicalLoader message="Retrieving Specialist Directory..." />
             </div>
         );
     }
 
     return (
-        <div className="max-w-[1920px] mx-auto p-6 md:p-8">
-            <TransitionItem className="mb-8">
-                <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Find Specialists</h1>
-                <p className="text-muted-foreground">Search for verified healthcare professionals and book appointments</p>
+        <div className="space-y-8">
+            <TransitionItem className="mb-0">
+                <h1 className="page-heading !mb-0 transition-all duration-300">Find Specialists</h1>
+                <p className="page-subheading italic">Search for verified healthcare professionals and book appointments</p>
             </TransitionItem>
 
             {error && (
@@ -105,7 +105,7 @@ export const FindDoctors: React.FC = () => {
 
             <TransitionItem>
                 {/* Search and Filters */}
-                <Card className="mb-8 border-border/40 shadow-lg shadow-primary/5 bg-card/50 backdrop-blur-xl rounded-3xl overflow-hidden">
+                <Card className="mb-8 border-border/40 shadow-lg shadow-primary/5 bg-card/50 backdrop-blur-xl rounded-xl overflow-hidden">
                     <CardContent className="p-6">
                         <div className="flex flex-col md:flex-row gap-4">
                             <div className="relative flex-1 group">
@@ -119,7 +119,7 @@ export const FindDoctors: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="w-full md:w-[280px]">
+                            <div className="w-full md:w-72">
                                 <DropdownMenu modal={false}>
                                     <DropdownMenuTrigger asChild>
                                         <Button
@@ -131,9 +131,9 @@ export const FindDoctors: React.FC = () => {
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent
-                                        className="w-[280px] rounded-[32px] border-slate-200 dark:border-slate-800 p-0 overflow-hidden bg-card/95 backdrop-blur-3xl shadow-2xl"
+                                        className="w-72 rounded-xl border-slate-200 dark:border-slate-800 p-0 overflow-hidden bg-card/95 backdrop-blur-3xl shadow-2xl"
                                     >
-                                        <ScrollArea className="h-[280px] w-full">
+                                        <ScrollArea className="h-72 w-full">
                                             <div className="p-2.5 flex flex-col gap-1.5">
                                                 <DropdownMenuItem
                                                     onSelect={() => setSelectedSpecialization('all')}
@@ -256,12 +256,12 @@ export const FindDoctors: React.FC = () => {
                                             <div className="flex w-full gap-3">
                                                 <Button
                                                     variant="outline"
-                                                    className="flex-1 justify-center rounded-xl h-11 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-foreground font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                                    className="flex-1 justify-center"
                                                 >
                                                     View Profile
                                                 </Button>
                                                 <Button
-                                                    className="flex-1 justify-center rounded-xl h-11 bg-[#0E6B74] text-white hover:bg-[#083E44] dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90 shadow-lg shadow-teal-900/20 hover:shadow-xl hover:shadow-teal-900/30 transition-all font-semibold border border-transparent hover:scale-[1.02] active:scale-[0.98]"
+                                                    className="flex-1 justify-center"
                                                     onClick={() => handleBookAppointment(doctor.id)}
                                                 >
                                                     Book Now

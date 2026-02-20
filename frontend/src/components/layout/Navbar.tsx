@@ -42,9 +42,10 @@ export const Navbar: React.FC = () => {
         };
     }, []);
 
-    const handleLogout = () => {
-        logout();
-        navigate('/login', { replace: true });
+    const handleLogout = async () => {
+        await logout();
+        // Manual navigate removed: AuthContext atomic flush + ProtectedRoute 
+        // will handle the state-driven redirection to /login.
     };
 
     const getInitials = (name: string) => {

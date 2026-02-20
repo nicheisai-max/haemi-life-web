@@ -11,7 +11,7 @@ export interface UserProfile {
     phone_number: string;
     role: string;
     id_number?: string;
-    is_active: boolean;
+    status: string; // 'ACTIVE', 'INACTIVE'
     profile_image: string | null;
     created_at: string;
 }

@@ -11,7 +11,7 @@ export const getPendingVerifications = async (req: Request, res: Response) => {
                 dp.specialization, dp.license_number, dp.years_of_experience, dp.bio
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
-            WHERE u.role = 'doctor' AND dp.is_verified = false AND u.is_active = true
+            WHERE u.role = 'doctor' AND dp.is_verified = false AND u.status = 'ACTIVE'
             ORDER BY u.created_at DESC
         `);
 
@@ -77,9 +77,9 @@ export const verifyDoctor = async (req: Request, res: Response) => {
 // Get all users with filters (Admin only)
 export const getAllUsers = async (req: Request, res: Response) => {
     try {
-        const { role, is_active, search } = req.query;
+        const { role, status, search } = req.query;
 
-        let query = 'SELECT id, name, email, phone_number, role, is_active, created_at FROM users WHERE 1=1';
+        let query = 'SELECT id, name, email, phone_number, role, status, created_at FROM users WHERE 1=1';
         const params: any[] = [];
 
         if (role) {
@@ -87,9 +87,9 @@ export const getAllUsers = async (req: Request, res: Response) => {
             query += ` AND role = $${params.length}`;
         }
 
-        if (is_active !== undefined) {
-            params.push(is_active === 'true');
-            query += ` AND is_active = $${params.length}`;
+        if (status) { // Filter by status ('ACTIVE', 'INACTIVE', etc.)
+            params.push(status);
+            query += ` AND status = $${params.length}`;
         }
 
         if (search) {
@@ -99,12 +99,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
 
         query += ' ORDER BY created_at DESC';
 
-        console.log('getAllUsers request query:', req.query);
-        console.log('Generated SQL:', query);
-        console.log('Params:', params);
-
         const result = await pool.query(query, params);
-        console.log('Rows returned:', result.rows.length);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching users:', error);
@@ -116,7 +111,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
 export const updateUserStatus = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { is_active } = req.body;
+        const { status } = req.body; // Expect 'ACTIVE' or 'INACTIVE'
         const user = (req as any).user;
 
         const client = await pool.connect();
@@ -125,10 +120,10 @@ export const updateUserStatus = async (req: Request, res: Response) => {
 
             const result = await client.query(`
                 UPDATE users
-                SET is_active = $1, updated_at = CURRENT_TIMESTAMP
+                SET status = $1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = $2
-                RETURNING id, name, email, role, is_active
-            `, [is_active, id]);
+                RETURNING id, name, email, role, status
+            `, [status, id]);
 
             if (result.rows.length === 0) {
                 throw new Error('User not found');
@@ -140,10 +135,10 @@ export const updateUserStatus = async (req: Request, res: Response) => {
                 VALUES ($1, $2, $3, $4, $5)
             `, [
                 user.id,
-                is_active ? 'ACTIVATE_USER' : 'DEACTIVATE_USER',
+                'UPDATE_USER_STATUS',
                 'user',
                 id,
-                JSON.stringify({ is_active })
+                JSON.stringify({ status })
             ]);
 
             await client.query('COMMIT');
@@ -165,11 +160,12 @@ export const getSystemStats = async (req: Request, res: Response) => {
     try {
         const stats = await Promise.all([
             pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['patient']),
-            pool.query('SELECT COUNT(*) FROM users WHERE role = $1 AND is_active = true', ['doctor']),
+            pool.query('SELECT COUNT(*) FROM users WHERE role = $1 AND status = $2', ['doctor', 'ACTIVE']),
             pool.query('SELECT COUNT(*) FROM doctor_profiles WHERE is_verified = false'),
             pool.query('SELECT COUNT(*) FROM appointments WHERE status = $1', ['scheduled']),
             pool.query('SELECT COUNT(*) FROM prescriptions WHERE status = $1', ['pending']),
-            pool.query('SELECT COUNT(*) FROM users WHERE is_active = true')
+            pool.query('SELECT COUNT(*) FROM users WHERE status = $1', ['ACTIVE']),
+            pool.query('SELECT COUNT(*) FROM users') // Added: Total Users Unfiltered
         ]);
 
         res.json({
@@ -178,7 +174,8 @@ export const getSystemStats = async (req: Request, res: Response) => {
             pending_verifications: parseInt(stats[2].rows[0].count),
             scheduled_appointments: parseInt(stats[3].rows[0].count),
             pending_prescriptions: parseInt(stats[4].rows[0].count),
-            active_users: parseInt(stats[5].rows[0].count)
+            active_users: parseInt(stats[5].rows[0].count),
+            total_users: parseInt(stats[6].rows[0].count)
         });
     } catch (error) {
         console.error('Error fetching system stats:', error);
@@ -240,4 +237,3 @@ export const updateSessionTimeout = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Error updating session timeout' });
     }
 };
-

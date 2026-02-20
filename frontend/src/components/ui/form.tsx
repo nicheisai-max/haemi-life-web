@@ -95,7 +95,7 @@ const FormLabel = React.forwardRef<
   return (
     <Label
       ref={ref}
-      className={cn(className)}
+      className={cn("form-label-portal inline-block", className)}
       htmlFor={formItemId}
       {...props}
     />

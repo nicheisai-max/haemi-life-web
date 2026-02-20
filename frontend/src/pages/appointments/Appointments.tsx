@@ -105,18 +105,18 @@ export const Appointments: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="max-w-[1920px] mx-auto p-6 md:p-8 flex justify-center items-center min-h-[400px]">
+            <div className="pt-8 flex justify-center items-center min-h-96">
                 <MedicalLoader message="Syncing clinical appointments..." />
             </div>
         );
     }
 
     return (
-        <div className="max-w-[1920px] mx-auto p-6 md:p-8 space-y-8">
+        <div className="space-y-8">
             <TransitionItem className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">My Appointments</h1>
-                    <p className="text-muted-foreground mt-1">View and manage your appointments</p>
+                    <h1 className="page-heading !mb-0 transition-all duration-300">My Appointments</h1>
+                    <p className="page-subheading italic">View and manage your appointments</p>
                 </div>
                 <Button
                     variant="default"

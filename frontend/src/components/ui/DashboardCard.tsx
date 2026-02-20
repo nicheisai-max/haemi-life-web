@@ -17,7 +17,7 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
     return (
         <Card
             className={cn(
-                "rounded-2xl border-border/50 shadow-sm transition-shadow hover:shadow-md bg-card text-card-foreground h-full flex flex-col",
+                "rounded-xl border-border/50 dark:border-border/10 shadow-sm dark:shadow-none transition-all duration-200 hover:shadow-md bg-card text-card-foreground h-full flex flex-col",
                 !noPadding && "p-6",
                 className
             )}

@@ -1,72 +1,97 @@
+// --------------------------------------------------------------------------------
+// HAEMI LIFE -- SAFE SEED SCRIPT (BOTSWANA REAL DATA) -- v3.0
+// "The Source of Truth"
+//
+// 1. NON-DESTRUCTIVE: Checks if user exists (by email) before inserting.
+// 2. BOTSWANA DATA: Authentic names, roles, and locations.
+// 3. COMPLETE ROLES: Admins, Doctors, Pharmacists, Patients (10+ each).
+// --------------------------------------------------------------------------------
+
 import { pool } from '../config/db';
 import bcrypt from 'bcrypt';
 
-const seedMedicalRecords = async (client: any, patientId: string) => {
-    console.log('📂 Seeding Medical Records for Patient:', patientId);
+const BOTSWANA_NAMES = {
+    first: [
+        'Thabo', 'Neo', 'Kagiso', 'Lorato', 'Mpho', 'Tshepo', 'Amantle', 'Tumelo',
+        'Bakang', 'Sethunya', 'Kabo', 'Goitseone', 'Lesego', 'Pako', 'Tefo',
+        'Refilwe', 'Kgalalelo', 'Modise', 'Khumo', 'Tlamelo', 'Boitumelo', 'Karabo',
+        'Katlego', 'Onkemetse', 'Tshiamo'
+    ],
+    last: [
+        'Kgosi', 'Molefe', 'Mousi', 'Dube', 'Seretse', 'Motlhabane', 'Kwape',
+        'Sechele', 'Ntsima', 'Phiri', 'Mogwe', 'Moloi', 'Gabaraane', 'Masire',
+        'Khama', 'Seboni', 'Motswaledi', 'Boko', 'Masisi', 'Molale', 'Chiepe',
+        'Gaolathe', 'Matthews', 'Nasha', 'Skelemani'
+    ]
+};
 
-    // Clear existing records for this patient to avoid duplicates if re-seeding without full wipe
-    await client.query('DELETE FROM medical_records WHERE patient_id = $1', [patientId]);
+const LOCATIONS = ['Gaborone', 'Francistown', 'Maun', 'Lobatse', 'Serowe', 'Molepolole', 'Kasane', 'Palapye', 'Selibe Phikwe', 'Mochudi'];
+
+const SPECIALIZATIONS = [
+    'Cardiologist', 'Pediatrician', 'General Practitioner', 'Dermatologist',
+    'Gynecologist', 'Orthopedic Surgeon', 'Neurologist', 'Psychiatrist',
+    'Ophthalmologist', 'Oncologist', 'Dentist', 'ENT Specialist'
+];
+
+// Helper to generate distinct Botswana specific data
+const generateBotswanaUser = (role: string, index: number, specificData: any = {}) => {
+    const firstName = BOTSWANA_NAMES.first[index % BOTSWANA_NAMES.first.length];
+    const lastName = BOTSWANA_NAMES.last[index % BOTSWANA_NAMES.last.length];
+    const name = specificData.name || `${firstName} ${lastName}`;
+    const email = specificData.email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}${index}@haemilife.com`;
+    const phone = specificData.phone || `+2677${index}${Math.floor(Math.random() * 900000 + 100000)}`; // +267 7X XXXXXX
+
+    return { name, email, phone, role, ...specificData };
+};
+
+const safeCreateUser = async (client: any, userData: any, passwordHash: string) => {
+    // 1. Check if user exists
+    const existing = await client.query('SELECT id FROM users WHERE email = $1', [userData.email]);
+
+    if (existing.rows.length > 0) {
+        console.log(`⏩ Skipping Existing User: ${userData.email}`);
+        return existing.rows[0].id;
+    }
+
+    // 2. Insert new user
+    const res = await client.query(`
+        INSERT INTO users (name, email, password, role, phone_number, id_number, status, is_verified)
+        VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', true)
+        RETURNING id
+    `, [
+        userData.name,
+        userData.email,
+        passwordHash,
+        userData.role,
+        userData.phone,
+        userData.id_number || null
+    ]);
+
+    console.log(`✅ Created New ${userData.role}: ${userData.name}`);
+    return res.rows[0].id;
+};
+
+const seedMedicalRecords = async (client: any, patientId: string, patientName: string) => {
+    // Check if records exist to avoid duplicates
+    const check = await client.query('SELECT id FROM medical_records WHERE patient_id = $1 LIMIT 1', [patientId]);
+    if (check.rows.length > 0) {
+        console.log(`   ⏩ Records exist for ${patientName}, skipping insertion.`);
+        return;
+    }
+
+    console.log(`   📂 Seeding Records for: ${patientName}`);
 
     const records = [
         {
-            name: "Full Blood Count (FBC) Report",
-            record_type: "Lab Result",
+            name: "Initial Health Assessment",
+            record_type: "Clinical Note",
             doctor_name: "Dr. Thabo Kgosi",
             facility_name: "Princess Marina Hospital",
-            date_of_service: "2025-11-15",
             status: "Final",
-            notes: "HbA1c levels slightly elevated (6.2%). Lipid profile within normal range.",
-            file_path: "uploads/medical_records/demo_fbc_report.pdf",
+            notes: "Patient reports general well-being. Routine screening conducted.",
+            file_path: "uploads/medical_records/demo_initial_assessment.pdf", // Placeholder
             file_type: "application/pdf",
             file_size: "1.2 MB"
-        },
-        {
-            name: "Chest X-Ray (PA View)",
-            record_type: "Radiology",
-            doctor_name: "Dr. Lerato Molefe",
-            facility_name: "Bokamoso Private Hospital",
-            date_of_service: "2026-01-10",
-            status: "Final",
-            notes: "Clear lung fields. No evidence of consolidation or pleural effusion.",
-            file_path: "uploads/medical_records/demo_chest_xray.jpg",
-            file_type: "image/jpeg",
-            file_size: "3.5 MB"
-        },
-        {
-            name: "Annual General Checkup Summary",
-            record_type: "Clinical Note",
-            doctor_name: "Dr. Neo Mousi",
-            facility_name: "Maun General Hospital",
-            date_of_service: "2025-08-22",
-            status: "Final",
-            notes: "Patient in good general health. BP 120/80. BMI 24.5.",
-            file_path: "uploads/medical_records/demo_checkup_summary.pdf",
-            file_type: "application/pdf",
-            file_size: "850 KB"
-        },
-        {
-            name: "Dermatology Consultation",
-            record_type: "Specialist Report",
-            doctor_name: "Dr. Kagiso Dube",
-            facility_name: "Phakalane Specialist Clinic",
-            date_of_service: "2025-12-05",
-            status: "Final",
-            notes: "Treatment for localized dermatitis initiated. Follow-up in 3 months.",
-            file_path: "uploads/medical_records/demo_derm_report.pdf",
-            file_type: "application/pdf",
-            file_size: "1.0 MB"
-        },
-        {
-            name: "COVID-19 Vaccination Certificate",
-            record_type: "Immunization",
-            doctor_name: "Ministry of Health",
-            facility_name: "Sir Ketumile Masire Teaching Hospital",
-            date_of_service: "2024-05-20",
-            status: "Verified",
-            notes: "Booster dose administered.",
-            file_path: "uploads/medical_records/demo_vaccine_cert.pdf",
-            file_type: "application/pdf",
-            file_size: "500 KB"
         }
     ];
 
@@ -74,14 +99,13 @@ const seedMedicalRecords = async (client: any, patientId: string) => {
         await client.query(`
             INSERT INTO medical_records 
             (patient_id, name, record_type, doctor_name, facility_name, date_of_service, status, notes, file_path, file_type, file_size)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, $6, $7, $8, $9, $10)
         `, [
             patientId,
             record.name,
             record.record_type,
             record.doctor_name,
             record.facility_name,
-            record.date_of_service,
             record.status,
             record.notes,
             record.file_path,
@@ -89,209 +113,126 @@ const seedMedicalRecords = async (client: any, patientId: string) => {
             record.file_size
         ]);
     }
-    console.log(`✅ Seeded ${records.length} medical records.`);
 };
+
 
 const seed = async () => {
     const client = await pool.connect();
 
     try {
-        console.log('🌱 Starting database seed (Botswana Production Grade)...');
+        console.log('🌱 Starting SAFE SEEDING (Botswana Data)...');
         await client.query('BEGIN');
 
-        // --- 1. Clean up existing data ---
-        console.log('🧹 Cleaning up old doctor data...');
-        // Note: We don't delete all users here to preserve the patient if possible,
-        // but if the patient doesn't exist, we can't seed records.
-        // Assuming init.sql or manual signup created the patient.
+        const passwordHash = await bcrypt.hash('123456', 10); // Uniform password for ease of demo
 
-        await client.query(`DELETE FROM doctor_profiles`);
-        await client.query(`DELETE FROM users WHERE role = 'doctor'`);
+        // --- 1. ADMINS (10 Records) ---
+        console.log('\n--- 1. SEEDING ADMINS ---');
+        // Ensure the primary admin exists first
+        await safeCreateUser(client, { name: 'Super Admin', email: 'admin@haemilife.com', phone: '+26771000000', role: 'admin' }, passwordHash);
 
-        // --- 2. Define Botswana Specific Doctors ---
-        const passwordHash = await bcrypt.hash('password123', 10);
+        for (let i = 1; i <= 10; i++) {
+            const admin = generateBotswanaUser('admin', i, {
+                email: `admin${i}@haemilife.com` // Simple emails for easier testing
+            });
+            await safeCreateUser(client, admin, passwordHash);
+        }
 
-        const doctors = [
-            {
-                name: 'Dr. Thabo Kgosi',
-                email: 'thabo.kgosi@haemilife.com',
-                phone: '+267 71 111 222',
-                specialization: 'Cardiologist',
-                experience: 18,
-                fee: 1200.00,
-                bio: 'Leading Interventional Cardiologist in Gaborone. Formerly Head of Cardiology at Princess Marina Hospital. Specializes in coronary interventions and heart failure management.',
-                license: 'BW-MED-2008-012'
-            },
-            {
-                name: 'Dr. Lorato Molefe',
-                email: 'lorato.molefe@haemilife.com',
-                phone: '+267 72 333 444',
-                specialization: 'Pediatrician',
-                experience: 12,
-                fee: 850.00,
-                bio: 'Compassionate Pediatric Specialist at Bokamoso Private Hospital. Dedicated to neonatal care and early childhood development tracking.',
-                license: 'BW-MED-2014-089'
-            },
-            {
-                name: 'Dr. Neo Mousi',
-                email: 'neo.mousi@haemilife.com',
-                phone: '+267 73 555 666',
-                specialization: 'General Practitioner',
-                experience: 8,
-                fee: 400.00,
-                bio: 'Family-focused GP based in Maun. Expert in tropical diseases and travel medicine for the Okavango region. Committed to preventative community health.',
-                license: 'BW-MED-2018-156'
-            },
-            {
-                name: 'Dr. Kagiso Dube',
-                email: 'kagiso.dube@haemilife.com',
-                phone: '+267 74 777 888',
-                specialization: 'Dermatologist',
-                experience: 15,
-                fee: 950.00,
-                bio: 'Renowned Dermatologist specializing in sun-related skin conditions and cosmetic dermatology. Runs a specialized clinic in Phakalane.',
-                license: 'BW-MED-2011-045'
-            },
-            {
-                name: 'Dr. Mpho Seretse',
-                email: 'mpho.seretse@haemilife.com',
-                phone: '+267 75 999 000',
-                specialization: 'Gynecologist',
-                experience: 20,
-                fee: 1100.00,
-                bio: 'Senior Obstetrician & Gynecologist. Advocate for women\'s reproductive health with extensive experience in high-risk pregnancies at Sir Ketumile Masire Teaching Hospital.',
-                license: 'BW-MED-2006-003'
-            },
-            {
-                name: 'Dr. Tshepo Motlhabane',
-                email: 'tshepo.mot@haemilife.com',
-                phone: '+267 76 123 123',
-                specialization: 'Orthopedic Surgeon',
-                experience: 14,
-                fee: 1500.00,
-                bio: 'Sports Medicine specialist and Orthopedic Surgeon. Consultant for Botswana National Sports Commission athletes. Expert in arthroscopic surgery.',
-                license: 'BW-MED-2012-234'
-            },
-            {
-                name: 'Dr. Amantle Kwape',
-                email: 'amantle.kwape@haemilife.com',
-                phone: '+267 77 456 456',
-                specialization: 'Neurologist',
-                experience: 10,
-                fee: 1300.00,
-                bio: 'Fellowship-trained Neurologist. Specializes in migraine management, epilepsy, and neuro-degenerative disorders. Practices at Gaborone Private Hospital.',
-                license: 'BW-MED-2016-567'
-            },
-            {
-                name: 'Dr. Tumelo Sechele',
-                email: 'tumelo.sech@haemilife.com',
-                phone: '+267 71 789 789',
-                specialization: 'Psychiatrist',
-                experience: 16,
-                fee: 1000.00,
-                bio: 'Holistic Psychiatrist integrating medication management with tele-therapy. Focused on anxiety, depression, and workplace burnout tailored for corporate professionals.',
-                license: 'BW-MED-2010-890'
-            },
-            {
-                name: 'Dr. Bakang Ntsima',
-                email: 'bakang.n@haemilife.com',
-                phone: '+267 72 234 567',
-                specialization: 'Ophthalmologist',
-                experience: 9,
-                fee: 900.00,
-                bio: 'Eye specialist with a focus on cataract surgery and diabetic retinopathy. Conducting mobile eye clinics in rural Kweneng districts.',
-                license: 'BW-MED-2017-321'
-            },
-            {
-                name: 'Dr. Sethunya Phiri',
-                email: 'sethunya.p@haemilife.com',
-                phone: '+267 73 876 543',
-                specialization: 'Oncologist',
-                experience: 22,
-                fee: 1400.00,
-                bio: 'Leading Clinical Oncologist. Pioneer in Introducing modern immunotherapy treatments to Botswana. Compassionate care for cancer patients.',
-                license: 'BW-MED-2004-011'
-            },
-            {
-                name: 'Dr. Kabo Mogwe',
-                email: 'kabo.mogwe@haemilife.com',
-                phone: '+267 74 543 210',
-                specialization: 'Dentist',
-                experience: 7,
-                fee: 500.00,
-                bio: 'Cosmetic and Restorative Dentist. Dedicated to creating confident smiles using the latest digital dentistry technology.',
-                license: 'BW-MED-2019-654'
-            },
-            {
-                name: 'Dr. Goitseone Moloi',
-                email: 'goitse.moloi@haemilife.com',
-                phone: '+267 75 678 901',
-                specialization: 'ENT Specialist',
-                experience: 11,
-                fee: 800.00,
-                bio: 'Ear, Nose, and Throat Surgeon. Expert in treating allergic rhinitis and pediatric ENT conditions. Based in Francistown.',
-                license: 'BW-MED-2015-432'
-            }
-        ];
+        // --- 2. PHARMACISTS (10 Records) ---
+        console.log('\n--- 2. SEEDING PHARMACISTS ---');
+        // Primary pharmacist
+        await safeCreateUser(client, { name: 'Head Pharmacist', email: 'pharmacist@haemilife.com', phone: '+26772000000', role: 'pharmacist' }, passwordHash);
 
-        // --- 3. Execute Insertions ---
-        for (const doc of doctors) {
-            // Insert User
-            // Note: Using 'password' column as per schema forensic audit
-            const userRes = await client.query(`
-                INSERT INTO users (name, email, password, role, phone_number, is_active)
-                VALUES ($1, $2, $3, 'doctor', $4, true)
-                RETURNING id
-            `, [doc.name, doc.email, passwordHash, doc.phone]);
+        for (let i = 1; i <= 10; i++) {
+            const pharm = generateBotswanaUser('pharmacist', i + 10, { // Offset index to vary names slightly
+                email: `pharmacist${i}@haemilife.com`
+            });
+            await safeCreateUser(client, pharm, passwordHash);
+        }
 
-            const userId = userRes.rows[0].id;
+        // --- 3. PATIENTS (10 Records) ---
+        console.log('\n--- 3. SEEDING PATIENTS ---');
+        // Primary patient
+        const primaryPatientId = await safeCreateUser(client, { name: 'Main Patient', email: 'patient@haemilife.com', phone: '+26773000000', role: 'patient', id_number: '100110011' }, passwordHash);
+        await seedMedicalRecords(client, primaryPatientId, 'Main Patient');
 
-            // Insert Profile
+        for (let i = 1; i <= 10; i++) {
+            const patient = generateBotswanaUser('patient', i + 20, {
+                email: `patient${i}@haemilife.com`,
+                id_number: `1002200${i}`
+            });
+            const pId = await safeCreateUser(client, patient, passwordHash);
+            await seedMedicalRecords(client, pId, patient.name);
+        }
+
+        // --- 4. DOCTORS (10+ Records with Profiles) ---
+        console.log('\n--- 4. SEEDING DOCTORS ---');
+        // Primary doctor
+        const mainDocId = await safeCreateUser(client, { name: 'Dr. Kobus', email: 'doctor@haemilife.com', phone: '+26774000000', role: 'doctor' }, passwordHash);
+
+        // Ensure profile for main doctor
+        const mainProfileCheck = await client.query('SELECT id FROM doctor_profiles WHERE user_id = $1', [mainDocId]);
+        if (mainProfileCheck.rows.length === 0) {
             await client.query(`
                 INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
-                VALUES ($1, $2, $3, $4, $5, $6, true)
-            `, [userId, doc.specialization, doc.license, doc.experience, doc.bio, doc.fee]);
+                VALUES ($1, 'General Practitioner', 'BW-MD-MAIN', 10, 'Chief Medical Officer', 500.00, true)
+            `, [mainDocId]);
+        }
 
-            // Optional: Create specific schedule for them if needed later, 
-            // but for now, the profile presence allows them to be listed.
-            // Let's add a default M-F 08:00-17:00 schedule for all to ensure they are "bookable/available"
-            const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-            for (const day of days) {
+        // Array of 10 Specific Doctors (some might match previous seed, which is fine, exact emails will trigger skip)
+        const doctorsData = [
+            { name: 'Dr. Thabo Kgosi', email: 'thabo.kgosi@haemilife.com', spec: 'Cardiologist', exp: 18, fee: 1200 },
+            { name: 'Dr. Lorato Molefe', email: 'lorato.molefe@haemilife.com', spec: 'Pediatrician', exp: 12, fee: 850 },
+            { name: 'Dr. Neo Mousi', email: 'neo.mousi@haemilife.com', spec: 'General Practitioner', exp: 8, fee: 400 },
+            { name: 'Dr. Kagiso Dube', email: 'kagiso.dube@haemilife.com', spec: 'Dermatologist', exp: 15, fee: 950 },
+            { name: 'Dr. Mpho Seretse', email: 'mpho.seretse@haemilife.com', spec: 'Gynecologist', exp: 20, fee: 1100 },
+            { name: 'Dr. Tshepo Motlhabane', email: 'tshepo.mot@haemilife.com', spec: 'Orthopedic Surgeon', exp: 14, fee: 1500 },
+            { name: 'Dr. Amantle Kwape', email: 'amantle.kwape@haemilife.com', spec: 'Neurologist', exp: 10, fee: 1300 },
+            { name: 'Dr. Tumelo Sechele', email: 'tumelo.sech@haemilife.com', spec: 'Psychiatrist', exp: 16, fee: 1000 },
+            { name: 'Dr. Bakang Ntsima', email: 'bakang.n@haemilife.com', spec: 'Ophthalmologist', exp: 9, fee: 900 },
+            { name: 'Dr. Sethunya Phiri', email: 'sethunya.p@haemilife.com', spec: 'Oncologist', exp: 22, fee: 1400 }
+        ];
+
+        for (let i = 0; i < doctorsData.length; i++) {
+            const doc = doctorsData[i];
+            const userId = await safeCreateUser(client, {
+                name: doc.name,
+                email: doc.email,
+                phone: `+26776${100000 + i}`, // Unique phone
+                role: 'doctor'
+            }, passwordHash);
+
+            // Check profile
+            const profileCheck = await client.query('SELECT id FROM doctor_profiles WHERE user_id = $1', [userId]);
+            if (profileCheck.rows.length === 0) {
                 await client.query(`
-                    INSERT INTO doctor_schedules (doctor_id, day_of_week, start_time, end_time, is_available)
-                    VALUES ($1, $2, '08:00:00', '17:00:00', true)
-                `, [userId, day]);
+                    INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, bio, consultation_fee, is_verified)
+                    VALUES ($1, $2, $3, $4, $5, $6, true)
+                `, [
+                    userId,
+                    doc.spec,
+                    `BW-MD-202X-${i}`,
+                    doc.exp,
+                    `Expert ${doc.spec} serving the Botswana community.`,
+                    doc.fee
+                ]);
+                console.log(`   ✅ Created Profile for: ${doc.name}`);
+
+                // Create Default Schedule (1=Mon to 5=Fri)
+                const days = [1, 2, 3, 4, 5];
+                for (const day of days) {
+                    await client.query(`
+                        INSERT INTO doctor_schedules (doctor_id, day_of_week, start_time, end_time, is_available)
+                        VALUES ($1, $2, '08:00:00', '17:00:00', true)
+                    `, [userId, day]);
+                }
+            } else {
+                console.log(`   ⏩ Profile exists for: ${doc.name}`);
             }
-
-            console.log(`✅ Created Specialist: ${doc.name} (${doc.specialization})`);
-        }
-
-        // --- 4. Seed Medical Records for Default Patient ---
-        // --- 4. Seed Medical Records for Default Patient ---
-        let patientId;
-        const patientRes = await client.query("SELECT id FROM users WHERE email = 'patient@haemilife.com'");
-
-        if (patientRes.rows.length > 0) {
-            patientId = patientRes.rows[0].id;
-            console.log('🔄 Patient exists, updating password to ensure access...');
-            await client.query('UPDATE users SET password = $1 WHERE id = $2', [passwordHash, patientId]);
-        } else {
-            console.log('⚠️ Patient not found, creating default patient (Tebogo)...');
-            const newPatient = await client.query(`
-                INSERT INTO users (name, email, password, role, phone_number, id_number, status, is_verified)
-                VALUES ($1, $2, $3, 'patient', $4, $5, 'ACTIVE', true)
-                RETURNING id
-            `, ['Tebogo Motswana', 'patient@haemilife.com', passwordHash, '+26773123456', '123456789']);
-            patientId = newPatient.rows[0].id;
-            console.log('✅ Created Patient: Tebogo Motswana');
-        }
-
-        if (patientId) {
-            await seedMedicalRecords(client, patientId);
         }
 
         await client.query('COMMIT');
-        console.log('✨ Botswana Production-Grade Seeding Completed Successfully! 🇧🇼');
+        console.log('\n✨ Database Seeding Completed Successfully! 🇧🇼');
+
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Seeding failed:', error);

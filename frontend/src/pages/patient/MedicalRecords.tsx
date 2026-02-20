@@ -136,11 +136,11 @@ export const MedicalRecords: React.FC = () => {
     };
 
     return (
-        <div className="container mx-auto p-4 md:p-8 max-w-[1920px] space-y-8">
+        <div className="space-y-8">
             <TransitionItem className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight mb-2 text-foreground">Medical Records</h1>
-                    <p className="text-muted-foreground text-lg">Secure repository of your clinical history in Botswana</p>
+                    <h1 className="page-heading !mb-0 transition-all duration-300">Medical Records</h1>
+                    <p className="page-subheading italic">Secure repository of your clinical history in Botswana</p>
                 </div>
                 <div className="flex gap-2">
                     <label htmlFor="file-upload" className="cursor-pointer">
@@ -200,7 +200,7 @@ export const MedicalRecords: React.FC = () => {
                         <MedicalLoader message="Retrieving clinical records from MoH database..." />
                     </div>
                 ) : filteredRecords.length === 0 ? (
-                    <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-[300px] border-dashed">
+                    <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-80 border-dashed">
                         <div className="bg-muted/30 p-6 rounded-full mb-6">
                             <FolderOpen className="h-12 w-12 opacity-30" />
                         </div>

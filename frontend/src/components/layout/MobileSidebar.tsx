@@ -21,8 +21,8 @@ export const MobileSidebar: React.FC = () => {
                     <span className="sr-only">Open Menu</span>
                 </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-[300px] flex flex-col bg-background/95 backdrop-blur-xl border-r border-border/40">
-                <div className="p-6 border-b border-border/40">
+            <SheetContent side="left" className="p-0 w-[300px] flex flex-col bg-background/95 backdrop-blur-xl border-none">
+                <div className="p-6">
                     <Link to="/" onClick={() => setOpen(false)}>
                         <Logo size="nav" />
                     </Link>

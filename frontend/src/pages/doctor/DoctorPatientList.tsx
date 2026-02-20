@@ -31,8 +31,8 @@ export const DoctorPatientList: React.FC = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Patient Registry</h1>
-                    <p className="text-muted-foreground mt-1">Manage and monitor your assigned patients in Botswana.</p>
+                    <h1 className="page-heading">Patient Registry</h1>
+                    <p className="page-subheading">Manage and monitor your assigned patients in Botswana.</p>
                 </div>
                 <Button className="shrink-0 gap-2">
                     <Plus className="h-4 w-4" /> Add New Patient

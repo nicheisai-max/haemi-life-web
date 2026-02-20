@@ -202,7 +202,7 @@ export const VideoConsultation: React.FC = () => {
                     <div className="bg-primary/10 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CheckCircle2 className="h-10 w-10 text-primary" />
                     </div>
-                    <h2 className="text-2xl font-bold mb-2">Consultation Completed</h2>
+                    <h2 className="text-h2 mb-2">Consultation Completed</h2>
                     <p className="text-muted-foreground mb-6">Your medical interaction was secure and private. Returning to dashboard...</p>
                     <Button onClick={() => navigate('/dashboard')} className="w-full">Return Now</Button>
                 </Card>
@@ -270,7 +270,7 @@ export const VideoConsultation: React.FC = () => {
                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-4 border border-primary/20">
                                 <ShieldCheck size={14} /> Encrypted Session
                             </div>
-                            <h1 className="text-4xl font-black leading-tight tracking-tight text-foreground">Video Consultation</h1>
+                            <h1 className="text-h1 leading-tight text-foreground">Video Consultation</h1>
                             <p className="text-xl font-medium text-primary flex items-center gap-2">
                                 with {appointment?.doctor_name}
                             </p>
@@ -384,7 +384,7 @@ export const VideoConsultation: React.FC = () => {
             <div className="w-full md:w-[360px] bg-card border-t md:border-t-0 md:border-l border-border flex flex-col p-8 z-30 shadow-2xl">
                 <div className="space-y-6">
                     <div>
-                        <h3 className="text-2xl font-black tracking-tight text-foreground">{appointment?.doctor_name}</h3>
+                        <h3 className="text-h3 tracking-tight text-foreground">{appointment?.doctor_name}</h3>
                         <p className="text-primary font-black text-xs uppercase tracking-[0.2em] mt-2 bg-primary/5 inline-block px-2 py-1 rounded">{appointment?.specialization}</p>
                     </div>
 

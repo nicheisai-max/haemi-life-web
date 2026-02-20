@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { getAllUsers, updateUserStatus } from '../../services/admin.service';
 import type { UserListItem } from '../../services/admin.service';
-import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail } from 'lucide-react';
+import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail, CheckCircle2, CircleOff, Filter } from 'lucide-react';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
 
@@ -62,25 +62,26 @@ export const UserManagement: React.FC = () => {
         // Status filter
         if (statusFilter !== 'all') {
             const isActive = statusFilter === 'active';
-            filtered = filtered.filter(user => user.is_active === isActive);
+            filtered = filtered.filter(user => (user.status === 'ACTIVE') === isActive);
         }
 
         setFilteredUsers(filtered);
     };
 
-    const handleToggleStatus = async (userId: number, currentStatus: boolean, userName: string) => {
-        const action = currentStatus ? 'deactivate' : 'activate';
+    const handleToggleStatus = async (userId: number, currentActive: boolean, userName: string) => {
+        const action = currentActive ? 'deactivate' : 'activate';
+        const newStatus = currentActive ? 'INACTIVE' : 'ACTIVE';
 
         await confirm({
             title: `${action.charAt(0).toUpperCase() + action.slice(1)} User`,
-            message: `Are you sure you want to ${action} ${userName}? ${currentStatus ? 'They will lose access immediately.' : 'They will regain access.'}`,
-            type: currentStatus ? 'error' : 'warning',
+            message: `Are you sure you want to ${action} ${userName}? ${currentActive ? 'They will lose access immediately.' : 'They will regain access.'}`,
+            type: currentActive ? 'error' : 'warning',
             confirmText: `${action.charAt(0).toUpperCase() + action.slice(1)} User`,
             cancelText: 'Cancel',
             onAsyncConfirm: async () => {
                 try {
                     setProcessing(userId);
-                    await updateUserStatus(userId, !currentStatus);
+                    await updateUserStatus(userId, newStatus);
                     await fetchUsers();
                 } catch (err: any) {
                     setError(err.response?.data?.message || 'Failed to update user status');
@@ -118,11 +119,11 @@ export const UserManagement: React.FC = () => {
         );
     }
 
-    return (<div className="max-w-[1400px] mx-auto p-6 md:p-8 space-y-8">
+    return (<div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
-                <p className="text-muted-foreground mt-1">Manage user accounts and permissions</p>
+                <h1 className="page-heading !mb-0 transition-all duration-300">User Management</h1>
+                <p className="page-subheading italic">Manage user accounts and permissions</p>
             </div>
 
             {/* Stats */}
@@ -131,8 +132,8 @@ export const UserManagement: React.FC = () => {
                     <span className="text-2xl font-bold text-primary leading-none">{users.length}</span>
                     <span className="text-xs text-muted-foreground font-medium mt-1">Total Users</span>
                 </Card>
-                <Card className="px-4 py-2 flex flex-col items-center justify-center min-w-[100px]">
-                    <span className="text-2xl font-bold text-green-600 leading-none">{users.filter(u => u.is_active).length}</span>
+                <Card className="px-4 py-2 flex flex-col items-center justify-center w-24">
+                    <span className="text-2xl font-bold text-green-600 leading-none">{users.filter(u => u.status === 'ACTIVE').length}</span>
                     <span className="text-xs text-muted-foreground font-medium mt-1">Active</span>
                 </Card>
             </div>
@@ -157,7 +158,7 @@ export const UserManagement: React.FC = () => {
                     placeholder="Search by name, email, or phone..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 h-10"
+                    className="pl-9 h-10 border-none bg-muted/30 focus-visible:bg-muted/50 transition-all shadow-inner"
                 />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -165,28 +166,39 @@ export const UserManagement: React.FC = () => {
                     <button
                         key={role}
                         onClick={() => setRoleFilter(role)}
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors border ${roleFilter === role
-                            ? 'bg-primary text-primary-foreground border-primary'
-                            : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${roleFilter === role
+                            ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.05]'
+                            : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                             }`}
                     >
-                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                        {role === 'all' && <Users className="h-3.5 w-3.5" />}
+                        {role === 'patient' && <Heart className="h-3.5 w-3.5" />}
+                        {role === 'doctor' && <Stethoscope className="h-3.5 w-3.5" />}
+                        {role === 'admin' && <Shield className="h-3.5 w-3.5" />}
+                        {role === 'pharmacist' && <Briefcase className="h-3.5 w-3.5" />}
+                        <span>{role.charAt(0).toUpperCase() + role.slice(1)}</span>
                     </button>
                 ))}
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-2 border-t">
-                <span className="text-sm text-muted-foreground self-center mr-2">Status:</span>
+            <div className="flex flex-wrap gap-2 pt-3 border-t">
+                <div className="flex items-center text-sm text-muted-foreground mr-2 font-medium">
+                    <Filter className="h-3.5 w-3.5 mr-1.5" />
+                    Status:
+                </div>
                 {(['all', 'active', 'inactive'] as const).map(status => (
                     <button
                         key={status}
                         onClick={() => setStatusFilter(status)}
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors border ${statusFilter === status
-                            ? 'bg-secondary text-secondary-foreground border-secondary'
-                            : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${statusFilter === status
+                            ? 'bg-secondary text-secondary-foreground shadow-md scale-[1.05]'
+                            : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                             }`}
                     >
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                        {status === 'all' && <Users className="h-3.5 w-3.5" />}
+                        {status === 'active' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                        {status === 'inactive' && <CircleOff className="h-3.5 w-3.5" />}
+                        <span>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
                     </button>
                 ))}
             </div>
@@ -243,30 +255,30 @@ export const UserManagement: React.FC = () => {
                                         {new Date(user.created_at).toLocaleDateString()}
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant={user.is_active ? "outline" : "destructive"} className={user.is_active ? "text-green-600 border-green-600 bg-green-50 dark:bg-green-900/20" : ""}>
-                                            {user.is_active ? 'Active' : 'Inactive'}
+                                        <Badge variant={user.status === 'ACTIVE' ? "outline" : "destructive"} className={user.status === 'ACTIVE' ? "text-green-500 border-green-500/30 bg-green-500/10" : ""}>
+                                            {user.status === 'ACTIVE' ? 'Active' : 'Inactive'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-left">
                                         <Button
                                             size="sm"
-                                            className={user.is_active
+                                            className={user.status === 'ACTIVE'
                                                 ? "user-action-btn user-action-btn-deactivate"
                                                 : "user-action-btn user-action-btn-activate"
                                             }
-                                            onClick={() => handleToggleStatus(user.id, user.is_active, user.name)}
+                                            onClick={() => handleToggleStatus(user.id, user.status === 'ACTIVE', user.name)}
                                             disabled={processing === user.id}
                                         >
                                             {processing === user.id ? (
                                                 <PremiumLoader size="xs" bubbleClassName="bg-white" />
                                             ) : (
                                                 <div className="flex items-center gap-1.5">
-                                                    {user.is_active ? (
+                                                    {user.status === 'ACTIVE' ? (
                                                         <ShieldAlert className="h-3.5 w-3.5" />
                                                     ) : (
                                                         <Shield className="h-3.5 w-3.5" />
                                                     )}
-                                                    <span>{user.is_active ? 'Deactivate' : 'Activate'}</span>
+                                                    <span>{user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</span>
                                                 </div>
                                             )}
                                         </Button>

@@ -137,7 +137,6 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <Input
                                             placeholder="Enter your full name"
-                                            className="h-11"
                                             {...field}
                                         />
                                     </FormControl>
@@ -155,12 +154,12 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <div className="relative">
                                             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                                <span className="text-[#1BA7A6] text-sm">+267</span>
+                                                <span className="text-primary text-sm">+267</span>
                                             </div>
                                             <Input
                                                 type="tel"
                                                 placeholder="71 234 567"
-                                                className="h-11 pl-14"
+                                                className="pl-14"
                                                 {...field}
                                                 onChange={(e) => {
                                                     const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
@@ -205,7 +204,6 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <Input
                                             placeholder="Enter your Omang ID"
-                                            className="h-11"
                                             {...field}
                                         />
                                     </FormControl>
@@ -225,7 +223,6 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <PasswordInput
                                             placeholder="Create a strong password"
-                                            className="h-11"
                                             {...field}
                                         />
                                     </FormControl>
@@ -243,7 +240,6 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <PasswordInput
                                             placeholder="Re-enter your password"
-                                            className="h-11"
                                             {...field}
                                         />
                                     </FormControl>
@@ -255,7 +251,7 @@ export const Signup: React.FC = () => {
 
                     <Button
                         type="submit"
-                        className="w-full h-11 mt-4"
+                        className="w-full mt-4"
                         size="lg"
                         disabled={form.formState.isSubmitting}
                     >

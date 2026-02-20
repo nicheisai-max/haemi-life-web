@@ -9,7 +9,7 @@ export const NotFound: React.FC = () => {
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen w-full bg-background p-6 text-center animate-in fade-in duration-700">
-            <div className="max-w-[500px] w-full space-y-8">
+            <div className="max-w-lg w-full space-y-8">
                 <div className="flex justify-center mb-4">
                     <Logo size="lg" />
                 </div>

@@ -3,7 +3,6 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -11,6 +10,7 @@ import { getDoctorSchedule, updateDoctorSchedule } from '../../services/doctor.s
 import { Save, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { PremiumTimePicker } from '@/components/ui/PremiumTimePicker';
 import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -89,19 +89,19 @@ export const DoctorScheduleManagement: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="max-w-5xl mx-auto p-8 flex justify-center items-center min-h-[400px]">
+            <div className="flex justify-center items-center min-h-[400px]">
                 <MedicalLoader message="Synchronizing clinical calendar..." />
             </div>
         );
     }
 
-    return (<div className="max-w-5xl mx-auto p-6 md:p-8">
+    return (<div className="space-y-8">
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                 <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Schedule Management</h1>
-                        <p className="text-muted-foreground">Configure your weekly availability for patient appointments</p>
+                        <h1 className="page-heading">Schedule Management</h1>
+                        <p className="page-subheading">Configure your weekly availability for patient appointments</p>
                     </div>
                     <Button
                         type="submit"
@@ -183,7 +183,10 @@ export const DoctorScheduleManagement: React.FC = () => {
                                                         <FormItem className="space-y-1">
                                                             <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">Start</FormLabel>
                                                             <FormControl>
-                                                                <Input type="time" {...field} className="w-full md:w-36 cursor-pointer" />
+                                                                <PremiumTimePicker
+                                                                    value={field.value}
+                                                                    onChange={field.onChange}
+                                                                />
                                                             </FormControl>
                                                             <FormMessage />
                                                         </FormItem>
@@ -202,7 +205,10 @@ export const DoctorScheduleManagement: React.FC = () => {
                                                         <FormItem className="space-y-1">
                                                             <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">End</FormLabel>
                                                             <FormControl>
-                                                                <Input type="time" {...field} className="w-full md:w-36 cursor-pointer" />
+                                                                <PremiumTimePicker
+                                                                    value={field.value}
+                                                                    onChange={field.onChange}
+                                                                />
                                                             </FormControl>
                                                             <FormMessage />
                                                         </FormItem>

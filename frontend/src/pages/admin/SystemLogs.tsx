@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Search, Shield, Activity, Monitor, RefreshCw } from 'lucide-react';
+import { Search, Monitor, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { getAuditLogs } from '../../services/admin.service';
 import type { AuditLog } from '../../services/admin.service';
+import { MedicalLoader } from '@/components/ui/MedicalLoader';
 
 export const SystemLogs: React.FC = () => {
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -49,35 +50,36 @@ export const SystemLogs: React.FC = () => {
         return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400';
     };
 
-    if (loading && !refreshing) {
+    if (loading) {
         return (
-            <div className="max-w-[1400px] mx-auto p-8 animate-in fade-in">
-                <Card className="p-12 text-center space-y-4">
-                    <Activity className="h-12 w-12 text-primary/50 mx-auto animate-pulse" />
-                    <div className="text-muted-foreground font-medium">Loading system audit logs...</div>
-                </Card>
+            <div className="pt-20">
+                <MedicalLoader
+                    message="Syncing System Logs..."
+                />
             </div>
         );
     }
 
-    return (<div className="max-w-[1400px] mx-auto p-6 md:p-8 space-y-8">
+    return (<div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                    <Shield className="h-8 w-8 text-primary" />
+                <h1 className="page-heading !mb-0 transition-all duration-300">
                     System Audit Logs
                 </h1>
-                <p className="text-muted-foreground mt-1">Track comprehensive system activities and security events</p>
+                <p className="page-subheading italic">Track comprehensive system activities and security events</p>
             </div>
-            <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-                    <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            <div className="flex items-center gap-3">
+                <Button
+                    variant="outline"
+                    className="h-10 px-4 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-semibold transition-all hover:scale-105 active:scale-95 gap-2"
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                >
+                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     Refresh
                 </Button>
-                <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg">
-                    <Badge variant="outline" className="bg-background">
-                        {logs.length} events
-                    </Badge>
+                <div className="h-10 px-4 flex items-center justify-center rounded-xl bg-muted/50 border border-muted-foreground/20 text-muted-foreground text-sm font-bold min-w-[100px]">
+                    {logs.length} events
                 </div>
             </div>
         </div>

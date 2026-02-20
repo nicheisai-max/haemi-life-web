@@ -310,7 +310,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
                                     >
                                         <span
                                             style={{ fontFamily: font.family }}
-                                            className="text-2xl md:text-3xl break-all line-clamp-1 px-2"
+                                            className="text-h3 md:text-h2 break-all line-clamp-1 px-2"
                                         >
                                             {typedName || "Signature"}
                                         </span>

@@ -8,7 +8,6 @@
     "build": "tsc",
     "db:setup": "ts-node src/utils/setup-db.ts",
     "db:seed": "ts-node src/scripts/seed.ts",
-    "update-constraint": "ts-node src/utils/update-constraint.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -17,8 +16,10 @@
   "description": "",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@types/cookie-parser": "^1.4.10",
     "@types/socket.io": "^3.0.1",
     "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",

@@ -2,10 +2,11 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 
 import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
 import { authService } from '../services/auth.service';
+import { setAccessToken } from '../services/api';
 
 interface AuthContextType {
     user: User | null;
-    token: string | null;
+    token: string | null; // Keeps 'token' interface for compatibility, but it's just state now
     authStatus: 'initializing' | 'authenticated' | 'unauthenticated';
     login: (credentials: LoginCredentials) => Promise<void>;
     signup: (credentials: SignupCredentials) => Promise<void>;
@@ -17,138 +18,112 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-user: User | null;
-token: string | null;
-authStatus: 'initializing' | 'authenticated' | 'unauthenticated';
+interface AuthState {
+    user: User | null;
+    token: string | null;
+    authStatus: 'initializing' | 'authenticated' | 'unauthenticated';
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // ─── Synchronous Hydration (Frame Zero) ──────────────────────────────────
-    const [authState, setAuthState] = useState<AuthState>(() => {
-        const token = sessionStorage.getItem('token');
-        const userStr = sessionStorage.getItem('user');
-
-        if (token && userStr) {
-            try {
-                return {
-                    user: JSON.parse(userStr),
-                    token,
-                    authStatus: 'authenticated'
-                };
-            } catch {
-                sessionStorage.removeItem('user');
-                sessionStorage.removeItem('token');
-            }
-        }
-
-        return {
-            user: null,
-            token: null,
-            authStatus: 'unauthenticated'
-        };
+    // ─── Deterministic Initialization Phase ──────────────────────────────────
+    const [authState, setAuthState] = useState<AuthState>({
+        user: null, // Initially null. We do NOT trust storage blindly.
+        token: null,
+        authStatus: 'initializing' // Always start initializing
     });
-
-    /**
-     * isVerifying: Tracks the BACKGROUND verification of the hydrated session.
-     * We don't block the UI for this anymore because we hydrated synchronously.
-     */
-    const [isVerifying, setIsVerifying] = useState<boolean>(false);
 
     // ─── Global unauthorized event handler ───────────────────────────────────
     useEffect(() => {
-        const handleUnauthorized = (e: Event) => {
-            const detail = (e as CustomEvent).detail || {};
-            const failingToken = detail.token;
-            const currentToken = sessionStorage.getItem('token');
-
-            if (!currentToken && !authState.user && !authState.token) return;
-
-            if (failingToken !== undefined && failingToken !== currentToken) {
-                console.warn('[Auth] Ignoring unauthorized event for stale token.');
-                return;
-            }
-
-            console.log('[Auth] Session invalidated by server. Resetting state.');
-
-            sessionStorage.removeItem('token');
+        const handleUnauthorized = () => {
+            console.log('[Auth] Session invalidated (Global Event).');
+            setAccessToken(null);
             sessionStorage.removeItem('user');
             setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
-            setIsVerifying(false);
         };
 
-        window.addEventListener('auth:unauthorized', handleUnauthorized as EventListener);
-        return () => window.removeEventListener('auth:unauthorized', handleUnauthorized as EventListener);
-    }, [authState.user, authState.token]);
+        window.addEventListener('auth:unauthorized', handleUnauthorized);
+        return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    }, []);
 
-    // ─── Background Session Verification ────────────────────────────────────
+    // ─── Initial Boot (Silent Refresh) ──────────────────────────────────────
     useEffect(() => {
-        const verifySession = async () => {
-            if (authState.authStatus !== 'authenticated' || !authState.token) return;
+        let mounted = true;
 
-            setIsVerifying(true);
+        const initAuth = async () => {
             try {
-                const { user: verifiedUser } = await authService.verifySession();
+                // Attempt to refresh token using HTTP-Only cookie
+                const { token } = await authService.refreshToken();
 
-                // Final check to ensure we aren't overwriting a newer session
-                const currentToken = sessionStorage.getItem('token');
-                if (authState.token !== currentToken) return;
+                // If successful, we get a new access token
+                setAccessToken(token);
 
-                setAuthState(prev => ({
-                    ...prev,
-                    user: verifiedUser,
-                    authStatus: 'authenticated'
-                }));
-                sessionStorage.setItem('user', JSON.stringify(verifiedUser));
-            } catch (error) {
-                const storedError = error as { response?: { status: number } };
-                const currentToken = sessionStorage.getItem('token');
+                // We can hydrate user from sessionStorage for UI speed, 
+                // OR fetch profile. Let's start with verifying session to get fresh user data.
+                const { user } = await authService.verifySession();
 
-                if (authState.token !== currentToken) return;
-
-                // Treat 401/403 as hard failures
-                if (storedError.response?.status === 401 || storedError.response?.status === 403) {
-                    sessionStorage.removeItem('token');
-                    sessionStorage.removeItem('user');
-                    setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
+                if (mounted) {
+                    setAuthState({
+                        user,
+                        token,
+                        authStatus: 'authenticated'
+                    });
                 }
-            } finally {
-                setIsVerifying(false);
+            } catch (error) {
+                // Normal flow: User is simply not logged in (or session expired)
+                console.log('[Auth] No active session found on boot.');
+                if (mounted) {
+                    setAuthState({
+                        user: null, // Clear user even if storage had it
+                        token: null,
+                        authStatus: 'unauthenticated'
+                    });
+                }
             }
         };
 
-        verifySession();
-    }, []); // Only run once on mount to verify hydrated state
+        initAuth();
+
+        return () => { mounted = false; };
+    }, []);
 
     const login = useCallback(async (credentials: LoginCredentials) => {
         const { token: newToken, user: newUser } = await authService.login(credentials);
 
-        sessionStorage.setItem('token', newToken);
+        setAccessToken(newToken);
+        // Persist user for UI hydration if needed later (optional with this new flow)
         sessionStorage.setItem('user', JSON.stringify(newUser));
 
-        // Atomic state update
         setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated' });
     }, []);
 
     const signup = useCallback(async (credentials: SignupCredentials) => {
         const { token: newToken, user: newUser } = await authService.signup(credentials);
 
-        sessionStorage.setItem('token', newToken);
+        setAccessToken(newToken);
         sessionStorage.setItem('user', JSON.stringify(newUser));
 
-        // Atomic state update
         setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated' });
     }, []);
 
-    const logout = useCallback(() => {
-        sessionStorage.removeItem('token');
+    const logout = useCallback(async () => {
+        // ROBUST SYNC FLUSH: Immediately clear local state to prevent "Redirect Ping-Pong" loops.
+        // This ensures components mounting on the NEXT tick (like Login) see the correct status instantly.
+        setAccessToken(null);
         sessionStorage.removeItem('user');
-        setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
+        setAuthState({
+            user: null,
+            token: null,
+            authStatus: 'unauthenticated'
+        });
+
+        try {
+            await authService.logout();
+        } catch (e) {
+            console.error('Logout failed (Server-side)', e);
+        }
     }, []);
 
     const refreshUser = useCallback(async () => {
-        const storedToken = sessionStorage.getItem('token');
-        if (!storedToken) return;
-
         try {
             const { user: verifiedUser } = await authService.verifySession();
             setAuthState(prev => ({ ...prev, user: verifiedUser }));
@@ -157,8 +132,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('[Auth] Failed to refresh user:', error);
         }
     }, []);
-
-    const isAuthenticated = !!authState.user;
 
     return (
         <AuthContext.Provider value={{

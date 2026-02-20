@@ -99,7 +99,7 @@ export const Prescriptions: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="container mx-auto p-4 md:p-8 max-w-[1920px]">
+            <div className="space-y-8">
                 <div className="mb-8">
                     <Skeleton className="h-10 w-64 mb-2" />
                     <Skeleton className="h-4 w-96" />
@@ -114,11 +114,11 @@ export const Prescriptions: React.FC = () => {
     }
 
     return (
-        <div className="container mx-auto p-4 md:p-8 max-w-[1920px]">
-            <TransitionItem className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-8">
+            <TransitionItem className="mb-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground mb-2">My Prescriptions</h1>
-                    <p className="text-muted-foreground text-lg">View your digital and uploaded prescriptions</p>
+                    <h1 className="page-heading !mb-0 transition-all duration-300">My Prescriptions</h1>
+                    <p className="page-subheading italic">View your digital and uploaded prescriptions</p>
                 </div>
                 <div>
                     <label htmlFor="prescription-upload" className="cursor-pointer">
@@ -155,7 +155,7 @@ export const Prescriptions: React.FC = () => {
                 </Alert>
             )}
 
-            <div className={`grid grid-cols-1 ${selectedPrescription ? 'lg:grid-cols-[1fr_400px]' : ''} gap-8 transition-all duration-300`}>
+            <div className={`grid grid-cols-1 ${selectedPrescription ? 'lg:grid-cols-[1fr_24rem]' : ''} gap-8 transition-all duration-300`}>
                 <div className="space-y-8">
                     {/* Digital Prescriptions Section */}
                     <div className="space-y-4">

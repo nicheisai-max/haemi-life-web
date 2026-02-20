@@ -109,7 +109,7 @@ export const DoctorDashboard = () => {
     const pendingReviews = appointments.filter(a => a.status === 'completed').length;
 
     return (
-        <main className="w-full mx-auto p-4 md:p-5 pb-16 md:pb-20 max-w-[1600px] space-y-6">
+        <div className="space-y-8">
             <ClinicalCopilot isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
 
             {/* Hero Section - Standardized Premium Style */}
@@ -118,19 +118,16 @@ export const DoctorDashboard = () => {
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
-                            <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                            </span>
                             STATUS: ON-DUTY
                         </div>
-                        <h1 className="text-4xl md:text-3xl font-extrabold tracking-tight text-white">
-                            Welcome, {user?.name?.startsWith('Dr. ') ? user.name : `Dr. ${user?.name}`}
+                        <h1 className="page-heading !text-white !mb-0 transition-all duration-300">
+                            Welcome, {user?.name?.split(' ')[0]}
                         </h1>
-                        <div className="text-white/80 text-lg font-medium leading-relaxed max-w-xl">
+                        <p className="text-emerald-50/70 text-sm font-bold uppercase tracking-[0.2em] mb-1">Doctor's Portal</p>
+                        <div className="page-subheading !text-white/80 !opacity-100 italic">
                             {loading
                                 ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
-                                : `You have ${todayAppointments.length} patients scheduled for today. Your vitals dashboard is trending positive.`
+                                : `You have ${appointments.length} appointments scheduled for today.`
                             }
                         </div>
                     </div>
@@ -152,7 +149,7 @@ export const DoctorDashboard = () => {
                         </Button>
                         <Button
                             size="lg"
-                            className="bg-white dark:bg-white text-teal-900 dark:text-teal-900 hover:bg-teal-50 dark:hover:bg-teal-50 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
+                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
                             onClick={() => navigate('/appointments')}
                         >
                             <CalendarCheck className="h-5 w-5" aria-hidden="true" />
@@ -176,7 +173,7 @@ export const DoctorDashboard = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-teal-500/50 dark:hover:border-teal-500/80 hover:shadow-lg hover:shadow-teal-500/10 dark:hover:shadow-teal-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Users} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
+                            <div className="text-h1 text-slate-900 dark:text-white">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : todayAppointments.length}
                             </div>
                             <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-teal-600 transition-colors">Today's Census</div>
@@ -188,7 +185,7 @@ export const DoctorDashboard = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={ClipboardCheck} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
+                            <div className="text-h1 text-slate-900 dark:text-white">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : pendingReviews}
                             </div>
                             <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-emerald-600 transition-colors">Completed Notes</div>
@@ -200,7 +197,7 @@ export const DoctorDashboard = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-blue-500/50 dark:hover:border-blue-500/80 hover:shadow-lg hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Contact} variant="accent" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
+                            <div className="text-h1 text-slate-900 dark:text-white">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : patientCount}
                             </div>
                             <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-blue-600 transition-colors">Total Panel</div>
@@ -231,7 +228,7 @@ export const DoctorDashboard = () => {
             {/* Main Content Split */}
             <TransitionItem className="flex flex-col lg:flex-row gap-8 items-stretch min-h-[500px]">
                 {/* Left: Quick Actions + Clinical Snapshot */}
-                <div className="flex flex-col w-full lg:w-[60%] h-full">
+                <div className="flex flex-col w-full lg:w-3/5 h-full">
                     <section className="mb-8">
                         <h2 className="text-xl font-bold mb-4 text-foreground">Quick Actions</h2>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -319,7 +316,7 @@ export const DoctorDashboard = () => {
                 </div>
 
                 {/* Right: Today's Schedule */}
-                <div className="flex flex-col w-full lg:w-[40%] h-full">
+                <div className="flex flex-col w-full lg:w-2/5 h-full">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-foreground">Today's Schedule</h2>
                         <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-primary font-semibold" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
@@ -350,7 +347,7 @@ export const DoctorDashboard = () => {
                                     const time = formatTime(appointment.appointment_time);
                                     return (
                                         <DashboardCard key={appointment.id} className="group p-4 flex items-center gap-4 transition-all hover:border-primary/50 hover:bg-muted/30">
-                                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-xl p-3 min-w-[70px] text-center shrink-0 border border-blue-100 dark:border-blue-900/50">
+                                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-xl p-3 w-20 text-center shrink-0 border border-blue-100 dark:border-blue-900/50">
                                                 <span className="block text-lg font-bold leading-none">{time.split(' ')[0]}</span>
                                                 <span className="block text-xs font-bold uppercase mt-1">{time.split(' ')[1]}</span>
                                             </div>
@@ -393,6 +390,6 @@ export const DoctorDashboard = () => {
                     </div>
                 </div>
             </TransitionItem>
-        </main>
+        </div>
     );
 };

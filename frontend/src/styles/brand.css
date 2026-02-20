@@ -1,0 +1,91 @@
+/* 
+  HAEMI LIFE - ATOMIC BRAND BLUEPRINT 
+  Hardened CSS for Institutional Branding 
+  Bypassing build anomalies to ensure pixel-perfect rendering.
+*/
+
+/* 1. Global Page Headings - Big & Bold Institutional Standard */
+html .page-heading,
+body .page-heading,
+.page-heading {
+    font-size: 1.5rem !important;
+    /* 24px */
+    line-height: 1.3 !important;
+    font-weight: 600 !important;
+    color: #000000 !important;
+    letter-spacing: -0.025em !important;
+    margin-bottom: 0.25rem !important;
+    display: block !important;
+    font-family: 'Roboto', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Dark Mode Headings - Premium Medical Green */
+html.dark .page-heading,
+body.dark .page-heading,
+.dark .page-heading {
+    color: #bbf4a6 !important;
+}
+
+/* 2. Global Page Subheadings - Supporting Text */
+html .page-subheading,
+body .page-subheading,
+.page-subheading {
+    font-size: 1.05rem !important;
+    font-weight: 500 !important;
+    color: #64748b !important;
+    /* slate-500 */
+    letter-spacing: -0.01em !important;
+    line-height: 1.6 !important;
+    font-family: 'Roboto', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Dark Mode Subheadings */
+html.dark .page-subheading,
+body.dark .page-subheading,
+.dark .page-subheading {
+    color: #94a3b8 !important;
+    /* slate-400 */
+    opacity: 0.8 !important;
+}
+
+/* 3. Sidebar Lockdown - Institutional Trust Background */
+/* Clean Institutional Aesthetic for Both Themes */
+html .bg-sidebar,
+body .bg-sidebar,
+.bg-sidebar {
+    background-color: var(--sidebar) !important;
+    color: var(--sidebar-foreground) !important;
+    border-right: 1px solid var(--sidebar-border) !important;
+}
+
+/* 4. Global Typography Overrides for Institutional Trust */
+h1,
+h2,
+h3,
+h4,
+.text-h1,
+.text-h2,
+.text-h3,
+.text-h4 {
+    font-family: 'Roboto', sans-serif !important;
+}
+
+/* 5. Navigation Items Polish */
+.active-nav-item {
+    color: var(--sidebar-active) !important;
+}
+
+.active-nav-indicator {
+    background-color: var(--sidebar-active) !important;
+}
+
+/* 6. Auth Branding - Premium Styling */
+.auth-branding-title {
+    font-size: 3rem !important;
+    /* 48px */
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.025em !important;
+    font-family: 'Roboto', system-ui, -apple-system, sans-serif !important;
+}

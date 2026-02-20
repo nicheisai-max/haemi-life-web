@@ -57,7 +57,7 @@ export const Login: React.FC = () => {
 
     return (
         <AuthLayout
-            brandingTitle={<>Your Health, <br />Reimagined.</>}
+            brandingTitle="Your Health, Reimagined."
             brandingSubtitle="Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you."
             title="Welcome Back"
             subtitle="Sign in to access your dashboard"
@@ -82,7 +82,6 @@ export const Login: React.FC = () => {
                                 <FormControl>
                                     <Input
                                         placeholder="user@example.com"
-                                        className="h-11"
                                         {...field}
                                     />
                                 </FormControl>
@@ -108,7 +107,6 @@ export const Login: React.FC = () => {
                                 <FormControl>
                                     <PasswordInput
                                         placeholder="Enter your password"
-                                        className="h-11"
                                         {...field}
                                     />
                                 </FormControl>
@@ -119,7 +117,7 @@ export const Login: React.FC = () => {
 
                     <Button
                         type="submit"
-                        className="w-full h-11 mt-2"
+                        className="w-full mt-2"
                         size="lg"
                         disabled={form.formState.isSubmitting}
                     >

@@ -18,17 +18,15 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '' }) => {
     };
 
     return (
-        <div id="haemi-official-logo" className={`official-logo-root ${className}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div id="haemi-official-logo" className={`official-logo-root inline-flex items-center justify-center ${className}`}>
             <img
                 src={logoImg}
                 alt="Haemi Life"
                 loading="eager"
-                className="transition-all duration-300 dark:drop-shadow-[0_0_15px_rgba(63,194,181,0.5)] filter drop-shadow-sm"
+                className="transition-all duration-300 dark:drop-shadow-[0_0_15px_rgba(63,194,181,0.5)] filter drop-shadow-sm block pointer-events-none"
                 style={{
                     height: heightMap[size as keyof typeof heightMap] || '40px',
                     width: 'auto',
-                    display: 'block',
-                    pointerEvents: 'none'
                 }}
             />
         </div>

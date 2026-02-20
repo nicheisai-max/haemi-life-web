@@ -58,15 +58,15 @@ const DispensePrescription: React.FC = () => {
     };
 
     return (
-        <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
+        <main className="space-y-6">
             <TransitionItem className="relative overflow-hidden rounded-2xl border bg-teal-900 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 space-y-4">
                     <div className="flex items-center gap-3">
                         <IconWrapper icon={QrCode} variant="success" className="bg-white/10" />
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dispense Prescription</h1>
-                            <p className="text-white/60 text-sm">Verify RX ID or Scan QR to initiate dispensing process.</p>
+                            <h1 className="page-heading !text-white !mb-1">Dispense Prescription</h1>
+                            <p className="page-subheading !text-white/70">Verify RX ID or Scan QR to initiate dispensing process.</p>
                         </div>
                     </div>
                 </div>

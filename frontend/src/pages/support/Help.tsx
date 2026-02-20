@@ -121,7 +121,7 @@ export const Help: React.FC = () => {
     });
 
     return (
-        <div className="min-h-screen bg-background py-8 px-4">                <div className="max-w-4xl mx-auto space-y-8">
+        <div className="space-y-8">
             <div className="space-y-4">
                 <button
                     className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
@@ -131,8 +131,8 @@ export const Help: React.FC = () => {
                     Back
                 </button>
                 <div>
-                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-2">Help & Support</h1>
-                    <p className="text-muted-foreground">Find answers to common questions or contact our support team</p>
+                    <h1 className="page-heading !mb-0 transition-all duration-300">Help & Support</h1>
+                    <p className="page-subheading italic">Find answers to common questions or contact our support team</p>
                 </div>
             </div>
 
@@ -248,6 +248,6 @@ export const Help: React.FC = () => {
                     Start Live Chat
                 </Button>
             </Card>
-        </div>        </div>
+        </div>
     );
 };

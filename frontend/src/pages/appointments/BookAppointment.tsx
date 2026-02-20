@@ -107,7 +107,7 @@ export const BookAppointment: React.FC = () => {
             <div className="container mx-auto p-4 md:p-8 max-w-7xl flex items-center justify-center min-h-[50vh]">
                 <Card className="p-12 text-center max-w-lg w-full">
                     <CheckCircle className="h-20 w-20 text-green-500 mx-auto mb-6" />
-                    <h2 className="text-2xl font-bold text-foreground mb-2">Appointment Booked!</h2>
+                    <h2 className="text-h2 text-foreground mb-2">Appointment Booked!</h2>
                     <p className="text-muted-foreground mb-4">Your appointment has been successfully scheduled.</p>
                     <p className="text-sm text-muted-foreground">Redirecting to appointments...</p>
                 </Card>
@@ -117,7 +117,7 @@ export const BookAppointment: React.FC = () => {
 
     return (<div className="container mx-auto p-4 md:p-8 max-w-7xl">
         <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground mb-2">Book Appointment</h1>
+            <h1 className="text-h2 text-foreground mb-2">Book Appointment</h1>
             <p className="text-muted-foreground text-lg">Schedule a consultation with a healthcare professional</p>
         </div>
 
@@ -128,9 +128,9 @@ export const BookAppointment: React.FC = () => {
             </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8 min-w-0">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 min-w-0">
             {/* Booking Form */}
-            <div className="min-w-0">
+            <div className="min-w-0 lg:col-span-3">
                 <Card className="p-8 h-fit border-none shadow-xl shadow-primary/5 bg-background/50 backdrop-blur-sm">
                     <div className="flex items-center gap-3 mb-8 pb-4 border-b border-border/40">
                         <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -256,7 +256,7 @@ export const BookAppointment: React.FC = () => {
                                         <FormLabel>Reason for Visit</FormLabel>
                                         <FormControl>
                                             <textarea
-                                                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                                 rows={4}
                                                 placeholder="Describe your symptoms or reason for visit..."
                                                 {...field}
@@ -292,7 +292,7 @@ export const BookAppointment: React.FC = () => {
 
             {/* Info / Summary Card */}
             {selectedDoctorData && (
-                <div className="space-y-6">
+                <div className="space-y-6 lg:col-span-2">
                     <Card className="p-6 sticky top-24">
                         <h2 className="text-lg font-semibold text-foreground mb-6 pb-4 border-b">Appointment Summary</h2>
 

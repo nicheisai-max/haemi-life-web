@@ -1,23 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { Button } from '../components/ui/button';
 import { Clock, RotateCw } from 'lucide-react';
-
-
-interface SessionManagerContextValue {
-    extendSession: () => void;
-}
-
-const SessionManagerContext = createContext<SessionManagerContextValue>({
-    extendSession: () => { },
-});
-
-export const useSessionManager = () => useContext(SessionManagerContext);
+import { SessionManagerContext } from './SessionContext';
 
 interface SessionManagerProviderProps {
     children: ReactNode;
 }
+
 
 const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 const WARNING_TIME = 2 * 60 * 1000; // Show warning 2 minutes before expiry
@@ -26,7 +16,6 @@ const WARNING_TIME = 2 * 60 * 1000; // Show warning 2 minutes before expiry
 
 export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ children }) => {
     const { isAuthenticated, logout } = useAuth();
-    const navigate = useNavigate();
     const [lastActivity, setLastActivity] = useState(() => Date.now());
     const [showWarning, setShowWarning] = useState(false);
     const [countdown, setCountdown] = useState(120); // 2 minutes in seconds
@@ -41,11 +30,11 @@ export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ 
         setShowWarning(false);
     }, [updateActivity]);
 
-    const handleLogout = useCallback(() => {
-        logout();
+    const handleLogout = useCallback(async () => {
+        await logout();
         setShowWarning(false);
-        navigate('/login', { replace: true });
-    }, [logout, navigate]);
+        // Manual navigate removed: Relying on AuthContext state-driven routing.
+    }, [logout]);
 
     // Track user activity
     useEffect(() => {

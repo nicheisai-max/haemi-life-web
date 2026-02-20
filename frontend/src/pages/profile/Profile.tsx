@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, CheckCircle2, Pencil, Save, Shield, Calendar, BadgeCheck, Settings as SettingsIcon, Lock, User, Camera, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Pencil, Save, Shield, Calendar, BadgeCheck, Settings as SettingsIcon, Lock, User, Camera } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { getProfile, updateProfile, uploadProfileImage } from '../../services/user.service';
@@ -103,7 +104,7 @@ export const Profile: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8">
+            <div className="pt-8 space-y-8">
                 <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8">
                     <Skeleton className="h-96 rounded-xl" />
                     <Skeleton className="h-96 rounded-xl" />
@@ -113,10 +114,10 @@ export const Profile: React.FC = () => {
     }
 
     return (
-        <div className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8">
+        <div className="space-y-8">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight mb-2">My Profile</h1>
-                <p className="text-muted-foreground text-lg">Manage your personal information and account settings</p>
+                <h1 className="page-heading !mb-0 transition-all duration-300">My Profile</h1>
+                <p className="page-subheading italic">Manage your personal information and account settings</p>
             </div>
 
             {generalError && (
@@ -137,9 +138,9 @@ export const Profile: React.FC = () => {
                 </Alert>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left: Profile Info */}
-                <Card className="p-6">
+                <Card className="p-6 lg:col-span-2">
                     <div className="flex flex-col md:flex-row items-center gap-6 mb-8 pb-6 border-b">
                         <div className="relative group">
                             <Avatar className="h-24 w-24 ring-4 ring-background shadow-lg border">
@@ -156,7 +157,7 @@ export const Profile: React.FC = () => {
                                 htmlFor="avatar-upload"
                                 className="absolute bottom-0 right-0 p-1.5 bg-primary text-primary-foreground rounded-full cursor-pointer shadow-md hover:scale-110 transition-transform duration-200 ring-2 ring-background"
                             >
-                                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                                {uploading ? <PremiumLoader size="xs" /> : <Camera className="h-4 w-4" />}
                                 <input
                                     id="avatar-upload"
                                     type="file"
@@ -168,7 +169,7 @@ export const Profile: React.FC = () => {
                             </label>
                         </div>
                         <div className="text-center md:text-left">
-                            <h2 className="text-2xl font-bold mb-1">{profile?.name}</h2>
+                            <h2 className="text-h3 mb-1">{profile?.name}</h2>
                             <p className="text-muted-foreground flex items-center justify-center md:justify-start gap-2">
                                 <Shield className="h-4 w-4" />
                                 <span className="capitalize">{profile?.role}</span>
@@ -176,7 +177,7 @@ export const Profile: React.FC = () => {
                         </div>
                         {!editing && (
                             <Button
-                                variant="outline"
+                                variant="premium"
                                 size="sm"
                                 onClick={() => setEditing(true)}
                                 className="md:ml-auto gap-2"
@@ -266,7 +267,7 @@ export const Profile: React.FC = () => {
                                     </Button>
                                     <Button
                                         type="submit"
-                                        variant="default"
+                                        variant="premium"
                                         disabled={form.formState.isSubmitting}
                                         className="gap-2"
                                     >
@@ -318,8 +319,9 @@ export const Profile: React.FC = () => {
                             </div>
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Account Status</div>
-                                <div className={`font-medium ${profile?.is_active ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
-                                    {profile?.is_active ? 'Active' : 'Inactive'}
+                                <div className={`font-medium ${(profile as any)?.is_active ? 'text-green-600 dark:text-green-400' : 'text-destructive'} flex items-center gap-2`}>
+                                    <span>{(profile as any)?.is_active ? 'Active' : 'Inactive'}</span>
+                                    <span className={`h-2 w-2 rounded-full ${(profile as any)?.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
                                 </div>
                             </div>
                         </div>

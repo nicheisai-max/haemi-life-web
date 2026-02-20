@@ -461,12 +461,12 @@ export const ChatHub: React.FC = () => {
                                                     <button
                                                         key={conv.id}
                                                         onClick={() => handleSelectConversation(conv)}
-                                                        className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white dark:hover:bg-slate-900 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
+                                                        className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 dark:hover:bg-accent/20 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
                                                     >
                                                         <Avatar name={other.name} image={other.image} size="md" />
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex justify-between items-center mb-0.5">
-                                                                <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                                                                <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">
                                                                     {other.name}
                                                                 </h4>
                                                                 <span className="text-[10px] font-medium text-slate-400 shrink-0">
@@ -537,11 +537,11 @@ export const ChatHub: React.FC = () => {
                                                 <button
                                                     key={doc.id}
                                                     onClick={() => handleStartNewChat(doc)}
-                                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white dark:hover:bg-slate-900 hover:shadow-sm border border-transparent hover:border-slate-100 transition-all text-left"
+                                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 dark:hover:bg-accent/20 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
                                                 >
                                                     <Avatar name={doc.user?.name || doc.name} image={getDoctorImage(doc.user?.name || doc.name)} size="md" />
                                                     <div className="flex-1 min-w-0">
-                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-primary transition-colors">
                                                             {doc.user?.name || doc.name}
                                                         </h4>
                                                         <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">

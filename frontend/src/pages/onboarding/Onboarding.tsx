@@ -27,8 +27,8 @@ export const Onboarding: React.FC = () => {
     return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950 relative overflow-hidden">
             {/* Aesthetic Background Elements */}
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[120px] translate-y-1/2 -translate-x-1/2" />
+            <div className="absolute top-0 right-0 w-128 h-128 bg-primary/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-128 h-128 bg-emerald-500/5 rounded-full blur-[120px] translate-y-1/2 -translate-x-1/2" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_rgba(0,0,0,0.4)_100%)]" />
 
             {/* The Premium Carousel */}

@@ -76,14 +76,14 @@ export const PrescriptionQueue: React.FC = () => {
     }
 
     return (
-        <div className="max-w-7xl mx-auto p-6 md:p-8 animate-in fade-in duration-500">
+        <div className="animate-in fade-in duration-500 space-y-8">
             <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Prescription Queue</h1>
-                    <p className="text-muted-foreground">Process pending prescription orders</p>
+                    <h1 className="page-heading">Prescription Queue</h1>
+                    <p className="page-subheading">Process pending prescription orders</p>
                 </div>
                 <div className="flex bg-primary/10 rounded-lg p-4 items-center gap-3">
-                    <div className="text-2xl font-bold text-primary leading-none">{prescriptions.length}</div>
+                    <div className="text-h3 text-primary leading-none">{prescriptions.length}</div>
                     <div className="text-sm font-medium text-muted-foreground">Pending Orders</div>
                 </div>
             </div>

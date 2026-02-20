@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
-import { AlertCircle, CheckCircle2, User, Mail, Phone, Shield, Pencil, Lock, Bell, MessageSquare, Megaphone, Trash2, Power } from 'lucide-react';
+import { AlertCircle, CheckCircle2, User, Mail, Phone, Shield, Bell, MessageSquare, Megaphone, Trash2, Power, Save, ShieldCheck, KeyRound, Settings2 } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { changePassword } from '../../services/user.service';
 import { changePasswordSchema, type ChangePasswordFormData } from '../../lib/validation/auth.schema';
 import { preferencesSchema, type PreferencesFormData } from '../../lib/validation/preferences.schema';
 import { adminSettingsService } from '../../services/admin.service';
+import { PremiumNumberInput } from '@/components/ui/PremiumNumberInput';
 import { Clock } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -100,10 +101,10 @@ export const Settings: React.FC = () => {
     };
 
     return (
-        <div className="container mx-auto p-4 md:p-8 max-w-[1200px] space-y-8">
+        <div className="space-y-8">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight mb-2">Settings</h1>
-                <p className="text-muted-foreground text-lg">Manage your account preferences and security settings</p>
+                <h1 className="page-heading">Settings</h1>
+                <p className="page-subheading">Manage your account preferences and security settings</p>
             </div>
 
             {generalError && (
@@ -174,11 +175,11 @@ export const Settings: React.FC = () => {
                     </div>
 
                     <Button
-                        variant="outline"
+                        variant="premium"
                         className="w-full mt-8 gap-2"
                         onClick={() => navigate('/profile')}
                     >
-                        <Pencil className="h-4 w-4" />
+                        <User className="h-4 w-4" />
                         Edit Profile
                     </Button>
                 </Card>
@@ -252,11 +253,11 @@ export const Settings: React.FC = () => {
                             <div className="pt-4 mt-auto">
                                 <Button
                                     type="submit"
-                                    variant="default"
+                                    variant="premium"
                                     className="w-full gap-2"
                                     disabled={form.formState.isSubmitting}
                                 >
-                                    <Lock className="h-4 w-4" />
+                                    <KeyRound className="h-4 w-4" />
                                     {form.formState.isSubmitting ? 'Updating...' : 'Update Password'}
                                 </Button>
                             </div>
@@ -340,10 +341,11 @@ export const Settings: React.FC = () => {
 
                             <Button
                                 type="submit"
-                                variant="outline"
-                                className="w-full mt-4"
+                                variant="premium"
+                                className="w-full mt-4 gap-2"
                                 disabled={prefForm.formState.isSubmitting}
                             >
+                                <Settings2 className="h-4 w-4" />
                                 {prefForm.formState.isSubmitting ? 'Saving...' : 'Save Preferences'}
                             </Button>
                         </form>
@@ -352,34 +354,37 @@ export const Settings: React.FC = () => {
 
                 {/* Admin Session Management */}
                 {isAdmin && (
-                    <Card className="p-6 h-full flex flex-col border-primary/20 bg-primary/5">
-                        <div className="mb-6 pb-4 border-b border-primary/10">
+                    <Card className="p-6 h-full flex flex-col">
+                        <div className="mb-6 pb-4 border-b">
                             <h2 className="text-xl font-semibold flex items-center gap-2">
                                 <Clock className="h-5 w-5 text-primary" />
                                 Session Management
                             </h2>
                         </div>
 
-                        <div className="space-y-4 flex-1">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                        <div className="space-y-6 flex-1">
+                            <div className="flex flex-col pt-2">
+                                <label className="text-sm font-semibold tracking-wide text-muted-foreground uppercase mb-4 block">
                                     Global Session Timeout (Minutes)
                                 </label>
-                                <div className="flex gap-4">
-                                    <Input
-                                        type="number"
+                                <div className="flex items-center gap-4">
+                                    <PremiumNumberInput
+                                        id="session-timeout-input"
+                                        name="sessionTimeout"
+                                        value={sessionTimeout}
+                                        onChange={setSessionTimeout}
                                         min={5}
                                         max={1440}
-                                        value={sessionTimeout}
-                                        onChange={(e) => setSessionTimeout(parseInt(e.target.value))}
-                                        className="bg-background"
+                                        className="w-40"
                                     />
                                     <Button
                                         onClick={onUpdateTimeout}
                                         disabled={isSavingTimeout || sessionTimeout < 5 || sessionTimeout > 1440}
-                                        className="h-[44px] min-w-[100px]"
+                                        variant="premium"
+                                        className="h-11 px-6 font-bold text-xs uppercase tracking-widest gap-2"
                                     >
-                                        {isSavingTimeout ? 'Saving...' : 'Save'}
+                                        <Save className="h-4 w-4" />
+                                        {isSavingTimeout ? 'Saving...' : 'Save Configuration'}
                                     </Button>
                                 </div>
                                 <p className="text-[0.8rem] text-muted-foreground mt-2">
@@ -388,9 +393,9 @@ export const Settings: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-sm">
-                            <p className="font-semibold flex items-center gap-2 mb-1">
-                                <Shield className="h-4 w-4" />
+                        <div className="mt-6 p-4 rounded-xl bg-primary/5 border border-primary/10 text-muted-foreground text-sm backdrop-blur-sm">
+                            <p className="font-semibold flex items-center gap-2 mb-1 text-primary">
+                                <ShieldCheck className="h-4 w-4" />
                                 Security Note
                             </p>
                             Changes will apply to all roles for newly issued sessions.
@@ -413,7 +418,7 @@ export const Settings: React.FC = () => {
                                 <div className="font-medium text-destructive">Deactivate Account</div>
                                 <p className="text-sm text-muted-foreground">Temporarily disable your account</p>
                             </div>
-                            <Button variant="outline" className="h-[44px] w-[140px] border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2">
+                            <Button variant="outline" className="w-36 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2">
                                 <Power className="h-4 w-4" />
                                 Deactivate
                             </Button>
@@ -424,7 +429,7 @@ export const Settings: React.FC = () => {
                                 <div className="font-medium text-destructive">Delete Account</div>
                                 <p className="text-sm text-muted-foreground">Permanently delete your account and all data</p>
                             </div>
-                            <Button variant="destructive" className="h-[44px] w-[140px] gap-2 text-white">
+                            <Button variant="destructive" className="w-36 gap-2 text-white">
                                 <Trash2 className="h-4 w-4" />
                                 Delete
                             </Button>

@@ -11,8 +11,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle } from 'lucide-react';
+import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle, Activity, Microscope, Zap, Heart, Wind, Filter } from 'lucide-react';
 import { inventorySchema } from '../../lib/validation/inventory.schema';
+
+import { PremiumNumberInput } from '@/components/ui/PremiumNumberInput';
 
 import { TransitionItem } from '../../components/layout/PageTransition';
 
@@ -84,21 +86,21 @@ export const Inventory: React.FC = () => {
     };
 
     return (
-        <div className="max-w-[1920px] mx-auto p-6 md:p-8 space-y-8">
+        <div className="space-y-8">
             <TransitionItem className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">Inventory Management</h1>
-                    <p className="text-muted-foreground">Track and manage pharmacy stock levels and reordering</p>
+                    <h1 className="page-heading !mb-0 transition-all duration-300">Inventory Management</h1>
+                    <p className="page-subheading italic">Track and manage pharmacy stock levels and reordering</p>
                 </div>
 
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button className="min-w-[140px]">
+                        <Button className="w-36">
                             <Plus className="h-4 w-4 mr-2" />
                             Add New Item
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
+                    <DialogContent className="sm:max-w-lg">
                         <DialogHeader>
                             <DialogTitle>Add New Medicine</DialogTitle>
                             <DialogDescription>
@@ -150,7 +152,13 @@ export const Inventory: React.FC = () => {
                                             <FormItem>
                                                 <FormLabel>Initial Stock</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
+                                                    <PremiumNumberInput
+                                                        value={field.value as number}
+                                                        onChange={field.onChange}
+                                                        min={0}
+                                                        max={100000}
+                                                        id="stock"
+                                                    />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -163,7 +171,13 @@ export const Inventory: React.FC = () => {
                                             <FormItem>
                                                 <FormLabel>Min. Stock Level</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
+                                                    <PremiumNumberInput
+                                                        value={field.value as number}
+                                                        onChange={field.onChange}
+                                                        min={0}
+                                                        max={10000}
+                                                        id="minStock"
+                                                    />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -177,7 +191,14 @@ export const Inventory: React.FC = () => {
                                         <FormItem>
                                             <FormLabel>Price (BWP)</FormLabel>
                                             <FormControl>
-                                                <Input type="number" step="0.01" {...field} value={field.value as number} onChange={(e) => field.onChange(+e.target.value)} />
+                                                <PremiumNumberInput
+                                                    value={field.value as number}
+                                                    onChange={field.onChange}
+                                                    min={0.01}
+                                                    max={100000}
+                                                    step={0.5}
+                                                    id="price"
+                                                />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -201,7 +222,7 @@ export const Inventory: React.FC = () => {
                             <Package className="h-6 w-6" />
                         </div>
                         <div>
-                            <div className="text-2xl font-bold">{inventory.length}</div>
+                            <div className="text-h3">{inventory.length}</div>
                             <div className="text-sm text-muted-foreground font-medium">Total Items</div>
                         </div>
                     </CardContent>
@@ -213,7 +234,7 @@ export const Inventory: React.FC = () => {
                             <AlertTriangle className="h-6 w-6" />
                         </div>
                         <div>
-                            <div className="text-2xl font-bold">{lowStockItems.length}</div>
+                            <div className="text-h3">{lowStockItems.length}</div>
                             <div className="text-sm text-muted-foreground font-medium">Low Stock Alerts</div>
                         </div>
                     </CardContent>
@@ -225,7 +246,7 @@ export const Inventory: React.FC = () => {
                             <TrendingUp className="h-6 w-6" />
                         </div>
                         <div>
-                            <div className="text-2xl font-bold">{uniqueCategoriesInStock.length}</div>
+                            <div className="text-h3">{uniqueCategoriesInStock.length}</div>
                             <div className="text-sm text-muted-foreground font-medium">Categories</div>
                         </div>
                     </CardContent>
@@ -263,15 +284,24 @@ export const Inventory: React.FC = () => {
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {filterOptions.map(cat => (
-                                <Button
+                                <button
                                     key={cat}
-                                    variant={categoryFilter === cat ? 'default' : 'outline'}
-                                    size="sm"
                                     onClick={() => setCategoryFilter(cat)}
-                                    className="capitalize"
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${categoryFilter === cat
+                                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.05]'
+                                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        }`}
                                 >
-                                    {cat}
-                                </Button>
+                                    {cat === 'all' && <Package className="h-3.5 w-3.5" />}
+                                    {cat === 'Pain Relief' && <Pill className="h-3.5 w-3.5" />}
+                                    {cat === 'Antibiotics' && <Microscope className="h-3.5 w-3.5" />}
+                                    {cat === 'Digestive' && <Activity className="h-3.5 w-3.5" />}
+                                    {cat === 'Supplements' && <Zap className="h-3.5 w-3.5" />}
+                                    {cat === 'Cardiovascular' && <Heart className="h-3.5 w-3.5" />}
+                                    {cat === 'Respiratory' && <Wind className="h-3.5 w-3.5" />}
+                                    {!['all', 'Pain Relief', 'Antibiotics', 'Digestive', 'Supplements', 'Cardiovascular', 'Respiratory'].includes(cat) && <Filter className="h-3.5 w-3.5" />}
+                                    <span className="capitalize">{cat}</span>
+                                </button>
                             ))}
                         </div>
                     </CardContent>

@@ -19,7 +19,8 @@ export interface UserListItem {
     email: string;
     role: string;
     phone_number: string;
-    is_active: boolean;
+    status: string; // 'ACTIVE', 'INACTIVE'
+    is_active?: boolean; // Legacy fallback helper
     created_at: string;
 }
 
@@ -42,6 +43,7 @@ export interface SystemStats {
     scheduled_appointments: number;
     pending_prescriptions: number;
     active_users: number;
+    total_users: number; // Added: Parity with backend
 }
 
 // Named exports for components that expect direct imports
@@ -50,13 +52,13 @@ export const getAuditLogs = async (limit = 50, offset = 0): Promise<AuditLog[]> 
     return response.data;
 };
 
-export const getAllUsers = async (params?: { role?: string; is_active?: boolean; search?: string }): Promise<UserListItem[]> => {
+export const getAllUsers = async (params?: { role?: string; status?: string; search?: string }): Promise<UserListItem[]> => {
     const response = await api.get<UserListItem[]>('/admin/users', { params });
     return response.data;
 };
 
-export const updateUserStatus = async (userId: number, is_active: boolean): Promise<{ message: string; user: any }> => {
-    const response = await api.put<{ message: string; user: any }>(`/admin/users/${userId}/status`, { is_active });
+export const updateUserStatus = async (userId: number, status: string): Promise<{ message: string; user: any }> => {
+    const response = await api.put<{ message: string; user: any }>(`/admin/users/${userId}/status`, { status });
     return response.data;
 };
 

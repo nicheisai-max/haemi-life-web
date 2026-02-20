@@ -42,7 +42,7 @@ export const VerifyDoctors: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="max-w-[1200px] mx-auto p-8">
+            <div className="pt-8 mx-auto p-8">
                 <Card className="p-8 text-center">
                     <div className="animate-pulse text-muted-foreground">Loading verifications...</div>
                 </Card>
@@ -50,11 +50,11 @@ export const VerifyDoctors: React.FC = () => {
         );
     }
 
-    return (<div className="max-w-[1200px] mx-auto p-6 md:p-8 space-y-8">
+    return (<div className="space-y-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">Verify Doctors</h1>
-                <p className="text-muted-foreground mt-1">Review and approve doctor registrations</p>
+                <h1 className="page-heading !mb-0 transition-all duration-300">Verify Doctors</h1>
+                <p className="page-subheading italic">Review and approve doctor registrations</p>
             </div>
             <Badge variant="secondary" className="px-3 py-1.5 text-sm font-medium flex items-center gap-2 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400">
                 <Clock className="h-4 w-4" />

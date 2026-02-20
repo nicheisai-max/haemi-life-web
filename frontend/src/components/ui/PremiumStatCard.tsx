@@ -97,7 +97,7 @@ export const PremiumStatCard: React.FC<PremiumStatCardProps> = ({
                     {label}
                 </p>
                 <h3 className={cn(
-                    "text-2xl font-black tracking-tight",
+                    "text-h3 tracking-tight",
                     variant === 'gradient' ? "text-white" : "text-foreground"
                 )}>
                     {value}

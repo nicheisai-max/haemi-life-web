@@ -59,14 +59,6 @@ export const ClinicalCopilot: React.FC<ClinicalCopilotProps> = ({ isOpen, onClos
 
     return (
         <div className="fixed bottom-[96px] right-6 z-[60] flex flex-col items-end pointer-events-none font-sans">
-            <style>
-                {`
-                    .chat-scrollbar::-webkit-scrollbar { width: 4px; }
-                    .chat-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                    .chat-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-                    .dark .chat-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
-                `}
-            </style>
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
@@ -191,9 +183,9 @@ export const ClinicalCopilot: React.FC<ClinicalCopilotProps> = ({ isOpen, onClos
                                             <BrainCircuit className="h-4 w-4 animate-pulse" />
                                         </div>
                                         <div className="p-3 rounded-2xl bg-white dark:bg-white/10 text-slate-800 dark:text-white/90 rounded-tl-none border border-slate-200 dark:border-white/10 flex items-center gap-2 shadow-sm">
-                                            <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                            <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                            <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                            <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-white/40 rounded-full animate-bounce [animation-delay:0ms]" />
+                                            <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-white/40 rounded-full animate-bounce [animation-delay:150ms]" />
+                                            <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-white/40 rounded-full animate-bounce [animation-delay:300ms]" />
                                         </div>
                                     </div>
                                 )}

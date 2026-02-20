@@ -7,6 +7,7 @@ import morgan from 'morgan';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
 
 import { globalErrorHandler } from './middleware/error.middleware';
 import { notFoundHandler } from './middleware/notFound.middleware';
@@ -68,7 +69,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires', 'Accept', 'X-Requested-With', 'Origin'],
 }));
 
 // V2 FIX: Helmet Hardening (CSP Enabled)
@@ -97,6 +98,7 @@ app.use(morgan(morganFormat, {
 }));
 
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 
 // ─── V5 FIX: Tiered rate limiters — demo-safe but production-hardened ────────
 // Moved to src/middleware/rate-limit.middleware.ts to avoid circular dependencies

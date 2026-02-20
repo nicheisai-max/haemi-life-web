@@ -62,54 +62,49 @@
   --radius: 0.5rem;
   /* 8px base */
 
-  /* Light Theme - Haemi Life */
+  /* Light Theme - Haemi Life (Official Palette) */
   --background: #F8FAFC;
+  /* Gray-50 */
   --foreground: #0F172A;
+  /* Gray-900 */
   --card: #FFFFFF;
   --card-foreground: #0F172A;
   --popover: #FFFFFF;
   --popover-foreground: #0F172A;
-  --primary: #064E4D;
-  /* Even darker for true WCAG AA compliance on white */
+
+  --primary: #148C8B;
+  /* Primary-700 (Medical Teal) */
   --primary-foreground: #FFFFFF;
-  --secondary: #FFFFFF;
+
+  --secondary: #F1F5F9;
+  /* Gray-100 */
   --secondary-foreground: #148C8B;
-  --muted: #F1F5F9;
-  --muted-foreground: #4B5563;
-  /* Improved contrast for subtext */
-  --accent: #F1F5F9;
-  --accent-foreground: #0F172A;
-  --destructive: #DC2626;
-  --destructive-foreground: #FFFFFF;
-  --border: #E2E8F0;
-  --input: #E2E8F0;
-  --ring: #1BA7A6;
-  --chart-1: #148C8B;
-  --chart-2: #1BA7A6;
-  --chart-3: #6ED3C4;
-  --chart-4: #F59E0B;
-  --chart-5: #DC2626;
+
   --sidebar: #FFFFFF;
   --sidebar-foreground: #0F172A;
-  --sidebar-primary: #148C8B;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F1F5F9;
-  --sidebar-accent-foreground: #0F172A;
-  --sidebar-border: rgba(15, 23, 42, 0.05);
-  /* Ultra-light Gray-900 */
-  --sidebar-ring: #1BA7A6;
+  /* Gray-900 */
+  --sidebar-border: #E2E8F0;
+  /* Gray-200 */
+  --sidebar-active: #148C8B;
+  /* Primary-700 */
 
-  /* Semantic Colors */
-  --color-success: #16A34A;
-  --color-success-bg: #DCFCE7;
-  --color-warning: #F59E0B;
-  --color-warning-bg: #FEF3C7;
-  --color-error: #DC2626;
-  --color-error-bg: #FEE2E2;
-  --color-info: #2563EB;
-  --color-info-bg: #DBEAFE;
+  --muted: #F1F5F9;
+  --muted-foreground: #475569;
+  /* Gray-600 */
 
-  /* Haemi Life Brand Scale (Strict Design System) */
+  --accent: #F1F5F9;
+  --accent-foreground: #0F172A;
+
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+
+  --border: #E2E8F0;
+  /* Gray-200 */
+  --input: #E2E8F0;
+  --ring: #1BA7A6;
+  /* Primary-600 */
+
+  /* Haemi Life Brand Scale (Official) */
   --primary-900: #083E44;
   --primary-800: #0E6B74;
   --primary-700: #148C8B;
@@ -120,111 +115,57 @@
   --primary-200: #D5F6F1;
   --primary-100: #ECFCFA;
 
-
-  /* Task: Login Fallback Background */
-  --color-login-bg: #037b77;
+  /* Typography Scale - Premium Institutional Standard (GLOBAL) */
+  --font-h1: 3.5rem;
+  --font-h2: 2.5rem;
+  --font-h3: 1.75rem;
+  --font-h4: 1.25rem;
 
   /* Premium Gradients */
-  --primary-gradient: linear-gradient(135deg, #064E4D 0%, #148C8B 100%);
+  --primary-gradient: linear-gradient(135deg, #0E6B74 0%, #1BA7A6 50%, #6ED3C4 100%);
 }
 
 .dark {
-  /* Dark Theme - Haemi Life Premium Optimized (High Contrast Enterprise) */
+  /* Dark Theme - Haemi Life Premium Optimized */
   --background: #0B1214;
   /* Dark-Base */
   --foreground: #E6F4F3;
-  /* Primary Text */
+  /* Primary Text (Lightened Teal Tint) */
 
   --card: #14262A;
   /* Dark-Card */
   --card-foreground: #E6F4F3;
-  /* Primary Text */
 
-  --popover: #14262A;
-  /* Dark-Card */
+  --popover: #0F1C1F;
+  /* Dark-Surface */
   --popover-foreground: #E6F4F3;
 
-  --primary: #1BA7A6;
-  /* Primary-600 */
-  --primary-foreground: #0D1117;
-  /* High contrast for Dark Mode buttons */
+  --primary: #3FC2B5;
+  /* Primary-500 */
+  --primary-foreground: #0B1214;
 
-  --secondary: #133338;
-  /* Dark-Elevated */
-  --secondary-foreground: #A7DAD5;
-  /* Secondary Text */
+  --secondary: rgba(27, 167, 166, 0.1);
+  --secondary-foreground: #6ED3C4;
 
-  --muted: #0D1B1E;
-  /* Dark-Surface */
-  --muted-foreground: #A7DAD5;
-  /* Improved readability for Dark subtext */
+  --sidebar: #0d181a;
+  --sidebar-foreground: #bbf4a6;
+  --sidebar-border: rgba(31, 59, 64, 0.5);
+  --sidebar-active: #3FC2B5;
 
-  --accent: rgba(255, 255, 255, 0.15);
-  /* Slightly more opaque for better definition */
-  --accent-foreground: #FFFFFF;
-  /* Hard-enforced pure white */
+  --muted: #0D1619;
+  /* Slightly darker surface */
+  --muted-foreground: #648285;
 
-  --destructive: #DC2626;
-  --destructive-foreground: #FFFFFF;
+  --accent: rgba(63, 194, 181, 0.1);
+  --accent-foreground: #E6F4F3;
 
-  --border: #1F3B40;
-  /* Dark-Border */
-  --input: #1F3B40;
-  /* High visibility input border */
-  --ring: rgba(63, 194, 181, 0.60);
-  /* Primary-Glow-Strong */
+  --border: rgba(31, 59, 64, 0.4);
+  /* Phantom Border */
+  --input: rgba(31, 59, 64, 0.3);
+  --ring: rgba(63, 194, 181, 0.4);
 
-  --chart-1: #1BA7A6;
-  --chart-2: #3FC2B5;
-  --chart-3: #6ED3C4;
-  --chart-4: #F59E0B;
-  --chart-5: #DC2626;
-
-  --sidebar: #0F1C1F;
-  /* Dark-Surface (Distinction from bg) */
-  --sidebar-foreground: #E6F4F3;
-  --sidebar-primary: #1BA7A6;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #133338;
-  /* Dark-Elevated */
-  --sidebar-accent-foreground: #E6F4F3;
-  --sidebar-border: #1F3B40;
-  /* Dark-Border */
-  --sidebar-ring: rgba(63, 194, 181, 0.60);
-
-  /* Semantic Colors Dark Mode */
-  --color-success: #16A34A;
-  --color-success-bg: #064E3B;
-  --color-warning: #F59E0B;
-  --color-warning-bg: #78350F;
-  --color-error: #DC2626;
-  --color-error-bg: #7F1D1D;
-  --color-info: #2563EB;
-  --color-info-bg: #1E3A8A;
-
-  /* High Contrast Dark Mode Primary Gradient (Per User Request) */
-  /* Cyan-400 (#22D3EE) to White (#FFFFFF) */
-  --primary-gradient: linear-gradient(135deg, #22D3EE 0%, #FFFFFF 100%);
-  --primary: #22D3EE;
-  /* Haemi Life Typography Scale (Strict) */
-  --font-h1: 2.5rem;
-  /* 40px */
-  --font-h2: 2rem;
-  /* 32px */
-  --font-h3: 1.5rem;
-  /* 24px */
-  --font-h4: 1.25rem;
-  /* 20px */
-  --font-h5: 1rem;
-  /* 16px */
-  --font-h6: 0.875rem;
-  /* 14px */
-
-  --lh-h1: 1.3;
-  --lh-h2: 1.3;
-  --lh-h3: 1.4;
-  --lh-h4: 1.4;
-  --lh-body: 1.6;
+  /* Dark Mode Gradient (Official) */
+  --primary-gradient: linear-gradient(135deg, #1BA7A6 0%, #3FC2B5 100%);
 }
 
 @layer base {
@@ -236,6 +177,21 @@
   a,
   [role="button"] {
     cursor: pointer !important;
+  }
+
+  h1,
+  .text-h1 {
+    @apply font-bold tracking-tight text-h1 leading-[1.1];
+  }
+
+  h2,
+  .text-h2 {
+    @apply font-bold tracking-tight text-h2 leading-[1.2];
+  }
+
+  h3,
+  .text-h3 {
+    @apply font-semibold tracking-tight text-h3 leading-[1.3];
   }
 
   body {
@@ -322,10 +278,27 @@
     background: transparent !important;
   }
 
+  .chat-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
 
+  .chat-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .chat-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+  }
+
+  .dark .chat-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569;
+  }
 }
 
 @layer components {
+
+  /* DEFINTIVE UI HARDENING - Moved to brand.css for atomic priority */
 
   /* NOTE: overflow-hidden removed to allow outer glow/shadows */
   /* 
@@ -443,5 +416,98 @@
 
   .user-action-btn-deactivate:hover {
     background-color: #b91c1c !important;
+  }
+
+  /* Premium CTA Style (Apple/Google Dashboard Standard) */
+  .premium-cta {
+    @apply transition-all duration-300 relative overflow-hidden;
+    background: linear-gradient(135deg, #148C8B 0%, #1BA7A6 100%);
+    box-shadow: 0 4px 15px -1px rgba(20, 140, 139, 0.3);
+  }
+
+  .premium-cta:hover:not(:disabled) {
+    @apply -translate-y-[1px];
+    background: linear-gradient(135deg, #1BA7A6 0%, #3FC2B5 100%);
+    box-shadow: 0 8px 25px -5px rgba(20, 140, 139, 0.4);
+  }
+
+  .premium-cta:active:not(:disabled) {
+    @apply translate-y-[0px] scale-[0.98];
+  }
+
+  .dark .premium-cta {
+    background: linear-gradient(135deg, #1BA7A6 0%, #3FC2B5 100%);
+    box-shadow: 0 0 20px -5px rgba(63, 194, 181, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .dark .premium-cta:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3FC2B5 0%, #6ED3C4 100%);
+    box-shadow: 0 0 30px -5px rgba(63, 194, 181, 0.6);
+  }
+
+  /* Premium Button Glow - Refined */
+  .premium-button-glow {
+    @apply transition-all duration-300;
+    box-shadow: 0 0 0 0 rgba(20, 140, 139, 0) !important;
+  }
+
+  .premium-button-glow:hover:not(:disabled) {
+    box-shadow: 0 4px 15px rgba(20, 140, 139, 0.2) !important;
+    @apply -translate-y-[1px];
+  }
+
+  .dark .premium-button-glow:hover:not(:disabled) {
+    box-shadow: 0 0 20px -5px rgba(63, 194, 181, 0.4) !important;
+  }
+
+  /* Premium Session Counter (Branded for Light/Dark Contexts) */
+  .premium-counter-container {
+    @apply flex items-center justify-between rounded-full p-1 w-full border transition-all h-11 shadow-inner;
+    /* Light Mode (Normal Theme) - Branded Medical Teal */
+    background-color: var(--primary-100);
+    border-color: var(--primary-200);
+  }
+
+  .dark .premium-counter-container {
+    /* Dark Mode - Technical Digital Aesthetic */
+    background-color: #5E8D85;
+    border-color: #4a726b;
+  }
+
+  .premium-counter-btn {
+    @apply h-9 w-9 flex items-center justify-center rounded-full border transition-all active:scale-90 shadow-sm;
+    /* Light Mode */
+    background-color: var(--primary-600);
+    border-color: var(--primary-700);
+    color: white;
+  }
+
+  .premium-counter-btn:hover {
+    background-color: var(--primary-700);
+  }
+
+  .dark .premium-counter-btn {
+    /* Dark Mode */
+    background-color: #3A5953;
+    border-color: #3A5953;
+    color: white;
+  }
+
+  .dark .premium-counter-btn:hover {
+    background-color: #2d4440;
+    border-color: #2d4440;
+  }
+
+  .premium-counter-input {
+    @apply flex-1 min-w-0 bg-transparent border-none text-center font-bold text-sm focus:ring-0 outline-none select-none;
+    font-family: 'Roboto', sans-serif;
+    /* Light Mode */
+    color: var(--primary-900);
+  }
+
+  .dark .premium-counter-input {
+    /* Dark Mode */
+    color: white;
   }
 }

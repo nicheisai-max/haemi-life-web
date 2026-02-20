@@ -98,18 +98,22 @@ export const CommandCenter: React.FC = () => {
 
                     <CommandGroup heading="Trending in Botswana 🇧🇼">
                         {trendingBotswana.map((item, i) => (
-                            <CommandItem key={i} onSelect={() => console.log(item.label)} className="flex items-center gap-3 py-4 cursor-default group">
-                                <div className={`p-2 rounded-xl bg-slate-50 dark:bg-slate-800 transition-colors`}>
+                            <CommandItem
+                                key={i}
+                                onSelect={() => console.log(item.label)}
+                                className="flex items-center gap-3 py-4 cursor-default group aria-selected:bg-accent/50 aria-selected:text-accent-foreground transition-all duration-200 rounded-xl mx-1"
+                            >
+                                <div className={`p-2 rounded-xl bg-slate-100 dark:bg-slate-800/50 group-aria-selected:bg-white dark:group-aria-selected:bg-slate-900 transition-colors shadow-sm`}>
                                     <item.icon className={`h-5 w-5 ${item.color}`} />
                                 </div>
                                 <div className="flex-1">
-                                    <div className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                                    <div className="font-bold text-slate-700 dark:text-slate-100 flex items-center gap-2 group-aria-selected:text-primary transition-colors">
                                         {item.label}
-                                        <Sparkles className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <Sparkles className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 group-aria-selected:opacity-100 transition-all" />
                                     </div>
-                                    <div className="text-xs text-slate-400 font-medium tracking-tight">Real-time demographic data</div>
+                                    <div className="text-xs text-slate-400 dark:text-slate-500 font-medium tracking-tight">Real-time demographic data</div>
                                 </div>
-                                <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 dark:text-slate-200 text-[10px] font-black uppercase">Trending</Badge>
+                                <Badge variant="secondary" className="bg-slate-100/50 dark:bg-slate-800/50 dark:text-slate-400 text-[10px] font-black uppercase group-aria-selected:bg-primary group-aria-selected:text-white transition-colors">Trending</Badge>
                             </CommandItem>
                         ))}
                     </CommandGroup>
@@ -118,12 +122,16 @@ export const CommandCenter: React.FC = () => {
 
                     <CommandGroup heading="Quick Intelligence">
                         {quickActions.map((action, i) => (
-                            <CommandItem key={i} onSelect={() => runCommand(() => navigate(action.path))} className="flex items-center gap-3 py-4 cursor-pointer group">
-                                <div className="p-2 rounded-xl bg-primary/10 group-aria-selected:bg-primary group-aria-selected:text-white transition-all">
+                            <CommandItem
+                                key={i}
+                                onSelect={() => runCommand(() => navigate(action.path))}
+                                className="flex items-center gap-3 py-4 cursor-pointer group aria-selected:bg-primary/10 transition-all rounded-xl mx-1"
+                            >
+                                <div className="p-2 rounded-xl bg-primary/10 text-primary group-aria-selected:bg-primary group-aria-selected:text-white transition-all shadow-sm">
                                     <action.icon className="h-5 w-5" />
                                 </div>
-                                <div className="font-bold text-slate-700 dark:text-slate-200">{action.label}</div>
-                                <ArrowRight className="ml-auto h-4 w-4 text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                                <div className="font-bold text-slate-700 dark:text-slate-100 group-aria-selected:text-primary transition-colors">{action.label}</div>
+                                <ArrowRight className="ml-auto h-4 w-4 text-slate-300 opacity-0 group-hover:opacity-100 group-aria-selected:opacity-100 group-hover:translate-x-1 transition-all" />
                             </CommandItem>
                         ))}
                     </CommandGroup>

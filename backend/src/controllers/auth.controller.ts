@@ -109,22 +109,50 @@ export const login = async (req: Request, res: Response) => {
 
         logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
 
-        // Fetch dynamic session timeout from DB (fallback to 60m)
-        const timeoutStr = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
-        const timeoutMinutes = parseInt(timeoutStr || '60');
-
-        const token = jwt.sign(
+        // Generate Access Token (15m)
+        const accessToken = jwt.sign(
             {
                 id: user.id,
                 email: user.email,
                 role: user.role,
-                token_version: user.token_version // CRITICAL: Bind token to specific version
+                token_version: user.token_version
             },
             process.env.JWT_SECRET as string,
-            { expiresIn: `${timeoutMinutes}m` }
+            { expiresIn: '15m' }
         );
 
-        res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, status: user.status, profile_image: user.profile_image } });
+        // Generate Refresh Token (7d)
+        const refreshToken = jwt.sign(
+            {
+                id: user.id,
+                token_version: user.token_version
+            },
+            process.env.JWT_SECRET as string,
+            { expiresIn: '7d' }
+        );
+
+        // Send Refresh Token as HTTP-Only Cookie
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        // Update activity heartbeat on login
+        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+
+        res.json({
+            token: accessToken,
+            user: {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                name: user.name,
+                status: user.status,
+                profile_image: user.profile_image
+            }
+        });
     } catch (error) {
         logger.error('Login server error', { error, identifier });
         res.status(500).json({ message: 'Server error' });
@@ -178,7 +206,6 @@ export const uploadProfileImage = async (req: any, res: Response) => {
             req.file.mimetype
         );
 
-
         if (!updatedUser) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -224,38 +251,62 @@ export const changePassword = async (req: any, res: Response) => {
     }
 };
 
+export const refreshToken = async (req: Request, res: Response) => {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+        return res.status(401).json({ message: 'Refresh token required' });
+    }
+
+    try {
+        const decoded: any = jwt.verify(refreshToken, process.env.JWT_SECRET as string);
+
+        // Verify user exists and token version matches
+        const user = await userRepository.findById(decoded.id);
+
+        if (!user || user.status !== 'ACTIVE') {
+            res.clearCookie('refreshToken');
+            return res.status(401).json({ message: 'Invalid session' });
+        }
+
+        if (decoded.token_version !== user.token_version) {
+            res.clearCookie('refreshToken');
+            return res.status(401).json({ message: 'Session revoked' });
+        }
+
+        // Issue new Access Token (15m)
+        const accessToken = jwt.sign(
+            {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                token_version: user.token_version
+            },
+            process.env.JWT_SECRET as string,
+            { expiresIn: '15m' }
+        );
+
+        // Update activity heartbeat on refresh
+        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+
+        res.json({ token: accessToken });
+    } catch (error) {
+        res.clearCookie('refreshToken');
+        return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+};
+
+export const logout = async (req: Request, res: Response) => {
+    res.clearCookie('refreshToken');
+    res.json({ message: 'Logged out successfully' });
+};
+
 export const verifySession = async (req: any, res: Response) => {
     try {
-        const userId = req.user.id;
-        const tokenVersion = req.user.token_version;
-
-        // Verify user still exists and is active
-        const user = await userRepository.findById(userId);
-
-        if (!user) {
-            return res.status(401).json({ message: 'User no longer exists' });
-        }
-
-        // STRICT STATUS CHECK
-        if (user.status !== 'ACTIVE') {
-            return res.status(403).json({ message: `Account is ${user.status.toLowerCase()}` });
-        }
-
-        // V6 FIX: Token version check — detects revoked tokens.
-        // When a user changes their password or an admin revokes a session,
-        // token_version is incremented in the DB. Any JWT with an older version
-        // is immediately rejected, even if it hasn't expired yet.
-        // V6 FIX: Token version check — detects revoked tokens.
-        if (tokenVersion !== undefined && user.token_version !== undefined) {
-            if (tokenVersion !== user.token_version) {
-                logger.auth('Token version mismatch — session revoked', { userId, tokenVersion, dbVersion: user.token_version });
-                return res.status(401).json({ message: 'Session has been revoked. Please log in again.' });
-            }
-        }
-
+        // Just verify the access token from the middleware
+        const user = req.user;
         res.json({ message: 'Session valid', user });
     } catch (error) {
-        logger.error('Error verifying session', { error });
         res.status(500).json({ message: 'Server error' });
     }
 };

@@ -21,7 +21,7 @@ export const SidebarNav: React.FC<{ onItemClick?: () => void }> = ({ onItemClick
                         className={({ isActive }) => cn(
                             "flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 group w-full relative mb-1",
                             isActive
-                                ? "bg-primary/10 text-primary dark:text-primary-dark-500 font-semibold"
+                                ? "active-nav-item bg-primary/10 font-semibold"
                                 : "text-muted-foreground font-medium hover:bg-slate-100/50 dark:hover:bg-white/5 hover:text-foreground"
                         )}
                     >
@@ -29,7 +29,7 @@ export const SidebarNav: React.FC<{ onItemClick?: () => void }> = ({ onItemClick
                             <>
                                 {/* Active Indicator Bar */}
                                 <div className={cn(
-                                    "absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-primary transition-all duration-300 opacity-0",
+                                    "absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full active-nav-indicator transition-all duration-300 opacity-0",
                                     isActive && "opacity-100"
                                 )} />
 

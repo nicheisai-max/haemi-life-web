@@ -38,20 +38,20 @@ const Reports: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="flex h-[400px] items-center justify-center">
+            <div className="flex h-96 items-center justify-center">
                 <MedicalLoader message="Compiling clinical data..." />
             </div>
         );
     }
 
     return (
-        <main className="w-full mx-auto p-4 md:p-6 pb-16 md:pb-20 max-w-[1600px] space-y-6">
+        <div className="space-y-8">
             <TransitionItem className="relative overflow-hidden rounded-2xl border bg-slate-900 text-white shadow-xl">
                 <GradientMesh variant="secondary" className="opacity-20" />
                 <div className="relative z-10 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="space-y-2">
-                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Clinical Insights & Reports</h1>
-                        <p className="text-white/60 text-sm md:text-base">Comprehensive analytics of your clinical practice performance.</p>
+                    <div className="space-y-1">
+                        <h1 className="page-heading !text-white !mb-1">Clinical Insights & Reports</h1>
+                        <p className="page-subheading !text-white/70">Comprehensive analytics of your clinical practice performance.</p>
                     </div>
                     <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
                         <Download className="h-4 w-4 mr-2" />
@@ -77,7 +77,7 @@ const Reports: React.FC = () => {
                     <TransitionItem key={i}>
                         <DashboardCard className="flex flex-col items-center justify-center p-6 text-center space-y-2">
                             <IconWrapper icon={stat.icon} variant={stat.variant} />
-                            <div className="text-2xl font-bold">{stat.value}</div>
+                            <div className="text-h3">{stat.value}</div>
                             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{stat.label}</div>
                         </DashboardCard>
                     </TransitionItem>
@@ -128,13 +128,13 @@ const Reports: React.FC = () => {
 
                 <TransitionItem>
                     <DashboardCard title="Practice Efficiency" className="p-6">
-                        <div className="flex items-center justify-center h-full min-h-[200px] text-muted-foreground text-sm italic">
+                        <div className="flex items-center justify-center h-full min-h-52 text-muted-foreground text-sm italic">
                             Detailed efficiency metrics are being calibrated based on your last 30 days of activity.
                         </div>
                     </DashboardCard>
                 </TransitionItem>
             </div>
-        </main>
+        </div>
     );
 };
 

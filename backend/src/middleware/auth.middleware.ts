@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { pool } from '../config/db';
+import { auditService } from '../services/audit.service';
 
 interface AuthRequest extends Request {
     user?: any;
@@ -8,16 +10,12 @@ interface AuthRequest extends Request {
 /**
  * V9 FIX: JWT verification middleware.
  * - Missing token → 401 (Unauthorized)
- * - Invalid/expired token → 401 (Unauthorized) — was incorrectly returning 403
+ * - Invalid/expired token → 401 (Unauthorized)
  *
  * HTTP semantics:
  *   401 = "I don't know who you are" (unauthenticated)
  *   403 = "I know who you are, but you can't do this" (unauthorized/forbidden)
- * A bad JWT means we don't know who the user is → 401 is correct.
- * 403 is reserved for role/permission failures (see requireRole below).
  */
-import { pool } from '../config/db';
-
 export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -60,7 +58,6 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
             const userData = userResult.rows[0];
 
             // 2. Token Version Validation (Revocation Check)
-            // If the token's version doesn't match the DB, the session was revoked.
             if (decoded.token_version !== undefined && userData.token_version !== undefined) {
                 if (decoded.token_version !== userData.token_version) {
                     return res.status(401).json({
@@ -81,7 +78,6 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
             }
 
             // 3. Backend Inactivity Enforcement (60 Minute Threshold)
-            // This is the absolute source of truth that cannot be bypassed by frontend tampering.
             const timeoutMinutes = 60;
             if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
                 return res.status(401).json({
@@ -107,8 +103,6 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
         }
     });
 };
-
-import { auditService } from '../services/audit.service';
 
 /**
  * requireRole: Single-role guard. Returns 403 (Forbidden) when role doesn't match.

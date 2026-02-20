@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS users (
     is_active BOOLEAN DEFAULT true, -- Deprecated, use status
     is_verified BOOLEAN DEFAULT false,
     profile_image VARCHAR(255),
+    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -88,7 +89,7 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
 CREATE TABLE IF NOT EXISTS doctor_schedules (
     id SERIAL PRIMARY KEY,
     doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    day_of_week VARCHAR(20) NOT NULL, -- Changed from INTEGER to VARCHAR to match seed data ('monday', etc.)
+    day_of_week INTEGER NOT NULL, -- 0 (Sunday) to 6 (Saturday)
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     is_available BOOLEAN DEFAULT true,
@@ -337,12 +338,12 @@ BEGIN
     VALUES (v_doctor_id, 'General Practitioner', 'BW-GP-2018-1234', 6, 250.00, true, 'Senior GP focused on family medicine and preventive care.')
     ON CONFLICT (user_id) DO NOTHING;
 
-    -- Create Schedule for Dr. Mpho
+    -- Create Schedule for Dr. Mpho (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat)
     DELETE FROM doctor_schedules WHERE doctor_id = v_doctor_id;
     INSERT INTO doctor_schedules (doctor_id, day_of_week, start_time, end_time) VALUES
-    (v_doctor_id, 'monday', '08:00'::TIME, '17:00'::TIME),
-    (v_doctor_id, 'wednesday', '08:00'::TIME, '17:00'::TIME),
-    (v_doctor_id, 'friday', '08:00'::TIME, '17:00'::TIME);
+    (v_doctor_id, 1, '08:00'::TIME, '17:00'::TIME), -- Monday
+    (v_doctor_id, 3, '08:00'::TIME, '17:00'::TIME), -- Wednesday
+    (v_doctor_id, 5, '08:00'::TIME, '17:00'::TIME); -- Friday
 
     -- 5. Create Pharmacist (Keitumetse)
     CALL sp_create_user('Keitumetse Gaosekwe', 'pharmacist@haemilife.com', '+26775123456', p_password_hash, 'pharmacist', NULL, '/uploads/pharmacies/pharmacy_01.jpg');

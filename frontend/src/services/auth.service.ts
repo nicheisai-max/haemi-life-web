@@ -17,6 +17,15 @@ export const authService = {
         return response.data;
     },
 
+    refreshToken: async (): Promise<{ token: string }> => {
+        const response = await api.post<{ token: string }>('/auth/refresh-token');
+        return response.data;
+    },
+
+    logout: async (): Promise<void> => {
+        await api.post('/auth/logout');
+    },
+
     requestPasswordReset: async (identifier: string): Promise<{ message: string; dev_otp?: string }> => {
         const response = await api.post('/password-reset/request-reset', { identifier });
         return response.data;

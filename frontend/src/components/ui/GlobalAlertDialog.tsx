@@ -195,7 +195,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
 
                             {/* Content */}
                             <div className="space-y-2">
-                                <h3 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                                <h3 className="text-h3 tracking-tight text-slate-900 dark:text-white">
                                     {title}
                                 </h3>
                                 <p className="text-muted-foreground leading-relaxed font-medium">

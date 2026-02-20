@@ -22,7 +22,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
     showLogoInHeader = true
 }) => {
     return (
-        <div className="flex min-h-screen w-full bg-background relative">
+        <div className="auth-layout-root flex min-h-screen w-full bg-background relative">
             {/* Visual Section (Left) - Visible only on Desktop (LG+) via CSS hidden/block */}
             {/* This section contains MARKETING/BRANDING text only. It is NOT the auth header. */}
             <div className="hidden lg:block lg:w-1/2 relative overflow-hidden border-r" style={{ backgroundColor: 'var(--color-login-bg)' }}>
@@ -34,7 +34,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                 <div className="absolute inset-0 bg-black/20" /> {/* Subtle overlay for text contrast */}
 
                 <div className="absolute bottom-[10%] left-[10%] right-[10%] text-white z-20">
-                    <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight drop-shadow-lg">
+                    <h2 className="auth-branding-title mb-6 drop-shadow-lg">
                         {brandingTitle || "Your Health, Reimagined."}
                     </h2>
                     <p className="text-lg md:text-xl text-white/95 font-medium max-w-lg leading-relaxed drop-shadow-md">
@@ -55,7 +55,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                                 <Logo size="auth" />
                             </Link>
                         )}
-                        <h1 className="text-2xl font-bold text-foreground tracking-tight">{title}</h1>
+                        <h1 className="text-h3 text-foreground tracking-tight">{title}</h1>
                         <p className="text-sm text-muted-foreground">{subtitle}</p>
                     </div>
 

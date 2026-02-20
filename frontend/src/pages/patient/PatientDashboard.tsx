@@ -9,7 +9,7 @@ import type { Prescription } from '../../services/prescription.service';
 import {
     Plus, Calendar, FileText, FolderOpen, AlertCircle,
     ThermometerSun, Search, History, Settings as SettingsIcon,
-    CalendarX, Clock, Heart, Activity
+    CalendarX, Clock, Activity
 } from 'lucide-react';
 import { PATHS } from '../../routes/paths';
 import { GradientMesh } from '@/components/ui/GradientMesh';
@@ -80,31 +80,29 @@ export const PatientDashboard = () => {
 
     return (
 
-        <main className="w-full mx-auto p-4 md:p-5 pb-16 md:pb-20 max-w-[1600px] space-y-6">
+        <div className="space-y-8">
             {/* Hero Section - Compact */}
             <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
-                <div className="relative z-10 p-5 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="space-y-3">
                         <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/20 text-emerald-100 text-xs font-bold border border-emerald-500/30">
-                            <Heart className="h-3 w-3 fill-current" />
                             <span>Active Member</span>
                         </div>
-                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
+                        <h1 className="page-heading !text-white !mb-0 transition-all duration-300">
                             Welcome, {user?.name?.split(' ')[0]}
                         </h1>
-                        <p className="text-white/80 text-sm md:text-base font-medium max-w-xl">
+                        <p className="text-emerald-50/70 text-sm font-bold uppercase tracking-[0.2em] mb-1">Patient Hub</p>
+                        <div className="page-subheading !text-white/80 !opacity-100 italic">
                             {loading
-                                ? "Loading your health status..."
-                                : upcomingAppointments.length > 0
-                                    ? `You have ${upcomingAppointments.length} upcoming consultation${upcomingAppointments.length === 1 ? '' : 's'}.`
-                                    : "No upcoming appointments scheduled."
+                                ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
+                                : `"Your health is our priority. Access your records and appointments securely."`
                             }
-                        </p>
+                        </div>
                     </div>
                     <Button
                         size="sm"
-                        className="bg-white dark:bg-white text-teal-900 dark:text-teal-900 hover:bg-teal-50 dark:hover:bg-teal-50 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] px-6 h-10 text-sm font-bold rounded-xl border-none whitespace-nowrap transition-all duration-300 hover:scale-105 active:scale-95"
+                        className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] px-6 h-10 text-sm font-bold rounded-xl border-none whitespace-nowrap transition-all duration-300 hover:scale-105 active:scale-95"
                         onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
                     >
                         <Plus className="h-4 w-4 mr-2" />
@@ -123,14 +121,14 @@ export const PatientDashboard = () => {
 
             <TransitionItem className="flex flex-col lg:flex-row gap-6 items-stretch">
                 {/* LEFT COLUMN (8/12) */}
-                <div className="w-full lg:w-[66.66%] flex flex-col h-full space-y-6">
+                <div className="w-full lg:w-2/3 flex flex-col h-full space-y-6">
 
                     {/* Key Metrics - Compact Grid */}
                     <section className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-primary/50 dark:hover:border-primary/80 hover:shadow-lg hover:shadow-primary/10 dark:hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                             <IconWrapper icon={Calendar} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
-                                <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
+                                <div className="text-h1 text-slate-900 dark:text-white">
                                     {loading ? "-" : upcomingAppointments.length}
                                 </div>
                                 <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-primary transition-colors">Bookings</div>
@@ -140,7 +138,7 @@ export const PatientDashboard = () => {
                         <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                             <IconWrapper icon={FileText} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
-                                <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
+                                <div className="text-h1 text-slate-900 dark:text-white">
                                     {loading ? "-" : activePrescriptions.length}
                                 </div>
                                 <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-emerald-500 transition-colors">Scripts</div>
@@ -150,7 +148,7 @@ export const PatientDashboard = () => {
                         <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 dark:hover:border-amber-500/80 hover:shadow-lg hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer col-span-2 md:col-span-1" noPadding>
                             <IconWrapper icon={FolderOpen} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
-                                <div className="text-4xl font-bold text-slate-900 dark:text-white leading-none">
+                                <div className="text-h1 text-slate-900 dark:text-white">
                                     {loading ? "-" : appointments.length}
                                 </div>
                                 <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-amber-500 transition-colors">Total Visits</div>
@@ -235,7 +233,7 @@ export const PatientDashboard = () => {
                 </div>
 
                 {/* RIGHT COLUMN (4/12) */}
-                <div className="w-full lg:w-[33.33%] flex flex-col h-full space-y-6">
+                <div className="w-full lg:w-1/3 flex flex-col h-full space-y-6">
 
                     {/* Appointments List */}
                     <section className="bg-white dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-slate-800 flex-1 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
@@ -263,7 +261,7 @@ export const PatientDashboard = () => {
                                     const isToday = new Date(appointment.appointment_date).toDateString() === new Date().toDateString();
                                     return (
                                         <div key={appointment.id} className={`flex gap-3 p-3 rounded-xl transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 group cursor-pointer ${isToday ? 'bg-primary/5' : 'bg-transparent'}`} onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}>
-                                            <div className="flex flex-col items-center justify-center min-w-[44px] w-11 h-11 bg-slate-100 dark:bg-slate-800/50 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
+                                            <div className="flex flex-col items-center justify-center h-11 w-11 shrink-0 bg-slate-100 dark:bg-slate-800/50 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
                                                 <span className="text-sm font-bold text-slate-900 dark:text-white leading-none">{dateInfo.day}</span>
                                                 <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{dateInfo.month}</span>
                                             </div>
@@ -301,6 +299,6 @@ export const PatientDashboard = () => {
 
                 </div>
             </TransitionItem>
-        </main>
+        </div>
     );
 };

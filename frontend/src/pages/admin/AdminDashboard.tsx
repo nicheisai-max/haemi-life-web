@@ -81,21 +81,20 @@ export const AdminDashboard: React.FC = () => {
     }, []);
 
     return (
-        <main className="w-full mx-auto p-4 md:p-5 max-w-[1920px] space-y-8">
+        <div className="space-y-8">
             {/* Hero Section - Standardized Premium Style */}
-            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+            <TransitionItem className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl shadow-teal-900/20">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
-                            <ShieldCheck className="h-3 w-3" aria-hidden="true" />
                             ADMINISTRATOR ACCESS
                         </div>
-                        <h1 className="text-4xl md:text-3xl font-extrabold tracking-tight text-white">
+                        <h1 className="page-heading !text-white !mb-0 transition-all duration-300">
                             Welcome, {user?.name?.split(' ')[0]}
                         </h1>
                         <p className="text-emerald-50/70 text-sm font-bold uppercase tracking-[0.2em] mb-1">System Overview</p>
-                        <div className="text-white/80 text-lg font-medium leading-relaxed">
+                        <div className="page-subheading !text-white/80 !opacity-100 italic">
                             {loading
                                 ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
                                 : `Platform is operating normally. All services are online.`
@@ -106,7 +105,7 @@ export const AdminDashboard: React.FC = () => {
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
                             size="lg"
-                            className="bg-white dark:bg-white text-teal-900 dark:text-teal-900 hover:bg-teal-50 dark:hover:bg-teal-50 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)] h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
+                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
                             onClick={() => navigate(PATHS.ADMIN.USERS)}
                         >
                             <Users className="h-5 w-5" aria-hidden="true" />
@@ -114,7 +113,7 @@ export const AdminDashboard: React.FC = () => {
                         </Button>
                         <Button
                             size="lg"
-                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-white border border-emerald-500/30 hover:border-emerald-500/50 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
+                            className="bg-white/10 hover:bg-white/20 text-white border-none shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
                             onClick={() => navigate(PATHS.SETTINGS)}
                         >
                             <Settings className="h-5 w-5" aria-hidden="true" />
@@ -130,8 +129,8 @@ export const AdminDashboard: React.FC = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-indigo-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
                         <IconWrapper icon={Globe} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.total_patients || "0"}
+                            <div className="text-h1 text-foreground">
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.total_users || "0"}
                             </div>
                             <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Total Users</div>
                         </div>
@@ -142,7 +141,7 @@ export const AdminDashboard: React.FC = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
                         <IconWrapper icon={Activity} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
+                            <div className="text-h1 text-foreground">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : (stats ? "99.9%" : "100%")}
                             </div>
                             <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">System Uptime</div>
@@ -154,7 +153,7 @@ export const AdminDashboard: React.FC = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
                         <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-4xl font-bold tracking-tight text-foreground leading-none">
+                            <div className="text-h1 text-foreground">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.pending_verifications || "0"}
                             </div>
                             <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Pending Alerts</div>
@@ -245,6 +244,6 @@ export const AdminDashboard: React.FC = () => {
                     ))}
                 </div>
             </TransitionItem>
-        </main>
+        </div>
     );
 };

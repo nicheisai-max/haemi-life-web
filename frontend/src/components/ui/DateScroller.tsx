@@ -76,7 +76,7 @@ export const DateScroller: React.FC<DateScrollerProps> = ({
                             )}>
                                 {date.month}
                             </span>
-                            <span className="text-2xl font-bold leading-none">
+                            <span className="text-h3 leading-none">
                                 {date.dayNum}
                             </span>
                             <span className={cn(
