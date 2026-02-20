@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { GlobalAlertDialog, type AlertOptions } from '../components/ui/GlobalAlertDialog';
 
 // Define a local extended AlertOptions type to include onAsyncConfirm
@@ -16,48 +16,74 @@ interface AlertDialogContextType {
 
 const AlertDialogContext = createContext<AlertDialogContextType | undefined>(undefined);
 
+interface AlertRequest {
+    id: string;
+    options: ExtendedAlertOptions;
+    resolve: (value: boolean) => void;
+}
+
 export const AlertDialogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [options, setOptions] = useState<ExtendedAlertOptions>({ title: '', message: '' });
-    const resolveRef = useRef<(value: boolean) => void>(() => { });
+    const [queue, setQueue] = useState<AlertRequest[]>([]);
+    const [isInternalProcessing, setIsInternalProcessing] = useState(false);
+
+    const currentRequest = queue[0] || null;
 
     const confirm = useCallback((opts: ExtendedAlertOptions) => {
-        setOptions({ ...opts, type: opts.type || 'confirm' });
-        setIsOpen(true);
         return new Promise<boolean>((resolve) => {
-            resolveRef.current = resolve;
+            const id = Math.random().toString(36).substring(2, 11);
+            const newRequest: AlertRequest = {
+                id,
+                options: { ...opts, type: opts.type || 'confirm' },
+                resolve
+            };
+            setQueue(prev => [...prev, newRequest]);
         });
     }, []);
 
     const alert = useCallback((opts: ExtendedAlertOptions) => {
-        setOptions({ ...opts, type: opts.type || 'info', cancelText: undefined }); // Alert doesn't usually have cancel
-        setIsOpen(true);
         return new Promise<void>((resolve) => {
-            resolveRef.current = (confirmed) => {
-                if (confirmed) resolve();
+            const id = Math.random().toString(36).substring(2, 11);
+            const newRequest: AlertRequest = {
+                id,
+                options: { ...opts, type: opts.type || 'info', cancelText: undefined },
+                resolve: () => resolve()
             };
+            setQueue(prev => [...prev, newRequest]);
         });
     }, []);
 
     const handleConfirm = async () => {
-        if (options.onAsyncConfirm) {
-            await options.onAsyncConfirm();
+        if (!currentRequest || isInternalProcessing) return;
+
+        setIsInternalProcessing(true);
+        try {
+            if (currentRequest.options.onAsyncConfirm) {
+                await currentRequest.options.onAsyncConfirm();
+            }
+            currentRequest.resolve(true);
+            setQueue(prev => prev.slice(1));
+        } catch (error) {
+            console.error('Error in AlertDialog onConfirm:', error);
+            // We resolve false or just clear if error occurs during async action
+            currentRequest.resolve(false);
+            setQueue(prev => prev.slice(1));
+        } finally {
+            setIsInternalProcessing(false);
         }
-        setIsOpen(false);
-        resolveRef.current(true);
     };
 
     const handleCancel = () => {
-        setIsOpen(false);
-        resolveRef.current(false);
+        if (!currentRequest || isInternalProcessing) return;
+        currentRequest.resolve(false);
+        setQueue(prev => prev.slice(1));
     };
 
     return (
         <AlertDialogContext.Provider value={{ confirm, alert }}>
             {children}
             <GlobalAlertDialog
-                isOpen={isOpen}
-                options={options}
+                isOpen={!!currentRequest}
+                options={currentRequest?.options || { title: '', message: '' }}
                 onConfirm={handleConfirm}
                 onCancel={handleCancel}
             />

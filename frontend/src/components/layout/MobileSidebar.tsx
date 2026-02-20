@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { SidebarNav } from "./SidebarNav";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,10 @@ export const MobileSidebar: React.FC = () => {
                 </Button>
             </SheetTrigger>
             <SheetContent side="left" className="p-0 w-[300px] flex flex-col bg-background/95 backdrop-blur-xl border-none">
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                <SheetDescription className="sr-only">
+                    Access dashboard, medical records, and healthcare services.
+                </SheetDescription>
                 <div className="p-6">
                     <Link to="/" onClick={() => setOpen(false)}>
                         <Logo size="nav" />
