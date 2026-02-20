@@ -31,7 +31,7 @@ const getDoctorImage = (name: string) => {
 };
 
 // --- Premium Avatar Component ---
-const Avatar: React.FC<{ name: string; image?: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; className?: string }> = ({ name, image, size = 'md', className = "" }) => {
+const Avatar: React.FC<{ name: string; initials?: string; image?: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; className?: string }> = ({ name, initials, image, size = 'md', className = "" }) => {
     const sizeClasses = {
         xs: 'h-6 w-6 text-[9px]',
         sm: 'h-8 w-8 text-[11px]',
@@ -53,13 +53,15 @@ const Avatar: React.FC<{ name: string; image?: string; size?: 'xs' | 'sm' | 'md'
     const gradientIndex = name ? name.length % gradients.length : 0;
     const bgClass = gradients[gradientIndex];
 
+    const [imgError, setImgError] = useState(false);
+
     return (
         <div className={`relative shrink-0 ${className}`}>
             <div className={`${sizeClasses[size]} rounded-full overflow-hidden ${bgClass} flex items-center justify-center shadow-sm border border-white/20 text-white font-bold tracking-wider`}>
-                {image ? (
-                    <img src={image} alt={name} className="h-full w-full object-cover" />
+                {image && !imgError ? (
+                    <img src={image} alt={name} className="h-full w-full object-cover" onError={() => setImgError(true)} />
                 ) : (
-                    getInitials(name)
+                    initials || getInitials(name)
                 )}
             </div>
         </div>
@@ -240,7 +242,7 @@ export const ChatHub: React.FC = () => {
         const participant = other as any;
         const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
         const dbImage = `${baseUrl}/api/files/profile/${participant.id}`;
-        return { ...other, image: dbImage };
+        return { ...other, image: dbImage, initials: participant.initials };
     };
 
     const filteredConversations = useMemo(() => conversations.filter(c => {
@@ -313,7 +315,7 @@ export const ChatHub: React.FC = () => {
                     className="h-16 w-16 rounded-full bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/50 p-0 flex items-center justify-center group border border-slate-200 dark:border-slate-700 overflow-hidden"
                 >
                     {activeConversation ? (
-                        <Avatar name={getOtherParticipant(activeConversation).name} image={getOtherParticipant(activeConversation).image} size="md" className="h-full w-full rounded-none opacity-90 group-hover:opacity-100 transition-opacity" />
+                        <Avatar name={getOtherParticipant(activeConversation).name} initials={getOtherParticipant(activeConversation).initials} image={getOtherParticipant(activeConversation).image} size="md" className="h-full w-full rounded-none opacity-90 group-hover:opacity-100 transition-opacity" />
                     ) : (
                         <MessageCircle className="h-8 w-8 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
                     )}
@@ -365,7 +367,7 @@ export const ChatHub: React.FC = () => {
                                 {view === 'conversation' && activeConversation ? (
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="relative shrink-0">
-                                            <Avatar name={getOtherParticipant(activeConversation).name} image={getOtherParticipant(activeConversation).image} size="sm" />
+                                            <Avatar name={getOtherParticipant(activeConversation).name} initials={getOtherParticipant(activeConversation).initials} image={getOtherParticipant(activeConversation).image} size="sm" />
                                             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#1a1c23] rounded-full"></span>
                                         </div>
                                         <div className="flex flex-col truncate">
@@ -463,7 +465,7 @@ export const ChatHub: React.FC = () => {
                                                         onClick={() => handleSelectConversation(conv)}
                                                         className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 dark:hover:bg-accent/20 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
                                                     >
-                                                        <Avatar name={other.name} image={other.image} size="md" />
+                                                        <Avatar name={other.name} initials={other.initials} image={other.image} size="md" />
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex justify-between items-center mb-0.5">
                                                                 <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">
@@ -539,7 +541,7 @@ export const ChatHub: React.FC = () => {
                                                     onClick={() => handleStartNewChat(doc)}
                                                     className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 dark:hover:bg-accent/20 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
                                                 >
-                                                    <Avatar name={doc.user?.name || doc.name} image={getDoctorImage(doc.user?.name || doc.name)} size="md" />
+                                                    <Avatar name={doc.user?.name || doc.name} initials={doc.user?.initials || doc.initials} image={getDoctorImage(doc.user?.name || doc.name)} size="md" />
                                                     <div className="flex-1 min-w-0">
                                                         <h4 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-primary transition-colors">
                                                             {doc.user?.name || doc.name}

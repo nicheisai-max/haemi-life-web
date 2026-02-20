@@ -10,6 +10,7 @@ export interface User {
     role: string;
     id_number: string | null;
     status: string;
+    initials: string;
     is_active: boolean;
     token_version: number;
     profile_image: string | null;
@@ -43,7 +44,7 @@ export class UserRepository {
 
     async findById(id: string): Promise<User | null> {
         const result = await this.db.query(
-            'SELECT id, name, email, phone_number, role, id_number, status, is_active, created_at, token_version, profile_image FROM users WHERE id = $1',
+            'SELECT id, name, email, phone_number, role, id_number, initials, status, is_active, created_at, token_version, profile_image FROM users WHERE id = $1',
             [id]
         );
         return result.rows[0] || null;
@@ -56,7 +57,7 @@ export class UserRepository {
             `INSERT INTO users (
                 name, phone_number, email, password, role, id_number, created_at, updated_at, status
             ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), 'ACTIVE') 
-            RETURNING id, email, role, name, phone_number, status, profile_image`,
+            RETURNING id, email, role, name, phone_number, initials, status, profile_image`,
             [name, phone_number, email || null, password, role, id_number || null]
         );
         return result.rows[0];
@@ -64,7 +65,7 @@ export class UserRepository {
 
     async updateProfile(userId: string, data: { name: string, email: string, phone_number: string }): Promise<User> {
         const result = await this.db.query(
-            'UPDATE users SET name = $1, email = $2, phone_number = $3, updated_at = NOW() WHERE id = $4 RETURNING id, name, email, phone_number, role, profile_image',
+            'UPDATE users SET name = $1, email = $2, phone_number = $3, updated_at = NOW() WHERE id = $4 RETURNING id, name, email, phone_number, role, initials, profile_image',
             [data.name, data.email, data.phone_number, userId]
         );
         return result.rows[0];
@@ -72,7 +73,7 @@ export class UserRepository {
 
     async updateProfileImage(userId: string, imageBuffer: Buffer, mimeType: string): Promise<User> {
         const result = await this.db.query(
-            'UPDATE users SET profile_image_data = $1, profile_image_mime = $2, updated_at = NOW() WHERE id = $3 RETURNING id, name, email, phone_number, role, profile_image, profile_image_mime',
+            'UPDATE users SET profile_image_data = $1, profile_image_mime = $2, updated_at = NOW() WHERE id = $3 RETURNING id, name, email, phone_number, role, initials, profile_image, profile_image_mime',
             [imageBuffer, mimeType, userId]
         );
         return result.rows[0];

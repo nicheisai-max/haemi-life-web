@@ -266,6 +266,5 @@ export const TermsOfService: React.FC = () => {
                 </Button>
             </div>
         </div>
-        </div >
     );
 };

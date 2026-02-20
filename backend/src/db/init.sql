@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS users (
     id_number VARCHAR(50),
     is_active BOOLEAN DEFAULT true, -- Deprecated, use status
     is_verified BOOLEAN DEFAULT false,
+    initials VARCHAR(4), -- Enterprise-grade user initials
     profile_image VARCHAR(255),
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -269,6 +270,47 @@ BEGIN
        OR users.profile_image IS DISTINCT FROM EXCLUDED.profile_image;
 END;
 $$;
+
+-- Function: Generate Initials (Enterprise Grade)
+CREATE OR REPLACE FUNCTION fn_generate_initials(p_name TEXT) 
+RETURNS TEXT AS $$
+DECLARE
+    parts TEXT[];
+    v_clean_name TEXT;
+    v_first TEXT;
+    v_last TEXT;
+BEGIN
+    -- Clean the name (remove titles and extra spaces)
+    v_clean_name := trim(regexp_replace(p_name, '^(Dr\.|Dr|Prof\.|Prof|Mr\.|Mr|Mrs\.|Mrs|Ms\.|Ms)\s+', '', 'i'));
+    parts := regexp_split_to_array(v_clean_name, '\s+');
+    
+    IF array_length(parts, 1) = 0 THEN
+        RETURN 'U';
+    ELSIF array_length(parts, 1) = 1 THEN
+        RETURN LEFT(UPPER(parts[1]), 2); -- If single name, take first two letters (e.g. "Admin" -> "AD")
+    ELSE
+        v_first := LEFT(UPPER(parts[1]), 1);
+        v_last := LEFT(UPPER(parts[array_length(parts, 1)]), 1);
+        RETURN v_first || v_last;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger Function: Update User Initials
+CREATE OR REPLACE FUNCTION fn_update_user_initials()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.initials := fn_generate_initials(NEW.name);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger: tr_user_initials
+DROP TRIGGER IF EXISTS tr_user_initials ON users;
+CREATE TRIGGER tr_user_initials
+BEFORE INSERT OR UPDATE OF name ON users
+FOR EACH ROW
+EXECUTE FUNCTION fn_update_user_initials();
 
 -- Procedure: Seed Demo Data (The Master Switch)
 CREATE OR REPLACE PROCEDURE sp_seed_demo_data(p_password_hash VARCHAR)

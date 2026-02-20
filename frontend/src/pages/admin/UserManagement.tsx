@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useConfirm } from '@/context/AlertDialogContext';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -109,6 +110,11 @@ export const UserManagement: React.FC = () => {
             case 'pharmacist': return 'secondary';
             default: return 'outline';
         }
+    };
+
+    const getUserImageUrl = (userId: number) => {
+        const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
+        return `${baseUrl}/api/files/profile/${userId}`;
     };
 
     if (loading) {
@@ -230,9 +236,12 @@ export const UserManagement: React.FC = () => {
                                 <TableRow key={user.id} className="hover:bg-muted/50">
                                     <TableCell>
                                         <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm">
-                                                {user.name?.charAt(0).toUpperCase() || 'U'}
-                                            </div>
+                                            <Avatar className="h-10 w-10">
+                                                <AvatarImage src={getUserImageUrl(user.id)} alt={user.name} className="object-cover" />
+                                                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
+                                                    {user.initials || user.name?.charAt(0).toUpperCase() || 'U'}
+                                                </AvatarFallback>
+                                            </Avatar>
                                             <div className="flex flex-col">
                                                 <span className="font-medium text-foreground">{user.name || 'Unknown'}</span>
                                                 <span className="text-xs text-muted-foreground flex items-center gap-1">

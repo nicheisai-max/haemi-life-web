@@ -79,7 +79,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
     try {
         const { role, status, search } = req.query;
 
-        let query = 'SELECT id, name, email, phone_number, role, status, created_at FROM users WHERE 1=1';
+        let query = 'SELECT id, name, email, phone_number, role, status, initials, created_at FROM users WHERE 1=1';
         const params: any[] = [];
 
         if (role) {
@@ -122,7 +122,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
                 UPDATE users
                 SET status = $1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = $2
-                RETURNING id, name, email, role, status
+                RETURNING id, name, email, role, status, initials
             `, [status, id]);
 
             if (result.rows.length === 0) {

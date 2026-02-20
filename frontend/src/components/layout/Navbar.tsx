@@ -133,7 +133,7 @@ export const Navbar: React.FC = () => {
                                 <Avatar className="h-full w-full">
                                     <AvatarImage src={getUserImage()} alt={user?.name || 'User'} className="object-cover" />
                                     <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                        {user?.name ? getInitials(user.name) : 'U'}
+                                        {user?.initials || (user?.name ? getInitials(user.name) : 'U')}
                                     </AvatarFallback>
                                 </Avatar>
                             </Button>

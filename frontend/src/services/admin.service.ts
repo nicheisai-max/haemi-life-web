@@ -20,6 +20,7 @@ export interface UserListItem {
     role: string;
     phone_number: string;
     status: string; // 'ACTIVE', 'INACTIVE'
+    initials?: string;
     is_active?: boolean; // Legacy fallback helper
     created_at: string;
 }
