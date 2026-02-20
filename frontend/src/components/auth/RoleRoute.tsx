@@ -9,7 +9,7 @@ interface RoleRouteProps {
 }
 
 export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) => {
-    const { user, isLoading, isAuthenticated } = useAuth();
+    const { user, isLoading, isAuthenticated, authStatus } = useAuth();
     const location = useLocation();
 
     // During initial app-load verification, show a loader.
@@ -18,7 +18,8 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) 
         return <MedicalLoader fullPage message="Verifying clinical identity..." />;
     }
 
-    if (!isAuthenticated || !user) {
+    // V12 FIX: Mandatory "Authenticated" check before RBAC processing.
+    if (!isAuthenticated || authStatus !== 'authenticated' || !user) {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 

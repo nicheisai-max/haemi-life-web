@@ -214,13 +214,18 @@ api.interceptors.response.use(
                     // Refresh failed. Hard logout.
                     isRefreshing = false;
                     setAccessToken(null);
+                    sessionStorage.clear(); // V12 FIX: Nuclear flush on refresh failure
                     window.dispatchEvent(new CustomEvent('auth:unauthorized'));
                     return Promise.reject(error);
                 }
 
-                const response = await axios.post(`${API_URL}/auth/refresh-token`, {}, {
+                const response = await axios.post<{ authenticated: boolean; token?: string }>(`${API_URL}/auth/refresh-token`, {}, {
                     withCredentials: true // Important for cookie
                 });
+
+                if (!response.data.authenticated || !response.data.token) {
+                    throw new Error('Session invalid');
+                }
 
                 const { token } = response.data;
                 setAccessToken(token);
@@ -236,6 +241,7 @@ api.interceptors.response.use(
                 processQueue(err, null);
                 isRefreshing = false;
                 setAccessToken(null);
+                sessionStorage.clear(); // V12 FIX: Nuclear flush on catastrophic failure
                 window.dispatchEvent(new CustomEvent('auth:unauthorized'));
                 return Promise.reject(err);
             }

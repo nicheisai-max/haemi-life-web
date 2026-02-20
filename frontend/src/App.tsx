@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
@@ -7,7 +8,9 @@ import { NetworkStatusProvider } from './context/NetworkStatus';
 import { SessionManagerProvider } from './context/SessionManager';
 import { AlertDialogProvider } from './context/AlertDialogContext';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
-import { DashboardLayout } from './components/layout/DashboardLayout';
+import { DelayedFallback } from './components/layout/DelayedFallback';
+const LazyDashboardLayout = lazy(() => import('./components/layout/DashboardLayout').then(m => ({ default: m.DashboardLayout })));
+const RoleRouter = lazy(() => import('./components/layout/RoleRouter').then(m => ({ default: m.RoleRouter })));
 import { ScrollToTop } from './components/utils/ScrollToTop';
 import { PageTransition } from './components/layout/PageTransition';
 import { MedicalLoader } from './components/ui/MedicalLoader';
@@ -22,10 +25,7 @@ import { StyleGuide } from './pages/public/StyleGuide';
 import { PATHS } from './routes/paths';
 
 // Lazy loaded dashboard pages
-const PatientDashboard = lazy(() => import('./pages/patient/PatientDashboard').then(m => ({ default: m.PatientDashboard })));
-const DoctorDashboard = lazy(() => import('./pages/doctor/DoctorDashboard').then(m => ({ default: m.DoctorDashboard })));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
-const PharmacistDashboard = lazy(() => import('./pages/pharmacist/PharmacistDashboard').then(m => ({ default: m.PharmacistDashboard })));
 const Profile = lazy(() => import('./pages/profile/Profile').then(m => ({ default: m.Profile })));
 const Settings = lazy(() => import('./pages/settings/Settings').then(m => ({ default: m.Settings })));
 const FindDoctors = lazy(() => import('./pages/doctors/FindDoctors').then(m => ({ default: m.FindDoctors })));
@@ -57,52 +57,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   const location = useLocation();
 
   // 1. Initial Synchronous Initialization Phase
-  // NEVER redirect during this phase. The app is still reading storage or 
-  // waiting for the first mount cycle to settle.
   if (authStatus === 'initializing') {
     return <LoadingFallback />;
   }
 
-  // 2. Deterministic Unauthenticated State
-  // Only redirect if we are CERTAIN the user has no valid session.
-  if (authStatus === 'unauthenticated') {
+  // 2. Deterministic "Authenticated" Check
+  // V12 FIX: Explicitly require 'authenticated'. 
+  // Any other status (undefined, empty, unauthenticated) triggers a redirect.
+  if (authStatus !== 'authenticated') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 3. Authenticated State
-  // Guaranteed session exists — render the protected content.
   return children;
 };
 
-
-const RoleBasedDashboard: React.FC = () => {
-  const { user } = useAuth();
-
-  if (!user) return <Navigate to="/login" replace />;
-
-  switch (user.role) {
-    case 'patient':
-      return <PatientDashboard />;
-    case 'doctor':
-      return <DoctorDashboard />;
-    case 'admin':
-      return <AdminDashboard />;
-    case 'pharmacist':
-      return <PharmacistDashboard />;
-    default:
-      return <Navigate to="/login" replace />;
-  }
-};
-
-import { AnimatePresence } from 'framer-motion';
-import { useLocation } from 'react-router-dom';
-
 const AppRoutes = () => {
   const location = useLocation();
-  const navigate = useNavigate();
 
   return (
-    <ErrorBoundary onReset={() => navigate('/dashboard')}>
+    <ErrorBoundary onReset={() => window.location.reload()}>
       <Suspense fallback={<LoadingFallback />}>
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
@@ -121,11 +94,11 @@ const AppRoutes = () => {
               path="/dashboard/*"
               element={
                 <ProtectedRoute>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
-                      <RoleBasedDashboard />
+                      <RoleRouter />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </ProtectedRoute>
               }
             />
@@ -133,11 +106,11 @@ const AppRoutes = () => {
               path={PATHS.CONSENT}
               element={
                 <ProtectedRoute>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <TelemedicineConsent />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </ProtectedRoute>
               }
             />
@@ -145,11 +118,11 @@ const AppRoutes = () => {
               path={PATHS.PROFILE}
               element={
                 <ProtectedRoute>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <Profile />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </ProtectedRoute>
               }
             />
@@ -157,11 +130,11 @@ const AppRoutes = () => {
               path={PATHS.SETTINGS}
               element={
                 <ProtectedRoute>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <Settings />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </ProtectedRoute>
               }
             />
@@ -169,11 +142,11 @@ const AppRoutes = () => {
               path={PATHS.PATIENT.FIND_DOCTORS}
               element={
                 <RoleRoute allowedRoles={['patient']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <FindDoctors />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -181,11 +154,11 @@ const AppRoutes = () => {
               path={PATHS.PATIENT.BOOK_APPOINTMENT}
               element={
                 <RoleRoute allowedRoles={['patient']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <BookAppointment />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -193,11 +166,11 @@ const AppRoutes = () => {
               path={PATHS.PATIENT.APPOINTMENTS}
               element={
                 <RoleRoute allowedRoles={['patient', 'doctor']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <Appointments />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -205,11 +178,11 @@ const AppRoutes = () => {
               path={PATHS.PATIENT.PRESCRIPTIONS}
               element={
                 <RoleRoute allowedRoles={['patient', 'doctor', 'pharmacist']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <Prescriptions />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -217,11 +190,11 @@ const AppRoutes = () => {
               path={PATHS.PATIENT.MEDICAL_RECORDS}
               element={
                 <RoleRoute allowedRoles={['patient']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <MedicalRecords />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -229,11 +202,11 @@ const AppRoutes = () => {
               path={PATHS.DOCTOR.SCHEDULE}
               element={
                 <RoleRoute allowedRoles={['doctor']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <DoctorScheduleManagement />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -241,11 +214,11 @@ const AppRoutes = () => {
               path={PATHS.PHARMACIST.QUEUE}
               element={
                 <RoleRoute allowedRoles={['pharmacist']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <PrescriptionQueue />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -253,11 +226,11 @@ const AppRoutes = () => {
               path={PATHS.PHARMACIST.DISPENSE}
               element={
                 <RoleRoute allowedRoles={['pharmacist']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <DispensePrescription />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -265,11 +238,11 @@ const AppRoutes = () => {
               path={PATHS.PHARMACIST.INVENTORY}
               element={
                 <RoleRoute allowedRoles={['pharmacist']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <Inventory />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -277,11 +250,11 @@ const AppRoutes = () => {
               path={PATHS.ADMIN.VERIFY_DOCTORS}
               element={
                 <RoleRoute allowedRoles={['admin']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <VerifyDoctors />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -289,11 +262,11 @@ const AppRoutes = () => {
               path={PATHS.DOCTOR.PATIENTS}
               element={
                 <RoleRoute allowedRoles={['doctor']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <DoctorPatientList />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -301,11 +274,11 @@ const AppRoutes = () => {
               path={PATHS.DOCTOR.REPORTS}
               element={
                 <RoleRoute allowedRoles={['doctor']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <DoctorReports />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -313,11 +286,11 @@ const AppRoutes = () => {
               path={PATHS.ADMIN.DASHBOARD}
               element={
                 <RoleRoute allowedRoles={['admin']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <AdminDashboard />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -325,11 +298,11 @@ const AppRoutes = () => {
               path={PATHS.ADMIN.USERS}
               element={
                 <RoleRoute allowedRoles={['admin']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <UserManagement />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />
@@ -337,11 +310,11 @@ const AppRoutes = () => {
               path={PATHS.ADMIN.SYSTEM_LOGS}
               element={
                 <RoleRoute allowedRoles={['admin']}>
-                  <DashboardLayout>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <SystemLogs />
                     </PageTransition>
-                  </DashboardLayout>
+                  </LazyDashboardLayout></Suspense>
                 </RoleRoute>
               }
             />

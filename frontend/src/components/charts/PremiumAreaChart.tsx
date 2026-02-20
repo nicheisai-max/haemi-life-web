@@ -58,7 +58,7 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
             </CardHeader>
             <CardContent>
                 <div style={{ width: '100%', height: height }}>
-                    <ResponsiveContainer minWidth={0} minHeight={0}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
 
                         <AreaChart
                             data={data}

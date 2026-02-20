@@ -6,9 +6,13 @@ import path from "path"
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    include: ['react-is'],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "react-is": path.resolve(__dirname, "node_modules/react-is"),
     },
   },
   server: {

@@ -256,7 +256,8 @@ export const refreshToken = async (req: Request, res: Response) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-        return res.status(401).json({ message: 'Refresh token required' });
+        // Return 200 OK with authenticated: false instead of 401 to prevent browser console error spam on boot
+        return res.status(200).json({ authenticated: false, message: 'No active session' });
     }
 
     try {
@@ -267,12 +268,12 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         if (!user || user.status !== 'ACTIVE') {
             res.clearCookie('refreshToken');
-            return res.status(401).json({ message: 'Invalid session' });
+            return res.status(200).json({ authenticated: false, message: 'Invalid session' });
         }
 
         if (decoded.token_version !== user.token_version) {
             res.clearCookie('refreshToken');
-            return res.status(401).json({ message: 'Session revoked' });
+            return res.status(200).json({ authenticated: false, message: 'Session revoked' });
         }
 
         // Issue new Access Token (15m)
@@ -290,10 +291,10 @@ export const refreshToken = async (req: Request, res: Response) => {
         // Update activity heartbeat on refresh
         await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
-        res.json({ token: accessToken });
+        res.json({ authenticated: true, token: accessToken });
     } catch (error) {
         res.clearCookie('refreshToken');
-        return res.status(401).json({ message: 'Invalid refresh token' });
+        return res.status(200).json({ authenticated: false, message: 'Invalid refresh token' });
     }
 };
 

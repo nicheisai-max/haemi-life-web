@@ -173,10 +173,10 @@ export const DoctorDashboard = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-teal-500/50 dark:hover:border-teal-500/80 hover:shadow-lg hover:shadow-teal-500/10 dark:hover:shadow-teal-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Users} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-h1 text-slate-900 dark:text-white">
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : todayAppointments.length}
                             </div>
-                            <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-teal-600 transition-colors">Today's Census</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-teal-600 transition-colors">Today's Census</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -185,10 +185,10 @@ export const DoctorDashboard = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={ClipboardCheck} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-h1 text-slate-900 dark:text-white">
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : pendingReviews}
                             </div>
-                            <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-emerald-600 transition-colors">Completed Notes</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-emerald-600 transition-colors">Completed Notes</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -197,10 +197,10 @@ export const DoctorDashboard = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-blue-500/50 dark:hover:border-blue-500/80 hover:shadow-lg hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Contact} variant="accent" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-h1 text-slate-900 dark:text-white">
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : patientCount}
                             </div>
-                            <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em] group-hover:text-blue-600 transition-colors">Total Panel</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Total Panel</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>

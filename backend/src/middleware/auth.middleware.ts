@@ -72,7 +72,7 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
             if (userData.status !== 'ACTIVE') {
                 return res.status(403).json({
                     success: false,
-                    error: `Account is ${userData.status.toLowerCase()}. Please contact administrator.`,
+                    error: 'Access denied. Account restricted.',
                     statusCode: 403,
                 });
             }

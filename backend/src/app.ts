@@ -11,6 +11,7 @@ import cookieParser from 'cookie-parser';
 
 import { globalErrorHandler } from './middleware/error.middleware';
 import { notFoundHandler } from './middleware/notFound.middleware';
+import { authenticateToken } from './middleware/auth.middleware';
 
 import { authLimiter, apiLimiter } from './middleware/rate-limit.middleware';
 import { sendResponse } from './utils/response';
@@ -132,8 +133,6 @@ io.use((socket: AuthSocket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
 
     if (!token) {
-        // In demo/dev mode, allow unauthenticated sockets for easier testing
-        if (!IS_PRODUCTION) return next();
         return next(new Error('Authentication required'));
     }
 
@@ -142,8 +141,6 @@ io.use((socket: AuthSocket, next) => {
         socket.user = decoded;
         next();
     } catch {
-        // In demo/dev mode, allow even if token is invalid
-        if (!IS_PRODUCTION) return next();
         next(new Error('Invalid authentication token'));
     }
 });
@@ -178,9 +175,9 @@ app.use('/api/files', fileRoutes);
 
 
 // Serve uploaded files
-// NOTE: V12 (Auth-gating) is deferred to production deployment (signed URLs/Cookies)
-// to prevent breaking standard <img> tags during the investor demo.
-app.use('/uploads', express.static('uploads'));
+// V12 FIX: Protected static assets.
+// Note: Requests for these files must now include authorization (e.g., via session cookie or token)
+app.use('/uploads', authenticateToken, express.static('uploads'));
 
 
 

@@ -129,10 +129,10 @@ export const AdminDashboard: React.FC = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-indigo-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
                         <IconWrapper icon={Globe} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-h1 text-foreground">
+                            <div className="text-3xl md:text-4xl font-bold text-foreground">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.total_users || "0"}
                             </div>
-                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Total Users</div>
+                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Total Users</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -141,10 +141,10 @@ export const AdminDashboard: React.FC = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
                         <IconWrapper icon={Activity} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-h1 text-foreground">
+                            <div className="text-3xl md:text-4xl font-bold text-foreground">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : (stats ? "99.9%" : "100%")}
                             </div>
-                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">System Uptime</div>
+                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">System Uptime</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -153,10 +153,10 @@ export const AdminDashboard: React.FC = () => {
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
                         <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-h1 text-foreground">
+                            <div className="text-3xl md:text-4xl font-bold text-foreground">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.pending_verifications || "0"}
                             </div>
-                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-[0.15em]">Pending Alerts</div>
+                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Pending Alerts</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>

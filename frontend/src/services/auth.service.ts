@@ -1,3 +1,4 @@
+import axios from 'axios';
 import api from './api';
 import type { LoginCredentials, SignupCredentials, AuthResponse, User } from '../types/auth.types';
 
@@ -16,9 +17,14 @@ export const authService = {
         const response = await api.get<{ user: User }>('/auth/verify');
         return response.data;
     },
-
-    refreshToken: async (): Promise<{ token: string }> => {
-        const response = await api.post<{ token: string }>('/auth/refresh-token');
+    refreshToken: async (): Promise<{ token?: string; authenticated: boolean }> => {
+        // Use raw axios to bypass global interceptors for the refresh token endpoint
+        // This prevents loud 401 errors in the console when the user is simply not logged in
+        const response = await axios.post<{ token?: string; authenticated: boolean }>(
+            `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/refresh-token`,
+            {},
+            { withCredentials: true }
+        );
         return response.data;
     },
 
