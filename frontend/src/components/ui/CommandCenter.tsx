@@ -24,7 +24,8 @@ import {
     Pill,
     ClipboardList,
     Package,
-    ShieldCheck
+    ShieldCheck,
+    X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Badge } from './badge';
