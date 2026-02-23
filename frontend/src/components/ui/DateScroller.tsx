@@ -39,10 +39,10 @@ export const DateScroller: React.FC<DateScrollerProps> = ({
 
     return (
         <div className="relative group px-1">
-            {/* Navigation Buttons */}
+            {/* Navigation Buttons - Always visible now */}
             <button
                 onClick={() => scroll('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-background/90 backdrop-blur-md border border-border/50 shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary hover:text-primary-foreground disabled:opacity-0"
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-background/95 dark:bg-background/80 backdrop-blur-md border border-input shadow-sm flex items-center justify-center text-foreground transition-all duration-300 hover:bg-primary hover:border-primary hover:text-primary-foreground hover:shadow-lg dark:hover:bg-primary dark:hover:shadow-primary/30"
                 type="button"
             >
                 <ChevronLeft className="h-4 w-4" />
@@ -50,7 +50,7 @@ export const DateScroller: React.FC<DateScrollerProps> = ({
 
             <div
                 ref={scrollRef}
-                className="flex gap-3 overflow-x-auto pb-4 scrollbar-none snap-x snap-mandatory px-8"
+                className="flex gap-3 overflow-x-auto py-2 px-8 scrollbar-none snap-x snap-mandatory"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
                 {dates.map((date) => {
@@ -58,30 +58,34 @@ export const DateScroller: React.FC<DateScrollerProps> = ({
                     return (
                         <motion.button
                             key={date.full}
-                            whileHover={{ y: -2 }}
+                            whileHover={{ y: -4 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => onDateSelect(date.full)}
                             type="button"
                             className={cn(
-                                "flex-shrink-0 w-20 py-4 rounded-xl border transition-all duration-300 snap-center",
+                                "flex-shrink-0 w-20 py-4 rounded-xl border transition-all duration-300 snap-center cursor-pointer",
                                 "flex flex-col items-center justify-center gap-1",
                                 isSelected
-                                    ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/25"
-                                    : "bg-background/50 hover:bg-background border-border hover:border-primary/50 text-muted-foreground hover:text-foreground"
+                                    ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/30"
+                                    : "bg-background/60 border-border/60 text-muted-foreground hover:bg-primary/5 hover:border-primary hover:text-foreground hover:shadow-md dark:hover:bg-primary/15 dark:hover:shadow-lg dark:hover:shadow-primary/20"
                             )}
                         >
                             <span className={cn(
-                                "text-[10px] font-bold uppercase tracking-wider",
-                                isSelected ? "text-primary-foreground/80" : "text-muted-foreground"
+                                "text-[10px] font-bold uppercase tracking-wider transition-colors duration-300",
+                                isSelected 
+                                    ? "text-primary-foreground/80" 
+                                    : "text-muted-foreground group-hover:text-foreground"
                             )}>
                                 {date.month}
                             </span>
-                            <span className="text-h3 leading-none">
+                            <span className="text-h3 leading-none transition-colors duration-300">
                                 {date.dayNum}
                             </span>
                             <span className={cn(
-                                "text-xs font-medium",
-                                isSelected ? "text-primary-foreground/90" : "text-primary"
+                                "text-xs font-medium transition-colors duration-300",
+                                isSelected 
+                                    ? "text-primary-foreground/90" 
+                                    : "text-primary hover:text-primary-600 dark:hover:text-primary-400"
                             )}>
                                 {date.dayName}
                             </span>
@@ -92,7 +96,7 @@ export const DateScroller: React.FC<DateScrollerProps> = ({
 
             <button
                 onClick={() => scroll('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-background/90 backdrop-blur-md border border-border/50 shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary hover:text-primary-foreground disabled:opacity-0"
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-background/95 dark:bg-background/80 backdrop-blur-md border border-input shadow-sm flex items-center justify-center text-foreground transition-all duration-300 hover:bg-primary hover:border-primary hover:text-primary-foreground hover:shadow-lg dark:hover:bg-primary dark:hover:shadow-primary/30"
                 type="button"
             >
                 <ChevronRight className="h-4 w-4" />
