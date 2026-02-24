@@ -15,6 +15,11 @@ export const setAccessToken = (token: string | null) => {
 
 export const getAccessToken = () => accessToken;
 
+// Initialization guard — prevents background 401s from wiping the session
+// before initAuth() in AuthContext has completed its token refresh
+let appInitialized = false;
+export const setAppInitialized = () => { appInitialized = true; };
+
 // Cache for successful GET responses
 const CACHE_KEY_PREFIX = 'haemi_api_cache_';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -153,6 +158,11 @@ let failedQueue: any[] = [];
 
 // Session Management Helper
 const clearAuthSession = () => {
+    // Guard: Do not wipe session during app initialization.
+    // Background requests (socket, notifications) may 401 before the
+    // in-memory token is restored by initAuth(). Ignoring those 401s
+    // prevents a race that kicks the user to login on every page refresh.
+    if (!appInitialized) return;
     isRefreshing = false;
     setAccessToken(null);
     sessionStorage.removeItem('user');

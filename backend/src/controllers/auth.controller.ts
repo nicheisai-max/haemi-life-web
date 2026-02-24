@@ -65,7 +65,7 @@ export const signup = async (req: Request, res: Response) => {
             res.cookie('refreshToken', refreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
+                sameSite: 'lax', // 'lax' allows cookie on top-level navigations (page refresh)
                 maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
             });
 
@@ -183,7 +183,7 @@ export const login = async (req: Request, res: Response) => {
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax', // 'lax' allows cookie on top-level navigations (page refresh)
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
 
@@ -325,21 +325,23 @@ export const refreshToken = async (req: Request, res: Response) => {
             return res.status(200).json({ authenticated: false, message: 'Session revoked due to reuse detection' });
         }
 
-        // Token Rotation: Increment version and issue new refresh token
-        const newVersion = user.token_version + 1;
+        // Token Renewal: Update last_activity only.
+        // token_version is NOT incremented here — only on security events
+        // (password change, explicit logout, admin revocation) to prevent
+        // cascading 401 storms from concurrent requests during token refresh.
         await pool.query(
-            'UPDATE users SET token_version = $1, last_activity = CURRENT_TIMESTAMP WHERE id = $2',
-            [newVersion, user.id]
+            'UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
+            [user.id]
         );
 
         const accessToken = jwt.sign(
-            { id: user.id, email: user.email, role: user.role, token_version: newVersion },
+            { id: user.id, email: user.email, role: user.role, token_version: user.token_version },
             process.env.JWT_SECRET as string,
             { expiresIn: '15m' }
         );
 
         const newRefreshToken = jwt.sign(
-            { id: user.id, token_version: newVersion },
+            { id: user.id, token_version: user.token_version },
             process.env.JWT_SECRET as string,
             { expiresIn: '7d' }
         );
@@ -347,7 +349,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         res.cookie('refreshToken', newRefreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax', // consistent with login/signup cookie config
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 

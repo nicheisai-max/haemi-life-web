@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 
 import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
 import { authService } from '../services/auth.service';
-import { setAccessToken } from '../services/api';
+import { setAccessToken, setAppInitialized } from '../services/api';
 
 interface AuthContextType {
     user: User | null;
@@ -120,6 +120,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         authStatus: 'unauthenticated'
                     });
                 }
+            } finally {
+                // CRITICAL: Always lift the initialization guard regardless of outcome.
+                // After this point, legitimate 401 responses will correctly clear the session.
+                setAppInitialized();
             }
         };
 

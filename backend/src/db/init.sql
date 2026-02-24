@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS users (
     is_verified BOOLEAN DEFAULT false,
     initials VARCHAR(4), -- Enterprise-grade user initials
     profile_image VARCHAR(255),
+    profile_image_data BYTEA,                          -- Binary storage for uploaded profile pictures
+    profile_image_mime VARCHAR(100),                   -- MIME type for profile picture (e.g. image/jpeg)
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -54,6 +56,12 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image') THEN
         ALTER TABLE users ADD COLUMN profile_image VARCHAR(255);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image_data') THEN
+        ALTER TABLE users ADD COLUMN profile_image_data BYTEA;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image_mime') THEN
+        ALTER TABLE users ADD COLUMN profile_image_mime VARCHAR(100);
     END IF;
 END $$;
 
