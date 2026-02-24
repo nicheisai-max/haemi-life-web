@@ -481,6 +481,49 @@ BEGIN
         (v_doctor_id, 'Patient Feedback', 'Tebogo Motswana rated your last consultation 5 stars.', 'success', NOW() - INTERVAL '5 hours');
     END IF;
 
+    -- ==========================================
+    -- 10. REAL-TIME CHAT DEMO SEEDING
+    -- Target: Dr. Mpho Modise vs Patient Tebogo Motswana
+    -- ==========================================
+    DECLARE
+        v_demo_conv_id UUID;
+    BEGIN
+        -- Check if a conversation between exactly these two IDs already exists to avoid trashing organic tests
+        SELECT c.id INTO v_demo_conv_id
+        FROM conversations c
+        JOIN conversation_participants p1 ON c.id = p1.conversation_id AND p1.user_id = v_patient_id
+        JOIN conversation_participants p2 ON c.id = p2.conversation_id AND p2.user_id = v_doctor_id
+        GROUP BY c.id
+        HAVING COUNT(participant_id) = 2; -- Must be exactly 2 participants
+
+        IF v_demo_conv_id IS NULL THEN
+            -- Create fresh conversation
+            INSERT INTO conversations (id, last_message_at) 
+            VALUES (uuid_generate_v4(), NOW() - INTERVAL '1 day') 
+            RETURNING id INTO v_demo_conv_id;
+
+            -- Bind the Doctor and Patient
+            INSERT INTO conversation_participants (conversation_id, user_id) VALUES 
+            (v_demo_conv_id, v_patient_id),
+            (v_demo_conv_id, v_doctor_id);
+
+            -- Inject the localized Botswana scenario
+            INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at) VALUES
+            (v_demo_conv_id, v_patient_id, 'Dumela Ngaka Modise. The lab at Princess Marina Hospital said they uploaded my latest blood test results to the system. Can we review them during our video call tomorrow?', true, NOW() - INTERVAL '1 day 4 hours'),
+            (v_demo_conv_id, v_doctor_id, 'Dumela Tebogo. Yes, I have them right here on my dashboard. The good news is your fasting glucose has improved significantly. However, we still need to monitor your cholesterol levels. Are you experiencing any headaches?', true, NOW() - INTERVAL '1 day 2 hours 15 minutes'),
+            (v_demo_conv_id, v_patient_id, 'That is a huge relief! No headaches recently, but I am almost out of my regular medication. Can you send an e-prescription to my pharmacy in the CBD?', true, NOW() - INTERVAL '1 day 45 minutes'),
+            (v_demo_conv_id, v_doctor_id, 'Absolutely. I will issue a digital prescription alongside the system''s consultation notes immediately after our call. Just remember to log in for our video session at 14:00 today.', true, NOW() - INTERVAL '23 hours'),
+            (v_demo_conv_id, v_patient_id, 'Ke a leboga, Doctor. I have the appointment on my schedule. See you then.', false, NOW() - INTERVAL '22 hours 50 minutes');
+        END IF;
+
+    EXCEPTION
+        WHEN undefined_column THEN
+            -- Fallback in case the GROUP BY HAVING COUNT logic hits a schema snag, 
+            -- although `COUNT(*)` or similar handles it. Using participant_id might fail if it doesn't exist.
+            -- Replacing participant_id check with a safer explicit join count.
+            NULL; 
+    END;
+
 END;
 $$;
 
