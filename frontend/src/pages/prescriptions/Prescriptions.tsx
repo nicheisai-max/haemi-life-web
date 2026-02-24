@@ -183,7 +183,7 @@ export const Prescriptions: React.FC = () => {
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                                                     <h3 className="text-lg font-semibold text-foreground truncate">
-                                                        Dr. {prescription.doctor_name || 'Unknown'}
+                                                        {prescription.doctor_name || 'Unknown'}
                                                     </h3>
                                                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide border ${getStatusStyles(prescription.status)}`}>
                                                         {prescription.status}
@@ -282,7 +282,7 @@ export const Prescriptions: React.FC = () => {
                                             Doctor Information
                                         </h3>
                                         <div className="bg-muted/30 p-3 rounded-lg border">
-                                            <div className="text-sm font-medium text-foreground">Dr. {selectedPrescription.doctor_name || 'Unknown'}</div>
+                                            <div className="text-sm font-medium text-foreground">{selectedPrescription.doctor_name || 'Unknown'}</div>
                                             <div className="text-xs text-muted-foreground">Prescribing Physician</div>
                                         </div>
                                     </div>

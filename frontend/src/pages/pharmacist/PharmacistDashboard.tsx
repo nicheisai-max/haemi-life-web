@@ -178,7 +178,7 @@ export const PharmacistDashboard = () => {
                                         <p className="text-sm text-muted-foreground truncate flex items-center gap-1.5">
                                             <span>{prescription.medication_count || 0} item{(prescription.medication_count || 0) !== 1 ? 's' : ''}</span>
                                             <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                                            <span>Dr. {prescription.doctor_name || 'N/A'}</span>
+                                            <span>{prescription.doctor_name || 'N/A'}</span>
                                         </p>
                                     </div>
                                     <Button variant="default" size="sm" className="action-btn shadow-sm" onClick={() => navigate(PATHS.PHARMACIST.PRESCRIPTION_DETAIL(prescription.id))}>

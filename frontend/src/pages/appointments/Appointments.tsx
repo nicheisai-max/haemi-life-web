@@ -225,7 +225,7 @@ export const Appointments: React.FC = () => {
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         <div className="space-y-1">
                                             <h3 className="font-semibold text-lg flex items-center gap-3">
-                                                {user?.role === 'doctor' ? appointment.other_party_name || 'Patient' : `Dr. ${appointment.other_party_name}` || 'Doctor'}
+                                                {user?.role === 'doctor' ? appointment.other_party_name || 'Patient' : appointment.other_party_name || 'Doctor'}
                                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getStatusColor(appointment.status)}`}>
                                                     {appointment.status}
                                                 </span>

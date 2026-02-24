@@ -141,7 +141,7 @@ export const PrescriptionQueue: React.FC = () => {
                                             </Badge>
                                         </div>
 
-                                        <p className="text-sm text-muted-foreground">Prescribed by: <span className="font-medium text-foreground">Dr. {prescription.doctor_name || 'Unknown'}</span></p>
+                                        <p className="text-sm text-muted-foreground">Prescribed by: <span className="font-medium text-foreground">{prescription.doctor_name || 'Unknown'}</span></p>
 
                                         <div className="flex flex-wrap gap-4 pt-1">
                                             <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
