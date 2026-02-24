@@ -154,6 +154,9 @@ export const login = async (req: Request, res: Response) => {
 
         logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
 
+        // Update last_activity directly so the middleware doesn't instantly invalidate the new session
+        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+
         // Generate Access Token (15m)
         const accessToken = jwt.sign(
             {
