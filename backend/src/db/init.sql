@@ -13,12 +13,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 DROP TABLE IF EXISTS analytics_daily_visits CASCADE;
 DROP TABLE IF EXISTS revenue_stats CASCADE;
 -- Table 'medical_records' should stay persistent for files
-DROP TABLE IF EXISTS medical_records CASCADE;
-DROP TABLE IF EXISTS prescription_items CASCADE;
-
-DROP TABLE IF EXISTS prescriptions CASCADE;
-DROP TABLE IF EXISTS appointments CASCADE;
-DROP TABLE IF EXISTS pharmacies CASCADE;
+-- DROP TABLE IF EXISTS medical_records CASCADE;
+-- DROP TABLE IF EXISTS prescription_items CASCADE;
+-- DROP TABLE IF EXISTS prescriptions CASCADE;
+-- DROP TABLE IF EXISTS appointments CASCADE;
+-- DROP TABLE IF EXISTS pharmacies CASCADE;
 
 -- CRITICAL TABLES: DO NOT DROP (Ensures persistent users and core data)
 -- DROP TABLE IF EXISTS locations CASCADE;
@@ -245,7 +244,8 @@ CREATE TABLE IF NOT EXISTS medical_records (
     file_path VARCHAR(255) NOT NULL,
     file_type VARCHAR(100),
     file_size VARCHAR(50),
-    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP
 );
 
 -- Telemedicine Consents
@@ -438,6 +438,32 @@ BEGIN
         );
     END IF;
 
+    -- 7.5. Seed Clinical Data (Prescriptions & Medical Records)
+    DECLARE
+        v_presc_id INTEGER;
+    BEGIN
+        -- Dr. Mpho prescribes for Tebogo
+        IF NOT EXISTS (SELECT 1 FROM prescriptions WHERE patient_id = v_patient_id) THEN
+            INSERT INTO prescriptions (patient_id, doctor_id, prescription_date, status, notes)
+            VALUES (v_patient_id, v_doctor_id, CURRENT_DATE - INTERVAL '2 days', 'pending', 'Standard hypertension management. Patient to monitor blood pressure daily.')
+            RETURNING id INTO v_presc_id;
+
+            -- Add items for this prescription
+            INSERT INTO prescription_items (prescription_id, medicine_id, dosage, frequency, duration_days, quantity)
+            SELECT v_presc_id, id, '20mg', 'Once daily', 30, 30 FROM medicines WHERE name = 'Lipitor 20mg';
+            
+            INSERT INTO prescription_items (prescription_id, medicine_id, dosage, frequency, duration_days, quantity)
+            SELECT v_presc_id, id, '500mg', 'As needed for pain', 7, 20 FROM medicines WHERE name = 'Panado Extra';
+        END IF;
+
+        -- Seed Medical Records (Uploaded documents)
+        IF NOT EXISTS (SELECT 1 FROM medical_records WHERE patient_id = v_patient_id) THEN
+            INSERT INTO medical_records (patient_id, name, record_type, doctor_name, facility_name, date_of_service, status, file_path, file_type, file_size) VALUES
+            (v_patient_id, 'Blood_Test_Feb2026.pdf', 'Lab Result', 'Dr. Thabo Sekgwi', 'Princess Marina Hospital', CURRENT_DATE - INTERVAL '5 days', 'Final', 'uploads/medical_records/demo_lab_result.pdf', 'application/pdf', '1.2 MB'),
+            (v_patient_id, 'X-Ray_Chest_Jan2026.jpg', 'Radiology', 'Dr. Neo Balopi', 'Gaborone Private Hospital', CURRENT_DATE - INTERVAL '25 days', 'Final', 'uploads/medical_records/demo_xray.jpg', 'image/jpeg', '3.5 MB');
+        END IF;
+    END;
+
     -- 8. Seed Analytics
     IF NOT EXISTS (SELECT 1 FROM analytics_daily_visits LIMIT 1) THEN
         INSERT INTO analytics_daily_visits (date, visits, new_users) VALUES
@@ -598,5 +624,8 @@ BEGIN
         ALTER TABLE telemedicine_consents ADD COLUMN signature_data TEXT;
     END IF;
 END $$;
+
+-- Final Seed Execution
+CALL sp_seed_demo_data('$2b$10$dgePzZclKF6j5XBh7/gaq.OgbcSlFuqFbE7qoXpDg4oH6Jx4Ist.e');
 
 COMMIT;
