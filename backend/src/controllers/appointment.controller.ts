@@ -122,13 +122,12 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'doctor_id and date are required' });
         }
 
-        // Get day of week from date
-        const dateObj = new Date(date as string);
-        const dayOfWeekIndex = dateObj.getDay();
-        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const dayOfWeek = days[dayOfWeekIndex]; // Convert 0-6 to 'sunday'-'saturday'
+        // Get day of week from date using UTC-safe local parsing
+        const [year, month, day] = (date as string).split('-').map(Number);
+        const dateObj = new Date(year, month - 1, day);
+        const dayOfWeek = dateObj.getDay(); // 0 is Sunday, 6 is Saturday
 
-        // Get doctor's schedule for that day
+        // Get doctor's schedule for that day (passing integer as defined in init.sql)
         const schedule = await appointmentRepository.getDoctorSchedule(doctor_id as string, dayOfWeek);
 
         if (schedule.length === 0) {

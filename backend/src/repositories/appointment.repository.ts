@@ -130,10 +130,10 @@ export class AppointmentRepository {
         return result.rows[0] || null;
     }
 
-    async getDoctorSchedule(doctorId: string, dayOfWeek: string): Promise<any[]> {
+    async getDoctorSchedule(doctorId: string, dayOfWeek: number): Promise<any[]> {
         const result = await this.db.query(`
             SELECT start_time, end_time FROM doctor_schedules
-            WHERE doctor_id = $1 AND day_of_week ILIKE $2 AND is_available = true
+            WHERE doctor_id = $1 AND day_of_week = $2 AND is_available = true
         `, [doctorId, dayOfWeek]);
         return result.rows;
     }
