@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from './button';
 import { Card } from './card';
 import { Eraser, Check, Signature as SignatureIcon, PenTool, Type, RefreshCw } from 'lucide-react';
@@ -22,8 +22,7 @@ const SIGNATURE_FONTS = [
 
 export const SignaturePad: React.FC<SignaturePadProps> = ({
     onSave,
-    title = "Electronic Signature",
-    description = "Please sign within the box below to authorize this clinical action."
+    title = "Electronic Signature"
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [activeTab, setActiveTab] = useState<'draw' | 'type'>('draw');
@@ -39,16 +38,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
     const [typedName, setTypedName] = useState('');
     const [selectedFont, setSelectedFont] = useState(SIGNATURE_FONTS[0]);
 
-    // Inject Fonts
-    useEffect(() => {
-        const link = document.createElement('link');
-        link.href = 'https://fonts.googleapis.com/css2?family=Allura&family=Great+Vibes&family=Sacramento&display=swap';
-        link.rel = 'stylesheet';
-        document.head.appendChild(link);
-        return () => {
-            document.head.removeChild(link);
-        };
-    }, []);
+    // Fonts are now preloaded safely in index.html to prevent rendering issues
 
     // ----------------------------------------------------------------------
     // Drawing Logic (Bezier Curves & Velocity)
