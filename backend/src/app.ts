@@ -197,6 +197,11 @@ io.on('connection', (socket: AuthSocket) => {
     const userId = socket.user?.id || socket.id;
     logger.info(`[Socket] User connected: ${userId}`);
 
+    // Join personal room for targeted notifications
+    if (socket.user?.id) {
+        socket.join(`user:${socket.user.id}`);
+    }
+
     socket.on('join-consultation', (appointmentId) => {
         socket.join(appointmentId);
         socket.to(appointmentId).emit('participant-joined', socket.id);

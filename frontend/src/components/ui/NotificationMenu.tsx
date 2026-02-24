@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Bell, Check, Info, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,10 +10,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { notificationService, type Notification } from '../../services/notification.service';
+import { getAccessToken } from '../../services/api';
+import io from 'socket.io-client';
 
-// Assuming date-fns might not be there, I'll use a simple fallback for now if it fails, 
-// but let's try to import it as it's common in premium dashboards.
-// Actually, I'll use a simple helper to be safe.
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const getTimeAgo = (dateString: string) => {
     try {
@@ -40,6 +40,7 @@ export const NotificationMenu: React.FC = () => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
     const [hasUnread, setHasUnread] = useState(false);
+    const socketRef = useRef<any>(null);
 
     const fetchNotifications = async () => {
         try {
@@ -56,9 +57,37 @@ export const NotificationMenu: React.FC = () => {
     useEffect(() => {
         fetchNotifications();
 
-        // Refresh every 30 seconds
+        // Safety fallback: refresh every 30 seconds via polling
         const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
+
+        // Real-time: connect Socket.io with the in-memory access token
+        const token = getAccessToken();
+        if (token) {
+            const socket = io(SOCKET_URL, {
+                auth: { token },
+                transports: ['websocket'],
+                reconnectionAttempts: 3,
+            });
+            socketRef.current = socket;
+
+            // Instantly prepend new notifications pushed from server
+            socket.on('new_notification', (notification: Notification) => {
+                setNotifications(prev => [notification, ...prev]);
+                setHasUnread(true);
+            });
+
+            socket.on('connect_error', (err: Error) => {
+                console.warn('[NotificationMenu] Socket connect error:', err.message);
+            });
+        }
+
+        return () => {
+            clearInterval(interval);
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current = null;
+            }
+        };
     }, []);
 
     const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -85,8 +114,9 @@ export const NotificationMenu: React.FC = () => {
     const getIcon = (type: Notification['type']) => {
         switch (type) {
             case 'success': return <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />;
-            case 'warning': return <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={3} />; // Using Info as workaround for '!' circle
+            case 'warning': return <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={3} />;
             case 'info': return <Zap className="h-4 w-4 text-indigo-600 dark:text-indigo-400" strokeWidth={3} fill="currentColor" />;
+            default: return <Bell className="h-4 w-4 text-slate-600 dark:text-slate-400" />;
         }
     };
 
@@ -95,6 +125,7 @@ export const NotificationMenu: React.FC = () => {
             case 'success': return 'bg-emerald-100 dark:bg-emerald-900/30';
             case 'warning': return 'bg-amber-100 dark:bg-amber-900/30';
             case 'info': return 'bg-indigo-100 dark:bg-indigo-900/30';
+            default: return 'bg-slate-100 dark:bg-slate-800/30';
         }
     };
 
@@ -119,7 +150,7 @@ export const NotificationMenu: React.FC = () => {
                     )}
                 </div>
 
-                {/* List with Google-styled Scrollbar */}
+                {/* List */}
                 <ScrollArea className="h-[320px]">
                     <div className="flex flex-col">
                         {loading && notifications.length === 0 ? (
@@ -182,10 +213,8 @@ export const NotificationMenu: React.FC = () => {
                     </Button>
                 </div>
 
-                {/* Visual Polish Styles */}
                 <style dangerouslySetInnerHTML={{
                     __html: `
-                    /* Ensure drop down menu items feel premium */
                     [role="menuitem"] {
                         margin: 0 4px;
                         border-radius: 8px;

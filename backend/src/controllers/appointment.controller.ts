@@ -1,5 +1,27 @@
 import { Request, Response } from 'express';
 import { appointmentRepository } from '../repositories/appointment.repository';
+import { pool } from '../config/db';
+import { io } from '../app';
+
+// Helper to create a notification in DB and emit it in real-time
+async function createAndEmitNotification(
+    userId: string,
+    title: string,
+    description: string,
+    type: 'success' | 'info' | 'warning' | 'error'
+) {
+    const result = await pool.query(
+        `INSERT INTO notifications (user_id, title, description, type) 
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [userId, title, description, type]
+    );
+    const notification = result.rows[0];
+    // Emit to the user's personal room (user joins room `user:<id>` on socket connect)
+    if (io) {
+        io.to(`user:${userId}`).emit('new_notification', notification);
+    }
+    return notification;
+}
 
 // Book a new appointment (Patient)
 export const bookAppointment = async (req: Request, res: Response) => {
@@ -29,12 +51,41 @@ export const bookAppointment = async (req: Request, res: Response) => {
             reason
         });
 
+        // Fetch doctor name for notification messages
+        const doctorResult = await pool.query('SELECT name FROM users WHERE id = $1', [doctor_id]);
+        const doctorName = doctorResult.rows[0]?.name || 'your doctor';
+        const patientName = user.name || 'A patient';
+
+        const formattedDate = new Date(appointment_date).toLocaleDateString('en-GB', {
+            weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+        });
+        const formattedTime = new Date(`2000-01-01T${appointment_time}`).toLocaleTimeString('en-US', {
+            hour: 'numeric', minute: '2-digit', hour12: true
+        });
+
+        // Notify patient
+        await createAndEmitNotification(
+            patientId,
+            'Appointment Confirmed',
+            `Your appointment with ${doctorName} on ${formattedDate} at ${formattedTime} has been booked successfully.`,
+            'success'
+        );
+
+        // Notify doctor
+        await createAndEmitNotification(
+            doctor_id,
+            'New Appointment Request',
+            `${patientName} has booked an appointment with you on ${formattedDate} at ${formattedTime}.`,
+            'info'
+        );
+
         res.status(201).json({ message: 'Appointment booked successfully', appointment });
     } catch (error) {
         console.error('Error booking appointment:', error);
         res.status(500).json({ message: 'Error booking appointment' });
     }
 };
+
 
 // Get user's appointments
 export const getMyAppointments = async (req: Request, res: Response) => {

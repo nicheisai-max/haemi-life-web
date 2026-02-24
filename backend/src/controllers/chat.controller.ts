@@ -310,12 +310,37 @@ export const sendMessage = async (req: Request, res: Response) => {
         // We stored encrypted, so decrypt it back for the user/socket
         newMessage.content = content; // Optimistic: we know what we sent
 
+        const senderName = (req as any).user.name || 'Someone';
+
         // Emit socket event to room (conversationId)
         if (io) {
             io.to(conversationId).emit('receive_message', {
                 ...newMessage,
-                sender_name: (req as any).user.name
+                sender_name: senderName
             });
+        }
+
+        // Emit real-time notification to all other participants in this conversation
+        try {
+            const participantsResult = await pool.query(
+                'SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2',
+                [conversationId, senderId]
+            );
+            const previewText = content ? (content.length > 60 ? content.substring(0, 60) + '…' : content) : '📎 Attachment';
+
+            for (const row of participantsResult.rows) {
+                const recipientId = row.user_id;
+                const notifResult = await pool.query(
+                    `INSERT INTO notifications (user_id, title, description, type)
+                     VALUES ($1, $2, $3, 'info') RETURNING *`,
+                    [recipientId, `New message from ${senderName}`, previewText]
+                );
+                if (io) {
+                    io.to(`user:${recipientId}`).emit('new_notification', notifResult.rows[0]);
+                }
+            }
+        } catch (notifErr) {
+            console.error('Non-fatal: failed to emit chat notification:', notifErr);
         }
 
         res.status(201).json(newMessage);
