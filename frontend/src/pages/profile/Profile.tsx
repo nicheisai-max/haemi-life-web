@@ -26,6 +26,7 @@ export const Profile: React.FC = () => {
     const [editing, setEditing] = useState(false);
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [imageVersion, setImageVersion] = useState(() => Date.now()); // cache-bust key
 
     const form = useForm<ProfileUpdateFormData>({
         resolver: zodResolver(profileUpdateSchema),
@@ -65,7 +66,8 @@ export const Profile: React.FC = () => {
             setUploading(true);
             setGeneralError(null);
             await uploadProfileImage(file);
-            await refreshUser(); // Refresh auth state
+            setImageVersion(Date.now()); // Force browser to re-fetch the new image
+            await refreshUser(); // Refresh auth state (Navbar avatar)
             await fetchProfile(); // Refresh local profile state
             setSuccess('Profile image updated successfully!');
             setTimeout(() => setSuccess(null), 3000);
@@ -145,8 +147,7 @@ export const Profile: React.FC = () => {
                         <div className="relative group">
                             <Avatar className="h-24 w-24 ring-4 ring-background shadow-lg border">
                                 <AvatarImage
-                                    src={profile?.id ? `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/profile/${profile.id}` : ''}
-
+                                    src={profile?.id ? `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/profile/${profile.id}?v=${imageVersion}` : ''}
                                     alt={profile?.name}
                                 />
                                 <AvatarFallback className="bg-primary/5 text-primary text-2xl font-bold">

@@ -41,7 +41,7 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
             // ULTRA-STRICT PRODUCTION LOCKDOWN: 
             // 1. Fetch user status, role, token_version, and inactivity data from DB
             const userResult = await pool.query(
-                `SELECT name, initials, profile_image, status, role, token_version, last_activity, 
+                `SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity, 
                 (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
                 FROM users WHERE id = $1`,
                 [decoded.id]
@@ -97,6 +97,7 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
                 name: userData.name,
                 initials: userData.initials,
                 profile_image: userData.profile_image,
+                profile_image_mime: userData.profile_image_mime,
                 status: userData.status
             };
             next();
@@ -126,7 +127,7 @@ export const relaxedAuthenticateToken = (req: AuthRequest, res: Response, next: 
 
         try {
             const userResult = await pool.query(
-                `SELECT name, initials, profile_image, status, role, token_version, last_activity, 
+                `SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity, 
                 (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
                 FROM users WHERE id = $1`,
                 [decoded.id]
@@ -153,6 +154,7 @@ export const relaxedAuthenticateToken = (req: AuthRequest, res: Response, next: 
                 name: userData.name,
                 initials: userData.initials,
                 profile_image: userData.profile_image,
+                profile_image_mime: userData.profile_image_mime,
                 status: userData.status
             };
             next();

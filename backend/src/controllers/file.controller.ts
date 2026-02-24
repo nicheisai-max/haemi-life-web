@@ -18,7 +18,7 @@ export const getProfileImage = async (req: Request, res: Response) => {
         // 1. Try to serve from DB (BYTEA)
         if (user.profile_image_data && user.profile_image_mime) {
             res.setHeader('Content-Type', user.profile_image_mime);
-            res.setHeader('Cache-Control', 'public, max-age=86400'); // 24h cache
+            res.setHeader('Cache-Control', 'no-cache'); // Always revalidate — profile images change
             return res.send(user.profile_image_data);
         }
 
