@@ -12,6 +12,7 @@ import { signConsent } from '@/services/consent.service';
 import { toast } from 'sonner';
 
 import { SignaturePad } from '@/components/ui/SignaturePad';
+import { cn } from '@/lib/utils';
 
 export const TelemedicineConsent: React.FC = () => {
     const navigate = useNavigate();
@@ -212,16 +213,12 @@ export const TelemedicineConsent: React.FC = () => {
                                         <FormLabel>Digital Signature</FormLabel>
                                         <FormControl>
                                             <SignaturePad
+                                                value={field.value}
                                                 onSave={(signature) => field.onChange(signature)}
+                                                onClear={() => field.onChange('')}
                                             />
                                         </FormControl>
                                         <FormMessage />
-                                        {field.value && (
-                                            <p className="text-xs text-green-600 font-medium flex items-center gap-1 mt-2">
-                                                <CheckCircle2 className="h-3 w-3" />
-                                                Signature captured successfully
-                                            </p>
-                                        )}
                                     </FormItem>
                                 )}
                             />
@@ -232,7 +229,7 @@ export const TelemedicineConsent: React.FC = () => {
                                 type="button"
                                 variant="outline"
                                 onClick={() => navigate(-1)}
-                                className="flex items-center gap-2 sm:min-w-40"
+                                className="flex items-center justify-center gap-2 sm:min-w-40 h-11 text-base rounded-lg font-medium transition-all duration-300"
                             >
                                 <X className="h-4 w-4" />
                                 Decline
@@ -241,12 +238,17 @@ export const TelemedicineConsent: React.FC = () => {
                                 type="submit"
                                 variant="default"
                                 disabled={!form.watch('accepted') || !form.watch('signature') || form.formState.isSubmitting}
-                                className="flex items-center gap-2 sm:min-w-52"
+                                className={cn(
+                                    "flex items-center justify-center gap-2 sm:min-w-52 h-11 text-base rounded-lg font-medium transition-all duration-500",
+                                    form.watch('accepted') && form.watch('signature')
+                                        ? "bg-gradient-to-r from-primary to-teal-600 hover:from-primary/90 hover:to-teal-700 shadow-lg shadow-primary/20 hover:-translate-y-0.5 animate-in slide-in-from-bottom-2 fade-in border border-transparent"
+                                        : "border border-transparent"
+                                )}
                             >
                                 {form.formState.isSubmitting ? (
                                     <>
                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                        Saving signature...
+                                        Finalizing...
                                     </>
                                 ) : (
                                     <>

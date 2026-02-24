@@ -1,27 +1,31 @@
 import { useRef, useState } from 'react';
 import { Button } from './button';
 import { Card } from './card';
-import { Eraser, Check, Signature as SignatureIcon, PenTool, Type, RefreshCw } from 'lucide-react';
+import { Eraser, Check, Signature as SignatureIcon, PenTool, Type, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Input } from './input';
 import { Label } from './label';
 import { cn } from '@/lib/utils';
 
 interface SignaturePadProps {
+    value?: string;
     onSave?: (signatureData: string) => void;
+    onClear?: () => void;
     title?: string;
     description?: string;
 }
 
 // Premium Cursive Fonts (loaded via Google Fonts in global CSS or dynamically here)
 const SIGNATURE_FONTS = [
-    { name: 'Great Vibes', family: '"Great Vibes", cursive', label: 'Classic' },
-    { name: 'Sacramento', family: '"Sacramento", cursive', label: 'Modern' },
-    { name: 'Allura', family: '"Allura", cursive', label: 'Elegant' },
+    { name: 'Great Vibes', family: "'Great Vibes', cursive", className: 'font-signature-classic', label: 'Classic' },
+    { name: 'Sacramento', family: "'Sacramento', cursive", className: 'font-signature-modern', label: 'Modern' },
+    { name: 'Allura', family: "'Allura', cursive", className: 'font-signature-elegant', label: 'Elegant' },
 ];
 
 export const SignaturePad: React.FC<SignaturePadProps> = ({
+    value,
     onSave,
+    onClear,
     title = "Electronic Signature"
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -191,6 +195,42 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
         }
     };
 
+    if (value) {
+        return (
+            <Card className="border-2 border-primary bg-primary/5 rounded-3xl overflow-hidden relative group transition-all duration-300 shadow-md">
+                <div className="p-8 flex items-center justify-center min-h-[220px] bg-white dark:bg-card">
+                    <img
+                        src={value}
+                        alt="Captured Signature"
+                        className="max-h-[140px] max-w-full object-contain dark:invert mix-blend-multiply dark:mix-blend-screen"
+                    />
+                </div>
+
+                <div className="absolute inset-0 bg-primary/5 pointer-events-none" />
+
+                <div className="absolute top-4 right-4 flex gap-2">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                            clearSignature();
+                            onClear?.();
+                        }}
+                        className="shadow-md rounded-xl opacity-0 group-hover:opacity-100 transition-opacity bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 h-10 px-4 font-semibold"
+                    >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Retake
+                    </Button>
+                </div>
+
+                <div className="bg-primary/10 py-3 text-center border-t border-primary/20 flex items-center justify-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm font-bold uppercase tracking-widest text-primary">Signature Securely Captured</span>
+                </div>
+            </Card>
+        );
+    }
+
     return (
         <Card className="p-0 border-0 shadow-2xl rounded-3xl overflow-hidden bg-white dark:bg-card ring-1 ring-slate-200 dark:ring-slate-800">
             {/* Header / Tabs */}
@@ -299,8 +339,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
                                         )}
                                     >
                                         <span
-                                            style={{ fontFamily: font.family }}
-                                            className="text-h3 md:text-h2 break-all line-clamp-1 px-2"
+                                            className={cn("text-h3 md:text-h2 break-all line-clamp-1 px-2", font.className)}
                                         >
                                             {typedName || "Signature"}
                                         </span>

@@ -566,4 +566,9 @@
     /* Dark Mode */
     color: white;
   }
+
+  /* Signature Custom Cursive Fonts - Enforced to bypass inline style stripping */
+  .font-signature-classic { font-family: 'Great Vibes', cursive !important; }
+  .font-signature-modern { font-family: 'Sacramento', cursive !important; }
+  .font-signature-elegant { font-family: 'Allura', cursive !important; }
 }

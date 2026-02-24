@@ -570,4 +570,26 @@ INSERT INTO system_settings (key, value)
 VALUES ('SESSION_TIMEOUT_MINUTES', '60')
 ON CONFLICT (key) DO NOTHING;
 
+-- Telemedicine Consent Table
+CREATE TABLE IF NOT EXISTS telemedicine_consents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    patient_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    agreed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    version VARCHAR(20) DEFAULT 'v1.0',
+    signature_data TEXT
+);
+
+-- Idempotent migration: add signature_data if missing (handles pre-existing DBs)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='telemedicine_consents' AND column_name='signature_data'
+    ) THEN
+        ALTER TABLE telemedicine_consents ADD COLUMN signature_data TEXT;
+    END IF;
+END $$;
+
 COMMIT;
