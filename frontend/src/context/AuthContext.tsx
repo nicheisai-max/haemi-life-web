@@ -34,38 +34,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // ─── BroadcastChannel for Cross-Tab Sync ───────────────────────────────
     useEffect(() => {
-        const authChannel = new BroadcastChannel('haemi_auth_sync');
+        // DEMO OVERRIDE: Prevent cross-tab auto-logouts during single-machine multi-role demos
+        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+        let authChannel: BroadcastChannel | null = null;
 
-        const handleMessage = (event: MessageEvent) => {
-            const { type, payload } = event.data;
+        if (!IS_DEMO_MODE) {
+            authChannel = new BroadcastChannel('haemi_auth_sync');
 
-            if (type === 'LOGOUT') {
-                console.log('[Auth] Synchronizing logout across tabs.');
-                setAccessToken(null);
-                sessionStorage.removeItem('user');
-                setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
-            } else if (type === 'LOGIN') {
-                console.log('[Auth] Synchronizing login across tabs.');
-                const { user, token } = payload;
-                setAccessToken(token);
-                sessionStorage.setItem('user', JSON.stringify(user));
-                setAuthState({ user, token, authStatus: 'authenticated' });
-            }
-        };
+            const handleMessage = (event: MessageEvent) => {
+                const { type, payload } = event.data;
+
+                if (type === 'LOGOUT') {
+                    console.log('[Auth] Synchronizing logout across tabs.');
+                    setAccessToken(null);
+                    sessionStorage.removeItem('user');
+                    setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
+                } else if (type === 'LOGIN') {
+                    console.log('[Auth] Synchronizing login across tabs.');
+                    const { user, token } = payload;
+                    setAccessToken(token);
+                    sessionStorage.setItem('user', JSON.stringify(user));
+                    setAuthState({ user, token, authStatus: 'authenticated' });
+                }
+            };
+            authChannel.onmessage = handleMessage;
+        }
 
         const handleUnauthorized = () => {
             console.log('[Auth] Session invalidated (Global Event).');
             setAccessToken(null);
             sessionStorage.removeItem('user');
             setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
-            authChannel.postMessage({ type: 'LOGOUT' });
+            if (authChannel) authChannel.postMessage({ type: 'LOGOUT' });
         };
 
-        authChannel.onmessage = handleMessage;
         window.addEventListener('auth:unauthorized', handleUnauthorized);
 
         return () => {
-            authChannel.close();
+            if (authChannel) authChannel.close();
             window.removeEventListener('auth:unauthorized', handleUnauthorized);
         };
     }, []);
@@ -132,9 +138,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated' });
 
         // Broadcast to other tabs
-        const authChannel = new BroadcastChannel('haemi_auth_sync');
-        authChannel.postMessage({ type: 'LOGIN', payload: { user: newUser, token: newToken } });
-        authChannel.close();
+        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+        if (!IS_DEMO_MODE) {
+            const authChannel = new BroadcastChannel('haemi_auth_sync');
+            authChannel.postMessage({ type: 'LOGIN', payload: { user: newUser, token: newToken } });
+            authChannel.close();
+        }
     }, []);
 
     const signup = useCallback(async (credentials: SignupCredentials) => {
@@ -158,9 +167,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         // Broadcast to other tabs
-        const authChannel = new BroadcastChannel('haemi_auth_sync');
-        authChannel.postMessage({ type: 'LOGOUT' });
-        authChannel.close();
+        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+        if (!IS_DEMO_MODE) {
+            const authChannel = new BroadcastChannel('haemi_auth_sync');
+            authChannel.postMessage({ type: 'LOGOUT' });
+            authChannel.close();
+        }
 
         try {
             await authService.logout();

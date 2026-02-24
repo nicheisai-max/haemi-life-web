@@ -37,8 +37,11 @@ export const Login: React.FC = () => {
         setGeneralError('');
 
         try {
+            // Enterprise Hardening: Force sanitize inputs to avoid DB case-sensitivity mismatches
+            const cleanIdentifier = data.emailOrPhone.trim().toLowerCase();
+
             const credentials = {
-                identifier: data.emailOrPhone,
+                identifier: cleanIdentifier,
                 password: data.password,
             };
 
