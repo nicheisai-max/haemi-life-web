@@ -178,8 +178,9 @@ app.use('/api/files', fileRoutes);
 
 // Serve uploaded files
 // V12 FIX: Protected static assets.
-// Note: Requests for these files must now include authorization (e.g., via session cookie or token)
-app.use('/uploads', authenticateToken, express.static('uploads'));
+// DEPRECATED: Direct static access for /uploads is disabled to prevent BOLA guesswork.
+// All clinical files must now be routed through /api/files/ which enforces ownership.
+// app.use('/uploads', authenticateToken, express.static('uploads'));
 
 
 

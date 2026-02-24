@@ -6,15 +6,21 @@ import { userRepository } from '../repositories/user.repository';
 import { systemSettingsRepository } from '../repositories/system_settings.repository';
 import { logger } from '../utils/logger';
 import { auditService } from '../services/audit.service';
+import { sendResponse, sendError } from '../utils/response';
 
 export const signup = async (req: Request, res: Response) => {
     const { email, password, role, name, phone_number, id_number } = req.body;
+
+    // Institutional Hardening: Input Validation
+    if (!email || !password || !role || !name || !phone_number) {
+        return sendError(res, 400, 'Missing required fields (name, email, phone, password, role)');
+    }
 
     try {
         // Check if user exists (by phone or email if provided)
         const userCheck = await userRepository.findByPhoneOrEmail(phone_number, email);
         if (userCheck) {
-            return res.status(400).json({ message: 'User already exists with this phone number or email' });
+            return sendError(res, 400, 'User already exists with this phone number or email');
         }
 
         // Hash password
@@ -28,52 +34,38 @@ export const signup = async (req: Request, res: Response) => {
             const newUser = await userRepository.create({
                 name,
                 phone_number,
-                email: email || null,
+                email,
                 password: hashedPassword,
                 role,
                 id_number: id_number || null
             }, client);
 
-            // Handle role specific data insertion here (dummy logic for now)
-            // if (role === 'doctor') { ... }
-
             await client.query('COMMIT');
 
             // Generate Access Token (15m)
             const accessToken = jwt.sign(
-                {
-                    id: newUser.id,
-                    email: newUser.email,
-                    role: newUser.role,
-                    token_version: newUser.token_version
-                },
+                { id: newUser.id, email: newUser.email, role: newUser.role, token_version: newUser.token_version },
                 process.env.JWT_SECRET as string,
                 { expiresIn: '15m' }
             );
 
             // Generate Refresh Token (7d)
             const refreshToken = jwt.sign(
-                {
-                    id: newUser.id,
-                    token_version: newUser.token_version
-                },
+                { id: newUser.id, token_version: newUser.token_version },
                 process.env.JWT_SECRET as string,
                 { expiresIn: '7d' }
             );
 
-            // Send Refresh Token as HTTP-Only Cookie
             res.cookie('refreshToken', refreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax', // 'lax' allows cookie on top-level navigations (page refresh)
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000
             });
 
-            // Update activity heartbeat on signup
             await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [newUser.id]);
 
-            res.status(201).json({
-                message: 'User created successfully',
+            return sendResponse(res, 201, true, 'User created successfully', {
                 token: accessToken,
                 user: {
                     id: newUser.id,
@@ -93,7 +85,7 @@ export const signup = async (req: Request, res: Response) => {
         }
     } catch (error) {
         logger.error('Error creating user', { error, email, phone_number, role });
-        res.status(500).json({ message: 'Error creating user' });
+        return sendError(res, 500, 'Error creating user');
     }
 };
 
@@ -112,7 +104,7 @@ export const login = async (req: Request, res: Response) => {
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
-            return res.status(400).json({ message: 'Invalid credentials' });
+            return sendError(res, 400, 'Invalid credentials');
         }
 
         // STRICT STATUS CHECK
@@ -125,7 +117,7 @@ export const login = async (req: Request, res: Response) => {
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
-            return res.status(403).json({ message: 'Account is not active. Please contact support.' });
+            return sendError(res, 403, 'Account is not active. Please contact support.');
         }
 
         const validPassword = await bcrypt.compare(password, user.password!);
@@ -133,14 +125,14 @@ export const login = async (req: Request, res: Response) => {
         if (!validPassword) {
             await auditService.log({
                 actor_id: user.id,
-                actor_role: user.role, // Log role even on failure if user known
+                actor_role: user.role,
                 action_type: 'LOGIN_FAILED',
                 metadata: { reason: 'Invalid password' },
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
             logger.auth('Failed login attempt: Invalid password', { identifier, ip: req.ip });
-            return res.status(400).json({ message: 'Invalid credentials' });
+            return sendError(res, 400, 'Invalid credentials');
         }
 
         // Audit Successful Login
@@ -183,14 +175,14 @@ export const login = async (req: Request, res: Response) => {
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax', // 'lax' allows cookie on top-level navigations (page refresh)
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
         // Update activity heartbeat on login
         await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
-        res.json({
+        return sendResponse(res, 200, true, 'Login successful', {
             token: accessToken,
             user: {
                 id: user.id,
@@ -204,7 +196,7 @@ export const login = async (req: Request, res: Response) => {
         });
     } catch (error) {
         logger.error('Login server error', { error, identifier });
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -214,13 +206,13 @@ export const getProfile = async (req: any, res: Response) => {
         const user = await userRepository.findById(userId);
 
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            return sendError(res, 404, 'User not found');
         }
 
-        res.json(user);
+        return sendResponse(res, 200, true, 'Profile fetched', user);
     } catch (error) {
         console.error('Error fetching profile:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -232,13 +224,13 @@ export const updateProfile = async (req: any, res: Response) => {
         const updatedUser = await userRepository.updateProfile(userId, { name, email, phone_number });
 
         if (!updatedUser) {
-            return res.status(404).json({ message: 'User not found' });
+            return sendError(res, 404, 'User not found');
         }
 
-        res.json(updatedUser);
+        return sendResponse(res, 200, true, 'Profile updated', updatedUser);
     } catch (error) {
         console.error('Error updating profile:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -256,19 +248,15 @@ export const uploadProfileImage = async (req: any, res: Response) => {
         );
 
         if (!updatedUser) {
-            return res.status(404).json({ message: 'User not found' });
+            return sendError(res, 404, 'User not found');
         }
 
-        res.json({
-            message: 'Profile image updated successfully',
+        return sendResponse(res, 200, true, 'Profile image updated successfully', {
             user: updatedUser
         });
     } catch (error: any) {
         console.error('Error uploading profile image:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error during upload process'
-        });
+        return sendError(res, 500, 'Server error during upload process');
     }
 };
 
@@ -280,23 +268,23 @@ export const changePassword = async (req: any, res: Response) => {
         // Get current password hash
         const passwordHash = await userRepository.getPasswordHash(userId);
         if (!passwordHash) {
-            return res.status(404).json({ message: 'User not found' });
+            return sendError(res, 404, 'User not found');
         }
 
         const validPassword = await bcrypt.compare(current_password, passwordHash);
 
         if (!validPassword) {
-            return res.status(400).json({ message: 'Invalid current password' });
+            return sendError(res, 400, 'Invalid current password');
         }
 
         const hashedPassword = await bcrypt.hash(new_password, 10);
 
         await userRepository.updatePassword(userId, hashedPassword);
 
-        res.json({ message: 'Password updated successfully' });
+        return sendResponse(res, 200, true, 'Password updated successfully');
     } catch (error) {
         console.error('Error changing password:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -304,7 +292,7 @@ export const refreshToken = async (req: Request, res: Response) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-        return res.status(200).json({ authenticated: false, message: 'No active session' });
+        return sendResponse(res, 200, false, 'No active session');
     }
 
     try {
@@ -314,7 +302,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         if (!user || user.status !== 'ACTIVE') {
             res.clearCookie('refreshToken');
-            return res.status(200).json({ authenticated: false, message: 'Invalid session' });
+            return sendResponse(res, 200, false, 'Invalid session');
         }
 
         // Session Replay Protection
@@ -322,7 +310,7 @@ export const refreshToken = async (req: Request, res: Response) => {
             // If a token reuse is detected, invalidate all current sessions for the user
             await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [user.id]);
             res.clearCookie('refreshToken');
-            return res.status(200).json({ authenticated: false, message: 'Session revoked due to reuse detection' });
+            return sendResponse(res, 200, false, 'Session revoked due to reuse detection');
         }
 
         // Token Renewal: Update last_activity only.
@@ -349,39 +337,39 @@ export const refreshToken = async (req: Request, res: Response) => {
         res.cookie('refreshToken', newRefreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax', // consistent with login/signup cookie config
+            sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
-        res.json({ authenticated: true, token: accessToken });
+        return sendResponse(res, 200, true, 'Token refreshed', { token: accessToken });
     } catch (error) {
         res.clearCookie('refreshToken');
-        return res.status(200).json({ authenticated: false, message: 'Invalid refresh token' });
+        return sendResponse(res, 200, false, 'Invalid refresh token');
     }
 };
 
 export const logout = async (req: Request, res: Response) => {
     res.clearCookie('refreshToken');
-    res.json({ message: 'Logged out successfully' });
+    return sendResponse(res, 200, true, 'Logged out successfully');
 };
 
 export const verifySession = async (req: any, res: Response) => {
     try {
         const user = req.user;
-        res.json({ message: 'Session valid', user });
+        return sendResponse(res, 200, true, 'Session valid', { user });
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
 export const getMe = async (req: any, res: Response) => {
     try {
-        res.json({
+        return sendResponse(res, 200, true, 'User data fetched', {
             authenticated: !!req.user,
             user: req.user || null
         });
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 

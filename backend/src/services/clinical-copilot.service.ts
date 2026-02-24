@@ -20,11 +20,12 @@ export class ClinicalCopilotService {
      * @returns A string response from the AI.
      */
     async generateResponse(query: string, context?: any): Promise<string> {
-        try {
-            // Construct a system-like prompt for the AI
-            // Note: gemini-pro doesn't strictly support 'system' role in the same way as GPT-4,
-            // so we prepend instructions to the user prompt or use chat history.
+        // Institutional Hardening: Prevent event loop stalling with a 15s timeout
+        const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('AI_TIMEOUT')), 15000)
+        );
 
+        try {
             const systemInstruction = `
                 You are the 'Haemi Life Clinical Copilot', an advanced AI assistant for doctors in Botswana.
                 
@@ -41,13 +42,20 @@ export class ClinicalCopilotService {
                 ${query}
             `;
 
-            const result = await this.model.generateContent(systemInstruction);
+            // Race the AI call against the timeout
+            const resultPromise = this.model.generateContent(systemInstruction);
+            const result = await Promise.race([resultPromise, timeoutPromise]) as any;
+
             const response = await result.response;
             const text = response.text();
 
             return text;
 
-        } catch (error) {
+        } catch (error: any) {
+            if (error.message === 'AI_TIMEOUT') {
+                console.error('[ClinicalCopilot] Request timed out after 15s');
+                throw new Error('SERVICE_UNAVAILABLE');
+            }
             console.error('[ClinicalCopilot] Error generating response:', error);
             throw new Error('Failed to generate AI response. Please try again.');
         }

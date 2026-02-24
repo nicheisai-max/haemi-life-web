@@ -25,13 +25,15 @@ export class ClinicalCopilotController {
             const { query, context } = validation.data;
 
             // 2. Call Service
-            // Note: In a real app, we might also want to log *who* is asking (req.user.id) for audit trails.
             const response = await clinicalCopilotService.generateResponse(query, context);
 
             // 3. Send Response
             return sendResponse(res, 200, true, 'AI Response Generated', { response });
 
-        } catch (error) {
+        } catch (error: any) {
+            if (error.message === 'SERVICE_UNAVAILABLE') {
+                return sendResponse(res, 503, false, 'Clinical Copilot is currently overloaded. Please try again in a moment.');
+            }
             console.error('[ClinicalCopilotController] Error:', error);
             return sendResponse(res, 500, false, 'Internal Server Error');
         }

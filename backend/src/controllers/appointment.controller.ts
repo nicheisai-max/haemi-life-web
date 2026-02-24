@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { appointmentRepository } from '../repositories/appointment.repository';
 import { pool } from '../config/db';
 import { io } from '../app';
+import { sendResponse, sendError } from '../utils/response';
 
 // Helper to create a notification in DB and emit it in real-time
 async function createAndEmitNotification(
@@ -112,10 +113,10 @@ export const getMyAppointments = async (req: Request, res: Response) => {
             status as string,
             upcoming === 'true'
         );
-        res.json(appointments);
+        return sendResponse(res, 200, true, 'Appointments fetched successfully', appointments);
     } catch (error) {
         console.error('Error fetching appointments:', error);
-        res.status(500).json({ message: 'Error fetching appointments' });
+        return sendError(res, 500, 'Error fetching appointments');
     }
 };
 
@@ -128,13 +129,13 @@ export const getAppointmentById = async (req: Request, res: Response) => {
         const appointment = await appointmentRepository.findByIdWithDetails(id as string, user.id as string);
 
         if (!appointment) {
-            return res.status(404).json({ message: 'Appointment not found' });
+            return sendError(res, 404, 'Appointment not found');
         }
 
-        res.json(appointment);
+        return sendResponse(res, 200, true, 'Appointment details fetched', appointment);
     } catch (error) {
         console.error('Error fetching appointment:', error);
-        res.status(500).json({ message: 'Error fetching appointment' });
+        return sendError(res, 500, 'Error fetching appointment');
     }
 };
 

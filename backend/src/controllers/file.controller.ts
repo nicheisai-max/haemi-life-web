@@ -42,16 +42,21 @@ export const getProfileImage = async (req: Request, res: Response) => {
 export const getChatAttachment = async (req: Request, res: Response) => {
     try {
         const { messageId } = req.params;
-        const result = await pool.query(
-            'SELECT attachment_data, attachment_mime, attachment_url FROM messages WHERE id = $1',
-            [messageId]
-        );
+        const user = (req as any).user;
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Message not found' });
+        // BOLA Fix: Check if user is a participant in the conversation this message belongs to
+        const accessCheck = await pool.query(`
+            SELECT m.attachment_data, m.attachment_mime, m.attachment_url 
+            FROM messages m
+            JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
+            WHERE m.id = $1 AND cp.user_id = $2
+        `, [messageId, user.id]);
+
+        if (accessCheck.rows.length === 0) {
+            return res.status(403).json({ message: 'Access denied. You are not a participant in this conversation.' });
         }
 
-        const message = result.rows[0];
+        const message = accessCheck.rows[0];
 
         if (message.attachment_data && message.attachment_mime) {
             res.setHeader('Content-Type', message.attachment_mime);
@@ -72,13 +77,25 @@ export const getChatAttachment = async (req: Request, res: Response) => {
 export const getMedicalRecordFile = async (req: Request, res: Response) => {
     try {
         const { recordId } = req.params;
-        const result = await pool.query(
-            'SELECT file_data, file_mime, file_path FROM medical_records WHERE id = $1',
-            [recordId]
-        );
+        const user = (req as any).user;
+
+        // BOLA Fix: Patients can only see their own records. Doctors/Admins can see any record.
+        let query = `
+            SELECT file_data, file_mime, file_path 
+            FROM medical_records 
+            WHERE id = $1 AND deleted_at IS NULL
+        `;
+        const params: any[] = [recordId];
+
+        if (user.role === 'patient') {
+            query += ' AND patient_id = $2';
+            params.push(user.id);
+        }
+
+        const result = await pool.query(query, params);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Record not found' });
+            return res.status(403).json({ message: 'Access denied or record not found' });
         }
 
         const record = result.rows[0];
@@ -89,7 +106,7 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
         }
 
         if (record.file_path) {
-            // Adjust path if needed
+            // Institutional Hardening: Prevent direct static guesswork by serving via controller
             return res.redirect(`/${record.file_path}`);
         }
 
