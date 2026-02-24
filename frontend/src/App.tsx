@@ -43,6 +43,7 @@ const PrivacyPolicy = lazy(() => import('./pages/legal/PrivacyPolicy').then(m =>
 const TermsOfService = lazy(() => import('./pages/legal/TermsOfService').then(m => ({ default: m.TermsOfService })));
 const Help = lazy(() => import('./pages/support/Help').then(m => ({ default: m.Help })));
 const TelemedicineConsent = lazy(() => import('./pages/legal/TelemedicineConsent').then(m => ({ default: m.TelemedicineConsent })));
+const TelemedicineDashboard = lazy(() => import('./pages/telemedicine/TelemedicineDashboard').then(m => ({ default: m.TelemedicineDashboard })));
 const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then(m => ({ default: m.Onboarding })));
 const VideoConsultation = lazy(() => import('./components/telemedicine/VideoConsultation').then(m => ({ default: m.VideoConsultation })));
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound })));
@@ -109,6 +110,18 @@ const AppRoutes = () => {
                   <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <TelemedicineConsent />
+                    </PageTransition>
+                  </LazyDashboardLayout></Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={PATHS.TELEMEDICINE}
+              element={
+                <ProtectedRoute>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
+                    <PageTransition>
+                      <TelemedicineDashboard />
                     </PageTransition>
                   </LazyDashboardLayout></Suspense>
                 </ProtectedRoute>

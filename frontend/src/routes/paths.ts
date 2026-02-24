@@ -17,6 +17,7 @@ export const PATHS = {
     TERMS: '/terms',
     HELP: '/help',
     CONSENT: '/consent',
+    TELEMEDICINE: '/telemedicine',
     ONBOARDING: '/onboarding',
 
     // Dashboard (Role Based Redirect)

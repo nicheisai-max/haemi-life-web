@@ -23,7 +23,7 @@ export const useNavigation = () => {
         patient: [
             { icon: LayoutDashboard, label: 'Dashboard', path: PATHS.PATIENT.DASHBOARD },
             { icon: Search, label: 'Find Specialists', path: PATHS.PATIENT.FIND_DOCTORS },
-            { icon: Video, label: 'Telemedicine', path: PATHS.CONSENT }, // Start with consent or a specific landing page
+            { icon: Video, label: 'Telemedicine', path: PATHS.TELEMEDICINE },
             { icon: Calendar, label: 'Appointments', path: PATHS.PATIENT.APPOINTMENTS },
             { icon: FileText, label: 'Prescriptions', path: PATHS.PATIENT.PRESCRIPTIONS },
             { icon: ClipboardList, label: 'Medical Records', path: PATHS.PATIENT.MEDICAL_RECORDS },

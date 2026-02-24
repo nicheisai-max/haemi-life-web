@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 
 import { SignaturePad } from '@/components/ui/SignaturePad';
 import { cn } from '@/lib/utils';
+import { PATHS } from '@/routes/paths';
 
 export const TelemedicineConsent: React.FC = () => {
     const navigate = useNavigate();
@@ -35,8 +36,8 @@ export const TelemedicineConsent: React.FC = () => {
                     description: 'Your telemedicine consent has been saved. You can now book video appointments.',
                 });
 
-                // Navigate back to the booking flow
-                navigate(-1);
+                // Navigate to the Telemedicine Hub (reliable, predictable destination)
+                navigate(PATHS.TELEMEDICINE);
             } catch (error: any) {
                 toast.error('Failed to save consent', {
                     description: error.response?.data?.message || 'An error occurred while saving your signature. Please try again.',
