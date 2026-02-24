@@ -76,24 +76,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const initAuth = async () => {
             try {
-                // Discovery Phase: hit the relaxed endpoint to check for existing sessions silently.
-                // This NEVER returns a 401, keeping the console 100% clean for guests.
-                const { user, authenticated } = await authService.getMe();
+                // PHASE 1: Proactively attempt to refresh the token using the HttpOnly cookie.
+                // This securely negotiates a new in-memory access token BEFORE assuming guest status.
+                const refreshResult = await authService.refreshToken();
 
-                if (authenticated && user && mounted) {
-                    setAuthState({
-                        user,
-                        token: null,
-                        authStatus: 'authenticated'
-                    });
-                } else if (mounted) {
-                    setAuthState({
-                        user: null,
-                        token: null,
-                        authStatus: 'unauthenticated'
-                    });
+                if (refreshResult.authenticated && refreshResult.token) {
+                    setAccessToken(refreshResult.token);
+
+                    // PHASE 2: Fetch the full user profile securely with the new in-memory token.
+                    const { user } = await authService.verifySession();
+
+                    if (mounted) {
+                        setAuthState({
+                            user,
+                            token: refreshResult.token,
+                            authStatus: 'authenticated'
+                        });
+                        // Persist user for cross-tab sync / hydration
+                        sessionStorage.setItem('user', JSON.stringify(user));
+                    }
+                } else {
+                    // Genuine guest or expired session. Safe to become unauthenticated.
+                    if (mounted) {
+                        setAuthState({
+                            user: null,
+                            token: null,
+                            authStatus: 'unauthenticated'
+                        });
+                    }
                 }
             } catch (error: any) {
+                // Safe degrade if network drops during initialization
                 if (mounted) {
                     setAuthState({
                         user: null,
