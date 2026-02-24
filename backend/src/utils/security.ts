@@ -1,43 +1,84 @@
 import crypto from 'crypto';
 
-const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex'); // Fallback for demo if env missing, but ideally fixed
+const ALGORITHM_GCM = 'aes-256-gcm';
+const ALGORITHM_CBC = 'aes-256-cbc';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'demo_key_32_bytes_at_least_123456';
 const IV_LENGTH = 16;
+const AUTH_TAG_LENGTH = 16;
 const ENCRYPTED_PREFIX = 'enc:';
+const GCM_PREFIX = 'gcm:';
 
 // Helper to ensure key is 32 bytes
 function getKey() {
-    return crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    return crypto.scryptSync(ENCRYPTION_KEY, 'haemi_salt', 32);
 }
 
+/**
+ * AES-256-GCM Encryption (High-Performance Authenticated Encryption)
+ * Format: enc:gcm:<iv>:<tag>:<ciphertext>
+ */
 export const encrypt = (text: string): string => {
     if (!text) return text;
     try {
         const iv = crypto.randomBytes(IV_LENGTH);
-        const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
-        let encrypted = cipher.update(text);
-        encrypted = Buffer.concat([encrypted, cipher.final()]);
-        return ENCRYPTED_PREFIX + iv.toString('hex') + ':' + encrypted.toString('hex');
+        const cipher = crypto.createCipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH }) as crypto.CipherGCM;
+
+        let encrypted = cipher.update(text, 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        const authTag = cipher.getAuthTag().toString('hex');
+
+        return `${ENCRYPTED_PREFIX}${GCM_PREFIX}${iv.toString('hex')}:${authTag}:${encrypted}`;
     } catch (error) {
-        console.error('[Security] Encryption failed:', error);
-        return text; // Fail safe return original if error
+        console.error('[Security] GCM Encryption failed:', error);
+        return text;
     }
 };
 
+/**
+ * Dual-Mode Decryption (GCM + CBC Legacy + Plaintext)
+ */
 export const decrypt = (text: string): string => {
-    if (!text) return text;
-    if (!text.startsWith(ENCRYPTED_PREFIX)) return text; // Assume legacy plaintext
+    if (!text || !text.startsWith(ENCRYPTED_PREFIX)) return text;
+
+    const data = text.slice(ENCRYPTED_PREFIX.length);
 
     try {
-        const parts = text.slice(ENCRYPTED_PREFIX.length).split(':');
-        const iv = Buffer.from(parts.shift()!, 'hex');
-        const encryptedText = Buffer.from(parts.join(':'), 'hex');
-        const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv);
+        // Mode A: AES-256-GCM
+        if (data.startsWith(GCM_PREFIX)) {
+            const parts = data.slice(GCM_PREFIX.length).split(':');
+            const iv = Buffer.from(parts[0], 'hex');
+            const tag = Buffer.from(parts[1], 'hex');
+            const encryptedText = parts[2];
+
+            const decipher = crypto.createDecipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH }) as crypto.DecipherGCM;
+            decipher.setAuthTag(tag);
+
+            let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+            decrypted += decipher.final('utf8');
+            return decrypted;
+        }
+
+        // Mode B: Legacy AES-256-CBC (Phase 2 Default)
+        const parts = data.split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const encryptedText = Buffer.from(parts[1], 'hex');
+
+        const decipher = crypto.createDecipheriv(ALGORITHM_CBC, getKey(), iv);
         let decrypted = decipher.update(encryptedText);
         decrypted = Buffer.concat([decrypted, decipher.final()]);
         return decrypted.toString();
+
     } catch (error) {
-        console.error('[Security] Decryption failed:', error);
-        return text; // Fail safe return original (or encrypted string if fail)
+        console.error('[Security] Decryption failed (Mode mismatch or key error):', error);
+        return text;
     }
 };
+
+// Blind Index helper (Deterministic HMAC for searchable PII)
+export const getBlindIndex = (text: string): string => {
+    if (!text) return '';
+    return crypto.createHmac('sha256', getKey())
+        .update(text.trim().toLowerCase())
+        .digest('hex');
+};
+

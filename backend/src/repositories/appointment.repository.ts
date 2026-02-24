@@ -43,7 +43,8 @@ export class AppointmentRepository {
     async checkConflict(doctorId: string, date: string, time: string): Promise<boolean> {
         const result = await this.db.query(`
             SELECT id FROM appointments
-            WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3 AND status != 'cancelled'
+            WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3 
+              AND status != 'cancelled' AND deleted_at IS NULL
         `, [doctorId, date, time]);
         return result.rows.length > 0;
     }
@@ -72,7 +73,7 @@ export class AppointmentRepository {
             FROM appointments a
             LEFT JOIN users u_doctor ON a.doctor_id = u_doctor.id
             LEFT JOIN users u_patient ON a.patient_id = u_patient.id
-            WHERE (a.patient_id = $1 OR a.doctor_id = $1)
+            WHERE (a.patient_id = $1 OR a.doctor_id = $1) AND a.deleted_at IS NULL
         `;
 
         const params: any[] = [userId];
@@ -104,7 +105,7 @@ export class AppointmentRepository {
             JOIN users u_doctor ON a.doctor_id = u_doctor.id
             JOIN users u_patient ON a.patient_id = u_patient.id
             LEFT JOIN doctor_profiles dp ON a.doctor_id = dp.user_id
-            WHERE a.id = $1 AND (a.patient_id = $2 OR a.doctor_id = $2)
+            WHERE a.id = $1 AND (a.patient_id = $2 OR a.doctor_id = $2) AND a.deleted_at IS NULL
         `, [id, userId]);
 
         return result.rows[0] || null;
@@ -114,7 +115,7 @@ export class AppointmentRepository {
         const result = await this.db.query(`
             UPDATE appointments
             SET status = $1, notes = COALESCE($2, notes), updated_at = CURRENT_TIMESTAMP
-            WHERE id = $3 AND doctor_id = $4
+            WHERE id = $3 AND doctor_id = $4 AND deleted_at IS NULL
             RETURNING *
         `, [status, notes || null, id, doctorId]);
         return result.rows[0] || null;
@@ -124,7 +125,7 @@ export class AppointmentRepository {
         const result = await this.db.query(`
             UPDATE appointments
             SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2)
+            WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2) AND deleted_at IS NULL
             RETURNING *
         `, [id, userId]);
         return result.rows[0] || null;
@@ -141,7 +142,8 @@ export class AppointmentRepository {
     async getBookedTimes(doctorId: string, date: string): Promise<string[]> {
         const result = await this.db.query(`
             SELECT appointment_time FROM appointments
-            WHERE doctor_id = $1 AND appointment_date = $2 AND status != 'cancelled'
+            WHERE doctor_id = $1 AND appointment_date = $2 
+              AND status != 'cancelled' AND deleted_at IS NULL
         `, [doctorId, date]);
         return result.rows.map(row => {
             const time = row.appointment_time;
@@ -158,9 +160,11 @@ export class AppointmentRepository {
     }
 
     // Permanently remove a past/completed/cancelled appointment (patient only)
-    async hardDelete(id: string, patientId: string): Promise<boolean> {
+    // Institutional Soft delete (only for past/completed/cancelled)
+    async softDelete(id: string, patientId: string): Promise<boolean> {
         const result = await this.db.query(`
-            DELETE FROM appointments
+            UPDATE appointments
+            SET deleted_at = CURRENT_TIMESTAMP
             WHERE id = $1
               AND patient_id = $2
               AND (

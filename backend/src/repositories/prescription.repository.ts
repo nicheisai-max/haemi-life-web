@@ -78,7 +78,7 @@ export class PrescriptionRepository {
             JOIN users u_patient ON p.patient_id = u_patient.id
             JOIN users u_doctor ON p.doctor_id = u_doctor.id
             LEFT JOIN prescription_items pi ON p.id = pi.prescription_id
-            WHERE ${role === 'patient' ? 'p.patient_id' : 'p.doctor_id'} = $1
+            WHERE ${role === 'patient' ? 'p.patient_id' : 'p.doctor_id'} = $1 AND p.deleted_at IS NULL
             GROUP BY p.id, u_patient.name, u_doctor.name
             ORDER BY p.prescription_date DESC
         `;
@@ -98,7 +98,7 @@ export class PrescriptionRepository {
             JOIN users u_patient ON p.patient_id = u_patient.id
             JOIN users u_doctor ON p.doctor_id = u_doctor.id
             LEFT JOIN doctor_profiles dp ON p.doctor_id = dp.user_id
-            WHERE p.id = $1 AND (p.patient_id = $2 OR p.doctor_id = $2 OR $3 = 'pharmacist')
+            WHERE p.id = $1 AND (p.patient_id = $2 OR p.doctor_id = $2 OR $3 = 'pharmacist') AND p.deleted_at IS NULL
         `, [id, userId, role]);
 
         if (result.rows.length === 0) return null;
@@ -141,7 +141,7 @@ export class PrescriptionRepository {
             JOIN users u_patient ON p.patient_id = u_patient.id
             JOIN users u_doctor ON p.doctor_id = u_doctor.id
             LEFT JOIN prescription_items pi ON p.id = pi.prescription_id
-            WHERE p.status = 'pending'
+            WHERE p.status = 'pending' AND p.deleted_at IS NULL
             GROUP BY p.id, u_patient.name, u_patient.phone_number, u_doctor.name
             ORDER BY p.prescription_date ASC
         `);
@@ -150,10 +150,19 @@ export class PrescriptionRepository {
 
     async checkAppointmentAccess(appointmentId: string, doctorId: string): Promise<boolean> {
         const result = await this.db.query(
-            'SELECT id FROM appointments WHERE id = $1 AND doctor_id = $2',
+            'SELECT id FROM appointments WHERE id = $1 AND doctor_id = $2 AND deleted_at IS NULL',
             [appointmentId, doctorId]
         );
         return result.rows.length > 0;
+    }
+
+    async softDelete(id: string, userId: string): Promise<boolean> {
+        const result = await this.db.query(`
+            UPDATE prescriptions
+            SET deleted_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2)
+        `, [id, userId]);
+        return (result.rowCount ?? 0) > 0;
     }
 }
 

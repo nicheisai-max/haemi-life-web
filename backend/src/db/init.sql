@@ -5,8 +5,9 @@
 
 BEGIN;
 
--- 1. Enable UUID extension
+-- 1. Enable Required Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- Required for digest/blind indexing
 
 -- 1.5 Clean Start (Prevent Schema Drift)
 -- Non-critical tables can be dropped if schema changed significantly
@@ -46,13 +47,24 @@ CREATE TABLE IF NOT EXISTS users (
     profile_image_data BYTEA,                          -- Binary storage for uploaded profile pictures
     profile_image_mime VARCHAR(100),                   -- MIME type for profile picture (e.g. image/jpeg)
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
+    phone_blind_index VARCHAR(64),                     -- Searchable hash for encrypted phone
+    id_blind_index VARCHAR(64),                        -- Searchable hash for encrypted ID
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Schema Migration (Ensure column exists for existing DBs - Idempotent)
+-- Idempotent Migration: User Table Enhancements
 DO $$
 BEGIN
+    -- PII Blind Indexing
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='phone_blind_index') THEN
+        ALTER TABLE users ADD COLUMN phone_blind_index VARCHAR(64);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='id_blind_index') THEN
+        ALTER TABLE users ADD COLUMN id_blind_index VARCHAR(64);
+    END IF;
+    
+    -- Profile Image Infrastructure
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image') THEN
         ALTER TABLE users ADD COLUMN profile_image VARCHAR(255);
     END IF;
@@ -62,20 +74,63 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image_mime') THEN
         ALTER TABLE users ADD COLUMN profile_image_mime VARCHAR(100);
     END IF;
+
+    -- Enforce Professional Constraints on existing columns
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='doctor_profiles') THEN
+        ALTER TABLE doctor_profiles DROP CONSTRAINT IF EXISTS doc_fee_check;
+        ALTER TABLE doctor_profiles ADD CONSTRAINT doc_fee_check CHECK (consultation_fee >= 0);
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='medicines') THEN
+        ALTER TABLE medicines DROP CONSTRAINT IF EXISTS med_price_check;
+        ALTER TABLE medicines ADD CONSTRAINT med_price_check CHECK (price_per_unit >= 0);
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='appointments') THEN
+        ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appt_duration_check;
+        ALTER TABLE appointments ADD CONSTRAINT appt_duration_check CHECK (duration_minutes > 0);
+    END IF;
 END $$;
 
--- Audit Logs (Compulsory for Compliance)
+-- PII Blind Indexing for High-Performance Search
+CREATE INDEX IF NOT EXISTS idx_users_phone_blind ON users(phone_blind_index);
+CREATE INDEX IF NOT EXISTS idx_users_id_blind ON users(id_blind_index);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status);
+CREATE INDEX IF NOT EXISTS idx_users_last_activity ON users(last_activity);
+
+-- 3. Audit Logs (Aligned with Admin & Audit Services)
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    actor_id UUID, -- Nullable if system action or failed login
+    user_id UUID, -- Previously actor_id
     actor_role VARCHAR(50),
-    action_type VARCHAR(50) NOT NULL, -- LOGIN, LOGOUT, VIEW_DASHBOARD, UPDATE_PROFILE, etc.
-    target_id UUID,
-    metadata JSONB,
+    action VARCHAR(100) NOT NULL, -- Previously action_type
+    entity_type VARCHAR(50), -- Previously target_type or part of metadata
+    entity_id UUID, -- Previously target_id
+    details JSONB, -- Previously metadata
     ip_address VARCHAR(45),
     user_agent TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Audit Performance Indices
+CREATE INDEX IF NOT EXISTS idx_audit_user_action ON audit_logs(user_id, action);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+
+-- Schema Migration for Audit Logs (Idempotent alignment)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='user_id') THEN
+        ALTER TABLE audit_logs RENAME COLUMN actor_id TO user_id;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='action') THEN
+        ALTER TABLE audit_logs RENAME COLUMN action_type TO action;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='details') THEN
+        ALTER TABLE audit_logs RENAME COLUMN metadata TO details;
+    END IF;
+END $$;
 
 -- Doctor Profiles
 CREATE TABLE IF NOT EXISTS doctor_profiles (
@@ -85,7 +140,7 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
     license_number VARCHAR(50) UNIQUE,
     years_of_experience INTEGER,
     bio TEXT,
-    consultation_fee DECIMAL(10,2),
+    consultation_fee DECIMAL(10,2) CHECK (consultation_fee >= 0),
     is_verified BOOLEAN DEFAULT false,
     profile_image VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -109,7 +164,7 @@ CREATE TABLE IF NOT EXISTS medicines (
     name VARCHAR(255) NOT NULL,
     generic_name VARCHAR(255),
     common_uses TEXT,
-    price_per_unit DECIMAL(10,2),
+    price_per_unit DECIMAL(10,2) CHECK (price_per_unit >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -140,14 +195,28 @@ CREATE TABLE IF NOT EXISTS appointments (
     doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
     appointment_date DATE NOT NULL,
     appointment_time TIME NOT NULL,
-    duration_minutes INTEGER DEFAULT 30,
+    duration_minutes INTEGER DEFAULT 30 CHECK (duration_minutes > 0),
     status VARCHAR(20) DEFAULT 'scheduled',
     consultation_type VARCHAR(50), -- 'video', 'in-person'
     reason TEXT,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP -- Soft delete support
 );
+
+-- Appointment Performance Indices
+CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
+CREATE INDEX IF NOT EXISTS idx_appointments_doctor_date ON appointments(doctor_id, appointment_date);
+CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+
+-- Idempotent Migration: Appointments deleted_at
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='appointments' AND column_name='deleted_at') THEN
+        ALTER TABLE appointments ADD COLUMN deleted_at TIMESTAMP;
+    END IF;
+END $$;
 
 -- Prescriptions
 CREATE TABLE IF NOT EXISTS prescriptions (
@@ -159,8 +228,22 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     status VARCHAR(20) DEFAULT 'pending',
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP -- Soft delete support
 );
+
+-- Prescription Performance Indices
+CREATE INDEX IF NOT EXISTS idx_prescriptions_patient ON prescriptions(patient_id);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_status ON prescriptions(status);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_date ON prescriptions(prescription_date DESC);
+
+-- Idempotent Migration: Prescriptions deleted_at
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescriptions' AND column_name='deleted_at') THEN
+        ALTER TABLE prescriptions ADD COLUMN deleted_at TIMESTAMP;
+    END IF;
+END $$;
 
 -- Prescription Items
 CREATE TABLE IF NOT EXISTS prescription_items (
@@ -172,8 +255,17 @@ CREATE TABLE IF NOT EXISTS prescription_items (
     duration_days INTEGER,
     quantity INTEGER,
     instructions TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP -- Soft delete support
 );
+
+-- Idempotent Migration: Prescription Items deleted_at
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescription_items' AND column_name='deleted_at') THEN
+        ALTER TABLE prescription_items ADD COLUMN deleted_at TIMESTAMP;
+    END IF;
+END $$;
 
 -- Chat System
 CREATE TABLE IF NOT EXISTS conversations (
@@ -195,9 +287,53 @@ CREATE TABLE IF NOT EXISTS messages (
     conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
     sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
     content TEXT,
+    message_type VARCHAR(50) DEFAULT 'text', -- 'text', 'image', 'document'
     attachment_url VARCHAR(255),
-    attachment_type VARCHAR(50), -- 'image', 'pdf', 'document'
+    attachment_type VARCHAR(50), 
+    attachment_data BYTEA,         -- Secure binary storage for small attachments
+    attachment_mime VARCHAR(100),
+    attachment_name VARCHAR(255),
+    reply_to_id UUID REFERENCES messages(id),
     is_read BOOLEAN DEFAULT false,
+    is_deleted BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Message Threading Indices
+CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
+
+-- Idempotent Migration: Messages is_read
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='messages' AND column_name='is_read') THEN
+        ALTER TABLE messages ADD COLUMN is_read BOOLEAN DEFAULT false;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(conversation_id) WHERE is_read = false;
+
+-- Missing Chat Infrastructure
+CREATE TABLE IF NOT EXISTS message_reactions (
+    message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    reaction_type VARCHAR(20) NOT NULL, -- 'like', 'love', etc.
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (message_id, user_id, reaction_type)
+);
+
+CREATE TABLE IF NOT EXISTS deleted_messages (
+    message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (message_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS temp_attachments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    data BYTEA NOT NULL,
+    mime VARCHAR(100),
+    name VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -235,18 +371,31 @@ CREATE TABLE IF NOT EXISTS medical_records (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
-    record_type VARCHAR(100) NOT NULL, -- e.g. 'Lab Result', 'Prescription', 'Radiology'
+    record_type VARCHAR(100) NOT NULL, 
     doctor_name VARCHAR(255),
     facility_name VARCHAR(255),
     date_of_service DATE,
-    status VARCHAR(50) DEFAULT 'Final', -- 'Preliminary', 'Final', 'Amended'
+    status VARCHAR(50) DEFAULT 'Final', 
     notes TEXT,
-    file_path VARCHAR(255) NOT NULL,
-    file_type VARCHAR(100),
+    file_path VARCHAR(255) NOT NULL DEFAULT 'DB_ONLY',
+    file_data BYTEA, -- Secure binary storage
+    file_mime VARCHAR(100),
+    file_type VARCHAR(100), -- Legacy column
     file_size VARCHAR(50),
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP
 );
+
+-- Idempotent Migration for Medical Records
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_records' AND column_name='file_data') THEN
+        ALTER TABLE medical_records ADD COLUMN file_data BYTEA;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_records' AND column_name='file_mime') THEN
+        ALTER TABLE medical_records ADD COLUMN file_mime VARCHAR(100);
+    END IF;
+END $$;
 
 -- Telemedicine Consents
 CREATE TABLE IF NOT EXISTS telemedicine_consents (
@@ -274,17 +423,30 @@ CREATE OR REPLACE PROCEDURE sp_create_user(
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    INSERT INTO users (name, email, phone_number, password, role, id_number, is_verified, profile_image)
-    VALUES (p_name, p_email, p_phone, p_password_hash, p_role, p_id_number, true, p_profile_image)
+    -- This procedure simulates the application logic for seeding
+    -- In a real scenario, the app handles encryption, but for demo seeding:
+    INSERT INTO users (
+        name, email, phone_number, password, role, id_number, is_verified, profile_image,
+        phone_blind_index, id_blind_index
+    )
+    VALUES (
+        p_name, p_email, p_phone, p_password_hash, p_role, p_id_number, true, p_profile_image,
+        encode(digest(lower(trim(p_phone)), 'sha256'), 'hex'), -- Simplified blind index for SQL seed
+        encode(digest(lower(trim(p_id_number)), 'sha256'), 'hex')
+    )
     ON CONFLICT (email) DO UPDATE 
     SET password = EXCLUDED.password,
         name = EXCLUDED.name,
         phone_number = EXCLUDED.phone_number,
-        profile_image = EXCLUDED.profile_image
+        profile_image = EXCLUDED.profile_image,
+        phone_blind_index = EXCLUDED.phone_blind_index,
+        id_blind_index = EXCLUDED.id_blind_index
     WHERE users.password IS DISTINCT FROM EXCLUDED.password 
        OR users.name IS DISTINCT FROM EXCLUDED.name
        OR users.phone_number IS DISTINCT FROM EXCLUDED.phone_number
-       OR users.profile_image IS DISTINCT FROM EXCLUDED.profile_image;
+       OR users.profile_image IS DISTINCT FROM EXCLUDED.profile_image
+       OR users.phone_blind_index IS DISTINCT FROM EXCLUDED.phone_blind_index
+       OR users.id_blind_index IS DISTINCT FROM EXCLUDED.id_blind_index;
 END;
 $$;
 

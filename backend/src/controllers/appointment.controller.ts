@@ -187,7 +187,7 @@ export const deleteAppointment = async (req: Request, res: Response) => {
             return res.status(403).json({ message: 'Only patients can permanently delete appointments' });
         }
 
-        const deleted = await appointmentRepository.hardDelete(id as string, user.id as string);
+        const deleted = await appointmentRepository.softDelete(id as string, user.id as string);
 
         if (!deleted) {
             return res.status(404).json({

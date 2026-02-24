@@ -133,3 +133,21 @@ export const getPendingPrescriptions = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Error fetching pending prescriptions' });
     }
 };
+// Delete a prescription (Soft delete)
+export const deletePrescription = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const user = (req as any).user;
+
+        const deleted = await prescriptionRepository.softDelete(id as string, user.id as string);
+
+        if (!deleted) {
+            return res.status(404).json({ message: 'Prescription not found or access denied' });
+        }
+
+        res.json({ message: 'Prescription deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting prescription:', error);
+        res.status(500).json({ message: 'Error deleting prescription' });
+    }
+};

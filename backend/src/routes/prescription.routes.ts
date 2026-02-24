@@ -5,7 +5,8 @@ import {
     getMyPrescriptions,
     getPrescriptionById,
     updatePrescriptionStatus,
-    getPendingPrescriptions
+    getPendingPrescriptions,
+    deletePrescription
 } from '../controllers/prescription.controller';
 
 const router = Router();
@@ -35,5 +36,6 @@ router.get('/', authenticateToken, requireRole('pharmacist'), getPendingPrescrip
 
 router.get('/pending/list', authenticateToken, requireRole('pharmacist'), getPendingPrescriptions);
 router.put('/:id/status', authenticateToken, requireRole('pharmacist'), updatePrescriptionStatus);
+router.delete('/:id', authenticateToken, authorizeRole(['patient', 'doctor']), deletePrescription);
 
 export default router;
