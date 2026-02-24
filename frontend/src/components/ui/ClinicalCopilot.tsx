@@ -252,7 +252,7 @@ export const ClinicalCopilot: React.FC<ClinicalCopilotProps> = ({ isOpen, onClos
                                         value={inputValue}
                                         onChange={(e) => setInputValue(e.target.value)}
                                         placeholder="Ask about patient history, interactions..."
-                                        className="w-full bg-transparent border-none focus:ring-0 outline-none p-0 text-slate-900 dark:text-white placeholder-slate-400 text-sm max-h-24 resize-none leading-relaxed"
+                                        className="w-full bg-transparent border-none focus:ring-0 outline-none p-0 pl-2 text-slate-900 dark:text-white placeholder-slate-400 text-sm max-h-24 resize-none leading-relaxed"
                                         disabled={isLoading}
                                     />
                                 </div>
