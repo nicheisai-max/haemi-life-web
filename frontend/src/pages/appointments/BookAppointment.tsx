@@ -8,13 +8,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { getDoctors } from '../../services/doctor.service';
 import { bookAppointment, getAvailableSlots } from '../../services/appointment.service';
 import { bookAppointmentSchema, type BookAppointmentFormData } from '../../lib/validation/appointment.schema';
 import type { DoctorProfile } from '../../services/doctor.service';
 import type { AvailableSlots } from '../../services/appointment.service';
-import { CheckCircle, AlertTriangle, User, Calendar, Clock } from 'lucide-react';
+import { getConsentStatus, signConsent } from '../../services/consent.service';
+import { CheckCircle, AlertTriangle, User, Calendar, Clock, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DateScroller } from '@/components/ui/DateScroller';
 import { TimeGrid } from '@/components/ui/TimeGrid';
@@ -30,6 +33,11 @@ export const BookAppointment: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+
+    // Telemedicine Consent States
+    const [hasConsent, setHasConsent] = useState<boolean | null>(null);
+    const [showConsentModal, setShowConsentModal] = useState(false);
+    const [signingConsent, setSigningConsent] = useState(false);
 
     const form = useForm<z.input<typeof bookAppointmentSchema>, undefined, BookAppointmentFormData>({
         resolver: zodResolver(bookAppointmentSchema),
@@ -47,7 +55,17 @@ export const BookAppointment: React.FC = () => {
 
     useEffect(() => {
         fetchDoctors();
+        checkConsent();
     }, []);
+
+    const checkConsent = async () => {
+        try {
+            const data = await getConsentStatus();
+            setHasConsent(data.hasConsent);
+        } catch (err) {
+            setHasConsent(false);
+        }
+    };
 
     useEffect(() => {
         if (preselectedDoctorId && doctors.length > 0) {
@@ -96,6 +114,21 @@ export const BookAppointment: React.FC = () => {
             }, 2000);
         } catch (err: any) {
             setGeneralError(err.response?.data?.message || 'Failed to book appointment');
+        }
+    };
+
+    const handleSignConsent = async () => {
+        try {
+            setSigningConsent(true);
+            await signConsent();
+            setHasConsent(true);
+            setShowConsentModal(false);
+            setGeneralError(null);
+        } catch (err: any) {
+            console.error('Failed to sign consent:', err);
+            setGeneralError(err.response?.data?.message || 'Failed to sign consent form.');
+        } finally {
+            setSigningConsent(false);
         }
     };
 
@@ -267,24 +300,50 @@ export const BookAppointment: React.FC = () => {
                                 )}
                             />
 
-                            <Button
-                                type="submit"
-                                className="w-full"
-                                size="lg"
-                                disabled={form.formState.isSubmitting}
-                            >
-                                {form.formState.isSubmitting ? (
-                                    <>
-                                        <PremiumLoader size="xs" />
-                                        Booking...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Calendar className="mr-2 h-4 w-4" />
-                                        Book Appointment
-                                    </>
-                                )}
-                            </Button>
+                            {/* --- TELEMEDICINE CONSENT GUARD --- */}
+                            {form.watch('consultation_type') === 'video' && hasConsent === false ? (
+                                <Alert className="border-primary/50 bg-primary/5 shadow-md">
+                                    <div className="flex gap-4 items-start">
+                                        <div className="shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary mt-1">
+                                            <ShieldAlert className="h-5 w-5" />
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                            <AlertTitle className="text-base font-bold text-foreground m-0">Telemedicine Consent Required</AlertTitle>
+                                            <AlertDescription className="text-sm text-muted-foreground m-0">
+                                                You must review and sign the digital Telemedicine Consultation Consent before booking a continuous video appointment.
+                                            </AlertDescription>
+                                            <Button
+                                                type="button"
+                                                variant="default"
+                                                onClick={() => setShowConsentModal(true)}
+                                                className="mt-3 w-full sm:w-auto shadow-sm"
+                                            >
+                                                <ShieldCheck className="mr-2 h-4 w-4" />
+                                                Review & Sign Consent
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </Alert>
+                            ) : (
+                                <Button
+                                    type="submit"
+                                    className="w-full"
+                                    size="lg"
+                                    disabled={form.formState.isSubmitting}
+                                >
+                                    {form.formState.isSubmitting ? (
+                                        <>
+                                            <PremiumLoader size="xs" />
+                                            Booking...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Calendar className="mr-2 h-4 w-4" />
+                                            Book Appointment
+                                        </>
+                                    )}
+                                </Button>
+                            )}
                         </form>
                     </Form>
                 </Card>
@@ -358,5 +417,47 @@ export const BookAppointment: React.FC = () => {
                 </div>
             )}
         </div>
+
+        {/* Telemedicine Consent Signature Modal */}
+        <Dialog open={showConsentModal} onOpenChange={setShowConsentModal}>
+            <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden" aria-describedby="consent-terms">
+                <div className="bg-primary/10 p-6 flex items-center gap-4 border-b border-primary/20">
+                    <div className="shrink-0 w-12 h-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/30">
+                        <ShieldCheck className="h-6 w-6" />
+                    </div>
+                    <div>
+                        <DialogTitle className="text-xl font-bold text-foreground">Telemedicine Digital Consent</DialogTitle>
+                        <DialogDescription className="text-sm text-primary/80 font-medium pt-1">Botswana Digital Healthcare Authority</DialogDescription>
+                    </div>
+                </div>
+
+                <div id="consent-terms" className="p-6 max-h-[60vh] overflow-y-auto space-y-4 text-sm text-muted-foreground leading-relaxed">
+                    <p className="font-semibold text-foreground">By proceeding with a video consultation, you acknowledge and agree to the following terms:</p>
+                    <ul className="space-y-3 list-disc pl-5">
+                        <li><strong>Nature of Telemedicine:</strong> You understand that telemedicine involves the use of electronic communications to enable healthcare providers at different locations to share individual patient medical information for the purpose of improving patient care.</li>
+                        <li><strong>Security & Privacy:</strong> The Haemi Life platform utilizes end-to-end encryption. However, you are responsible for ensuring your physical environment is private and secure during the consultation.</li>
+                        <li><strong>Limitations:</strong> A video consultation may lack the ability to perform a comprehensive physical examination. If the specialist determines that your condition requires immediate, physical intervention, they will advise you to seek in-person care.</li>
+                        <li><strong>Data Retention:</strong> Relevant medical information discussed during the consultation will be recorded in your electronic health record in compliance with the Data Protection Act.</li>
+                    </ul>
+                    <div className="mt-6 p-4 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50">
+                        <p className="text-orange-800 dark:text-orange-300 text-xs font-semibold uppercase tracking-wider mb-1">EMERGENCY NOTICE</p>
+                        <p className="text-orange-700 dark:text-orange-400">Do not use telemedicine for medical emergencies. If you are experiencing a life-threatening emergency, call 997 immediately.</p>
+                    </div>
+                </div>
+
+                <DialogFooter className="p-6 border-t bg-muted/30 flex-col sm:flex-row gap-3">
+                    <Button type="button" variant="outline" onClick={() => setShowConsentModal(false)} className="w-full sm:w-auto">
+                        Cancel
+                    </Button>
+                    <Button type="button" onClick={handleSignConsent} disabled={signingConsent} className="w-full sm:w-auto shadow-md">
+                        {signingConsent ? (
+                            <><PremiumLoader size="xs" /> Processing...</>
+                        ) : (
+                            <><ShieldCheck className="mr-2 h-4 w-4" /> I Agree & Sign Consent</>
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>);
 };

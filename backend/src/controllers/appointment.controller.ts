@@ -36,6 +36,19 @@ export const bookAppointment = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'Doctor not found or not verified' });
         }
 
+        // --- Medical-Grade Safety Guard: Telemedicine Consent ---
+        if (consultation_type === 'video') {
+            // Lazy import to avoid circular dependency issues at the top level
+            const { consentRepository } = await import('../repositories/consent.repository');
+            const hasConsent = await consentRepository.hasConsent(patientId);
+            if (!hasConsent) {
+                return res.status(403).json({
+                    message: 'Telemedicine consent required. Please review and sign the digital consent form before booking a video consultation.'
+                });
+            }
+        }
+        // --------------------------------------------------------
+
         // Check for conflicts
         const hasConflict = await appointmentRepository.checkConflict(doctor_id, appointment_date, appointment_time);
         if (hasConflict) {

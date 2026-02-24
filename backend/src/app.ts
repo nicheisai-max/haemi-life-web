@@ -38,6 +38,7 @@ import passwordResetRoutes from './routes/password-reset.routes';
 import clinicalCopilotRoutes from './routes/clinical-copilot.routes';
 import commonRoutes from './routes/common.routes';
 import fileRoutes from './routes/file.routes';
+import consentRoutes from './routes/consent.routes';
 
 
 // --- Production Hardening: Fail-Fast Environment Check ---
@@ -170,6 +171,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
 app.use('/api/clinical-copilot', clinicalCopilotRoutes); // NEW: Clinical Copilot Secure Route
+app.use('/api/consents', consentRoutes);
 app.use('/api/common', commonRoutes);
 app.use('/api/files', fileRoutes);
 

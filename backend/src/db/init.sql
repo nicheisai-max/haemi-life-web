@@ -241,6 +241,16 @@ CREATE TABLE IF NOT EXISTS medical_records (
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Telemedicine Consents
+CREATE TABLE IF NOT EXISTS telemedicine_consents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    patient_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    agreed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    version VARCHAR(20) DEFAULT 'v1.0'
+);
+
 
 -- 3. Stored Procedures (The "Golden Path" Logic)
 
