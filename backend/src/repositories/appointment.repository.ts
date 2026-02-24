@@ -156,6 +156,20 @@ export class AppointmentRepository {
         );
         return result.rows.length > 0;
     }
+
+    // Permanently remove a past/completed/cancelled appointment (patient only)
+    async hardDelete(id: string, patientId: string): Promise<boolean> {
+        const result = await this.db.query(`
+            DELETE FROM appointments
+            WHERE id = $1
+              AND patient_id = $2
+              AND (
+                    appointment_date < CURRENT_DATE
+                    OR status IN ('completed', 'cancelled')
+                  )
+        `, [id, patientId]);
+        return (result.rowCount ?? 0) > 0;
+    }
 }
 
 export const appointmentRepository = new AppointmentRepository();

@@ -164,6 +164,31 @@ export const cancelAppointment = async (req: Request, res: Response) => {
     }
 };
 
+// Permanently delete a past appointment (Patient only)
+export const deleteAppointment = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const user = (req as any).user;
+
+        if (user.role !== 'patient') {
+            return res.status(403).json({ message: 'Only patients can permanently delete appointments' });
+        }
+
+        const deleted = await appointmentRepository.hardDelete(id as string, user.id as string);
+
+        if (!deleted) {
+            return res.status(404).json({
+                message: 'Appointment not found, already deleted, or cannot be deleted (only past/completed/cancelled appointments can be deleted)'
+            });
+        }
+
+        res.json({ message: 'Appointment deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting appointment:', error);
+        res.status(500).json({ message: 'Error deleting appointment' });
+    }
+};
+
 // Get available time slots for a doctor
 export const getAvailableSlots = async (req: Request, res: Response) => {
     try {

@@ -5,9 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { getMyAppointments, cancelAppointment, updateAppointmentStatus } from '../../services/appointment.service';
+import { getMyAppointments, cancelAppointment, updateAppointmentStatus, deleteAppointment } from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
-import { Plus, AlertCircle, CalendarX, Clock, Calendar } from 'lucide-react';
+import { Plus, AlertCircle, CalendarX, Clock, Calendar, Trash2 } from 'lucide-react';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
 
 import { TransitionItem } from '../../components/layout/PageTransition';
@@ -43,7 +43,7 @@ export const Appointments: React.FC = () => {
 
     const applyFilter = () => {
         const now = new Date();
-        now.setHours(0, 0, 0, 0); // Start of today
+        now.setHours(0, 0, 0, 0);
         let filtered = appointments;
 
         if (filter === 'upcoming') {
@@ -84,6 +84,22 @@ export const Appointments: React.FC = () => {
         }
     };
 
+    const handleDelete = async (e: React.MouseEvent, appointmentId: number) => {
+        e.stopPropagation();
+
+        await confirm({
+            title: 'Delete Appointment',
+            message: 'Are you sure you want to permanently delete this appointment record? This action cannot be undone and will remove all history.',
+            type: 'error',
+            confirmText: 'Delete Record',
+            cancelText: 'Cancel',
+            onAsyncConfirm: async () => {
+                await deleteAppointment(appointmentId);
+                setAppointments(prev => prev.filter(a => a.id !== appointmentId));
+            }
+        });
+    };
+
     const handleComplete = async (appointmentId: number) => {
         try {
             await updateAppointmentStatus(appointmentId, 'completed');
@@ -91,6 +107,14 @@ export const Appointments: React.FC = () => {
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to update appointment');
         }
+    };
+
+    const isPastAppointment = (apt: Appointment) => {
+        const aptDate = new Date(apt.appointment_date);
+        aptDate.setHours(0, 0, 0, 0);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        return aptDate < now || apt.status === 'completed' || apt.status === 'cancelled';
     };
 
     const getStatusColor = (status: string) => {
@@ -209,8 +233,9 @@ export const Appointments: React.FC = () => {
                                             <p className="text-muted-foreground">{appointment.reason}</p>
                                         </div>
 
-                                        {/* Actions for Desktop (and Mobile wrapped) */}
-                                        <div className="flex flex-row sm:flex-col md:flex-row gap-3">
+                                        {/* Action Buttons */}
+                                        <div className="flex flex-row sm:flex-col md:flex-row gap-2 items-center">
+                                            {/* Doctor: Mark Complete */}
                                             {appointment.status === 'scheduled' && user?.role === 'doctor' && (
                                                 <Button
                                                     variant="default"
@@ -220,7 +245,9 @@ export const Appointments: React.FC = () => {
                                                     Mark Complete
                                                 </Button>
                                             )}
-                                            {appointment.status === 'scheduled' && (
+
+                                            {/* Patient: Cancel (upcoming/scheduled only) */}
+                                            {appointment.status === 'scheduled' && user?.role === 'patient' && (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -228,6 +255,28 @@ export const Appointments: React.FC = () => {
                                                     className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
                                                 >
                                                     Cancel
+                                                </Button>
+                                            )}
+
+                                            {/* Patient: Delete (past/completed/cancelled only) */}
+                                            {user?.role === 'patient' && isPastAppointment(appointment) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={(e) => handleDelete(e, appointment.id)}
+                                                    className="
+                                                        gap-1.5 font-medium text-sm
+                                                        text-rose-600 hover:text-rose-700
+                                                        hover:bg-rose-50
+                                                        dark:text-rose-400 dark:hover:text-rose-300
+                                                        dark:hover:bg-rose-950/40
+                                                        border border-rose-200 hover:border-rose-300
+                                                        dark:border-rose-800/60 dark:hover:border-rose-700
+                                                        transition-all duration-150
+                                                    "
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    Delete
                                                 </Button>
                                             )}
                                         </div>

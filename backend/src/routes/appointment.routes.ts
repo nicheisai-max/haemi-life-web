@@ -6,6 +6,7 @@ import {
     getAppointmentById,
     updateAppointmentStatus,
     cancelAppointment,
+    deleteAppointment,
     getAvailableSlots
 } from '../controllers/appointment.controller';
 
@@ -19,6 +20,7 @@ router.post('/', authenticateToken, requireRole('patient'), bookAppointment);
 router.get('/my-appointments', authenticateToken, authorizeRole(['patient', 'doctor']), getMyAppointments);
 router.get('/:id', authenticateToken, authorizeRole(['patient', 'doctor']), getAppointmentById);
 router.put('/:id/status', authenticateToken, requireRole('doctor'), updateAppointmentStatus);
+router.delete('/:id/permanent', authenticateToken, requireRole('patient'), deleteAppointment);
 router.delete('/:id', authenticateToken, authorizeRole(['patient', 'doctor']), cancelAppointment);
 
 export default router;

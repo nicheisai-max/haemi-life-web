@@ -28,12 +28,6 @@ export interface Appointment {
 export interface AvailableSlots {
     date: string;
     slots: string[];
-    // Legacy/Old definition (commented out in case backend actually returns this)
-    // schedule: Array<{
-    //     start_time: string;
-    //     end_time: string;
-    // }>;
-    // booked: string[];
 }
 
 // Book a new appointment (Patient only)
@@ -65,9 +59,15 @@ export const updateAppointmentStatus = async (id: number, status: string, notes?
     return response.data;
 };
 
-// Cancel appointment
+// Cancel appointment (soft-cancel — sets status to 'cancelled')
 export const cancelAppointment = async (id: number) => {
     const response = await api.delete(`/appointments/${id}`);
+    return response.data;
+};
+
+// Permanently delete a past/completed/cancelled appointment (Patient only)
+export const deleteAppointment = async (id: number) => {
+    const response = await api.delete(`/appointments/${id}/permanent`);
     return response.data;
 };
 
@@ -85,5 +85,7 @@ export default {
     getAppointmentById,
     updateAppointmentStatus,
     cancelAppointment,
+    deleteAppointment,
     getAvailableSlots
 };
+
