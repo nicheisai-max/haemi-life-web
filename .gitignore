@@ -56,3 +56,4 @@ TEST_CREDENTIALS.md
 
 # Package lock files (use npm ci in CI/CD)
 package-lock.json
+backend/uploads/
