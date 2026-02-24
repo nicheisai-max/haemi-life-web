@@ -79,9 +79,9 @@ export const getPendingPrescriptions = async () => {
     return response.data as Prescription[];
 };
 
-// Get ALL prescriptions (Pharmacist/Admin)
+// Get ALL prescriptions — uses dedicated route, returns all statuses for pharmacist
 export const getAllPrescriptions = async () => {
-    const response = await api.get('/prescriptions');
+    const response = await api.get('/prescriptions/pending/list');
     return response.data as Prescription[];
 };
 

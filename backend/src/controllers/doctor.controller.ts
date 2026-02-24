@@ -12,7 +12,7 @@ export const listDoctors = async (req: Request, res: Response) => {
                 dp.specialization, dp.years_of_experience, dp.bio, dp.consultation_fee
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
-            WHERE u.role = 'doctor' AND dp.is_verified = true AND u.is_active = true
+            WHERE u.role = 'doctor' AND dp.is_verified = true AND u.status = 'ACTIVE'
         `;
 
         const params: any[] = [];

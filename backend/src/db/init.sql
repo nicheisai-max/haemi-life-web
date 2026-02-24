@@ -12,7 +12,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Non-critical tables can be dropped if schema changed significantly
 DROP TABLE IF EXISTS analytics_daily_visits CASCADE;
 DROP TABLE IF EXISTS revenue_stats CASCADE;
-DROP TABLE IF EXISTS notifications CASCADE;
 -- Table 'medical_records' should stay persistent for files
 DROP TABLE IF EXISTS medical_records CASCADE;
 DROP TABLE IF EXISTS prescription_items CASCADE;

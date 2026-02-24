@@ -4,11 +4,13 @@ import { authenticateToken, requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Protect all consent routes, specifically for patients
+// All consent routes require authentication
 router.use(authenticateToken);
-router.use(requireRole('patient'));
 
+// Status check: open to any authenticated role (patients, doctors checking the gate)
 router.get('/status', getConsentStatus);
-router.post('/', signConsent);
+
+// Signing consent: patients only
+router.post('/', requireRole('patient'), signConsent);
 
 export default router;

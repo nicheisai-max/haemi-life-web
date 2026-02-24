@@ -94,7 +94,8 @@ export const getAllUsers = async (req: Request, res: Response) => {
 
         if (search) {
             params.push(`%${search}%`);
-            query += ` AND (name ILIKE $${params.length} OR email ILIKE $${params.length} OR phone_number ILIKE $${params.length})`;
+            const idx = params.length;
+            query += ` AND (name ILIKE $${idx} OR email ILIKE $${idx} OR phone_number ILIKE $${idx})`;
         }
 
         query += ' ORDER BY created_at DESC';

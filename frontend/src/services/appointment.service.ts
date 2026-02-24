@@ -35,6 +35,7 @@ export const bookAppointment = async (data: {
     doctor_id: string;
     appointment_date: string;
     appointment_time: string;
+    consultation_type: string;
     reason: string;
 }) => {
     const response = await api.post('/appointments', data);
