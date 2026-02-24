@@ -6,8 +6,9 @@ import { setAccessToken, setAppInitialized } from '../services/api';
 
 interface AuthContextType {
     user: User | null;
-    token: string | null; // Keeps 'token' interface for compatibility, but it's just state now
+    token: string | null;
     authStatus: 'initializing' | 'authenticated' | 'unauthenticated';
+    profileImageVersion: number; // increments after every refreshUser() — use as cache-bust in avatar URLs
     login: (credentials: LoginCredentials) => Promise<void>;
     signup: (credentials: SignupCredentials) => Promise<void>;
     logout: () => void;
@@ -22,14 +23,16 @@ interface AuthState {
     user: User | null;
     token: string | null;
     authStatus: 'initializing' | 'authenticated' | 'unauthenticated';
+    profileImageVersion: number;
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // ─── Deterministic Initialization Phase ──────────────────────────────────
     const [authState, setAuthState] = useState<AuthState>({
-        user: null, // Initially null. We do NOT trust storage blindly.
+        user: null,
         token: null,
-        authStatus: 'initializing' // Always start initializing
+        authStatus: 'initializing',
+        profileImageVersion: Date.now()
     });
 
     // ─── BroadcastChannel for Cross-Tab Sync ───────────────────────────────
@@ -48,13 +51,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     console.log('[Auth] Synchronizing logout across tabs.');
                     setAccessToken(null);
                     sessionStorage.removeItem('user');
-                    setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
+                    setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
                 } else if (type === 'LOGIN') {
                     console.log('[Auth] Synchronizing login across tabs.');
                     const { user, token } = payload;
                     setAccessToken(token);
                     sessionStorage.setItem('user', JSON.stringify(user));
-                    setAuthState({ user, token, authStatus: 'authenticated' });
+                    setAuthState({ user, token, authStatus: 'authenticated', profileImageVersion: Date.now() });
                 }
             };
             authChannel.onmessage = handleMessage;
@@ -64,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('[Auth] Session invalidated (Global Event).');
             setAccessToken(null);
             sessionStorage.removeItem('user');
-            setAuthState({ user: null, token: null, authStatus: 'unauthenticated' });
+            setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
             if (authChannel) authChannel.postMessage({ type: 'LOGOUT' });
         };
 
@@ -96,7 +99,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         setAuthState({
                             user,
                             token: refreshResult.token,
-                            authStatus: 'authenticated'
+                            authStatus: 'authenticated',
+                            profileImageVersion: Date.now()
                         });
                         // Persist user for cross-tab sync / hydration
                         sessionStorage.setItem('user', JSON.stringify(user));
@@ -107,7 +111,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         setAuthState({
                             user: null,
                             token: null,
-                            authStatus: 'unauthenticated'
+                            authStatus: 'unauthenticated',
+                            profileImageVersion: Date.now()
                         });
                     }
                 }
@@ -117,7 +122,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     setAuthState({
                         user: null,
                         token: null,
-                        authStatus: 'unauthenticated'
+                        authStatus: 'unauthenticated',
+                        profileImageVersion: Date.now()
                     });
                 }
             } finally {
@@ -139,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Persist user for UI hydration if needed later (optional with this new flow)
         sessionStorage.setItem('user', JSON.stringify(newUser));
 
-        setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated' });
+        setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated', profileImageVersion: Date.now() });
 
         // Broadcast to other tabs
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
@@ -156,7 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAccessToken(newToken);
         sessionStorage.setItem('user', JSON.stringify(newUser));
 
-        setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated' });
+        setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated', profileImageVersion: Date.now() });
     }, []);
 
     const logout = useCallback(async () => {
@@ -167,7 +173,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAuthState({
             user: null,
             token: null,
-            authStatus: 'unauthenticated'
+            authStatus: 'unauthenticated',
+            profileImageVersion: Date.now()
         });
 
         // Broadcast to other tabs
@@ -188,7 +195,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const refreshUser = useCallback(async () => {
         try {
             const { user: verifiedUser } = await authService.verifySession();
-            setAuthState(prev => ({ ...prev, user: verifiedUser }));
+            setAuthState(prev => ({
+                ...prev,
+                user: verifiedUser,
+                profileImageVersion: Date.now() // Signal Navbar to re-fetch avatar
+            }));
             sessionStorage.setItem('user', JSON.stringify(verifiedUser));
         } catch (error) {
             console.error('[Auth] Failed to refresh user:', error);
@@ -200,6 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             user: authState.user,
             token: authState.token,
             authStatus: authState.authStatus,
+            profileImageVersion: authState.profileImageVersion,
             login,
             signup,
             logout,

@@ -25,7 +25,7 @@ import adminImg from '../../assets/images/admin/admin.png';
 import pharmacistImg from '../../assets/images/pharmacies/pharmacy_01.jpg';
 
 export const Navbar: React.FC = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, profileImageVersion } = useAuth();
     const navigate = useNavigate();
     const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -83,7 +83,8 @@ export const Navbar: React.FC = () => {
             }
         }
 
-        return apiImage;
+        // Append profileImageVersion as cache-bust so Navbar always shows the latest image
+        return `${apiImage}?v=${profileImageVersion}`;
     };
 
 
