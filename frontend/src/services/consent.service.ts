@@ -11,7 +11,7 @@ export const getConsentStatus = async (): Promise<{ hasConsent: boolean }> => {
     return response.data;
 };
 
-export const signConsent = async (): Promise<{ message: string; record: ConsentRecord }> => {
-    const response = await api.post('/consents');
+export const signConsent = async (signature: string): Promise<{ message: string; record: ConsentRecord }> => {
+    const response = await api.post('/consents', { signature });
     return response.data;
 };

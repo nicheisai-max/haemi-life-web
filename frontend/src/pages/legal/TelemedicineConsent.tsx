@@ -6,8 +6,10 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Video, ShieldCheck, AlertTriangle, MonitorPlay, Wifi, Lock, CheckCircle2, X, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, MonitorPlay, Wifi, Lock, CheckCircle2, X, ArrowLeft, Loader2 } from 'lucide-react';
 import { telemedicineConsentSchema, type TelemedicineConsentFormData } from '../../lib/validation/legal.schema';
+import { signConsent } from '@/services/consent.service';
+import { toast } from 'sonner';
 
 import { SignaturePad } from '@/components/ui/SignaturePad';
 
@@ -22,16 +24,23 @@ export const TelemedicineConsent: React.FC = () => {
         },
     });
 
-    const onSubmit = (data: TelemedicineConsentFormData) => {
+    const onSubmit = async (data: TelemedicineConsentFormData) => {
         if (data.accepted && data.signature) {
-            // Store consent in sessionStorage
-            sessionStorage.setItem('telemedicine_consent', JSON.stringify({
-                status: 'accepted',
-                signature: data.signature,
-                timestamp: new Date().toISOString()
-            }));
-            // Navigate to video call or wherever needed
-            navigate(-1);
+            try {
+                // Persist securely to PostgreSQL Local DB
+                await signConsent(data.signature);
+
+                toast.success('Consent signed successfully!', {
+                    description: 'Your telemedicine consent has been saved. You can now book video appointments.',
+                });
+
+                // Navigate back to the booking flow
+                navigate(-1);
+            } catch (error: any) {
+                toast.error('Failed to save consent', {
+                    description: error.response?.data?.message || 'An error occurred while saving your signature. Please try again.',
+                });
+            }
         }
     };
 
@@ -231,11 +240,20 @@ export const TelemedicineConsent: React.FC = () => {
                             <Button
                                 type="submit"
                                 variant="default"
-                                disabled={!form.watch('accepted') || !form.watch('signature')}
+                                disabled={!form.watch('accepted') || !form.watch('signature') || form.formState.isSubmitting}
                                 className="flex items-center gap-2 sm:min-w-52"
                             >
-                                <CheckCircle2 className="h-4 w-4" />
-                                Accept & Continue
+                                {form.formState.isSubmitting ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Saving signature...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        Accept & Continue
+                                    </>
+                                )}
                             </Button>
                         </div>
                     </form>

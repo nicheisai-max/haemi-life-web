@@ -24,15 +24,21 @@ export const signConsent = async (req: Request, res: Response) => {
         const user = (req as any).user;
         const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown';
         const userAgent = req.headers['user-agent'] || 'unknown';
+        const { signature } = req.body;
 
         if (user.role !== 'patient') {
             return res.status(403).json({ message: 'Only patients can sign telemedicine consent.' });
+        }
+
+        if (!signature) {
+            return res.status(400).json({ message: 'Digital signature is required.' });
         }
 
         const record = await consentRepository.recordConsent(
             user.id,
             ipAddress as string,
             userAgent as string,
+            signature as string,
             'v1.0'
         );
 

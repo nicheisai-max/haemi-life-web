@@ -16,7 +16,7 @@ import { bookAppointment, getAvailableSlots } from '../../services/appointment.s
 import { bookAppointmentSchema, type BookAppointmentFormData } from '../../lib/validation/appointment.schema';
 import type { DoctorProfile } from '../../services/doctor.service';
 import type { AvailableSlots } from '../../services/appointment.service';
-import { getConsentStatus, signConsent } from '../../services/consent.service';
+import { getConsentStatus } from '../../services/consent.service';
 import { CheckCircle, AlertTriangle, User, Calendar, Clock, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DateScroller } from '@/components/ui/DateScroller';
@@ -37,7 +37,6 @@ export const BookAppointment: React.FC = () => {
     // Telemedicine Consent States
     const [hasConsent, setHasConsent] = useState<boolean | null>(null);
     const [showConsentModal, setShowConsentModal] = useState(false);
-    const [signingConsent, setSigningConsent] = useState(false);
 
     const form = useForm<z.input<typeof bookAppointmentSchema>, undefined, BookAppointmentFormData>({
         resolver: zodResolver(bookAppointmentSchema),
@@ -70,6 +69,23 @@ export const BookAppointment: React.FC = () => {
     useEffect(() => {
         if (preselectedDoctorId && doctors.length > 0) {
             form.setValue('doctor_id', preselectedDoctorId);
+        }
+
+        // Restore form data from draft if arriving back from the /consent page
+        const draft = sessionStorage.getItem('book_appointment_draft');
+        if (draft && doctors.length > 0) {
+            try {
+                const draftData = JSON.parse(draft);
+                if (draftData.doctor_id) form.setValue('doctor_id', draftData.doctor_id);
+                if (draftData.appointment_date) form.setValue('appointment_date', draftData.appointment_date);
+                if (draftData.appointment_time) form.setValue('appointment_time', draftData.appointment_time);
+                if (draftData.reason) form.setValue('reason', draftData.reason);
+                form.setValue('consultation_type', 'video');
+                // Clean up draft after restoring to avoid sticking state
+                sessionStorage.removeItem('book_appointment_draft');
+            } catch (e) {
+                console.error("Failed to parse appointment draft", e);
+            }
         }
     }, [preselectedDoctorId, doctors]);
 
@@ -118,18 +134,16 @@ export const BookAppointment: React.FC = () => {
     };
 
     const handleSignConsent = async () => {
-        try {
-            setSigningConsent(true);
-            await signConsent();
-            setHasConsent(true);
-            setShowConsentModal(false);
-            setGeneralError(null);
-        } catch (err: any) {
-            console.error('Failed to sign consent:', err);
-            setGeneralError(err.response?.data?.message || 'Failed to sign consent form.');
-        } finally {
-            setSigningConsent(false);
-        }
+        // Save form state to sessionStorage so we can restore it when they come back
+        sessionStorage.setItem('book_appointment_draft', JSON.stringify({
+            doctor_id: form.getValues('doctor_id'),
+            appointment_date: form.getValues('appointment_date'),
+            appointment_time: form.getValues('appointment_time'),
+            reason: form.getValues('reason'),
+        }));
+
+        setShowConsentModal(false);
+        navigate('/consent');
     };
 
     const selectedDoctorData = doctors.find(d => d.id === watchedDoctorId);
@@ -449,12 +463,8 @@ export const BookAppointment: React.FC = () => {
                     <Button type="button" variant="outline" onClick={() => setShowConsentModal(false)} className="w-full sm:w-auto">
                         Cancel
                     </Button>
-                    <Button type="button" onClick={handleSignConsent} disabled={signingConsent} className="w-full sm:w-auto shadow-md">
-                        {signingConsent ? (
-                            <><PremiumLoader size="xs" /> Processing...</>
-                        ) : (
-                            <><ShieldCheck className="mr-2 h-4 w-4" /> I Agree & Sign Consent</>
-                        )}
+                    <Button type="button" onClick={handleSignConsent} className="w-full sm:w-auto shadow-md">
+                        <ShieldCheck className="mr-2 h-4 w-4" /> I Agree & Sign Consent
                     </Button>
                 </DialogFooter>
             </DialogContent>
