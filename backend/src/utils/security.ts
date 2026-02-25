@@ -3,14 +3,20 @@ import crypto from 'crypto';
 const ALGORITHM_GCM = 'aes-256-gcm';
 const ALGORITHM_CBC = 'aes-256-cbc';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'demo_key_32_bytes_at_least_123456';
-const IV_LENGTH = 16;
+const IV_LENGTH = 12; // Standard GCM IV length for WebCrypto compatibility
 const AUTH_TAG_LENGTH = 16;
 const ENCRYPTED_PREFIX = 'enc:';
 const GCM_PREFIX = 'gcm:';
+const LEGACY_IV_LENGTH = 16; // For CBC fallback
 
 // Helper to ensure key is 32 bytes
+// Standardized to PBKDF2 for production-grade compatibility with Web Crypto API (Frontend)
 function getKey() {
-    return crypto.scryptSync(ENCRYPTION_KEY, 'haemi_salt', 32);
+    let keyData: Buffer | string = ENCRYPTION_KEY;
+    if (/^[0-9a-fA-F]+$/.test(ENCRYPTION_KEY)) {
+        keyData = Buffer.from(ENCRYPTION_KEY, 'hex');
+    }
+    return crypto.pbkdf2Sync(keyData, 'haemi_salt', 100000, 32, 'sha256');
 }
 
 /**
@@ -61,6 +67,9 @@ export const decrypt = (text: string): string => {
         // Mode B: Legacy AES-256-CBC (Phase 2 Default)
         const parts = data.split(':');
         const iv = Buffer.from(parts[0], 'hex');
+        if (iv.length !== LEGACY_IV_LENGTH) {
+            throw new Error('Invalid IV length for CBC');
+        }
         const encryptedText = Buffer.from(parts[1], 'hex');
 
         const decipher = crypto.createDecipheriv(ALGORITHM_CBC, getKey(), iv);

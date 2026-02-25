@@ -7,21 +7,8 @@ import fs from 'fs';
 import { encrypt, decrypt } from '../utils/security';
 import { notificationService } from '../services/notification.service';
 
-// Configure Multer Storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = 'uploads/';
-        // Ensure directory exists
-        if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath);
-        }
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
+// Configure Multer Storage (Centralized Memory Storage preferred for Bytea)
+const storage = multer.memoryStorage();
 
 export const upload = multer({
     storage: storage,
@@ -158,7 +145,11 @@ export const getMessages = async (req: Request, res: Response) => {
                         FROM message_attachments ma
                         WHERE ma.message_id = m.id
                     ),
-                    '[]'::json
+                    (
+                        CASE WHEN m.attachment_url IS NOT NULL 
+                        THEN json_build_array(json_build_object('url', m.attachment_url, 'type', m.attachment_type, 'size', 0))
+                        ELSE '[]'::json END
+                    )
                 ) as attachments,
                 COALESCE(
                     (
@@ -317,7 +308,14 @@ export const sendMessage = async (req: Request, res: Response) => {
         if (io) {
             io.to(conversationId).emit('receive_message', {
                 ...newMessage,
-                sender_name: senderName
+                sender_name: senderName,
+                attachments: [
+                    {
+                        url: `/api/files/message/${newMessage.id}`,
+                        type: attachment?.type || 'attachment',
+                        size: 0
+                    }
+                ]
             });
         }
 

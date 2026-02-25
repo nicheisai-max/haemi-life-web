@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import io from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { encrypt, decrypt } from '../utils/security';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'; // Adjust for production
 
@@ -43,7 +44,15 @@ export const useChat = () => {
     const fetchConversations = useCallback(async () => {
         try {
             const res = await api.get('/chat/conversations');
-            setConversations(res.data);
+            const data = res.data;
+
+            // Decrypt last messages if they are encrypted
+            const decryptedConversations = await Promise.all(data.map(async (conv: any) => ({
+                ...conv,
+                last_message: conv.last_message ? await decrypt(conv.last_message) : conv.last_message
+            })));
+
+            setConversations(decryptedConversations);
         } catch (error) {
             console.error('Failed to fetch conversations', error);
         }
@@ -54,10 +63,18 @@ export const useChat = () => {
         setLoading(true);
         try {
             const res = await api.get(`/chat/messages/${conversationId}`);
-            const formattedMessages = res.data.map((msg: any) => ({
+
+            // Decrypt all messages in parallel for performance
+            const formattedMessages = await Promise.all(res.data.map(async (msg: any) => ({
                 ...msg,
-                isMe: msg.sender_id === user?.id
-            }));
+                content: await decrypt(msg.content),
+                isMe: msg.sender_id === user?.id,
+                reply_to: msg.reply_to ? {
+                    ...msg.reply_to,
+                    content: await decrypt(msg.reply_to.content)
+                } : undefined
+            })));
+
             setMessages(formattedMessages);
 
             // Mark as read
@@ -120,16 +137,28 @@ export const useChat = () => {
     // Message Receive Handler
     useEffect(() => {
         if (!socket) return;
-        const handler = (message: Message) => {
-            console.log('Incoming message via socket:', message.id, message.content);
+        const handler = async (message: Message) => {
+            console.log('Incoming message via socket:', message.id);
+
+            // Decrypt immediately on arrival
+            const decryptedContent = await decrypt(message.content);
+            const decryptedReplyContent = message.reply_to ? await decrypt(message.reply_to.content) : undefined;
+
             if (activeConversation && message.conversation_id === activeConversation.id) {
                 setMessages((prev: Message[]) => {
                     const isDuplicate = prev.some(m => String(m.id) === String(message.id));
                     if (isDuplicate) {
-                        console.warn('Duplicate message ignored:', message.id);
                         return prev;
                     }
-                    return [...prev, { ...message, isMe: message.sender_id === user?.id }];
+                    return [...prev, {
+                        ...message,
+                        content: decryptedContent,
+                        isMe: message.sender_id === user?.id,
+                        reply_to: message.reply_to ? {
+                            ...message.reply_to,
+                            content: decryptedReplyContent!
+                        } : undefined
+                    }];
                 });
                 api.put(`/chat/conversations/${activeConversation.id}/read`).catch(console.error);
             }
@@ -143,9 +172,12 @@ export const useChat = () => {
     // Send Message
     const sendMessage = async (content: string, conversationId: string, attachmentUrl?: string, attachmentType?: string, replyToId?: string) => {
         try {
+            // E2EE: Encrypt content before sending
+            const encryptedContent = await encrypt(content);
+
             await api.post('/chat/messages', {
                 conversationId,
-                content,
+                content: encryptedContent,
                 messageType: attachmentUrl ? 'file' : 'text',
                 attachment: attachmentUrl ? { url: attachmentUrl, type: attachmentType } : undefined,
                 replyToId

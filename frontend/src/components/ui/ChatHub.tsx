@@ -87,7 +87,8 @@ const ReactionIcon: React.FC<{ type: string; className?: string }> = ({ type, cl
     }
 };
 
-import { ChatContextMenu } from './ChatContextMenu'; // Import Context Menu
+import { ChatContextMenu } from './ChatContextMenu'; // Iimport { TransitionItem } from '../layout/PageTransition';
+import { AuthenticatedImage } from './AuthenticatedImage';
 
 // --- Main Chat Hub ---
 export const ChatHub: React.FC = () => {
@@ -129,16 +130,21 @@ export const ChatHub: React.FC = () => {
         y: number;
         messageId: string;
         isMe: boolean;
+        parentWidth: number;
+        parentHeight: number;
     }>({
         isOpen: false,
         x: 0,
         y: 0,
         messageId: '',
-        isMe: false
+        isMe: false,
+        parentWidth: 0,
+        parentHeight: 0
     });
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const chatWindowRef = useRef<HTMLDivElement>(null);
 
     // Handlers for Context Menu
     const handleDeleteMessage = (messageId: string, forEveryone: boolean) => {
@@ -247,7 +253,16 @@ export const ChatHub: React.FC = () => {
 
     const filteredConversations = useMemo(() => conversations.filter(c => {
         const other = getOtherParticipant(c);
-        return other.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = other.name.toLowerCase().includes(searchTerm.toLowerCase());
+
+        // Polishing rule: Hide chats that are encrypted placeholders or generic "Start a conversation"
+        // provided they are not the "fresh" ones intended to be seen.
+        // We only show chats that have real human content or are the explicitly allowed "Hi Doctor!"
+        const isFresh = c.last_message === 'Hi Doctor!' || (c.unread_count && parseInt(c.unread_count) > 0);
+        const isEncrypted = c.last_message?.startsWith('enc:') || c.last_message?.startsWith('enc-');
+        const isGeneric = c.last_message === 'Start a conversation' || !c.last_message;
+
+        return matchesSearch && (isFresh || (!isEncrypted && !isGeneric));
     }), [conversations, searchTerm, user]);
 
     const filteredDoctors = useMemo(() => doctors.filter(d => {
@@ -347,7 +362,8 @@ export const ChatHub: React.FC = () => {
                     animate={{ y: 0, opacity: 1, scale: 1 }}
                     exit={{ y: 20, opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-[380px] sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5"
+                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-[380px] sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5 relative"
+                    ref={chatWindowRef}
                 >
                     {/* --- Helper: Header --- */}
                     <div className="shrink-0 bg-[#026355] dark:bg-[#1a1c23]/95 backdrop-blur z-20">
@@ -586,13 +602,18 @@ export const ChatHub: React.FC = () => {
                                                 <div
                                                     onContextMenu={(e) => {
                                                         e.preventDefault();
-                                                        setContextMenu({
-                                                            isOpen: true,
-                                                            x: e.clientX,
-                                                            y: e.clientY,
-                                                            messageId: msg.id,
-                                                            isMe: msg.isMe || false
-                                                        });
+                                                        if (chatWindowRef.current) {
+                                                            const rect = chatWindowRef.current.getBoundingClientRect();
+                                                            setContextMenu({
+                                                                isOpen: true,
+                                                                x: e.clientX - rect.left,
+                                                                y: e.clientY - rect.top,
+                                                                messageId: msg.id,
+                                                                isMe: msg.isMe || false,
+                                                                parentWidth: rect.width,
+                                                                parentHeight: rect.height
+                                                            });
+                                                        }
                                                     }}
                                                     className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm relative cursor-context-menu group ${msg.isMe
                                                         ? 'bg-teal-600 text-white rounded-tr-none'
@@ -630,13 +651,14 @@ export const ChatHub: React.FC = () => {
 
                                                     {msg.attachments && msg.attachments.length > 0 && msg.attachments.map((att, i) => (
                                                         <div key={i} className="mb-2 -mx-1 -mt-1">
-                                                            {att.type?.startsWith('image') ? (
-                                                                <img
-                                                                    src={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`}
-                                                                    alt="Attachment"
-                                                                    className="rounded-xl w-full max-h-48 object-cover border border-white/20"
-                                                                    onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`, '_blank')}
-                                                                />
+                                                            {att.type?.startsWith('image') || (att.url && (att.url.match(/\.(jpeg|jpg|png|gif|webp)$/i) || att.url.includes('message/'))) ? (
+                                                                <div className="cursor-pointer" onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`, '_blank')}>
+                                                                    <AuthenticatedImage
+                                                                        src={`/files/message/${msg.id}`}
+                                                                        alt="Attachment"
+                                                                        className="rounded-xl w-full max-h-48 object-cover border border-white/20 hover:brightness-95 transition-all"
+                                                                    />
+                                                                </div>
                                                             ) : (
                                                                 <a
                                                                     href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`}
@@ -751,7 +773,7 @@ export const ChatHub: React.FC = () => {
                                             <div className="flex-1 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center min-h-[44px] px-4 py-2 transition-all">
                                                 <input
                                                     ref={inputRef}
-                                                    className="w-full bg-transparent border-none focus:ring-0 outline-none p-0 text-slate-900 dark:text-white placeholder-slate-400 text-sm max-h-24 resize-none leading-relaxed"
+                                                    className="w-full bg-transparent border-none focus:ring-0 outline-none pl-4 text-slate-900 dark:text-white placeholder-slate-400 text-sm max-h-24 resize-none leading-relaxed"
                                                     placeholder="Type a message..."
                                                     value={newMessage}
                                                     onChange={(e) => setNewMessage(e.target.value)}
@@ -772,38 +794,38 @@ export const ChatHub: React.FC = () => {
                                             </Button>
                                         </div>
                                     </div>
-
-
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
+
+                    {/* Context Menu - Moved inside to adhere to parent widget bounds */}
+                    {contextMenu.isOpen && (
+                        <ChatContextMenu
+                            x={contextMenu.x}
+                            y={contextMenu.y}
+                            isMe={contextMenu.isMe}
+                            parentWidth={contextMenu.parentWidth}
+                            parentHeight={contextMenu.parentHeight}
+                            onClose={() => setContextMenu({ ...contextMenu, isOpen: false })}
+                            onDeleteForMe={() => handleDeleteMessage(contextMenu.messageId, false)}
+                            onDeleteForEveryone={() => handleDeleteMessage(contextMenu.messageId, true)}
+                            onReact={(reactionType) => handleReaction(contextMenu.messageId, reactionType)}
+                            onReply={() => {
+                                const msg = (messages || []).find(m => m.id === contextMenu.messageId);
+                                if (msg) {
+                                    setReplyingTo(msg);
+                                    setTimeout(() => inputRef.current?.focus(), 10);
+                                }
+                            }}
+                            onCopy={() => {
+                                const msg = (messages || []).find(m => m.id === contextMenu.messageId);
+                                if (msg) copyToClipboard(msg.content);
+                            }}
+                        />
+                    )}
                 </motion.div>
             </AnimatePresence>
-
-            {/* Context Menu - Moved outside to escape overflow/transform clipping */}
-            {contextMenu.isOpen && (
-                <ChatContextMenu
-                    x={contextMenu.x}
-                    y={contextMenu.y}
-                    isMe={contextMenu.isMe}
-                    onClose={() => setContextMenu({ ...contextMenu, isOpen: false })}
-                    onDeleteForMe={() => handleDeleteMessage(contextMenu.messageId, false)}
-                    onDeleteForEveryone={() => handleDeleteMessage(contextMenu.messageId, true)}
-                    onReact={(reactionType) => handleReaction(contextMenu.messageId, reactionType)}
-                    onReply={() => {
-                        const msg = (messages || []).find(m => m.id === contextMenu.messageId);
-                        if (msg) {
-                            setReplyingTo(msg);
-                            setTimeout(() => inputRef.current?.focus(), 10);
-                        }
-                    }}
-                    onCopy={() => {
-                        const msg = (messages || []).find(m => m.id === contextMenu.messageId);
-                        if (msg) copyToClipboard(msg.content);
-                    }}
-                />
-            )}
         </div >
     );
 };
