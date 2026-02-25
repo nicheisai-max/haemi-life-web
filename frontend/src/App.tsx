@@ -66,7 +66,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   // V12 FIX: Explicitly require 'authenticated'. 
   // Any other status (undefined, empty, unauthenticated) triggers a redirect.
   if (authStatus !== 'authenticated') {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
   }
 
   return children;

@@ -166,7 +166,14 @@ const clearAuthSession = () => {
     isRefreshing = false;
     setAccessToken(null);
     sessionStorage.removeItem('user');
-    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+
+    // SOLUTION C: Strict Interceptor-Level Navigation
+    // Immediately terminate the browser's current route and force a hard navigation
+    // to the login page. This circumvents all React Router `<Navigate>` lifecycles
+    // and Framer Motion `<AnimatePresence>` unmount bugs safely.
+    if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+    }
 };
 
 const processQueue = (error: any, token: string | null = null) => {

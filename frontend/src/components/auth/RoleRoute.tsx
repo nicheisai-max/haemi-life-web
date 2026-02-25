@@ -20,7 +20,7 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) 
 
     // V12 FIX: Mandatory "Authenticated" check before RBAC processing.
     if (!isAuthenticated || authStatus !== 'authenticated' || !user) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
+        return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
     }
 
     if (!allowedRoles.includes(user.role)) {
