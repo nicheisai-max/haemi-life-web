@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AnimatePresence, useIsPresent } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
@@ -56,18 +56,12 @@ const LoadingFallback = () => <MedicalLoader fullPage message="Securing clinical
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { authStatus } = useAuth();
   const location = useLocation();
-  const isPresent = useIsPresent();
 
   if (authStatus === 'initializing') {
     return <LoadingFallback />;
   }
 
   if (authStatus !== 'authenticated') {
-    // During AnimatePresence exit animation, show a loader instead of null.
-    // Returning null while AnimatePresence mode="wait" is active causes a blank screen
-    // because mode="wait" holds the old route alive until exit completes — null gives
-    // it nothing to work with and blocks the incoming Login route from rendering.
-    if (!isPresent) return <LoadingFallback />;
     return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
   }
 
