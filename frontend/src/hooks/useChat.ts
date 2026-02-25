@@ -12,7 +12,7 @@ export interface Message {
     sender_id: string;
     content: string;
     message_type: 'text' | 'file';
-    attachments?: { url: string; type: string; size: number }[];
+    attachments?: { url: string; type: string; size: number; name?: string }[];
     is_read: boolean;
     created_at: string;
     sender_name?: string;

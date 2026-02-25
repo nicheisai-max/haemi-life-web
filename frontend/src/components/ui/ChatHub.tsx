@@ -4,8 +4,9 @@ import {
     MessageSquare, X, Minus,
     ChevronLeft,
     ShieldCheck, Search, CheckCheck,
-    Paperclip, Send, FileText, Plus, UserPlus,
-    MessageCircle, Reply
+    Paperclip, Send, Plus, UserPlus,
+    MessageCircle, Reply,
+    Maximize2, Loader2, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat, type Conversation, type Message } from '../../hooks/useChat';
@@ -118,6 +119,8 @@ export const ChatHub: React.FC = () => {
     const [doctors, setDoctors] = useState<DoctorProfile[]>([]); // List of doctors for new chat
     const [doctorSearch, setDoctorSearch] = useState('');
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+    const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -145,6 +148,27 @@ export const ChatHub: React.FC = () => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
+
+    const handleDownload = async (messageId: string, fileName: string) => {
+        try {
+            setDownloadingId(messageId);
+            const response = await api.get(`/files/message/${messageId}`, {
+                responseType: 'blob'
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', fileName || 'attachment');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Download failed:', error);
+        } finally {
+            setDownloadingId(null);
+        }
+    };
 
     // Handlers for Context Menu
     const handleDeleteMessage = (messageId: string, forEveryone: boolean) => {
@@ -652,28 +676,35 @@ export const ChatHub: React.FC = () => {
                                                     {msg.attachments && msg.attachments.length > 0 && msg.attachments.map((att, i) => (
                                                         <div key={i} className="mb-2 -mx-1 -mt-1">
                                                             {att.type?.startsWith('image') || (att.url && (att.url.match(/\.(jpeg|jpg|png|gif|webp)$/i) || att.url.includes('message/'))) ? (
-                                                                <div className="cursor-pointer" onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`, '_blank')}>
+                                                                <div
+                                                                    className="cursor-pointer group/img relative overflow-hidden rounded-xl"
+                                                                    onClick={() => setLightboxImage({ src: `/files/message/${msg.id}`, alt: att.name || 'Attachment' })}
+                                                                >
                                                                     <AuthenticatedImage
                                                                         src={`/files/message/${msg.id}`}
                                                                         alt="Attachment"
-                                                                        className="rounded-xl w-full max-h-48 object-cover border border-white/20 hover:brightness-95 transition-all"
+                                                                        className="w-full max-h-48 object-cover border border-white/20 transition-all duration-300 group-hover:scale-105"
                                                                     />
+                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                                        <Maximize2 className="text-white opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 drop-shadow-md" />
+                                                                    </div>
                                                                 </div>
                                                             ) : (
-                                                                <a
-                                                                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/message/${msg.id}`}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className={`flex items-center gap-2 p-3 rounded-xl bg-black/10 transition-colors border border-black/5 ${msg.isMe ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}
+                                                                <button
+                                                                    onClick={() => handleDownload(msg.id, att.name || 'document')}
+                                                                    disabled={downloadingId === msg.id}
+                                                                    className={`w-full flex items-center gap-2 p-3 rounded-xl bg-black/10 transition-colors border border-black/5 hover:bg-black/20 ${msg.isMe ? 'text-white' : 'text-slate-700 dark:text-slate-200'} ${downloadingId === msg.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                                 >
                                                                     <div className="h-8 w-8 rounded-lg bg-black/10 flex items-center justify-center shrink-0">
-                                                                        <FileText className="h-4 w-4" />
+                                                                        {downloadingId === msg.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                                                                     </div>
-                                                                    <div className="min-w-0 pr-2">
-                                                                        <p className="text-[11px] font-bold truncate opacity-90">DOCUMENT</p>
-                                                                        <span className="text-[10px] break-all opacity-70">View Attachment</span>
+                                                                    <div className="min-w-0 pr-2 text-left">
+                                                                        <p className="text-[11px] font-bold truncate opacity-90 uppercase">{att.name || 'DOCUMENT'}</p>
+                                                                        <span className="text-[10px] break-all opacity-70">
+                                                                            {downloadingId === msg.id ? 'Securing Download...' : 'Click to Download Securely'}
+                                                                        </span>
                                                                     </div>
-                                                                </a>
+                                                                </button>
                                                             )}
                                                         </div>
                                                     ))}
@@ -826,6 +857,71 @@ export const ChatHub: React.FC = () => {
                     )}
                 </motion.div>
             </AnimatePresence>
-        </div >
+
+            {/* Image Lightbox (WhatsApp Grade) */}
+            <AnimatePresence>
+                {lightboxImage && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-12 bg-slate-950/95 backdrop-blur-sm"
+                        onClick={() => setLightboxImage(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="relative max-w-5xl w-full h-full flex flex-col items-center justify-center pointer-events-auto"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/60 to-transparent">
+                                <div className="flex flex-col">
+                                    <h3 className="text-white font-bold text-lg leading-tight uppercase tracking-wide">
+                                        {lightboxImage.alt}
+                                    </h3>
+                                    <span className="text-white/60 text-xs font-medium italic">
+                                        Haemi Life Secure Medical Asset
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={() => setLightboxImage(null)}
+                                        className="h-10 w-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white border border-white/20"
+                                    >
+                                        <X className="h-5 w-5" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="relative group w-full h-full flex items-center justify-center p-4">
+                                <AuthenticatedImage
+                                    src={lightboxImage.src}
+                                    alt={lightboxImage.alt}
+                                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl shadow-teal-500/10 border border-white/10"
+                                />
+                            </div>
+
+                            <div className="absolute bottom-8 flex gap-3">
+                                <Button
+                                    onClick={() => handleDownload(lightboxImage.src.split('/').pop() || '', lightboxImage.alt)}
+                                    className="bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 h-11 rounded-xl shadow-lg shadow-teal-900/40 border-0 flex items-center gap-2"
+                                >
+                                    {downloadingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                    Save to Device
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setLightboxImage(null)}
+                                    className="bg-white/5 border-white/20 text-white hover:bg-white/10 font-bold px-6 h-11 rounded-xl"
+                                >
+                                    Close
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 };

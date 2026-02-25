@@ -141,13 +141,13 @@ export const getMessages = async (req: Request, res: Response) => {
                 u.name as sender_name,
                 COALESCE(
                     (
-                        SELECT json_agg(json_build_object('url', ma.file_url, 'type', ma.file_type, 'size', ma.file_size))
+                        SELECT json_agg(json_build_object('url', ma.file_url, 'type', ma.file_type, 'size', ma.file_size, 'name', ma.file_name))
                         FROM message_attachments ma
                         WHERE ma.message_id = m.id
                     ),
                     (
                         CASE WHEN m.attachment_url IS NOT NULL 
-                        THEN json_build_array(json_build_object('url', m.attachment_url, 'type', m.attachment_type, 'size', 0))
+                        THEN json_build_array(json_build_object('url', m.attachment_url, 'type', m.attachment_type, 'size', 0, 'name', m.attachment_name))
                         ELSE '[]'::json END
                     )
                 ) as attachments,
@@ -313,7 +313,8 @@ export const sendMessage = async (req: Request, res: Response) => {
                     {
                         url: `/api/files/message/${newMessage.id}`,
                         type: attachment?.type || 'attachment',
-                        size: 0
+                        size: 0,
+                        name: attachment?.originalName || 'attachment'
                     }
                 ]
             });
