@@ -221,7 +221,7 @@
   }
 
   /* GLOBAL FORM ELEMENT STANDARDS - SLEEK PREMIUM V1 */
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not(.premium-counter-input),
   textarea,
   select {
     height: var(--input-height) !important;
@@ -233,7 +233,7 @@
   }
 
   /* Support for shadcn/ui and other components that might use height: 10px or similar */
-  .h-10 {
+  .h-10:not(.premium-counter-input) {
     height: var(--input-height) !important;
   }
 
@@ -251,7 +251,7 @@
     padding-bottom: 0.75rem !important;
   }
 
-  input:focus,
+  input:focus:not(.premium-counter-input),
   textarea:focus,
   select:focus {
     @apply border-primary ring-1 ring-primary/20;
@@ -542,7 +542,8 @@
   }
 
   .premium-counter-btn {
-    @apply h-9 w-9 flex items-center justify-center rounded-full border transition-all active:scale-90 shadow-sm;
+    @apply h-9 w-9 flex items-center justify-center rounded-full border transition-colors shadow-sm;
+    /* P1 FIX: Removed active:scale-90 as it triggers premature mouseleave during long-press */
     /* Light Mode */
     background-color: var(--primary-600);
     border-color: var(--primary-700);
@@ -568,13 +569,29 @@
   .premium-counter-input {
     @apply flex-1 min-w-0 bg-transparent border-none text-center font-bold text-sm focus:ring-0 outline-none select-none;
     font-family: 'Roboto', sans-serif;
+    /* Deep Polish: Kill all industrial borders/rings to allow the capsule to shine */
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: transparent !important;
+
     /* Light Mode */
     color: var(--primary-900);
+  }
+
+  .premium-counter-input:focus,
+  .premium-counter-input:active,
+  .premium-counter-input:focus-visible {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: transparent !important;
   }
 
   .dark .premium-counter-input {
     /* Dark Mode */
     color: white;
+    background: transparent !important;
   }
 
   /* Signature Custom Cursive Fonts - Enforced to bypass inline style stripping */
