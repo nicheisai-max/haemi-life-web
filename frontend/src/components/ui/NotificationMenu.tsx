@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { notificationService, type Notification } from '../../services/notification.service';
 import { getAccessToken } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import io from 'socket.io-client';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -37,6 +38,7 @@ const getTimeAgo = (dateString: string) => {
 };
 
 export const NotificationMenu: React.FC = () => {
+    const { authStatus } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
     const [hasUnread, setHasUnread] = useState(false);
@@ -55,6 +57,11 @@ export const NotificationMenu: React.FC = () => {
     };
 
     useEffect(() => {
+        // CRITICAL GUARD: only fetch when auth is fully confirmed AND token is in memory.
+        // This prevents the post-login race where React has rendered the Dashboard
+        // but the access token hasn't yet propagated through the interceptor.
+        if (authStatus !== 'authenticated' || !getAccessToken()) return;
+
         fetchNotifications();
 
         // Safety fallback: refresh every 30 seconds via polling
@@ -88,7 +95,7 @@ export const NotificationMenu: React.FC = () => {
                 socketRef.current = null;
             }
         };
-    }, []);
+    }, [authStatus]);
 
     const unreadCount = notifications.filter(n => !n.is_read).length;
 
