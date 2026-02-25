@@ -88,7 +88,7 @@ const ReactionIcon: React.FC<{ type: string; className?: string }> = ({ type, cl
     }
 };
 
-import { ChatContextMenu } from './ChatContextMenu'; // Iimport { TransitionItem } from '../layout/PageTransition';
+import { ChatContextMenu } from './ChatContextMenu';
 import { AuthenticatedImage } from './AuthenticatedImage';
 
 // --- Main Chat Hub ---
@@ -865,7 +865,7 @@ export const ChatHub: React.FC = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-12 bg-slate-950/95 backdrop-blur-sm"
+                        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-12 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md"
                         onClick={() => setLightboxImage(null)}
                     >
                         <motion.div
@@ -875,19 +875,19 @@ export const ChatHub: React.FC = () => {
                             className="relative max-w-5xl w-full h-full flex flex-col items-center justify-center pointer-events-auto"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/60 to-transparent">
+                            <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-slate-200/80 to-transparent dark:from-black/60">
                                 <div className="flex flex-col">
-                                    <h3 className="text-white font-bold text-lg leading-tight uppercase tracking-wide">
+                                    <h3 className="text-slate-900 dark:text-white font-bold text-lg leading-tight uppercase tracking-wide">
                                         {lightboxImage.alt}
                                     </h3>
-                                    <span className="text-white/60 text-xs font-medium italic">
+                                    <span className="text-slate-600 dark:text-white/60 text-xs font-medium italic">
                                         Haemi Life Secure Medical Asset
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <button
                                         onClick={() => setLightboxImage(null)}
-                                        className="h-10 w-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white border border-white/20"
+                                        className="h-10 w-10 flex items-center justify-center rounded-full bg-slate-200/50 hover:bg-slate-300/50 dark:bg-white/10 dark:hover:bg-white/20 transition-colors text-slate-800 dark:text-white border border-slate-300 dark:border-white/20 shadow-sm"
                                     >
                                         <X className="h-5 w-5" />
                                     </button>
@@ -898,14 +898,14 @@ export const ChatHub: React.FC = () => {
                                 <AuthenticatedImage
                                     src={lightboxImage.src}
                                     alt={lightboxImage.alt}
-                                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl shadow-teal-500/10 border border-white/10"
+                                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl shadow-teal-500/10 border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-transparent"
                                 />
                             </div>
 
                             <div className="absolute bottom-8 flex gap-3">
                                 <Button
                                     onClick={() => handleDownload(lightboxImage.src.split('/').pop() || '', lightboxImage.alt)}
-                                    className="bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 h-11 rounded-xl shadow-lg shadow-teal-900/40 border-0 flex items-center gap-2"
+                                    className="bg-[#148C8B] hover:bg-[#0E6B74] dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold px-6 h-11 rounded-xl shadow-lg shadow-teal-900/20 dark:shadow-teal-900/40 border-0 flex items-center gap-2"
                                 >
                                     {downloadingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                                     Save to Device
@@ -913,7 +913,7 @@ export const ChatHub: React.FC = () => {
                                 <Button
                                     variant="outline"
                                     onClick={() => setLightboxImage(null)}
-                                    className="bg-white/5 border-white/20 text-white hover:bg-white/10 font-bold px-6 h-11 rounded-xl"
+                                    className="bg-white/80 dark:bg-white/5 border-slate-200 dark:border-white/20 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10 font-bold px-6 h-11 rounded-xl shadow-sm"
                                 >
                                     Close
                                 </Button>
