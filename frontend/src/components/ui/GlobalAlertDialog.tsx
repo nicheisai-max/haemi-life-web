@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, Info, CheckCircle2, HelpCircle } from 'lucide-react';
+import { AlertTriangle, Info, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export type AlertType = 'info' | 'success' | 'warning' | 'error' | 'confirm';
@@ -93,12 +93,11 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                             stroke="currentColor"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            variants={draw}
+                            variants={draw as any}
                         />
                     </motion.svg>
                 );
             case 'error':
-            case 'destructive': // Handle alias if used
                 return (
                     <motion.svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -115,7 +114,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                             strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            variants={draw}
+                            variants={draw as any}
                         />
                     </motion.svg>
                 );
@@ -124,7 +123,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                     <motion.div
                         initial="hidden"
                         animate="visible"
-                        variants={pop}
+                        variants={pop as any}
                         className="relative"
                     >
                         <AlertTriangle className="h-10 w-10 text-amber-500 fill-amber-500/10 stroke-[2.5px]" />

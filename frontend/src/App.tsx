@@ -7,6 +7,7 @@ import { ToastProvider } from './context/ToastContext';
 import { NetworkStatusProvider } from './context/NetworkStatus';
 import { SessionManagerProvider } from './context/SessionManager';
 import { AlertDialogProvider } from './context/AlertDialogContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DelayedFallback } from './components/layout/DelayedFallback';
 const LazyDashboardLayout = lazy(() => import('./components/layout/DashboardLayout').then(m => ({ default: m.DashboardLayout })));
@@ -53,6 +54,15 @@ import { DoctorPatientList } from './pages/doctor/DoctorPatientList';
 
 const LoadingFallback = () => <MedicalLoader fullPage message="Securing clinical data..." />;
 
+/**
+ * Renders NotificationProvider unconditionally to prevent React from unmounting
+ * the entire AppRoutes subtree whenever authStatus toggles.
+ * The NotificationProvider internally guards its socket connection via user?.id.
+ */
+const AuthGatedNotifications: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return <NotificationProvider>{children}</NotificationProvider>;
+};
+
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { authStatus } = useAuth();
   const location = useLocation();
@@ -68,8 +78,38 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   return children;
 };
 
+const IdentityGate = () => {
+  const { authStatus, isAuthenticated } = useAuth();
+
+  if (authStatus === 'initializing') {
+    return <LoadingFallback />;
+  }
+
+  if (isAuthenticated) {
+    return (
+      <ProtectedRoute>
+        <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
+          <PageTransition>
+            <RoleRouter />
+          </PageTransition>
+        </LazyDashboardLayout></Suspense>
+      </ProtectedRoute>
+    );
+  }
+
+  return <Login />;
+};
+
 const AppRoutes = () => {
   const location = useLocation();
+  const { authStatus } = useAuth();
+
+  // UNIVERSAL PRODUCTION GUARD:
+  // Do not render ANY routes until the initial session check is complete.
+  // This prevents the "Flicker" of protected layouts to unauthorized users.
+  if (authStatus === 'initializing') {
+    return <LoadingFallback />;
+  }
 
   return (
     <ErrorBoundary onReset={() => window.location.reload()}>
@@ -339,7 +379,7 @@ const AppRoutes = () => {
             />
             <Route path={PATHS.DOCTOR.DASHBOARD_LEGACY} element={<Navigate to={PATHS.DASHBOARD} replace />} />
             <Route path={PATHS.ADMIN.DASHBOARD_LEGACY} element={<Navigate to={PATHS.ADMIN.DASHBOARD} replace />} />
-            <Route path={PATHS.ROOT} element={<Navigate to={PATHS.DASHBOARD} replace />} />
+            <Route path={PATHS.ROOT} element={<IdentityGate />} />
             <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
           </Routes>
         </AnimatePresence>
@@ -361,8 +401,10 @@ const App: React.FC = () => {
                 <NetworkStatusProvider>
                   <SessionManagerProvider>
                     <LanguageProvider>
-                      <ScrollToTop />
-                      <AppRoutes />
+                      <AuthGatedNotifications>
+                        <ScrollToTop />
+                        <AppRoutes />
+                      </AuthGatedNotifications>
                     </LanguageProvider>
                   </SessionManagerProvider>
                 </NetworkStatusProvider>

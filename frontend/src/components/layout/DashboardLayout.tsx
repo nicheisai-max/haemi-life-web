@@ -1,6 +1,6 @@
 import React, { type ReactNode } from 'react';
 import { Navbar } from './Navbar';
-import { NotificationSimulator } from '../utils/NotificationSimulator';
+import { NotificationSimulator } from '../utils/_NotificationSimulator.deprecated';
 
 
 interface DashboardLayoutProps {

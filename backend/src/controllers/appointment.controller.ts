@@ -1,28 +1,9 @@
 import { Request, Response } from 'express';
 import { appointmentRepository } from '../repositories/appointment.repository';
 import { pool } from '../config/db';
-import { io } from '../app';
 import { sendResponse, sendError } from '../utils/response';
+import { notificationService } from '../services/notification.service';
 
-// Helper to create a notification in DB and emit it in real-time
-async function createAndEmitNotification(
-    userId: string,
-    title: string,
-    description: string,
-    type: 'success' | 'info' | 'warning' | 'error'
-) {
-    const result = await pool.query(
-        `INSERT INTO notifications (user_id, title, description, type) 
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [userId, title, description, type]
-    );
-    const notification = result.rows[0];
-    // Emit to the user's personal room (user joins room `user:<id>` on socket connect)
-    if (io) {
-        io.to(`user:${userId}`).emit('new_notification', notification);
-    }
-    return notification;
-}
 
 // Book a new appointment (Patient)
 export const bookAppointment = async (req: Request, res: Response) => {
@@ -78,7 +59,7 @@ export const bookAppointment = async (req: Request, res: Response) => {
         });
 
         // Notify patient
-        await createAndEmitNotification(
+        await notificationService.create(
             patientId,
             'Appointment Confirmed',
             `Your appointment with ${doctorName} on ${formattedDate} at ${formattedTime} has been booked successfully.`,
@@ -86,7 +67,7 @@ export const bookAppointment = async (req: Request, res: Response) => {
         );
 
         // Notify doctor
-        await createAndEmitNotification(
+        await notificationService.create(
             doctor_id,
             'New Appointment Request',
             `${patientName} has booked an appointment with you on ${formattedDate} at ${formattedTime}.`,

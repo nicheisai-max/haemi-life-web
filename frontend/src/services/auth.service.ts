@@ -17,19 +17,31 @@ export const authService = {
         const response = await api.get<{ user: User }>('/auth/verify');
         return response.data;
     },
+
     getMe: async (): Promise<{ user: User | null; authenticated: boolean }> => {
         const response = await api.get<{ user: User | null; authenticated: boolean }>('/auth/me');
         return response.data;
     },
+
     refreshToken: async (): Promise<{ token?: string; authenticated: boolean }> => {
         // Use raw axios to bypass global interceptors for the refresh token endpoint
         // This prevents loud 401 errors in the console when the user is simply not logged in
-        const response = await axios.post<{ token?: string; authenticated: boolean }>(
-            `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/refresh-token`,
-            {},
-            { withCredentials: true }
-        );
-        return response.data;
+        try {
+            // Note: Since raw axios is used, we must manually unwrap the `{ success, data }` format here.
+            // Our global `api.ts` interceptor does not apply to this raw `axios` call.
+            const response = await axios.post<{ success?: boolean; data?: { token?: string } }>(
+                `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/refresh-token`,
+                {},
+                { withCredentials: true }
+            );
+
+            if (response.data.success && response.data.data?.token) {
+                return { token: response.data.data.token, authenticated: true };
+            }
+            return { authenticated: false };
+        } catch (error) {
+            return { authenticated: false };
+        }
     },
 
     logout: async (): Promise<void> => {
@@ -38,16 +50,16 @@ export const authService = {
 
     requestPasswordReset: async (identifier: string): Promise<{ message: string; dev_otp?: string }> => {
         const response = await api.post('/password-reset/request-reset', { identifier });
-        return response.data;
+        return response.data as any;
     },
 
     verifyOTP: async (identifier: string, otp: string): Promise<{ message: string; resetToken: string }> => {
         const response = await api.post('/password-reset/verify-otp', { identifier, otp });
-        return response.data;
+        return response.data as any;
     },
 
     resetPassword: async (resetToken: string, newPassword: string): Promise<{ message: string }> => {
         const response = await api.post('/password-reset/reset-password', { resetToken, newPassword });
-        return response.data;
+        return response.data as any;
     },
 };

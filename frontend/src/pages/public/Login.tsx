@@ -18,7 +18,8 @@ export const Login: React.FC = () => {
     const { login, isAuthenticated } = useAuth();
     const [generalError, setGeneralError] = useState<string>('');
 
-    // PRODUCTION FIX: Automatic redirection if already authenticated
+    // PRODUCTION UX: Instant redirection if already authenticated
+    // This maintains the "polished" feel the user prefers
     React.useEffect(() => {
         if (isAuthenticated) {
             navigate('/dashboard', { replace: true });
@@ -37,18 +38,14 @@ export const Login: React.FC = () => {
         setGeneralError('');
 
         try {
-            // Enterprise Hardening: Force sanitize inputs to avoid DB case-sensitivity mismatches
             const cleanIdentifier = data.emailOrPhone.trim().toLowerCase();
-
             const credentials = {
                 identifier: cleanIdentifier,
                 password: data.password,
             };
 
             await login(credentials);
-            // No manual navigate here! 
-            // The AuthContext update will trigger the useEffect above to handle 
-            // navigation gracefully once the state has fully propagated.
+            // The useEffect above will handle the navigation once state updates
         } catch (error: any) {
             console.error('Login failed:', error);
             setGeneralError(
@@ -56,7 +53,6 @@ export const Login: React.FC = () => {
             );
         }
     };
-
 
     return (
         <AuthLayout

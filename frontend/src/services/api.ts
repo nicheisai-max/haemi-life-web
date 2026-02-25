@@ -156,13 +156,16 @@ api.interceptors.request.use(
 let isRefreshing = false;
 let failedQueue: any[] = [];
 
-// Peripheral endpoints: their 401s are non-session-terminating.
-// These routes can transiently fail post-login due to race conditions
-// or backend issues and must NEVER invalidate the user session.
-const PERIPHERAL_ENDPOINTS = ['/notifications', '/chat/messages'];
+// ─── Session-Neutral Endpoints ───────────────────────────────────────────────
+// These are DATA endpoints. A 401 from them means that specific request failed
+// (e.g., transient backend issue, brief token invalidity for that route), NOT
+// that the user's session is expired. Only /auth/refresh-token failing can prove
+// the session is truly dead. These endpoints MUST NOT trigger clearAuthSession().
+// This is a permanent architectural rule, not a workaround.
+const SESSION_NEUTRAL_ENDPOINTS = ['/notifications', '/chat/messages', '/chat/'];
 
-const isPeripheral = (url?: string) =>
-    !!url && PERIPHERAL_ENDPOINTS.some(p => url.includes(p));
+const isSessionNeutral = (url?: string): boolean =>
+    !!url && SESSION_NEUTRAL_ENDPOINTS.some(p => url.includes(p));
 
 // Session Management Helper
 const clearAuthSession = () => {
@@ -190,6 +193,13 @@ const processQueue = (error: any, token: string | null = null) => {
 api.interceptors.response.use(
     async (response) => {
         const config = response.config as ExtendedRequestConfig;
+
+        // GLOBAL HARDENED API UNWRAPPER:
+        // Automatically unwrap the standard backend format { success, message, data }
+        // so that all frontend services (auth, appointments, prescriptions) receive the expected payload directly.
+        if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
+            response.data = response.data.data;
+        }
 
         // If this was a GET request, save to cache
         if (config.method?.toLowerCase() === 'get' && response.data) {
@@ -224,17 +234,17 @@ api.interceptors.response.use(
             isRefreshing = true;
 
             try {
-                const response = await axios.post<{ authenticated: boolean; token?: string }>(
+                const response = await axios.post<{ success?: boolean; data?: { token?: string } }>(
                     `${API_URL}/auth/refresh-token`,
                     {},
                     { withCredentials: true }
                 );
 
-                if (!response.data.authenticated || !response.data.token) {
+                if (!response.data.success || !response.data.data?.token) {
                     throw new Error('Unauthenticated');
                 }
 
-                const { token } = response.data;
+                const token = response.data.data.token;
                 setAccessToken(token);
                 processQueue(null, token);
                 isRefreshing = false;
@@ -244,10 +254,11 @@ api.interceptors.response.use(
             } catch (err) {
                 processQueue(err, null);
                 isRefreshing = false;
-                // Only terminate the session if the ORIGINAL failing request was a
-                // critical/authenticated route. Peripheral endpoints (notifications, chat)
-                // failing does NOT mean the session is expired - they fail silently.
-                const isCritical = !isPeripheral(originalRequest.url) && !originalRequest.url?.includes('/auth/me');
+                // Session is truly expired ONLY when a core auth or data route fails
+                // AND the URL is not a session-neutral data endpoint.
+                // Session-neutral endpoints (e.g. /notifications, /chat/) returning 401
+                // means that specific request failed — not that the session is gone.
+                const isCritical = !isSessionNeutral(originalRequest.url) && !originalRequest.url?.includes('/auth/me');
                 if (isCritical) {
                     clearAuthSession();
                 }

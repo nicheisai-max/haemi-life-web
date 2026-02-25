@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef } from 'react';
 import { Bell, Check, Info, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,12 +8,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { notificationService, type Notification } from '../../services/notification.service';
-import { getAccessToken } from '../../services/api';
-import { useAuth } from '../../context/AuthContext';
-import io from 'socket.io-client';
-
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { type Notification } from '../../services/notification.service';
+import { useNotifications } from '../../context/NotificationContext';
 
 const getTimeAgo = (dateString: string) => {
     try {
@@ -38,85 +33,10 @@ const getTimeAgo = (dateString: string) => {
 };
 
 export const NotificationMenu: React.FC = () => {
-    const { authStatus } = useAuth();
-    const [notifications, setNotifications] = useState<Notification[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [hasUnread, setHasUnread] = useState(false);
-    const socketRef = useRef<any>(null);
+    // Single source of truth — all state and socket logic lives in NotificationContext
+    const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications();
 
-    const fetchNotifications = async () => {
-        try {
-            const data = await notificationService.getNotifications();
-            setNotifications(data);
-            setHasUnread(data.some(n => !n.is_read));
-        } catch (error) {
-            console.error('Failed to fetch notifications:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        // CRITICAL GUARD: only fetch when auth is fully confirmed AND token is in memory.
-        // This prevents the post-login race where React has rendered the Dashboard
-        // but the access token hasn't yet propagated through the interceptor.
-        if (authStatus !== 'authenticated' || !getAccessToken()) return;
-
-        fetchNotifications();
-
-        // Safety fallback: refresh every 30 seconds via polling
-        const interval = setInterval(fetchNotifications, 30000);
-
-        // Real-time: connect Socket.io with the in-memory access token
-        const token = getAccessToken();
-        if (token) {
-            const socket = io(SOCKET_URL, {
-                auth: { token },
-                transports: ['websocket'],
-                reconnectionAttempts: 3,
-            });
-            socketRef.current = socket;
-
-            // Instantly prepend new notifications pushed from server
-            socket.on('new_notification', (notification: Notification) => {
-                setNotifications(prev => [notification, ...prev]);
-                setHasUnread(true);
-            });
-
-            socket.on('connect_error', (err: Error) => {
-                console.warn('[NotificationMenu] Socket connect error:', err.message);
-            });
-        }
-
-        return () => {
-            clearInterval(interval);
-            if (socketRef.current) {
-                socketRef.current.disconnect();
-                socketRef.current = null;
-            }
-        };
-    }, [authStatus]);
-
-    const unreadCount = notifications.filter(n => !n.is_read).length;
-
-    const markAllRead = async () => {
-        try {
-            await notificationService.markAllAsRead();
-            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-            setHasUnread(false);
-        } catch (error) {
-            console.error('Failed to mark all as read:', error);
-        }
-    };
-
-    const markRead = async (id: string) => {
-        try {
-            await notificationService.markAsRead(id);
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-        } catch (error) {
-            console.error('Failed to mark notification as read:', error);
-        }
-    };
+    const hasUnread = unreadCount > 0;
 
     const getIcon = (type: Notification['type']) => {
         switch (type) {
@@ -176,7 +96,7 @@ export const NotificationMenu: React.FC = () => {
                                 {notifications.map((notif) => (
                                     <DropdownMenuItem
                                         key={notif.id}
-                                        onClick={() => !notif.is_read && markRead(notif.id)}
+                                        onClick={() => !notif.is_read && markAsRead(notif.id)}
                                         className={`px-5 py-4 cursor-pointer outline-none transition-all duration-150 flex items-start gap-4 border-b border-border/5 last:border-0
                                             ${!notif.is_read
                                                 ? 'bg-primary/[0.03] hover:bg-primary/[0.08] dark:bg-primary/[0.02] dark:hover:bg-primary/[0.05]'
@@ -213,7 +133,7 @@ export const NotificationMenu: React.FC = () => {
                 <div className="p-2 border-t border-border/5">
                     <Button
                         variant="ghost"
-                        onClick={markAllRead}
+                        onClick={markAllAsRead}
                         className="w-full text-xs h-9 text-primary hover:text-primary/90 hover:bg-primary/5 font-bold"
                     >
                         Mark all as read

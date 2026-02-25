@@ -5,6 +5,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { encrypt, decrypt } from '../utils/security';
+import { notificationService } from '../services/notification.service';
 
 // Configure Multer Storage
 const storage = multer.diskStorage({
@@ -330,14 +331,12 @@ export const sendMessage = async (req: Request, res: Response) => {
 
             for (const row of participantsResult.rows) {
                 const recipientId = row.user_id;
-                const notifResult = await pool.query(
-                    `INSERT INTO notifications (user_id, title, description, type)
-                     VALUES ($1, $2, $3, 'info') RETURNING *`,
-                    [recipientId, `New message from ${senderName}`, previewText]
+                await notificationService.create(
+                    recipientId,
+                    `New message from ${senderName}`,
+                    previewText,
+                    'info'
                 );
-                if (io) {
-                    io.to(`user:${recipientId}`).emit('new_notification', notifResult.rows[0]);
-                }
             }
         } catch (notifErr) {
             console.error('Non-fatal: failed to emit chat notification:', notifErr);
