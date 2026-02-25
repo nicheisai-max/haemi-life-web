@@ -306,18 +306,19 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         // Emit socket event to room (conversationId)
         if (io) {
-            io.to(conversationId).emit('receive_message', {
+            const socketPayload = {
                 ...newMessage,
                 sender_name: senderName,
-                attachments: [
+                attachments: (attachment && attachment.url) ? [
                     {
                         url: `/api/files/message/${newMessage.id}`,
                         type: attachment?.type || 'attachment',
                         size: 0,
                         name: attachment?.originalName || 'attachment'
                     }
-                ]
-            });
+                ] : []
+            };
+            io.to(conversationId).emit('receive_message', socketPayload);
         }
 
         // Emit real-time notification to all other participants in this conversation
