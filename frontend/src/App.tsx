@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, useIsPresent } from 'framer-motion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
@@ -56,16 +56,16 @@ const LoadingFallback = () => <MedicalLoader fullPage message="Securing clinical
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { authStatus } = useAuth();
   const location = useLocation();
+  const isPresent = useIsPresent();
 
-  // 1. Initial Synchronous Initialization Phase
   if (authStatus === 'initializing') {
     return <LoadingFallback />;
   }
 
-  // 2. Deterministic "Authenticated" Check
-  // V12 FIX: Explicitly require 'authenticated'. 
-  // Any other status (undefined, empty, unauthenticated) triggers a redirect.
   if (authStatus !== 'authenticated') {
+    // Guard: if this route is currently animating out inside AnimatePresence,
+    // return null to prevent a re-entrant Navigate that triggers an infinite loop.
+    if (!isPresent) return null;
     return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
   }
 

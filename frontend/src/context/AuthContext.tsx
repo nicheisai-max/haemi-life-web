@@ -63,8 +63,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             authChannel.onmessage = handleMessage;
         }
 
+        const handleUnauthorized = () => {
+            console.log('[Auth] Session invalidated (Global Event).');
+            setAccessToken(null);
+            sessionStorage.removeItem('user');
+            setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
+            if (authChannel) authChannel.postMessage({ type: 'LOGOUT' });
+        };
+
+        window.addEventListener('auth:unauthorized', handleUnauthorized);
+
         return () => {
             if (authChannel) authChannel.close();
+            window.removeEventListener('auth:unauthorized', handleUnauthorized);
         };
     }, []);
 

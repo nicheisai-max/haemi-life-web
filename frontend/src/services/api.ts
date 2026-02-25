@@ -156,40 +156,17 @@ api.interceptors.request.use(
 let isRefreshing = false;
 let failedQueue: any[] = [];
 
-// Non-critical background endpoints — their 401s must NEVER trigger
-// a session wipe or hard redirect. They fail silently to prevent
-// post-login race conditions when the token isn't fully propagated yet.
-const NON_CRITICAL_ENDPOINTS = [
-    '/notifications',
-    '/chat/messages',
-];
-
-function isNonCriticalEndpoint(url: string | undefined): boolean {
-    if (!url) return false;
-    return NON_CRITICAL_ENDPOINTS.some(endpoint => url.includes(endpoint));
-}
-
 // Session Management Helper
-const clearAuthSession = (failingUrl?: string) => {
-    // Guard 1: Do not wipe session during app initialization.
+const clearAuthSession = () => {
+    // Guard: Do not wipe session during app initialization.
+    // Background requests (socket, notifications) may 401 before the
+    // in-memory token is restored by initAuth(). Ignoring those 401s
+    // prevents a race that kicks the user to login on every page refresh.
     if (!appInitialized) return;
-
-    // Guard 2: Do not redirect if the 401 came from a non-critical background endpoint.
-    // These endpoints (notifications, chat polling) can transiently 401 right after login
-    // before the token fully propagates — treating them as session termination causes boot loops.
-    if (isNonCriticalEndpoint(failingUrl)) return;
-
     isRefreshing = false;
     setAccessToken(null);
     sessionStorage.removeItem('user');
-
-    // SOLUTION C: Strict Interceptor-Level Navigation
-    // Immediately terminate the browser's current route and force a hard navigation
-    // to the login page. This circumvents all React Router `<Navigate>` lifecycles
-    // and Framer Motion `<AnimatePresence>` unmount bugs safely.
-    if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-    }
+    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
 };
 
 const processQueue = (error: any, token: string | null = null) => {
@@ -225,7 +202,7 @@ api.interceptors.response.use(
         // Authentication Interceptor (Silent Refresh)
         if (error.response?.status === 401 && !originalRequest._retry) {
             if (originalRequest.url?.includes('/auth/refresh-token')) {
-                clearAuthSession(originalRequest.url);
+                clearAuthSession();
                 return Promise.reject(error);
             }
 
@@ -263,7 +240,7 @@ api.interceptors.response.use(
                 processQueue(err, null);
                 // Fail-safe: Only clear session if this wasn't an intentional discovery attempt
                 if (!originalRequest.url?.includes('/auth/me')) {
-                    clearAuthSession(originalRequest.url);
+                    clearAuthSession();
                 } else {
                     isRefreshing = false;
                 }
