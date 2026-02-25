@@ -75,7 +75,7 @@ const AppRoutes = () => {
     <ErrorBoundary onReset={() => window.location.reload()}>
       <Suspense fallback={<LoadingFallback />}>
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
+          <Routes location={location} key={location.key}>
             {/* Eagerly Loaded Auth/Public Routes (Zero Flicker) */}
             <Route path={PATHS.STYLE_GUIDE} element={<StyleGuide />} />
             <Route path={PATHS.LOGIN} element={<Login />} />
