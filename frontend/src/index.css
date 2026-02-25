@@ -257,6 +257,15 @@
     @apply border-primary ring-1 ring-primary/20;
     box-shadow: 0 0 0 1px var(--primary) !important;
   }
+
+  /* GLOBAL BORDER RADIUS STANDARDIZATION - INSTITUTIONAL 8px */
+  /* Enforcing consistency across all industrial UI elements (Buttons & Alerts) */
+  button:not(.rounded-full),
+  .button:not(.rounded-full),
+  [role="alert"],
+  .alert {
+    border-radius: var(--radius) !important;
+  }
 }
 
 @layer utilities {
@@ -568,7 +577,15 @@
   }
 
   /* Signature Custom Cursive Fonts - Enforced to bypass inline style stripping */
-  .font-signature-classic { font-family: 'Great Vibes', cursive !important; }
-  .font-signature-modern { font-family: 'Sacramento', cursive !important; }
-  .font-signature-elegant { font-family: 'Allura', cursive !important; }
+  .font-signature-classic {
+    font-family: 'Great Vibes', cursive !important;
+  }
+
+  .font-signature-modern {
+    font-family: 'Sacramento', cursive !important;
+  }
+
+  .font-signature-elegant {
+    font-family: 'Allura', cursive !important;
+  }
 }
