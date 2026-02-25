@@ -260,10 +260,11 @@
 
   /* GLOBAL BORDER RADIUS STANDARDIZATION - INSTITUTIONAL 8px */
   /* Enforcing consistency across all industrial UI elements (Buttons & Alerts) */
-  button:not(.rounded-full),
-  .button:not(.rounded-full),
-  [role="alert"],
-  .alert {
+  /* EXCEPTION: .rounded-full and .premium-counter-btn are exempted to maintain design balance */
+  button:not(.rounded-full):not(.premium-counter-btn),
+  .button:not(.rounded-full):not(.premium-counter-btn),
+  [role="alert"]:not(.rounded-full),
+  .alert:not(.rounded-full) {
     border-radius: var(--radius) !important;
   }
 }
