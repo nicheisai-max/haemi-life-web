@@ -19,12 +19,12 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) 
     }
 
     if (!isAuthenticated || authStatus !== 'authenticated' || !user) {
-        if (!isPresent) return null;
+        if (!isPresent) return <MedicalLoader fullPage message="" />;
         return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
     }
 
     if (!allowedRoles.includes(user.role)) {
-        if (!isPresent) return null;
+        if (!isPresent) return <MedicalLoader fullPage message="" />;
         console.warn(`[RoleRoute] Access denied: role '${user.role}' cannot access route requiring '${allowedRoles.join(', ')}'.`);
         const dashboardMap: Record<string, string> = {
             'patient': '/dashboard',

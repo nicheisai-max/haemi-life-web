@@ -156,12 +156,17 @@ api.interceptors.request.use(
 let isRefreshing = false;
 let failedQueue: any[] = [];
 
+// Peripheral endpoints: their 401s are non-session-terminating.
+// These routes can transiently fail post-login due to race conditions
+// or backend issues and must NEVER invalidate the user session.
+const PERIPHERAL_ENDPOINTS = ['/notifications', '/chat/messages'];
+
+const isPeripheral = (url?: string) =>
+    !!url && PERIPHERAL_ENDPOINTS.some(p => url.includes(p));
+
 // Session Management Helper
 const clearAuthSession = () => {
     // Guard: Do not wipe session during app initialization.
-    // Background requests (socket, notifications) may 401 before the
-    // in-memory token is restored by initAuth(). Ignoring those 401s
-    // prevents a race that kicks the user to login on every page refresh.
     if (!appInitialized) return;
     isRefreshing = false;
     setAccessToken(null);
@@ -238,11 +243,13 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (err) {
                 processQueue(err, null);
-                // Fail-safe: Only clear session if this wasn't an intentional discovery attempt
-                if (!originalRequest.url?.includes('/auth/me')) {
+                isRefreshing = false;
+                // Only terminate the session if the ORIGINAL failing request was a
+                // critical/authenticated route. Peripheral endpoints (notifications, chat)
+                // failing does NOT mean the session is expired - they fail silently.
+                const isCritical = !isPeripheral(originalRequest.url) && !originalRequest.url?.includes('/auth/me');
+                if (isCritical) {
                     clearAuthSession();
-                } else {
-                    isRefreshing = false;
                 }
                 return Promise.reject(err);
             }

@@ -63,9 +63,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   }
 
   if (authStatus !== 'authenticated') {
-    // Guard: if this route is currently animating out inside AnimatePresence,
-    // return null to prevent a re-entrant Navigate that triggers an infinite loop.
-    if (!isPresent) return null;
+    // During AnimatePresence exit animation, show a loader instead of null.
+    // Returning null while AnimatePresence mode="wait" is active causes a blank screen
+    // because mode="wait" holds the old route alive until exit completes — null gives
+    // it nothing to work with and blocks the incoming Login route from rendering.
+    if (!isPresent) return <LoadingFallback />;
     return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
   }
 
