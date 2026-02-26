@@ -12,7 +12,7 @@ export const demoConfig = {
     // Demo mode logging
     log: (action: string, data?: any) => {
         if (demoConfig.isDemoMode()) {
-            console.log(`[DEMO MODE] ${action}`, data || '');
+            // Silenced for production-grade terminal clarity
         }
     },
 

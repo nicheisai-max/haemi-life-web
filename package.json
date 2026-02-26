@@ -8,6 +8,12 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
-    "playwright": "^1.58.2"
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^9.39.3",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "playwright": "^1.58.2",
+    "typescript": "^5.9.3"
   }
 }

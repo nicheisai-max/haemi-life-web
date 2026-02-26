@@ -139,13 +139,13 @@ export const Help: React.FC = () => {
             {/* Search Bar */}
             <Card className="p-6">
                 <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         type="text"
                         placeholder="Search for help..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 h-10 w-full"
+                        className="pl-10 h-10 w-full"
                     />
                 </div>
             </Card>

@@ -1,8 +1,6 @@
 const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY;
 if (!ENCRYPTION_KEY) {
     console.error('[Security] CRITICAL: VITE_ENCRYPTION_KEY is missing. Decryption will fail. Please restart the frontend dev server.');
-} else {
-    console.log('[Security] Encryption key loaded:', ENCRYPTION_KEY.slice(0, 4) + '...' + ENCRYPTION_KEY.slice(-4));
 }
 
 const ALGORITHM_GCM = 'AES-GCM';
@@ -83,7 +81,6 @@ export const decrypt = async (text: string): Promise<string> => {
         }
 
         // Mode B: Legacy AES-256-CBC
-        console.log('[Security] Attempting legacy CBC decryption...');
         const key = await deriveKey(ALGORITHM_CBC);
         const parts = data.split(':');
         if (parts.length < 2) return text;
@@ -92,7 +89,6 @@ export const decrypt = async (text: string): Promise<string> => {
         const encryptedData = new Uint8Array(parts[1].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
 
         const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_CBC, iv }, key, encryptedData);
-        console.log('[Security] Legacy CBC decryption successful');
         return new TextDecoder().decode(buffer);
 
     } catch (error) {

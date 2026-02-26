@@ -49,6 +49,7 @@ export const decrypt = (text: string): string => {
     const data = text.slice(ENCRYPTED_PREFIX.length);
 
     try {
+        let result: string = text;
         // Mode A: AES-256-GCM
         if (data.startsWith(GCM_PREFIX)) {
             const parts = data.slice(GCM_PREFIX.length).split(':');
@@ -61,22 +62,23 @@ export const decrypt = (text: string): string => {
 
             let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
             decrypted += decipher.final('utf8');
-            return decrypted;
+            result = decrypted;
+        } else {
+            // Mode B: Legacy AES-256-CBC
+            const parts = data.split(':');
+            const iv = Buffer.from(parts[0], 'hex');
+            if (iv.length !== LEGACY_IV_LENGTH) {
+                throw new Error('Invalid IV length for CBC');
+            }
+            const encryptedText = Buffer.from(parts[1], 'hex');
+
+            const decipher = crypto.createDecipheriv(ALGORITHM_CBC, getKey(), iv);
+            let decrypted = decipher.update(encryptedText);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            result = decrypted.toString();
         }
 
-        // Mode B: Legacy AES-256-CBC (Phase 2 Default)
-        const parts = data.split(':');
-        const iv = Buffer.from(parts[0], 'hex');
-        if (iv.length !== LEGACY_IV_LENGTH) {
-            throw new Error('Invalid IV length for CBC');
-        }
-        const encryptedText = Buffer.from(parts[1], 'hex');
-
-        const decipher = crypto.createDecipheriv(ALGORITHM_CBC, getKey(), iv);
-        let decrypted = decipher.update(encryptedText);
-        decrypted = Buffer.concat([decrypted, decipher.final()]);
-        return decrypted.toString();
-
+        return result;
     } catch (error) {
         console.error('[Security] Decryption failed (Mode mismatch or key error):', error);
         return text;
@@ -90,4 +92,3 @@ export const getBlindIndex = (text: string): string => {
         .update(text.trim().toLowerCase())
         .digest('hex');
 };
-

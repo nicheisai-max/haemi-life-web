@@ -87,12 +87,11 @@ export const Settings: React.FC = () => {
         }
     };
 
-    const onPrefSubmit = async (data: PreferencesFormData) => {
+    const onPrefSubmit = async () => {
         try {
             setGeneralError(null);
             setSuccess(null);
             // Simulate API call
-            console.log('Saving preferences:', data);
             setSuccess('Preferences updated successfully!');
             setTimeout(() => setSuccess(null), 3000);
         } catch (err: any) {

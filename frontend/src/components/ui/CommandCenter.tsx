@@ -100,7 +100,7 @@ export const CommandCenter: React.FC = () => {
                         {trendingBotswana.map((item, i) => (
                             <CommandItem
                                 key={i}
-                                onSelect={() => console.log(item.label)}
+                                onSelect={() => { }}
                                 className="flex items-center gap-3 py-4 cursor-default group aria-selected:bg-accent/50 aria-selected:text-accent-foreground transition-all duration-200 rounded-xl mx-1"
                             >
                                 <div className={`p-2 rounded-xl bg-slate-100 dark:bg-slate-800/50 group-aria-selected:bg-white dark:group-aria-selected:bg-slate-900 transition-colors shadow-sm`}>

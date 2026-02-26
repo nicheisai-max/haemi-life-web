@@ -5,17 +5,28 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 export interface PasswordInputProps
-    extends React.InputHTMLAttributes<HTMLInputElement> { }
+    extends React.InputHTMLAttributes<HTMLInputElement> {
+    leftIcon?: React.ReactNode;
+}
 
 const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
-    ({ className, ...props }, ref) => {
+    ({ className, leftIcon, ...props }, ref) => {
         const [showPassword, setShowPassword] = React.useState(false)
 
         return (
             <div className="relative">
+                {leftIcon && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10">
+                        {leftIcon}
+                    </div>
+                )}
                 <Input
                     type={showPassword ? "text" : "password"}
-                    className={cn("hide-password-toggle pr-10", className)}
+                    className={cn(
+                        "hide-password-toggle pr-10",
+                        leftIcon && "pl-10",
+                        className
+                    )}
                     ref={ref}
                     {...props}
                 />
@@ -23,7 +34,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword((prev) => !prev)}
                     tabIndex={-1}
                 >

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button } from './button';
 import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -206,12 +206,29 @@ export const ChatHub: React.FC = () => {
         setContextMenu(prev => ({ ...prev, isOpen: false }));
     };
 
-    // Initial Load
+    // Initial Load — fetch immediately when user/token is ready
+    useEffect(() => {
+        if (user?.id) {
+            fetchConversations();
+        }
+    }, [user?.id, fetchConversations]);
+
+    // Re-fetch when the window is explicitly opened to ensure sync
     useEffect(() => {
         if (isOpen) {
             fetchConversations();
         }
     }, [isOpen, fetchConversations]);
+
+    // P1 Fix: Periodic polling (30s) to keep the unread badge fresh even if
+    // sockets are dropped or browser tab was inactive.
+    useEffect(() => {
+        if (!user?.id) return;
+        const interval = setInterval(() => {
+            fetchConversations();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [user?.id, fetchConversations]);
 
     // Load Doctors when entering 'new-chat' view
     useEffect(() => {
@@ -230,6 +247,14 @@ export const ChatHub: React.FC = () => {
             loadDoctors();
         }
     }, [view]);
+
+    // P1 Fix: Refresh conversations when active conversation changes to clear badge
+    // MOVED TO TOP-LEVEL TO COMPLY WITH REACT RULES OF HOOKS
+    useEffect(() => {
+        if (activeConversation?.id) {
+            fetchConversations();
+        }
+    }, [activeConversation?.id, fetchConversations]);
 
     // Auto-scroll
     useEffect(() => {
@@ -288,31 +313,49 @@ export const ChatHub: React.FC = () => {
         setTimeout(() => inputRef.current?.focus(), 10);
     };
 
-    const getOtherParticipant = (conversation: Conversation) => {
-        const other = (conversation.participants && Array.isArray(conversation.participants))
-            ? conversation.participants.find(p => p.id !== user?.id) || { name: 'Unknown', role: 'Unknown', id: 'unknown' }
-            : { name: 'Unknown', role: 'Unknown', id: 'unknown' };
+    const getOtherParticipant = useCallback((conversation: Conversation) => {
+        const currentId = String(user?.id || '').toLowerCase();
+        const participants = Array.isArray(conversation.participants) ? conversation.participants : [];
 
-        // Cast to any to safely access profile_image from dynamic participant data
+        // Explicitly find the person who is NOT the current user
+        const other = participants.find(p => String(p.id).toLowerCase() !== currentId);
+
+        if (!other) {
+            // If API didn't return other participants, check the last message sender or use a generic fallback
+            return {
+                id: 'unknown',
+                name: 'Haemi Member',
+                role: 'User',
+                initials: 'HM',
+                image: ''
+            };
+        }
+
+        const displayName = other.name && other.name !== 'Unknown' ? other.name : 'Health Professional';
         const participant = other as any;
         const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
-        const dbImage = `${baseUrl}/api/files/profile/${participant.id}`;
-        return { ...other, image: dbImage, initials: participant.initials };
-    };
+        const dbImage = participant.id !== 'unknown' ? `${baseUrl}/api/files/profile/${participant.id}` : '';
 
-    const filteredConversations = useMemo(() => conversations.filter(c => {
-        const other = getOtherParticipant(c);
-        const matchesSearch = other.name.toLowerCase().includes(searchTerm.toLowerCase());
+        return {
+            ...other,
+            name: displayName,
+            image: dbImage,
+            initials: participant.initials || displayName.substring(0, 1)
+        };
+    }, [user?.id]);
 
-        // Polishing rule: Hide chats that are encrypted placeholders or generic "Start a conversation"
-        // provided they are not the "fresh" ones intended to be seen.
-        // We only show chats that have real human content or are the explicitly allowed "Hi Doctor!"
-        const isFresh = c.last_message === 'Hi Doctor!' || (c.unread_count && parseInt(c.unread_count) > 0);
-        const isEncrypted = c.last_message?.startsWith('enc:') || c.last_message?.startsWith('enc-');
-        const isGeneric = c.last_message === 'Start a conversation' || !c.last_message;
+    const filteredConversations = useMemo(() => {
+        return conversations.filter(c => {
+            const other = getOtherParticipant(c);
+            const matchesSearch = other.name.toLowerCase().includes(searchTerm.toLowerCase());
 
-        return matchesSearch && (isFresh || (!isEncrypted && !isGeneric));
-    }), [conversations, searchTerm, user]);
+            // Hide broken/ghost conversations definitely
+            const isEncryptedRaw = c.last_message?.startsWith('enc:') || c.last_message?.startsWith('enc-');
+            const hasMessages = parseInt(c.message_count || '0') > 0;
+
+            return matchesSearch && !isEncryptedRaw && hasMessages;
+        });
+    }, [conversations, searchTerm, getOtherParticipant]);
 
     const filteredDoctors = useMemo(() => doctors.filter(d => {
         const name = d.name || '';
@@ -355,19 +398,19 @@ export const ChatHub: React.FC = () => {
                     <div className="absolute inset-0 bg-white/20 blur-xl group-hover:bg-white/30 transition-all duration-500" />
 
                     <MessageCircle className="relative h-8 w-8 text-white drop-shadow-md group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
-
-                    {(() => {
-                        const totalUnread = conversations.reduce((acc, c) => acc + parseInt(c.unread_count || '0'), 0);
-                        if (totalUnread > 0) {
-                            return (
-                                <span className="chat-unread-badge animate-badge-pop">
-                                    {totalUnread > 9 ? '9+' : totalUnread}
-                                </span>
-                            );
-                        }
-                        return null;
-                    })()}
                 </Button>
+
+                {(() => {
+                    const totalUnread = conversations.reduce((acc, c) => acc + parseInt(c.unread_count || '0'), 0);
+                    if (totalUnread > 0) {
+                        return (
+                            <span className="chat-unread-badge animate-badge-pop">
+                                {totalUnread > 9 ? '9+' : totalUnread}
+                            </span>
+                        );
+                    }
+                    return null;
+                })()}
             </motion.div>
         );
     }
@@ -391,18 +434,19 @@ export const ChatHub: React.FC = () => {
                     ) : (
                         <MessageCircle className="h-8 w-8 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
                     )}
-                    {(() => {
-                        const totalUnread = conversations.reduce((acc, c) => acc + parseInt(c.unread_count || '0'), 0);
-                        if (totalUnread > 0) {
-                            return (
-                                <span className="chat-unread-badge animate-badge-pop">
-                                    {totalUnread > 9 ? '9+' : totalUnread}
-                                </span>
-                            );
-                        }
-                        return null;
-                    })()}
                 </Button>
+
+                {(() => {
+                    const totalUnread = conversations.reduce((acc, c) => acc + parseInt(c.unread_count || '0'), 0);
+                    if (totalUnread > 0) {
+                        return (
+                            <span className="chat-unread-badge animate-badge-pop">
+                                {totalUnread > 9 ? '9+' : totalUnread}
+                            </span>
+                        );
+                    }
+                    return null;
+                })()}
             </motion.div>
         );
     }
@@ -586,7 +630,7 @@ export const ChatHub: React.FC = () => {
                                                 value={searchTerm}
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                                 placeholder="Search messages..."
-                                                className="w-full h-10 pl-9 pr-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-sm transition-all"
+                                                className="w-full h-10 pl-10 pr-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-sm transition-all"
                                             />
                                         </div>
                                     </div>
@@ -667,7 +711,7 @@ export const ChatHub: React.FC = () => {
                                                 value={doctorSearch}
                                                 onChange={(e) => setDoctorSearch(e.target.value)}
                                                 placeholder="Search doctors by name or specialty..."
-                                                className="w-full h-10 pl-9 pr-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-teal-500 text-sm"
+                                                className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-teal-500 text-sm"
                                             />
                                         </div>
                                     </div>

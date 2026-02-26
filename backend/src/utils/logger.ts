@@ -39,7 +39,7 @@ export const logger = {
     info: (message: string, meta?: any) => {
         const maskedMeta = meta ? maskPHI(meta) : undefined;
         const log = { timestamp: getTimestamp(), level: 'INFO', message, meta: maskedMeta };
-        console.log(`[INFO] ${message}`, maskedMeta || '');
+        // console.log(`[INFO] ${message}`, maskedMeta || '');
         appendToFile(log);
     },
     warn: (message: string, meta?: any) => {
@@ -57,7 +57,7 @@ export const logger = {
     auth: (message: string, meta?: any) => {
         const maskedMeta = meta ? maskPHI(meta) : undefined;
         const log = { timestamp: getTimestamp(), level: 'AUTH', message, meta: maskedMeta };
-        console.log(`[AUTH] ${message}`, maskedMeta || '');
+        // console.log(`[AUTH] ${message}`, maskedMeta || '');
         appendToFile(log, 'auth.log');
     }
 };

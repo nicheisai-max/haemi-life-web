@@ -13,7 +13,6 @@ export const NotificationSimulator: React.FC = () => {
         // but for now, we'll let the NotificationMenu handle the source of truth.
         // We can add a socket listener here later if needed.
 
-        console.log("NotificationSimulator active for role:", user.role);
 
         return () => { };
     }, [user, success, info, warning]);

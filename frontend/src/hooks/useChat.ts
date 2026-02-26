@@ -32,6 +32,7 @@ export interface Conversation {
     last_message?: string;
     participants: { id: string; name: string; role: string; profile_image?: string }[];
     unread_count: string;
+    message_count?: string;
 }
 
 export const useChat = () => {
@@ -111,7 +112,7 @@ export const useChat = () => {
         if (user && token) {
             const newSocket = io(SOCKET_URL, { auth: { token } });
 
-            newSocket.on('connect', () => console.log('Chat socket connected'));
+            newSocket.on('connect', () => { });
 
             // Real-time Reaction Handler
             newSocket.on('message_reaction', ({ messageId, userId, reactionType, action }: any) => {
@@ -157,9 +158,11 @@ export const useChat = () => {
             newSocket.on('messages_read', ({ conversation_id, message_ids }: any) => {
                 if (activeConversationRef.current?.id === conversation_id) {
                     setMessages(prev => prev.map(msg =>
-                        message_ids.includes(msg.id) ? { ...msg, status: 'read' } : msg
+                        message_ids.includes(msg.id) ? { ...msg, status: 'read', is_read: true } : msg
                     ));
                 }
+                // Always fetch conversations to update unread counts on FAB
+                fetchConversations();
             });
 
             setSocket(newSocket);
@@ -171,7 +174,6 @@ export const useChat = () => {
     useEffect(() => {
         if (!socket) return;
         const handler = async (message: Message) => {
-            console.log('Incoming message via socket:', message.id);
 
             // Decrypt immediately on arrival
             const decryptedContent = await decrypt(message.content);
@@ -232,6 +234,10 @@ export const useChat = () => {
         if (socket) {
             socket.emit('join_conversation', conversation.id);
         }
+        // Mark as read immediately on selection
+        api.put(`/chat/conversations/${conversation.id}/read`).then(() => {
+            fetchConversations();
+        }).catch(console.error);
     };
 
     const startNewConversation = async (participantId: string) => {

@@ -48,12 +48,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const { type, payload } = event.data;
 
                 if (type === 'LOGOUT') {
-                    console.log('[Auth] Synchronizing logout across tabs.');
                     setAccessToken(null);
                     sessionStorage.removeItem('user');
                     setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
                 } else if (type === 'LOGIN') {
-                    console.log('[Auth] Synchronizing login across tabs.');
                     const { user, token } = payload;
                     setAccessToken(token);
                     sessionStorage.setItem('user', JSON.stringify(user));
@@ -64,7 +62,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const handleUnauthorized = () => {
-            console.log('[Auth] Session invalidated (Global Event).');
             setAccessToken(null);
             sessionStorage.removeItem('user');
             setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });

@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle2, AlertCircle, ArrowLeft, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -171,11 +172,11 @@ export const ForgotPassword: React.FC = () => {
                                         <FormLabel>Email Address</FormLabel>
                                         <FormControl>
                                             <div className="relative">
-                                                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                                 <Input
                                                     type="email"
                                                     placeholder="Enter your email"
-                                                    className="pl-9 bg-background h-11"
+                                                    className="pl-10 bg-background h-11"
                                                     {...field}
                                                 />
                                             </div>
@@ -273,15 +274,11 @@ export const ForgotPassword: React.FC = () => {
                                     <FormItem>
                                         <FormLabel>New Password</FormLabel>
                                         <FormControl>
-                                            <div className="relative">
-                                                <KeyRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                                <Input
-                                                    type="password"
-                                                    placeholder="Create new password"
-                                                    className="pl-9 bg-background h-11"
-                                                    {...field}
-                                                />
-                                            </div>
+                                            <PasswordInput
+                                                placeholder="Create new password"
+                                                leftIcon={<KeyRound className="h-4 w-4" />}
+                                                {...field}
+                                            />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -295,15 +292,11 @@ export const ForgotPassword: React.FC = () => {
                                     <FormItem>
                                         <FormLabel>Confirm Password</FormLabel>
                                         <FormControl>
-                                            <div className="relative">
-                                                <ShieldCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                                <Input
-                                                    type="password"
-                                                    placeholder="Confirm new password"
-                                                    className="pl-9 bg-background h-11"
-                                                    {...field}
-                                                />
-                                            </div>
+                                            <PasswordInput
+                                                placeholder="Confirm new password"
+                                                leftIcon={<ShieldCheck className="h-4 w-4" />}
+                                                {...field}
+                                            />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>

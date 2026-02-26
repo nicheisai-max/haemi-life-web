@@ -82,12 +82,16 @@ export const getConversations = async (req: Request, res: Response) => {
                     SELECT COUNT(*) 
                     FROM messages m2 
                     WHERE m2.conversation_id = c.id AND m2.status != 'read' AND m2.sender_id != $1
-                ) as unread_count
+                ) as unread_count,
+                (
+                    SELECT COUNT(*) FROM messages m3 WHERE m3.conversation_id = c.id
+                ) as message_count
             FROM conversations c
             JOIN conversation_participants cp ON c.id = cp.conversation_id
             WHERE cp.user_id = $1
             GROUP BY c.id
-            ORDER BY c.last_message_at DESC
+            HAVING (SELECT COUNT(*) FROM messages m3 WHERE m3.conversation_id = c.id) > 0
+            ORDER BY c.last_message_at DESC NULLS LAST
             `,
             [userId]
         );
@@ -212,8 +216,11 @@ export const sendMessage = async (req: Request, res: Response) => {
             return res.status(403).json({ message: 'Not authorized to send to this conversation' });
         }
 
-        // Encrypt content before storage
-        const encryptedContent = content ? encrypt(content) : content;
+        // E2EE: Only encrypt if not already encrypted by the client
+        const encryptedContent = (content && !content.startsWith('enc:')) ? encrypt(content) : content;
+
+        // Decrypt for preview (plaintext in notifications table)
+        const previewContent = content && content.startsWith('enc:') ? decrypt(content) : content;
 
         const msgResult = await client.query(
             `
@@ -329,7 +336,11 @@ export const sendMessage = async (req: Request, res: Response) => {
                 'SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2',
                 [conversationId, senderId]
             );
-            const previewText = content ? (content.length > 60 ? content.substring(0, 60) + '…' : content) : '📎 Attachment';
+            // P1 FIX: Definitive decryption for notification previews
+            let previewText = '📎 Attachment';
+            if (content) {
+                previewText = (previewContent.length > 100) ? previewContent.substring(0, 100) + '...' : previewContent;
+            }
 
             for (const row of participantsResult.rows) {
                 const recipientId = row.user_id;

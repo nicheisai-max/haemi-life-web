@@ -57,7 +57,6 @@ export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ 
     // This prevents "inheriting" idle time spent on the login page.
     useEffect(() => {
         if (isAuthenticated) {
-            console.log('[SessionManager] User authenticated. Resetting idle timer.');
             setLastActivity(Date.now());
             setShowWarning(false);
         }

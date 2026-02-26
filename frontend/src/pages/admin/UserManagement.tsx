@@ -158,13 +158,13 @@ export const UserManagement: React.FC = () => {
         {/* Filters */}
         <Card className="p-4 space-y-4">
             <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                     type="text"
                     placeholder="Search by name, email, or phone..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 h-10 border-none bg-muted/30 focus-visible:bg-muted/50 transition-all shadow-inner"
+                    className="pl-10 h-10 border-none bg-muted/30 focus-visible:bg-muted/50 transition-all shadow-inner"
                 />
             </div>
             <div className="flex flex-wrap gap-2">

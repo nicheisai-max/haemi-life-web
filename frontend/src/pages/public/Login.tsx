@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Mail, Lock } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthLayout } from '../../components/layout/AuthLayout';
 import { loginSchema, type LoginFormData } from '../../lib/validation/auth.schema';
@@ -81,10 +81,14 @@ export const Login: React.FC = () => {
                             <FormItem>
                                 <FormLabel>Email or Phone</FormLabel>
                                 <FormControl>
-                                    <Input
-                                        placeholder="user@example.com"
-                                        {...field}
-                                    />
+                                    <div className="relative">
+                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            placeholder="user@example.com"
+                                            className="pl-10"
+                                            {...field}
+                                        />
+                                    </div>
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -108,6 +112,7 @@ export const Login: React.FC = () => {
                                 <FormControl>
                                     <PasswordInput
                                         placeholder="Enter your password"
+                                        leftIcon={<Lock className="h-4 w-4" />}
                                         {...field}
                                     />
                                 </FormControl>

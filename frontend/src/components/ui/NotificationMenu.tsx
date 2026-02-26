@@ -10,6 +10,32 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { type Notification } from '../../services/notification.service';
 import { useNotifications } from '../../context/NotificationContext';
+import { decrypt } from '@/utils/security';
+import React, { useState, useEffect } from 'react';
+
+const DecryptedDescription: React.FC<{ text: string }> = ({ text }) => {
+    const [decrypted, setDecrypted] = useState(text);
+
+    useEffect(() => {
+        if (text && text.startsWith('enc:')) {
+            decrypt(text)
+                .then(res => {
+                    // Check if the result is STILL encrypted (double encryption case)
+                    if (res.startsWith('enc:')) {
+                        return decrypt(res);
+                    }
+                    return res;
+                })
+                .then(setDecrypted)
+                .catch(() => setDecrypted('Message encrypted. Check key.'));
+        } else {
+            setDecrypted(text);
+        }
+    }, [text]);
+
+    // Handle string overflow with break-all to prevent panel break
+    return <span className="break-all">{decrypted}</span>;
+};
 
 const getTimeAgo = (dateString: string) => {
     try {
@@ -106,21 +132,25 @@ export const NotificationMenu: React.FC = () => {
                                         <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${getBgColor(notif.type)}`}>
                                             {getIcon(notif.type)}
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between gap-2 mb-0.5">
-                                                <p className={`text-sm tracking-tight truncate ${notif.is_read ? 'text-slate-600 dark:text-slate-400 font-normal' : 'text-slate-900 dark:text-white font-bold'}`}>
+                                        <div className="flex-1 min-w-0 pr-1">
+                                            <div className="flex items-start justify-between gap-3 mb-1.5">
+                                                <h5 className={`text-[14px] leading-[1.4] tracking-tight ${notif.is_read ? 'text-slate-600 dark:text-slate-400 font-medium' : 'text-slate-900 dark:text-white font-bold'}`}>
                                                     {notif.title}
-                                                </p>
+                                                </h5>
                                                 {!notif.is_read && (
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                                                    <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1 shadow-[0_0_8px_rgba(20,140,139,0.4)]" />
                                                 )}
                                             </div>
-                                            <p className={`text-xs leading-snug line-clamp-2 ${notif.is_read ? 'text-slate-500/80' : 'text-slate-600 dark:text-slate-300 font-normal'}`}>
-                                                {notif.description}
-                                            </p>
-                                            <span className="text-[10px] text-slate-400 font-medium mt-2 block">
-                                                {getTimeAgo(notif.created_at)}
-                                            </span>
+                                            <div className="w-full">
+                                                <p className={`text-[13px] leading-[1.6] whitespace-normal break-all overflow-visible block text-pretty ${notif.is_read ? 'text-slate-500/90' : 'text-slate-600 dark:text-slate-300 font-normal'}`}>
+                                                    <DecryptedDescription text={notif.description} />
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <span className="text-[10px] text-slate-400 font-semibold tracking-wide uppercase">
+                                                    {getTimeAgo(notif.created_at)}
+                                                </span>
+                                            </div>
                                         </div>
                                     </DropdownMenuItem>
                                 ))}
@@ -148,6 +178,6 @@ export const NotificationMenu: React.FC = () => {
                     }
                 `}} />
             </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu >
     );
 };

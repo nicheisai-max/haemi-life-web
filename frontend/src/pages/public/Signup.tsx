@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { User, Stethoscope, Building2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { User, Stethoscope, Building2, AlertCircle, ArrowLeft, Mail, Lock, ShieldCheck } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthLayout } from '../../components/layout/AuthLayout';
 import { signupSchema, type SignupFormData } from '../../lib/validation/auth.schema';
@@ -135,10 +135,14 @@ export const Signup: React.FC = () => {
                                 <FormItem>
                                     <FormLabel>Full Name</FormLabel>
                                     <FormControl>
-                                        <Input
-                                            placeholder="Enter your full name"
-                                            {...field}
-                                        />
+                                        <div className="relative">
+                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                placeholder="Enter your full name"
+                                                className="pl-10"
+                                                {...field}
+                                            />
+                                        </div>
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -182,12 +186,15 @@ export const Signup: React.FC = () => {
                             <FormItem>
                                 <FormLabel>Email</FormLabel>
                                 <FormControl>
-                                    <Input
-                                        type="email"
-                                        placeholder="your.email@example.com"
-                                        className="h-11"
-                                        {...field}
-                                    />
+                                    <div className="relative">
+                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            type="email"
+                                            placeholder="your.email@example.com"
+                                            className="h-11 pl-10"
+                                            {...field}
+                                        />
+                                    </div>
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -223,6 +230,7 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <PasswordInput
                                             placeholder="Create a strong password"
+                                            leftIcon={<Lock className="h-4 w-4" />}
                                             {...field}
                                         />
                                     </FormControl>
@@ -240,6 +248,7 @@ export const Signup: React.FC = () => {
                                     <FormControl>
                                         <PasswordInput
                                             placeholder="Re-enter your password"
+                                            leftIcon={<ShieldCheck className="h-4 w-4" />}
                                             {...field}
                                         />
                                     </FormControl>

@@ -79,7 +79,6 @@ router.post(
 
             // Log to server console only (for development debugging via server logs).
             // In a real production deployment, integrate with email/SMS provider here.
-            console.log(`[OTP] Generated for ${identifier} (integrate email/SMS service): ${otp}`);
             // TODO: await emailService.sendOTP(user.email, otp);
             // TODO: await smsService.sendOTP(user.phone_number, otp);
 
@@ -252,7 +251,6 @@ router.post(
             otpStore.set(identifier, { otp, expiresAt, identifier, attempts: 0 });
 
             // V2 FIX: Never return OTP in production response
-            console.log(`[OTP RESEND] Generated for ${identifier}: ${otp}`);
 
             return res.status(200).json({ message: 'OTP resent successfully' });
         } catch (error) {

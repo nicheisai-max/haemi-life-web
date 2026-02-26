@@ -175,7 +175,7 @@ export const MedicalRecords: React.FC = () => {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Search records, doctors, or facilities..."
-                                className="pl-9 bg-background"
+                                className="pl-10 bg-background"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
