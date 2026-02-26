@@ -1,13 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from './button';
-import {
-    MessageSquare, X, Minus,
-    ChevronLeft,
-    ShieldCheck, Search, CheckCheck,
-    Paperclip, Send, Plus, UserPlus,
-    MessageCircle, Reply,
-    Maximize2, Loader2, Download
-} from 'lucide-react';
+import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat, type Conversation, type Message } from '../../hooks/useChat';
 import { useAuth } from '../../context/AuthContext';
@@ -105,11 +98,39 @@ export const ChatHub: React.FC = () => {
         fetchConversations,
         selectConversation,
         sendMessage,
-        uploadAttachment,
         startNewConversation,
-        deleteMessage, // Destructure new functions
-        reactToMessage
+        uploadAttachment,
+        deleteMessage,
+        reactToMessage,
+        markAsRead,
     } = useChat();
+
+    // IntersectionObserver for Read Receipts
+    useEffect(() => {
+        if (!activeConversation || messages.length === 0) return;
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const msgId = entry.target.id.replace('msg-', '');
+                    // Find the message
+                    const msg = messages.find(m => m.id === msgId);
+                    if (msg && !msg.isMe && msg.status !== 'read') {
+                        markAsRead(activeConversation.id);
+                    }
+                }
+            });
+        }, { threshold: 0.5 });
+
+        // Observe the latest message(s) from the other party
+        const unreadMessages = messages.filter(m => !m.isMe && m.status !== 'read');
+        unreadMessages.forEach(msg => {
+            const el = document.getElementById(`msg-${msg.id}`);
+            if (el) observer.observe(el);
+        });
+
+        return () => observer.disconnect();
+    }, [activeConversation, messages, markAsRead]);
 
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -335,9 +356,17 @@ export const ChatHub: React.FC = () => {
 
                     <MessageCircle className="relative h-8 w-8 text-white drop-shadow-md group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
 
-                    {conversations.some(c => parseInt(c.unread_count) > 0) && (
-                        <span className="absolute top-3 right-3 h-3.5 w-3.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 shadow-sm z-10" />
-                    )}
+                    {(() => {
+                        const totalUnread = conversations.reduce((acc, c) => acc + parseInt(c.unread_count || '0'), 0);
+                        if (totalUnread > 0) {
+                            return (
+                                <span className="chat-unread-badge animate-badge-pop">
+                                    {totalUnread > 9 ? '9+' : totalUnread}
+                                </span>
+                            );
+                        }
+                        return null;
+                    })()}
                 </Button>
             </motion.div>
         );
@@ -362,9 +391,17 @@ export const ChatHub: React.FC = () => {
                     ) : (
                         <MessageCircle className="h-8 w-8 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
                     )}
-                    {conversations.some(c => parseInt(c.unread_count) > 0) && (
-                        <span className="absolute top-3 right-3 h-3.5 w-3.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 z-10" />
-                    )}
+                    {(() => {
+                        const totalUnread = conversations.reduce((acc, c) => acc + parseInt(c.unread_count || '0'), 0);
+                        if (totalUnread > 0) {
+                            return (
+                                <span className="chat-unread-badge animate-badge-pop">
+                                    {totalUnread > 9 ? '9+' : totalUnread}
+                                </span>
+                            );
+                        }
+                        return null;
+                    })()}
                 </Button>
             </motion.div>
         );
@@ -379,6 +416,69 @@ export const ChatHub: React.FC = () => {
                     .chat-scrollbar::-webkit-scrollbar-track { background: transparent; }
                     .chat-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
                     .dark .chat-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
+
+                    .chat-unread-badge {
+                        position: absolute;
+                        top: 0px;
+                        right: 0px;
+                        height: 24px;
+                        min-width: 24px;
+                        padding: 0 6px;
+                        background-color: #DC2626; /* Error/Alert Color from guide */
+                        border-radius: 9999px;
+                        border: 2px solid white;
+                        color: white;
+                        font-size: 10px;
+                        font-weight: bold;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                        z-index: 10;
+                    }
+
+                    .dark .chat-unread-badge {
+                        border-color: #1a1c23;
+                    }
+
+                    .conv-unread-pill {
+                        height: 18px;
+                        min-width: 18px;
+                        padding: 0 6px;
+                        border-radius: 9999px;
+                        background-color: #1BA7A6; /* Primary-600 from guide */
+                        color: white;
+                        font-size: 9px;
+                        font-weight: 700;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+                    }
+
+                    .animate-badge-pop {
+                        animation: badge-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+                    }
+
+                    @keyframes badge-pop {
+                        0% { transform: scale(0); opacity: 0; }
+                        70% { transform: scale(1.1); opacity: 1; }
+                        100% { transform: scale(1); }
+                    }
+
+                    .message-status-ticks {
+                        display: flex;
+                        align-items: center;
+                        color: rgba(255, 255, 255, 0.85);
+                    }
+
+                    .message-status-ticks.read {
+                        color: #A7E6DB; /* Primary-300 for soft but distinct read state on dark/teal bg */
+                    }
+                    
+                    .dark .message-status-ticks.read {
+                        color: #3FC2B5; /* Primary-500 for high-visibility read state in dark mode */
+                    }
                 `}
             </style>
             <AnimatePresence mode="wait" initial={false}>
@@ -524,7 +624,7 @@ export const ChatHub: React.FC = () => {
                                                                     {conv.last_message || 'Start a conversation'}
                                                                 </p>
                                                                 {parseInt(conv.unread_count) > 0 && (
-                                                                    <span className="h-4 min-w-[16px] px-1 rounded-full bg-teal-500 text-white text-[9px] font-bold flex items-center justify-center shadow-sm">
+                                                                    <span className="conv-unread-pill animate-badge-pop">
                                                                         {conv.unread_count}
                                                                     </span>
                                                                 )}
@@ -805,7 +905,15 @@ export const ChatHub: React.FC = () => {
                                                     <div className={`flex items-center justify-end gap-1.5 mt-2 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
                                                         <span className="font-semibold">{getFormattedTime(msg.created_at)}</span>
                                                         {msg.isMe && (
-                                                            <CheckCheck className="h-4 w-4 text-white drop-shadow-md brightness-110 animate-in fade-in zoom-in duration-300" strokeWidth={2.8} />
+                                                            <div className={`message-status-ticks ${msg.status === 'read' ? 'read' : ''}`}>
+                                                                {msg.status === 'sent' ? (
+                                                                    <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
+                                                                ) : msg.status === 'delivered' ? (
+                                                                    <CheckCheck className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
+                                                                ) : (
+                                                                    <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>

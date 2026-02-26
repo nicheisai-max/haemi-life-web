@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import io from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -14,6 +14,9 @@ export interface Message {
     message_type: 'text' | 'file';
     attachments?: { url: string; type: string; size: number; name?: string }[];
     is_read: boolean;
+    status: 'sent' | 'delivered' | 'read';
+    delivered_at?: string;
+    read_at?: string;
     created_at: string;
     sender_name?: string;
     isMe?: boolean;
@@ -39,6 +42,12 @@ export const useChat = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(false);
     const [typingUsers, setTypingUsers] = useState<string[]>([]);
+    const activeConversationRef = useRef<Conversation | null>(null);
+
+    // Keep ref in sync for socket listeners to access latest state without re-creating listeners
+    useEffect(() => {
+        activeConversationRef.current = activeConversation;
+    }, [activeConversation]);
 
     // Load Conversations
     const fetchConversations = useCallback(async () => {
@@ -77,7 +86,13 @@ export const useChat = () => {
 
             setMessages(formattedMessages);
 
-            // Mark as read
+            // Mark as delivered if we are loading messages that were only 'sent'
+            if (formattedMessages.some(m => !m.isMe && m.status === 'sent')) {
+                api.put(`/chat/conversations/${conversationId}/delivered`).catch(console.error);
+            }
+
+            // Mark as read (this will be more granular with IntersectionObserver later, 
+            // but for now we mark all when entering conversation as a fallback)
             await api.put(`/chat/conversations/${conversationId}/read`);
             fetchConversations(); // Update unread count
         } catch (error) {
@@ -129,6 +144,24 @@ export const useChat = () => {
                 }
             });
 
+            // Real-time Delivery Receipt
+            newSocket.on('messages_delivered', ({ conversation_id, message_ids }: any) => {
+                if (activeConversationRef.current?.id === conversation_id) {
+                    setMessages(prev => prev.map(msg =>
+                        message_ids.includes(msg.id) ? { ...msg, status: 'delivered' } : msg
+                    ));
+                }
+            });
+
+            // Real-time Read Receipt
+            newSocket.on('messages_read', ({ conversation_id, message_ids }: any) => {
+                if (activeConversationRef.current?.id === conversation_id) {
+                    setMessages(prev => prev.map(msg =>
+                        message_ids.includes(msg.id) ? { ...msg, status: 'read' } : msg
+                    ));
+                }
+            });
+
             setSocket(newSocket);
             return () => { newSocket.disconnect(); };
         }
@@ -160,7 +193,12 @@ export const useChat = () => {
                         } : undefined
                     }];
                 });
-                api.put(`/chat/conversations/${activeConversation.id}/read`).catch(console.error);
+                api.put(`/chat/conversations/${activeConversation.id}/delivered`).catch(console.error);
+            } else {
+                // If we are NOT in the conversation, the message is still delivered to the client
+                // but we don't mark as read. We might want to mark as delivered though?
+                // WhatsApp marks as delivered when the app receives it.
+                api.put(`/chat/conversations/${message.conversation_id}/delivered`).catch(console.error);
             }
             fetchConversations();
         };
@@ -271,6 +309,15 @@ export const useChat = () => {
         }
     };
 
+    const markAsRead = useCallback(async (conversationId: string) => {
+        try {
+            await api.put(`/chat/conversations/${conversationId}/read`);
+            fetchConversations();
+        } catch (error) {
+            console.error('Failed to mark as read', error);
+        }
+    }, [fetchConversations]);
+
     return {
         conversations,
         activeConversation,
@@ -285,6 +332,7 @@ export const useChat = () => {
         uploadAttachment,
         deleteMessage,
         reactToMessage,
+        markAsRead,
         user
     };
 };

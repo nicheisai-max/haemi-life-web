@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.middleware';
-import { getConversations, getMessages, sendMessage, startConversation, markAsRead, uploadAttachment, upload, reactToMessage, deleteMessage } from '../controllers/chat.controller';
+import { getConversations, getMessages, sendMessage, startConversation, markAsRead, uploadAttachment, upload, reactToMessage, deleteMessage, markAsDelivered } from '../controllers/chat.controller';
 
 const router = Router();
 
@@ -19,8 +19,11 @@ router.post('/attachments', authenticateToken, upload.single('file'), uploadAtta
 // Start a new conversation
 router.post('/conversations', authenticateToken, startConversation);
 
-// Mark as read
+// Mark as read (Update for Read Receipts)
 router.put('/conversations/:conversationId/read', authenticateToken, markAsRead);
+
+// Mark as delivered
+router.put('/conversations/:conversationId/delivered', authenticateToken, markAsDelivered);
 
 // React to a message
 router.post('/messages/:messageId/react', authenticateToken, reactToMessage);

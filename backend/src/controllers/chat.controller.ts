@@ -81,7 +81,7 @@ export const getConversations = async (req: Request, res: Response) => {
                 (
                     SELECT COUNT(*) 
                     FROM messages m2 
-                    WHERE m2.conversation_id = c.id AND m2.is_read = false AND m2.sender_id != $1
+                    WHERE m2.conversation_id = c.id AND m2.status != 'read' AND m2.sender_id != $1
                 ) as unread_count
             FROM conversations c
             JOIN conversation_participants cp ON c.id = cp.conversation_id
@@ -130,7 +130,9 @@ export const getMessages = async (req: Request, res: Response) => {
                 m.sender_id, 
                 m.created_at, 
                 m.message_type,
-                m.is_read,
+                m.status,
+                m.delivered_at,
+                m.read_at,
                 m.reply_to_id,
                 (
                     SELECT json_build_object('id', rm.id, 'content', rm.content, 'sender_name', ru.name)
@@ -215,8 +217,8 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         const msgResult = await client.query(
             `
-            INSERT INTO messages (conversation_id, sender_id, content, message_type, reply_to_id)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO messages (conversation_id, sender_id, content, message_type, reply_to_id, status)
+            VALUES ($1, $2, $3, $4, $5, 'sent')
             RETURNING *
             `,
             [conversationId, senderId, encryptedContent, messageType, req.body.replyToId]
@@ -396,20 +398,63 @@ export const startConversation = async (req: Request, res: Response) => {
     }
 };
 
+// Mark messages as delivered
+export const markAsDelivered = async (req: Request, res: Response) => {
+    const userId = (req as any).user.id;
+    const { conversationId } = req.params;
+
+    try {
+        const result = await pool.query(
+            `
+            UPDATE messages 
+            SET status = 'delivered', delivered_at = NOW() 
+            WHERE conversation_id = $1 AND sender_id != $2 AND status = 'sent'
+            RETURNING id, sender_id
+            `,
+            [conversationId, userId]
+        );
+
+        if (result.rows.length > 0 && io) {
+            // Notify the sender(s) that their messages were delivered
+            io.to(conversationId).emit('messages_delivered', {
+                conversation_id: conversationId,
+                receiver_id: userId,
+                message_ids: result.rows.map(r => r.id)
+            });
+        }
+
+        res.sendStatus(200);
+    } catch (error) {
+        console.error('Error marking delivered:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 // Mark messages as read
 export const markAsRead = async (req: Request, res: Response) => {
     const userId = (req as any).user.id;
     const { conversationId } = req.params;
 
     try {
-        await pool.query(
+        const result = await pool.query(
             `
             UPDATE messages 
-            SET is_read = true 
-            WHERE conversation_id = $1 AND sender_id != $2 AND is_read = false
+            SET status = 'read', read_at = NOW(), is_read = true
+            WHERE conversation_id = $1 AND sender_id != $2 AND status != 'read'
+            RETURNING id, sender_id
             `,
             [conversationId, userId]
         );
+
+        if (result.rows.length > 0 && io) {
+            // Notify the sender(s) that their messages were read
+            io.to(conversationId).emit('messages_read', {
+                conversation_id: conversationId,
+                receiver_id: userId,
+                message_ids: result.rows.map(r => r.id)
+            });
+        }
+
         res.sendStatus(200);
     } catch (error) {
         console.error('Error marking read:', error);

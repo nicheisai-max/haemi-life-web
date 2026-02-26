@@ -612,4 +612,37 @@
   .font-signature-elegant {
     font-family: 'Allura', cursive !important;
   }
+
+  /* Chat Enhancements: WhatsApp/Teams style */
+  .chat-unread-badge {
+    @apply absolute -top-1 -right-1 h-5 min-w-[20px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white dark:border-slate-800 flex items-center justify-center shadow-sm animate-in zoom-in duration-200;
+  }
+
+  .conv-unread-pill {
+    @apply h-5 min-w-[20px] px-1 rounded-full bg-teal-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm;
+  }
+
+  .message-status-ticks {
+    @apply flex items-center ml-1 opacity-70 transition-opacity;
+  }
+
+  .message-status-ticks.read {
+    @apply text-blue-400 opacity-100;
+  }
+
+  /* Micro-animations */
+  @keyframes badge-pop {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+
+  .animate-badge-pop {
+    animation: badge-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  /* Chat Floating Widget Glow */
+  .chat-widget-pulse {
+    @apply absolute inline-flex h-full w-full rounded-full animate-ping bg-teal-400 opacity-20 duration-1000;
+  }
 }
