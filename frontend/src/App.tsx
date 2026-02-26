@@ -16,6 +16,7 @@ import { ScrollToTop } from './components/utils/ScrollToTop';
 import { PageTransition } from './components/layout/PageTransition';
 import { MedicalLoader } from './components/ui/MedicalLoader';
 import { RoleRoute } from './components/auth/RoleRoute';
+import { FirstVisitGuard } from './components/guards/FirstVisitGuard';
 
 // Lazy loaded pages
 // Eagerly loaded Auth/Public pages for zero-jerks and instantaneous navigation
@@ -45,7 +46,6 @@ const TermsOfService = lazy(() => import('./pages/legal/TermsOfService').then(m 
 const Help = lazy(() => import('./pages/support/Help').then(m => ({ default: m.Help })));
 const TelemedicineConsent = lazy(() => import('./pages/legal/TelemedicineConsent').then(m => ({ default: m.TelemedicineConsent })));
 const TelemedicineDashboard = lazy(() => import('./pages/telemedicine/TelemedicineDashboard').then(m => ({ default: m.TelemedicineDashboard })));
-const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then(m => ({ default: m.Onboarding })));
 const VideoConsultation = lazy(() => import('./components/telemedicine/VideoConsultation').then(m => ({ default: m.VideoConsultation })));
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound })));
 const DoctorReports = lazy(() => import('./pages/doctor/Reports'));
@@ -97,7 +97,7 @@ const IdentityGate = () => {
     );
   }
 
-  return <Login />;
+  return <FirstVisitGuard><Login /></FirstVisitGuard>;
 };
 
 const AppRoutes = () => {
@@ -118,7 +118,7 @@ const AppRoutes = () => {
           <Routes location={location} key={location.key}>
             {/* Eagerly Loaded Auth/Public Routes (Zero Flicker) */}
             <Route path={PATHS.STYLE_GUIDE} element={<StyleGuide />} />
-            <Route path={PATHS.LOGIN} element={<Login />} />
+            <Route path={PATHS.LOGIN} element={<FirstVisitGuard><Login /></FirstVisitGuard>} />
             <Route path={PATHS.SIGNUP} element={<Signup />} />
             <Route path={PATHS.FORGOT_PASSWORD} element={<ForgotPassword />} />
             <Route path={PATHS.PRIVACY} element={<PrivacyPolicy />} />
@@ -126,7 +126,6 @@ const AppRoutes = () => {
 
             {/* Lazy Loaded Routes */}
             <Route path={PATHS.HELP} element={<Help />} />
-            <Route path={PATHS.ONBOARDING} element={<Onboarding />} />
             <Route
               path="/dashboard/*"
               element={
