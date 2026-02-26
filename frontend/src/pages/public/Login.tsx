@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '../../context/AuthContext';
+import { PATHS } from '../../routes/paths';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -15,16 +16,17 @@ import loginBg from '../../assets/images/login_bg_premium.png';
 
 export const Login: React.FC = () => {
     const navigate = useNavigate();
-    const { login, isAuthenticated } = useAuth();
+    const { login, isAuthenticated, user } = useAuth();
     const [generalError, setGeneralError] = useState<string>('');
 
-    // PRODUCTION UX: Instant redirection if already authenticated
-    // This maintains the "polished" feel the user prefers
+    // PRODUCTION UX: Redirect to the role-specific dashboard URL once authenticated.
+    // Admin users must land on /admin (not /dashboard) so the sidebar highlights correctly.
     React.useEffect(() => {
-        if (isAuthenticated) {
-            navigate('/dashboard', { replace: true });
+        if (isAuthenticated && user) {
+            const target = user.role === 'admin' ? PATHS.ADMIN.DASHBOARD : PATHS.DASHBOARD;
+            navigate(target, { replace: true });
         }
-    }, [isAuthenticated, navigate]);
+    }, [isAuthenticated, user, navigate]);
 
     const form = useForm<LoginFormData>({
         resolver: zodResolver(loginSchema),

@@ -79,25 +79,22 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 };
 
 const IdentityGate = () => {
-  const { authStatus, isAuthenticated } = useAuth();
+  const { authStatus, user } = useAuth();
 
   if (authStatus === 'initializing') {
     return <LoadingFallback />;
   }
 
-  if (isAuthenticated) {
-    return (
-      <ProtectedRoute>
-        <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-          <PageTransition>
-            <RoleRouter />
-          </PageTransition>
-        </LazyDashboardLayout></Suspense>
-      </ProtectedRoute>
-    );
+  if (authStatus === 'authenticated' && user) {
+    // Redirect to the role-specific canonical dashboard URL.
+    // This ensures the browser URL always reflects the correct path, enabling
+    // sidebar NavLink active-state detection and proper deep linking.
+    const dashboardPath = user.role === 'admin' ? PATHS.ADMIN.DASHBOARD : PATHS.DASHBOARD;
+    return <Navigate to={dashboardPath} replace />;
   }
 
-  return <FirstVisitGuard><Login /></FirstVisitGuard>;
+  // Unauthenticated: redirect to /login — FirstVisitGuard handles onboarding interception.
+  return <Navigate to={PATHS.LOGIN} replace />;
 };
 
 const AppRoutes = () => {
