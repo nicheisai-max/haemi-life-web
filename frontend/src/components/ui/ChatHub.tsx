@@ -155,7 +155,11 @@ export const ChatHub: React.FC = () => {
             const response = await api.get(`/files/message/${messageId}`, {
                 responseType: 'blob'
             });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
+            // Use the Content-Type from the server response so the browser
+            // saves the file with the correct MIME type (e.g. application/pdf, not text/plain).
+            const mimeType = response.headers['content-type'] || 'application/octet-stream';
+            const blob = new Blob([response.data], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.setAttribute('download', fileName || 'attachment');

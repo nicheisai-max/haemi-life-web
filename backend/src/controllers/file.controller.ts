@@ -46,7 +46,7 @@ export const getChatAttachment = async (req: Request, res: Response) => {
 
         // BOLA Fix: Check if user is a participant in the conversation this message belongs to
         const accessCheck = await pool.query(`
-            SELECT m.attachment_data, m.attachment_mime, m.attachment_url 
+            SELECT m.attachment_data, m.attachment_mime, m.attachment_url, m.attachment_name
             FROM messages m
             JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
             WHERE m.id = $1 AND cp.user_id = $2
@@ -60,6 +60,9 @@ export const getChatAttachment = async (req: Request, res: Response) => {
 
         if (message.attachment_data && message.attachment_mime) {
             res.setHeader('Content-Type', message.attachment_mime);
+            // Send the original filename so the browser saves with the right name and extension
+            const safeFileName = (message.attachment_name || `attachment-${messageId}`).replace(/[^a-zA-Z0-9._\-]/g, '_');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
             return res.send(message.attachment_data);
         }
 
