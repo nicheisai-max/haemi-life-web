@@ -348,8 +348,28 @@ export const refreshToken = async (req: Request, res: Response) => {
     }
 };
 
-export const logout = async (req: Request, res: Response) => {
-    res.clearCookie('refreshToken');
+export const logout = async (req: any, res: Response) => {
+    try {
+        // CRITICAL: Increment token_version in DB to invalidate ALL outstanding refresh tokens
+        // for this user — regardless of which browser, tab, or device holds them.
+        // The Session Replay Protection check in refreshToken() rejects any token whose
+        // embedded token_version no longer matches the DB value.
+        if (req.user?.id) {
+            await pool.query(
+                'UPDATE users SET token_version = token_version + 1, last_activity = CURRENT_TIMESTAMP WHERE id = $1',
+                [req.user.id]
+            );
+        }
+    } catch (dbError) {
+        // Log but do not block logout — clearing the cookie is still the primary action
+        console.error('[Auth] Failed to increment token_version on logout:', dbError);
+    }
+
+    res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+    });
     return sendResponse(res, 200, true, 'Logged out successfully');
 };
 
