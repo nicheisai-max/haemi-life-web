@@ -42,15 +42,25 @@ import consentRoutes from './routes/consent.routes';
 
 
 // --- Production Hardening: Fail-Fast Environment Check ---
-const REQUIRED_ENV = ['JWT_SECRET', 'DB_PASSWORD', 'GEMINI_API_KEY'];
+const REQUIRED_ENV = ['JWT_SECRET', 'DB_PASSWORD', 'GEMINI_API_KEY', 'ENCRYPTION_KEY'];
 const missingEnv = REQUIRED_ENV.filter(key => !process.env[key]);
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_DEMO_MODE = process.env.DEMO_MODE === 'true';
+
 if (missingEnv.length > 0) {
     logger.error(`[FATAL] Missing critical environment variables: ${missingEnv.join(', ')}`);
     process.exit(1);
 }
 
+// ─── CRITICAL SECURITY GUARD: Prevent "Prod-Demo" accidental deployment ──────
+if (IS_PRODUCTION && IS_DEMO_MODE) {
+    logger.error(`[FATAL] SECURITY VIOLATION: NODE_ENV is 'production' but DEMO_MODE is active.`);
+    logger.error(`[REASON] DEMO_MODE bypasses critical security rate-limiters and backdoors.`);
+    process.exit(1);
+}
+
 const app = express();
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // ─── V1 FIX: CORS — env-based allowlist, dev wildcard fallback ───────────────
 // In production: set ALLOWED_ORIGINS=https://app.haemilife.com,https://haemilife.com

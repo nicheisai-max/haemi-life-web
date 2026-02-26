@@ -77,19 +77,9 @@ router.post(
             // Store OTP with attempt counter initialized to 0
             otpStore.set(identifier, { otp, expiresAt, identifier, attempts: 0 });
 
-            // Demo mode: log OTP to console, return in response for testing
-            if (demoConfig.isDemoMode()) {
-                demoConfig.log(`OTP for ${identifier}`, otp);
-                return res.status(200).json({
-                    message: 'OTP sent successfully',
-                    dev_otp: otp, // Only in demo mode
-                });
-            }
-
-            // V2 FIX: In production, NEVER return the OTP in the response.
             // Log to server console only (for development debugging via server logs).
             // In a real production deployment, integrate with email/SMS provider here.
-            console.log(`[OTP] Generated for ${identifier} (integrate email/SMS service)`);
+            console.log(`[OTP] Generated for ${identifier} (integrate email/SMS service): ${otp}`);
             // TODO: await emailService.sendOTP(user.email, otp);
             // TODO: await smsService.sendOTP(user.phone_number, otp);
 
@@ -120,17 +110,6 @@ router.post(
         const { identifier, otp } = req.body;
 
         try {
-            // Demo mode: Accept demo OTP without validation
-            if (demoConfig.isDemoMode() && otp === demoConfig.DEMO_OTP) {
-                demoConfig.log('Demo OTP accepted', identifier);
-                const resetToken = jwt.sign(
-                    { identifier },
-                    process.env.JWT_SECRET!,
-                    { expiresIn: '30m' }
-                );
-                return res.status(200).json({ message: 'OTP verified successfully', resetToken });
-            }
-
             const storedData = otpStore.get(identifier);
 
             if (!storedData) {
@@ -272,13 +251,8 @@ router.post(
             // Reset attempt counter on resend
             otpStore.set(identifier, { otp, expiresAt, identifier, attempts: 0 });
 
-            if (demoConfig.isDemoMode()) {
-                demoConfig.log(`OTP resent for ${identifier}`, otp);
-                return res.status(200).json({ message: 'OTP resent successfully', dev_otp: otp });
-            }
-
             // V2 FIX: Never return OTP in production response
-            console.log(`[OTP RESEND] Generated for ${identifier}`);
+            console.log(`[OTP RESEND] Generated for ${identifier}: ${otp}`);
 
             return res.status(200).json({ message: 'OTP resent successfully' });
         } catch (error) {

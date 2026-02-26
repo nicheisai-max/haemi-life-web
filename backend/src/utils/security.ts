@@ -2,7 +2,7 @@ import crypto from 'crypto';
 
 const ALGORITHM_GCM = 'aes-256-gcm';
 const ALGORITHM_CBC = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'demo_key_32_bytes_at_least_123456';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!;
 const IV_LENGTH = 12; // Standard GCM IV length for WebCrypto compatibility
 const AUTH_TAG_LENGTH = 16;
 const ENCRYPTED_PREFIX = 'enc:';

@@ -10,7 +10,6 @@ export const authLimiter = rateLimit({
     message: { success: false, error: 'Too many auth attempts. Please try again in 15 minutes.', statusCode: 429 },
     standardHeaders: true,
     legacyHeaders: false,
-    skip: () => !IS_PRODUCTION && process.env.VITE_DEMO_MODE === 'true', // Skip in demo mode
 });
 
 // General API: 200 req/15min
