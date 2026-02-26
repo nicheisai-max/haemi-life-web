@@ -182,9 +182,7 @@ export const useChat = () => {
             if (activeConversation && message.conversation_id === activeConversation.id) {
                 setMessages((prev: Message[]) => {
                     const isDuplicate = prev.some(m => String(m.id) === String(message.id));
-                    if (isDuplicate) {
-                        return prev;
-                    }
+                    if (isDuplicate) return prev;
                     return [...prev, {
                         ...message,
                         content: decryptedContent,
@@ -196,12 +194,31 @@ export const useChat = () => {
                     }];
                 });
                 api.put(`/chat/conversations/${activeConversation.id}/delivered`).catch(console.error);
-            } else {
-                // If we are NOT in the conversation, the message is still delivered to the client
-                // but we don't mark as read. We might want to mark as delivered though?
-                // WhatsApp marks as delivered when the app receives it.
+            } else if (message.sender_id !== user?.id) {
+                // OPTIMISTIC SYNC: Increment unread count locally for the badge to pop instantly
+                setConversations(prev => {
+                    const index = prev.findIndex(c => c.id === message.conversation_id);
+                    if (index === -1) return prev; // New conversation not yet in list
+
+                    const newConversations = [...prev];
+                    const target = newConversations[index];
+
+                    // Increment count and update last message/timestamp
+                    newConversations[index] = {
+                        ...target,
+                        unread_count: (parseInt(target.unread_count || '0') + 1).toString(),
+                        last_message: decryptedContent,
+                        last_message_at: message.created_at
+                    };
+
+                    // Move to top (WhatsApp/Teams style)
+                    const [moved] = newConversations.splice(index, 1);
+                    return [moved, ...newConversations];
+                });
+
                 api.put(`/chat/conversations/${message.conversation_id}/delivered`).catch(console.error);
             }
+            // Still trigger background fetch to ensure total database sync consistency
             fetchConversations();
         };
         socket.on('receive_message', handler);
