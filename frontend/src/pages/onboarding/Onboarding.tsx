@@ -1,17 +1,15 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { OnboardingCarousel } from '../../components/onboarding/OnboardingCarousel';
 import { completeOnboarding } from '../../utils/onboardingStorage';
 
 export const Onboarding: React.FC = () => {
-    const navigate = useNavigate();
-
     // Fires haemiOnboardingSkipped event → FirstVisitGuard swaps to Login in-place.
-    // navigate ensures the browser URL also transitions to /login.
+    // No navigate() needed — IdentityGate already redirected the user to /login,
+    // so the URL is correct. Calling navigate('/login') here would remount
+    // FirstVisitGuard with showLogin=false BEFORE the event arrives, causing a flash.
     const handleCompleteOnboarding = () => {
         completeOnboarding();
-        navigate('/login', { replace: true });
     };
 
     return (
