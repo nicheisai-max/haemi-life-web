@@ -245,10 +245,10 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
     const currentSlide = slides[index];
 
     return (
-        <div className="relative w-[95vw] md:w-[90vw] max-w-[1400px] flex flex-col md:flex-row bg-card/95 backdrop-blur-xl rounded-[2rem] md:rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04),_0_30px_60px_rgb(0,0,0,0.08)] border border-white/60 dark:border-border/40 my-4 mx-auto ring-1 ring-black/5 dark:ring-white/10 transition-all duration-500 ease-[var(--ease-premium)]">
+        <div className="relative w-[95vw] md:w-[75vw] lg:w-[60vw] max-w-[960px] flex flex-col md:flex-row bg-card/95 backdrop-blur-xl rounded-[2rem] md:rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04),_0_30px_60px_rgb(0,0,0,0.08)] border border-white/60 dark:border-border/40 my-4 mx-auto ring-1 ring-black/5 dark:ring-white/10 transition-all duration-500 ease-[var(--ease-premium)]">
 
             {/* Visual Section (Top on mobile, Left on desktop) - Elevated Bright Canvas */}
-            <div className={`relative w-full min-h-[350px] md:min-h-[450px] shrink-0 md:flex-[0.45] lg:flex-[0.5] bg-gradient-to-br ${currentSlide.gradient} transition-colors duration-1000 flex items-center justify-center overflow-hidden rounded-t-[2rem] md:rounded-tr-none md:rounded-l-[2.5rem]`}>
+            <div className={`relative w-full min-h-[280px] md:min-h-[360px] shrink-0 md:flex-[0.45] lg:flex-[0.5] bg-gradient-to-br ${currentSlide.gradient} transition-colors duration-1000 flex items-center justify-center overflow-hidden rounded-t-[2rem] md:rounded-tr-none md:rounded-l-[2.5rem]`}>
 
                 {/* Abstract Light Orbs */}
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/60 blur-[80px] rounded-full translate-x-1/3 -translate-y-1/3" />
@@ -271,7 +271,7 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
             </div>
 
             {/* Content Section (Bottom on mobile, Right on desktop) */}
-            <div className="flex-[0.55] lg:flex-[0.5] flex flex-col p-[clamp(1.5rem,4vw,4rem)] bg-transparent relative z-10 shadow-[-10px_0_30px_rgba(0,0,0,0.02)] md:shadow-none min-h-[380px] md:min-h-0 justify-between">
+            <div className="flex-[0.55] lg:flex-[0.5] flex flex-col p-[clamp(1.25rem,3.2vw,3rem)] bg-transparent relative z-10 shadow-[-10px_0_30px_rgba(0,0,0,0.02)] md:shadow-none min-h-[320px] md:min-h-0 justify-between">
 
                 {/* Skip / Brand Header */}
                 <div className="flex justify-between items-center w-full mb-8 md:mb-10">
@@ -319,7 +319,7 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
                 </div>
 
                 {/* Footer Controls */}
-                <div className="mt-[clamp(2rem,5vw,4rem)] flex flex-col md:flex-row md:items-center justify-between gap-[clamp(1rem,3vw,2rem)] pb-2">
+                <div className="mt-[clamp(1.25rem,3vw,2.5rem)] flex flex-col md:flex-row md:items-center justify-between gap-[clamp(0.75rem,2vw,1.5rem)] pb-2">
 
                     {/* Elegant Progress Track */}
                     <div className="relative w-32 md:w-48 h-1.5 bg-muted rounded-full overflow-hidden shadow-inner hidden md:block">

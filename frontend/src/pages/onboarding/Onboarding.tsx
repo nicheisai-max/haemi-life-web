@@ -1,16 +1,13 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { OnboardingCarousel } from '../../components/onboarding/OnboardingCarousel';
 import { completeOnboarding } from '../../utils/onboardingStorage';
 
 export const Onboarding: React.FC = () => {
-    const navigate = useNavigate();
-
+    // Fires haemiOnboardingSkipped event → FirstVisitGuard swaps to Login in-place.
+    // No navigate() needed — the guard handles the view transition without a URL change.
     const handleCompleteOnboarding = () => {
         completeOnboarding();
-        // Strict routing requirement: Always to login.
-        navigate('/login', { replace: true });
     };
 
     return (

@@ -1,37 +1,68 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { isOnboardingCompleted } from '../../utils/onboardingStorage';
+import { useAuth } from '../../context/AuthContext';
 import { MedicalLoader } from '../ui/MedicalLoader';
 
-// Lazy load the onboarding screen to keep the initial JS bundle small for returning users
-const Onboarding = lazy(() => import('../../pages/onboarding/Onboarding').then(m => ({ default: m.Onboarding })));
+const Onboarding = lazy(() =>
+    import('../../pages/onboarding/Onboarding').then(m => ({ default: m.Onboarding }))
+);
 
 interface FirstVisitGuardProps {
     children: React.ReactNode;
 }
 
+/**
+ * FirstVisitGuard — Standard Mobile-App Onboarding Gate
+ *
+ * Behavior:
+ *  1. Every unauthenticated page load → Onboarding appears first.
+ *  2. User clicks Skip / Continue → Login appears immediately (in-place, no reload).
+ *  3. Refresh → Onboarding appears again (in-memory state resets on every load).
+ *  4. Login succeeds → authenticated → children rendered (IdentityGate redirects to dashboard).
+ *  5. Logout → unauthenticated again → Onboarding appears on next load.
+ *
+ * State: `showLogin` is pure in-memory (useState). It is NOT persisted anywhere.
+ * This guarantees: refresh = onboarding, always, for unauthenticated users.
+ */
 export const FirstVisitGuard: React.FC<FirstVisitGuardProps> = ({ children }) => {
-    // Determine initial state immediately to avoid layout flicker
-    const [completed, setCompleted] = useState<boolean>(isOnboardingCompleted);
+    const { authStatus } = useAuth();
 
+    // In-memory only — resets to false on every page refresh by design.
+    const [showLogin, setShowLogin] = useState(false);
+
+    // Listen for the skip/complete event fired by completeOnboarding() in onboardingStorage.
     useEffect(() => {
-        // Listen for the custom event emitted when onboarding is finished
-        const handleOnboardingCompleted = () => {
-            setCompleted(true);
-        };
-
-        window.addEventListener('haemiOnboardingCompleted', handleOnboardingCompleted);
-        return () => window.removeEventListener('haemiOnboardingCompleted', handleOnboardingCompleted);
+        const handleSkip = () => setShowLogin(true);
+        window.addEventListener('haemiOnboardingSkipped', handleSkip);
+        return () => window.removeEventListener('haemiOnboardingSkipped', handleSkip);
     }, []);
 
-    // If onboarding is NOT completed, intercept rendering and show the Onboarding flow
-    if (!completed) {
-        return (
-            <Suspense fallback={<MedicalLoader fullPage message="Initializing Haemi Life..." />}>
-                <Onboarding />
-            </Suspense>
-        );
+    // When user logs out (auth → unauthenticated), reset so onboarding shows on next load.
+    // (This handles the case where authStatus toggles within the same tab without a full refresh.)
+    useEffect(() => {
+        if (authStatus === 'unauthenticated') {
+            setShowLogin(false);
+        }
+    }, [authStatus]);
+
+    // Auth still resolving — show loader to prevent flicker.
+    if (authStatus === 'initializing') {
+        return <MedicalLoader fullPage message="Initializing Haemi Life..." />;
     }
 
-    // If completed, render the original children seamlessly (e.g., Login or IdentityGate)
-    return <>{children}</>;
+    // Authenticated users never see onboarding.
+    if (authStatus === 'authenticated') {
+        return <>{children}</>;
+    }
+
+    // Unauthenticated + user clicked Skip/Continue → show Login.
+    if (showLogin) {
+        return <>{children}</>;
+    }
+
+    // Unauthenticated + fresh load → show Onboarding.
+    return (
+        <Suspense fallback={<MedicalLoader fullPage message="Initializing Haemi Life..." />}>
+            <Onboarding />
+        </Suspense>
+    );
 };

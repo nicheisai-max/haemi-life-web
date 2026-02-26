@@ -1,9 +1,15 @@
-export const isOnboardingCompleted = (): boolean => {
-    return localStorage.getItem("haemi_onboarding_completed") === "true";
+/**
+ * onboardingStorage.ts
+ *
+ * Fires a browser event to signal that the user chose to skip/complete onboarding.
+ * The FirstVisitGuard listens for this event and flips to show Login in-place.
+ *
+ * No localStorage. No sessionStorage. No persistence.
+ * This is intentional — onboarding resets on every page refresh (standard mobile-app pattern).
+ */
+export const completeOnboarding = (): void => {
+    window.dispatchEvent(new Event('haemiOnboardingSkipped'));
 };
 
-export const completeOnboarding = (): void => {
-    localStorage.setItem("haemi_onboarding_completed", "true");
-    // Dispatch a custom event so the guard can react globally without a full page reload if necessary.
-    window.dispatchEvent(new Event('haemiOnboardingCompleted'));
-};
+// Kept for type-compatibility — never read by the guard
+export const isOnboardingCompleted = (): boolean => false;
