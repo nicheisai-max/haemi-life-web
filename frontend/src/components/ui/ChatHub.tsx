@@ -690,21 +690,81 @@ export const ChatHub: React.FC = () => {
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <button
-                                                                    onClick={() => handleDownload(msg.id, att.name || 'document')}
-                                                                    disabled={downloadingId === msg.id}
-                                                                    className={`w-full flex items-center gap-2 p-3 rounded-xl bg-black/10 transition-colors border border-black/5 hover:bg-black/20 ${msg.isMe ? 'text-white' : 'text-slate-700 dark:text-slate-200'} ${downloadingId === msg.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                                >
-                                                                    <div className="h-8 w-8 rounded-lg bg-black/10 flex items-center justify-center shrink-0">
-                                                                        {downloadingId === msg.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                                                                    </div>
-                                                                    <div className="min-w-0 pr-2 text-left">
-                                                                        <p className="text-[11px] font-bold truncate opacity-90 uppercase">{att.name || 'DOCUMENT'}</p>
-                                                                        <span className="text-[10px] break-all opacity-70">
-                                                                            {downloadingId === msg.id ? 'Securing Download...' : 'Click to Download Securely'}
-                                                                        </span>
-                                                                    </div>
-                                                                </button>
+                                                                (() => {
+                                                                    // Determine file type for visual styling
+                                                                    const fileName = att.name || 'document';
+                                                                    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+                                                                    const isPdf = ext === 'pdf';
+                                                                    const isDoc = ext === 'doc' || ext === 'docx';
+
+                                                                    // Icon area color: PDF=red, DOC/DOCX=blue, other=slate
+                                                                    const iconBg = isPdf
+                                                                        ? (msg.isMe ? 'bg-red-500/30' : 'bg-red-50 dark:bg-red-900/20')
+                                                                        : isDoc
+                                                                            ? (msg.isMe ? 'bg-blue-400/30' : 'bg-blue-50 dark:bg-blue-900/20')
+                                                                            : (msg.isMe ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-700');
+                                                                    const iconColor = isPdf
+                                                                        ? 'text-red-400'
+                                                                        : isDoc
+                                                                            ? 'text-blue-400'
+                                                                            : (msg.isMe ? 'text-white/80' : 'text-slate-500');
+                                                                    const extLabel = ext.toUpperCase() || 'FILE';
+
+                                                                    // Human-readable file size
+                                                                    const formatSize = (bytes: number) => {
+                                                                        if (!bytes || bytes === 0) return '';
+                                                                        if (bytes < 1024) return `${bytes} B`;
+                                                                        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                                                                        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                                                                    };
+
+                                                                    return (
+                                                                        <button
+                                                                            onClick={() => handleDownload(msg.id, fileName)}
+                                                                            disabled={downloadingId === msg.id}
+                                                                            className={`w-full flex items-center gap-0 rounded-xl overflow-hidden border transition-all duration-200 hover:opacity-90 active:scale-[0.98] ${msg.isMe
+                                                                                ? 'border-white/10 bg-black/10 hover:bg-black/20'
+                                                                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
+                                                                                } ${downloadingId === msg.id ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                        >
+                                                                            {/* Left — File Type Icon Section (WhatsApp-style) */}
+                                                                            <div className={`shrink-0 w-14 h-16 flex flex-col items-center justify-center ${iconBg} gap-0.5`}>
+                                                                                {downloadingId === msg.id ? (
+                                                                                    <Loader2 className={`h-6 w-6 animate-spin ${iconColor}`} />
+                                                                                ) : (
+                                                                                    <>
+                                                                                        {/* Document shape SVG */}
+                                                                                        <svg viewBox="0 0 24 28" className={`h-8 w-7 ${iconColor}`} fill="currentColor">
+                                                                                            <path d="M14 0H2C0.9 0 0 0.9 0 2v24c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8l-10-8z" opacity="0.9" />
+                                                                                            <path d="M14 0v8h10L14 0z" opacity="0.5" />
+                                                                                        </svg>
+                                                                                        <span className={`text-[9px] font-extrabold tracking-wider ${iconColor} -mt-1`}>{extLabel}</span>
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* Right — File Info */}
+                                                                            <div className={`flex-1 min-w-0 px-3 py-2.5 flex flex-col justify-center text-left ${msg.isMe ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
+                                                                                <p className="text-[12px] font-semibold truncate leading-tight">
+                                                                                    {fileName}
+                                                                                </p>
+                                                                                <p className={`text-[10px] mt-0.5 font-medium ${msg.isMe ? 'text-white/60' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                                                    {downloadingId === msg.id
+                                                                                        ? 'Downloading...'
+                                                                                        : att.size ? formatSize(att.size) : extLabel + ' Document'}
+                                                                                </p>
+                                                                            </div>
+
+                                                                            {/* Download arrow icon */}
+                                                                            <div className={`shrink-0 pr-3 ${msg.isMe ? 'text-white/70' : 'text-teal-500'}`}>
+                                                                                {downloadingId === msg.id
+                                                                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                                                    : <Download className="h-4 w-4" />
+                                                                                }
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })()
                                                             )}
                                                         </div>
                                                     ))}
