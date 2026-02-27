@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -97,6 +97,12 @@ export const Prescriptions: React.FC = () => {
         return <File className="h-5 w-5" />;
     };
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
     if (loading) {
         return (
             <div className="space-y-8">
@@ -121,28 +127,25 @@ export const Prescriptions: React.FC = () => {
                     <p className="page-subheading italic">View your digital and uploaded prescriptions</p>
                 </div>
                 <div>
-                    <label htmlFor="prescription-upload" className="cursor-pointer">
-                        <Button
-                            variant="default"
-                            disabled={uploading}
-                            className="gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
-                            asChild
-                        >
-                            <span>
-                                {uploading ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
-                                {uploading ? 'Uploading...' : 'Upload Prescription'}
-                            </span>
-                        </Button>
-                        <input
-                            id="prescription-upload"
-                            type="file"
-                            multiple
-                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                            onChange={handleFileUpload}
-                            className="hidden"
-                            disabled={uploading}
-                        />
-                    </label>
+                    <Button
+                        variant="default"
+                        disabled={uploading}
+                        className="gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
+                        onClick={handleUploadClick}
+                    >
+                        {uploading ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
+                        {uploading ? 'Uploading...' : 'Upload Prescription'}
+                    </Button>
+                    <input
+                        ref={fileInputRef}
+                        id="prescription-upload"
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        disabled={uploading}
+                    />
                 </div>
             </TransitionItem>
 

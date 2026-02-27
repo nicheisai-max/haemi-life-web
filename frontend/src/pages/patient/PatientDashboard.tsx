@@ -263,20 +263,22 @@ export const PatientDashboard = () => {
                                         <button
                                             key={appointment.id}
                                             type="button"
-                                            className={`w-full text-left flex gap-3 p-3 rounded-xl transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 group cursor-pointer ${isToday ? 'bg-primary/5' : 'bg-transparent'}`}
+                                            className={`w-full appearance-none bg-transparent border-none text-left flex gap-3 p-0 m-0 rounded-full !rounded-xl transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 group cursor-pointer ${isToday ? 'bg-primary/5' : ''}`}
                                             onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}
                                         >
-                                            <div className="flex flex-col items-center justify-center h-11 w-11 shrink-0 bg-slate-100 dark:bg-slate-800/50 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
-                                                <span className="text-sm font-bold text-slate-900 dark:text-white leading-none">{dateInfo.day}</span>
-                                                <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{dateInfo.month}</span>
-                                            </div>
-                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{appointment.other_party_name || 'Doctor'}</h3>
-                                                <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                                                    <span className="flex items-center gap-1 group-hover:text-primary transition-colors">
-                                                        <Clock className="h-3 w-3" /> {formatTime(appointment.appointment_time)}
-                                                    </span>
-                                                    {isToday && <span className="text-primary font-bold px-1.5 py-0.5 bg-primary/10 rounded ml-auto text-[9px]">TODAY</span>}
+                                            <div className="flex gap-3 p-3 w-full">
+                                                <div className="flex flex-col items-center justify-center h-11 w-11 shrink-0 bg-slate-100 dark:bg-slate-800/50 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
+                                                    <span className="text-sm font-bold text-slate-900 dark:text-white leading-none">{dateInfo.day}</span>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{dateInfo.month}</span>
+                                                </div>
+                                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                    <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{appointment.other_party_name || 'Doctor'}</h3>
+                                                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                                        <span className="flex items-center gap-1 group-hover:text-primary transition-colors">
+                                                            <Clock className="h-3 w-3" /> {formatTime(appointment.appointment_time)}
+                                                        </span>
+                                                        {isToday && <span className="text-primary font-bold px-1.5 py-0.5 bg-primary/10 rounded ml-auto text-[9px]">TODAY</span>}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </button>
