@@ -52,7 +52,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const socket = io(SOCKET_URL, {
             auth: { token },
             transports: ['websocket'],
-            reconnectionAttempts: 5,
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            randomizationFactor: 0.5
         });
         socketRef.current = socket;
 
@@ -64,6 +67,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
 
         socket.on('connect_error', (err: Error) => {
+            // Silently handle connection errors due to network partitions
+            // Do not log to console.error to prevent flooding during backend restarts
+            if (err.message !== 'invalid signature') {
+                // It's a network error, socket.io will auto-retry based on backoff config
+                return;
+            }
             console.warn('[NotificationContext] Socket connect error:', err.message);
         });
 

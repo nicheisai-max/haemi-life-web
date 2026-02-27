@@ -112,10 +112,24 @@ export const useChat = () => {
     // simpler to rely on checking payload or state updater.
 
     useEffect(() => {
-        if (user && token) {
-            const newSocket = io(SOCKET_URL, { auth: { token } });
+        if (user && token && authStatus === 'authenticated') {
+            const newSocket = io(SOCKET_URL, {
+                auth: { token },
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                randomizationFactor: 0.5
+            });
 
             newSocket.on('connect', () => { });
+
+            newSocket.on('connect_error', (error: Error) => {
+                // Silently handle connection errors due to network partitions
+                // Do not log to console.error to prevent flooding during backend restarts
+                if (error.message !== 'invalid signature') {
+                    // It's a network error, socket.io will auto-retry based on backoff config
+                }
+            });
 
             // Real-time Reaction Handler
             newSocket.on('message_reaction', ({ messageId, userId, reactionType, action }: any) => {

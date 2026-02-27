@@ -96,7 +96,8 @@ function getRetryDelay(retryCount: number): number {
 // Check if error is retryable
 function isRetryableError(error: AxiosError): boolean {
     if (!error.response) {
-        return true; // Network errors
+        // FATAL NETWORK DROP: Do not retry. Immediately fail gracefully.
+        return false;
     }
     // Retry on 5xx server errors and 429 rate limit
     return error.response.status >= 500 || error.response.status === 429;
@@ -283,7 +284,8 @@ api.interceptors.response.use(
 
                 originalRequest.headers.Authorization = `Bearer ${token}`;
                 return api(originalRequest);
-            } catch (err) {
+            } catch (rawErr: any) {
+                const err = rawErr as AxiosError;
                 processQueue(err, null);
                 isRefreshing = false;
 
@@ -291,10 +293,13 @@ api.interceptors.response.use(
                 // do NOT clear session. Let the initialization logic handle it.
                 if (!appInitialized) return Promise.reject(err);
 
-                // Session is truly expired ONLY when a core auth or data route fails
-                // AND the URL is not a session-neutral data endpoint.
+                // Session is truly expired ONLY when a core auth or data route fails,
+                // the URL is not a session-neutral data endpoint, AND the server 
+                // explicitly rejected the token (401/403). A network drop MUST NOT clear it.
+                const isAuthRejection = err.response && (err.response.status === 401 || err.response.status === 403);
                 const isCritical = !isSessionNeutral(originalRequest.url) && !originalRequest.url?.includes('/auth/me');
-                if (isCritical) {
+
+                if (isCritical && isAuthRejection) {
                     clearAuthSession();
                 }
                 return Promise.reject(err);
