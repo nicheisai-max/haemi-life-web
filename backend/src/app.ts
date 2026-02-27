@@ -301,9 +301,8 @@ const startServer = async () => {
 let server: any;
 startServer().then(s => { server = s; });
 
-// Task 2: Backend Request Timeout
-// Set a 15-second timeout for all HTTP requests to prevent resource exhaustion.
-server.timeout = 15000;
+// server.timeout is already handled inside startServer() to ensure the instance is ready.
+// Removing redundant top-level call to prevent TypeError on boot.
 
 // ─── Task 2: Graceful Shutdown Implementation ──────────────────────────────
 /**
