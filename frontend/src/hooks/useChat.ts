@@ -115,6 +115,7 @@ export const useChat = () => {
         if (user && token && authStatus === 'authenticated') {
             const newSocket = io(SOCKET_URL, {
                 auth: { token },
+                transports: ['websocket'],
                 reconnection: true,
                 reconnectionDelay: 1000,
                 reconnectionDelayMax: 5000,

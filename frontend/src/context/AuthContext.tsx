@@ -7,7 +7,7 @@ import { setAccessToken, setAppInitialized } from '../services/api';
 interface AuthContextType {
     user: User | null;
     token: string | null;
-    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing';
+    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing' | 'offline';
     profileImageVersion: number; // increments after every refreshUser() — use as cache-bust in avatar URLs
     login: (credentials: LoginCredentials) => Promise<void>;
     signup: (credentials: SignupCredentials) => Promise<void>;
@@ -22,7 +22,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 interface AuthState {
     user: User | null;
     token: string | null;
-    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing';
+    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing' | 'offline';
     profileImageVersion: number;
 }
 
@@ -50,11 +50,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const { type, payload } = event.data;
 
                 if (type === 'LOGOUT') {
-                    setAccessToken(null);
-                    sessionStorage.removeItem('user');
-                    setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
+                    // DEMO SHIELD: Only logout if the message targets our current user identity
+                    if (payload?.userId && authState.user?.id === payload.userId) {
+                        setAccessToken(null);
+                        sessionStorage.removeItem('user');
+                        setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
+                    }
                 } else if (type === 'LOGIN') {
                     const { user, token } = payload;
+                    // DEMO SHIELD: If we are already authenticated as a DIFFERENT user, ignore cross-tab login
+                    if (authState.user && authState.user.id !== user.id) return;
+
                     setAccessToken(token);
                     sessionStorage.setItem('user', JSON.stringify(user));
                     setAuthState({ user, token, authStatus: 'authenticated', profileImageVersion: Date.now() });
@@ -64,10 +70,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const handleUnauthorized = () => {
+            const currentUserId = authState.user?.id;
             setAccessToken(null);
             sessionStorage.removeItem('user');
             setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
-            if (authChannel) authChannel.postMessage({ type: 'LOGOUT' });
+            if (authChannel && currentUserId) authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
         };
 
         window.addEventListener('auth:unauthorized', handleUnauthorized);
@@ -114,12 +121,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
             } catch (error: any) {
                 if (mounted) {
-                    setAuthState({
-                        user: null,
-                        token: null,
-                        authStatus: 'unauthenticated',
-                        profileImageVersion: Date.now()
-                    });
+                    // FAIL-OPEN BOOT: Detect if this is a network partition or a hard 401
+                    const isNetworkError = !error.response || error.code === 'ECONNABORTED' || error.message?.includes('Network Error');
+
+                    if (isNetworkError) {
+                        setAuthState(prev => ({
+                            ...prev,
+                            authStatus: 'offline'
+                        }));
+                    } else if (error.response?.status === 401) {
+                        setAuthState({
+                            user: null,
+                            token: null,
+                            authStatus: 'unauthenticated',
+                            profileImageVersion: Date.now()
+                        });
+                    } else {
+                        // All other errors default to unauthenticated for security
+                        setAuthState({
+                            user: null,
+                            token: null,
+                            authStatus: 'unauthenticated',
+                            profileImageVersion: Date.now()
+                        });
+                    }
                 }
             } finally {
                 // CRITICAL: Lift guard and notify global API buffer that we are ready
@@ -146,7 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
         if (!IS_DEMO_MODE) {
             const authChannel = new BroadcastChannel('haemi_auth_sync');
-            authChannel.postMessage({ type: 'LOGIN', payload: { user: newUser, token: newToken } });
+            authChannel.postMessage({ type: 'LOGIN', payload: { user: newUser, token: newToken, userId: newUser.id } });
             authChannel.close();
         }
     }, []);
@@ -174,9 +199,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Broadcast to other tabs
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-        if (!IS_DEMO_MODE) {
+        const currentUserId = authState.user?.id;
+        if (!IS_DEMO_MODE && currentUserId) {
             const authChannel = new BroadcastChannel('haemi_auth_sync');
-            authChannel.postMessage({ type: 'LOGOUT' });
+            authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
             authChannel.close();
         }
 

@@ -9,6 +9,10 @@ const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 // Memory Token Storage (Closure)
 let accessToken: string | null = null;
 
+// Task 5: DEMO SHIELD LOCK
+// @ts-ignore
+const DEMO_SHIELD = import.meta.env.VITE_DEMO_SHIELD === 'true' || IS_DEMO_MODE;
+
 export const setAccessToken = (token: string | null) => {
     accessToken = token;
 };
@@ -88,6 +92,58 @@ const api = axios.create({
     timeout: 10000, // 10 second timeout
 });
 
+// ─── Task 3: Basic Circuit Breaker (Frontend) ──────────────────────────────
+// Prevents flooding a failing backend with requests.
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+let failureCount = 0;
+let circuitState: CircuitState = 'CLOSED';
+let nextTryTime = 0;
+const FAILURE_THRESHOLD = 5;
+const COOLDOWN_PERIOD = 10000; // 10 seconds
+
+function checkCircuitBreaker(): boolean {
+    if (circuitState === 'CLOSED') return true;
+
+    if (circuitState === 'OPEN') {
+        if (Date.now() >= nextTryTime) {
+            circuitState = 'HALF_OPEN';
+            console.warn('[Circuit] Entering HALF_OPEN state. Allowing test request...');
+            return true;
+        }
+        return false;
+    }
+
+    // In HALF_OPEN, we only allow one request through
+    return false;
+}
+
+function recordSuccess() {
+    if (circuitState !== 'CLOSED') {
+        console.info('[Circuit] Success detected. Closing circuit.');
+    }
+    failureCount = 0;
+    circuitState = 'CLOSED';
+}
+
+function recordFailure(error: AxiosError) {
+    // Only trigger on network errors, timeouts, or server-level 502/503
+    const isNetworkError = !error.response || error.code === 'ECONNABORTED';
+    const isServerOverloaded = error.response && (error.response.status === 502 || error.response.status === 503);
+
+    if (!isNetworkError && !isServerOverloaded) return;
+
+    failureCount++;
+    if (failureCount >= FAILURE_THRESHOLD && circuitState !== 'OPEN') {
+        circuitState = 'OPEN';
+        nextTryTime = Date.now() + COOLDOWN_PERIOD;
+        console.error(`[Circuit] ${FAILURE_THRESHOLD} failures detected. Circuit OPENED for ${COOLDOWN_PERIOD / 1000}s.`);
+    } else if (circuitState === 'HALF_OPEN') {
+        circuitState = 'OPEN';
+        nextTryTime = Date.now() + COOLDOWN_PERIOD;
+        console.error(`[Circuit] Half-open request failed. Re-opening circuit.`);
+    }
+}
+
 // Exponential backoff delay calculation
 function getRetryDelay(retryCount: number): number {
     return INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
@@ -155,6 +211,11 @@ function showRetryToast(retryCount: number, maxRetries: number): void {
 // Add a request interceptor to include the auth token
 api.interceptors.request.use(
     (config: ExtendedRequestConfig) => {
+        // Task 3: Circuit Breaker Gate
+        if (!checkCircuitBreaker()) {
+            return Promise.reject(new Error('Circuit is OPEN. Request blocked to prevent cascading failure.'));
+        }
+
         // RESILIENCE GATE: If app is not initialized and route is sensitive, buffer it.
         // This prevents 401 logout loops during HMR or slow session boots.
         const isAuthRoute = config.url?.includes('/auth/');
@@ -234,6 +295,9 @@ api.interceptors.response.use(
             response.data = response.data.data;
         }
 
+        // Task 3: Record circuit success
+        recordSuccess();
+
         // If this was a GET request, save to cache
         if (config.method?.toLowerCase() === 'get' && response.data) {
             const cacheKey = getCacheKey(config);
@@ -244,6 +308,9 @@ api.interceptors.response.use(
     },
     async (error: AxiosError) => {
         const originalRequest = error.config as ExtendedRequestConfig;
+
+        // Task 3: Record circuit failure
+        recordFailure(error);
 
         if (!originalRequest) return Promise.reject(error);
 

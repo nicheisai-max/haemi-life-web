@@ -220,13 +220,19 @@ export const ChatHub: React.FC = () => {
         }
     }, [isOpen, fetchConversations]);
 
-    // P1 Fix: Periodic polling (30s) to keep the unread badge fresh even if
+    // P1 Fix: Periodic polling to keep the unread badge fresh even if
     // sockets are dropped or browser tab was inactive.
     useEffect(() => {
         if (!user?.id) return;
+        // DEMO SHIELD: Reduce background polling to near-zero to prioritize socket performance
+        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+        // @ts-ignore
+        const DEMO_SHIELD = import.meta.env.VITE_DEMO_SHIELD === 'true' || IS_DEMO_MODE;
+        const intervalTime = DEMO_SHIELD ? 600000 : 30000; // 10m vs 30s
+
         const interval = setInterval(() => {
             fetchConversations();
-        }, 30000);
+        }, intervalTime);
         return () => clearInterval(interval);
     }, [user?.id, fetchConversations]);
 

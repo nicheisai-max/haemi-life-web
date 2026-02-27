@@ -161,12 +161,37 @@ const port = process.env.PORT || 5000;
 export { io };
 
 // --- Health Check ---
-app.get('/health', (req, res) => {
-    sendResponse(res, 200, true, 'System Operational', {
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development',
-    });
+app.get('/health', async (req, res) => {
+    try {
+        // Task 3: Execute real DB probe
+        await pool.query('SELECT 1');
+        sendResponse(res, 200, true, 'System Operational', {
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString(),
+            environment: process.env.NODE_ENV || 'development',
+            db: 'connected'
+        });
+    } catch (error: any) {
+        logger.error('[Health] DB probe failed:', error.message);
+        sendResponse(res, 500, false, 'Database Disconnected', {
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString(),
+            environment: process.env.NODE_ENV || 'development',
+            db: 'disconnected',
+            error: error.message
+        });
+    }
+});
+
+// --- Task 1: Readiness Probe ---
+app.get('/readiness', async (req, res) => {
+    try {
+        await pool.query('SELECT 1');
+        res.status(200).json({ status: "ready", db: "connected" });
+    } catch (error: any) {
+        logger.error('[Readiness] Fail:', error.message);
+        res.status(500).json({ status: "not_ready", db: "disconnected" });
+    }
 });
 
 // Routes
@@ -250,13 +275,97 @@ io.on('connection', (socket: AuthSocket) => {
     });
 });
 
-httpServer.listen(port, () => {
-    logger.info(`[Server] Running on port ${port} (${process.env.NODE_ENV || 'development'})`);
-    pool.query('SELECT NOW()', (err) => {
+// ─── Task 2: Safe Server Startup Check ──────────────────────────────
+const startServer = async () => {
+    try {
+        // Test DB connection before listening
+        await pool.query('SELECT 1');
+        logger.info('[DB] Connection verified. Starting server...');
+
+        const server = httpServer.listen(port, () => {
+            logger.info(`[Server] Running on port ${port} (${process.env.NODE_ENV || 'development'})`);
+        });
+
+        // Task 2: Backend Request Timeout
+        // Set a 15-second timeout for all HTTP requests to prevent resource exhaustion.
+        server.timeout = 15000;
+
+        return server;
+    } catch (err: any) {
+        logger.error('[Server] Fatal: DB connection failed during startup.');
+        logger.error(`[Server] Error: ${err.message}`);
+        process.exit(1);
+    }
+};
+
+let server: any;
+startServer().then(s => { server = s; });
+
+// Task 2: Backend Request Timeout
+// Set a 15-second timeout for all HTTP requests to prevent resource exhaustion.
+server.timeout = 15000;
+
+// ─── Task 2: Graceful Shutdown Implementation ──────────────────────────────
+/**
+ * Gracefully shuts down the server and database connections.
+ * 1. Stops accepting new HTTP requests.
+ * 2. Closes the PostgreSQL connection pool.
+ * 3. Exits the process.
+ */
+const shutdown = (signal: string) => {
+    logger.info(`[Server] ${signal} received. Starting graceful shutdown...`);
+
+    server.close(async (err: any) => {
         if (err) {
-            logger.error('[DB] Connection failed:', err.message);
-        } else {
-            logger.info('[DB] Connected successfully');
+            logger.error('[Server] Error during server close:', err);
+            process.exit(1);
+        }
+
+        logger.info('[Server] HTTP server closed. No longer accepting requests.');
+
+        try {
+            await pool.end();
+            logger.info('[DB] PostgreSQL pool closed.');
+            process.exit(0);
+        } catch (dbErr) {
+            logger.error('[DB] Error closing PG pool:', dbErr);
+            process.exit(1);
         }
     });
+
+    // Enforce a hard timeout for shutdown (10s)
+    setTimeout(() => {
+        logger.error('[Server] Shutdown timed out. Forcing process exit.');
+        process.exit(1);
+    }, 10000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// ─── Task 6: Memory & Process Safety (DEMO SHIELD) ─────────────────────────
+/**
+ * Global handlers to prevent the demo server from crashing 
+ * due to unhandled promise rejections or uncaught exceptions.
+ */
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('[Process] Unhandled Rejection', { promise, reason });
+    // In DEMO_SHIELD mode, we log but do NOT exit to keep the demo alive
+    if (process.env.DEMO_SHIELD === 'true') {
+        logger.warn('[DEMO SHIELD] Preserving process after unhandled rejection.');
+    }
 });
+
+process.on('uncaughtException', (err) => {
+    logger.error('[Process] Uncaught Exception:', err.message);
+    logger.error(err.stack || 'No stack trace');
+
+    if (process.env.DEMO_SHIELD === 'true') {
+        logger.warn('[DEMO SHIELD] Preserving process after uncaught exception.');
+    } else {
+        // In non-demo mode, we exit as it's unsafe to continue
+        process.exit(1);
+    }
+});
+
+logger.info(`[DEMO SHIELD] Status: ${process.env.DEMO_SHIELD === 'true' ? 'ACTIVE' : 'INACTIVE'}`);
