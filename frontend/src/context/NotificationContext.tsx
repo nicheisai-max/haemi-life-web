@@ -6,7 +6,6 @@ import { useAuth } from './AuthContext';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-// ─── Context Shape ───────────────────────────────────────────────────────────
 interface NotificationContextType {
     notifications: Notification[];
     unreadCount: number;
@@ -17,10 +16,6 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-// ─── Provider ────────────────────────────────────────────────────────────────
-// IMPORTANT: This provider is only rendered when authStatus === 'authenticated'
-// (enforced by AuthGatedNotifications in App.tsx). Therefore getAccessToken()
-// is guaranteed to return a non-null token here — no race condition possible.
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -32,22 +27,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         let mounted = true;
 
-        // ── 1. Fetch all historic notifications from DB ───────────────────
         const fetchAll = async () => {
             try {
                 const data = await notificationService.getNotifications();
                 if (mounted) setNotifications(data);
             } catch (err) {
-                console.error('[NotificationContext] Failed to fetch notifications:', err);
+                console.error('[NotificationContext] Failed to fetch:', err);
             } finally {
                 if (mounted) setLoading(false);
             }
         };
         fetchAll();
 
-        // ── 2. Open a single Socket.IO connection ─────────────────────────
-        // Token is guaranteed to be in memory at this point (provider is
-        // auth-gated), so there is no race condition here.
         const token = getAccessToken();
         const socket = io(SOCKET_URL, {
             auth: { token },
@@ -55,42 +46,45 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             reconnection: true,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
-            randomizationFactor: 0.5
         });
         socketRef.current = socket;
 
-        // Prepend new real-time notifications instantly
         socket.on('new_notification', (notification: Notification) => {
-            if (mounted) {
-                setNotifications(prev => [notification, ...prev]);
-            }
+            if (mounted) setNotifications(prev => [notification, ...prev]);
         });
+
+        // FIX 4: Socket Auth Revalidation
+        const handleTokenRefreshed = (e: any) => {
+            const newToken = e.detail.token;
+            if (socket && newToken) {
+                // @ts-ignore
+                socket.auth.token = newToken;
+                if (!socket.connected) socket.connect();
+            }
+        };
 
         socket.on('connect_error', (err: Error) => {
-            // Silently handle connection errors due to network partitions
-            // Do not log to console.error to prevent flooding during backend restarts
-            if (err.message !== 'invalid signature') {
-                // It's a network error, socket.io will auto-retry based on backoff config
-                return;
+            // If socket 401s, it might need a refresh. 
+            // api.ts handles the actual refresh, we just wait for the event.
+            if (err.message === 'Authentication required' || err.message === 'Invalid authentication token') {
+                console.warn('[NotificationContext] Socket Auth Failed. Waiting for refresh...');
             }
-            console.warn('[NotificationContext] Socket connect error:', err.message);
         });
 
-        // ── 3. Cleanup on unmount (e.g. logout) ───────────────────────────
+        window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
+
         return () => {
             mounted = false;
+            window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
             socket.disconnect();
             socketRef.current = null;
         };
-    }, [user?.id]); // Fires exactly once per authenticated user — never on the raw token
+    }, [user?.id]);
 
-    // ─── Actions ─────────────────────────────────────────────────────────────
     const markAsRead = useCallback(async (id: string) => {
         try {
             await notificationService.markAsRead(id);
-            setNotifications(prev =>
-                prev.map(n => n.id === id ? { ...n, is_read: true } : n)
-            );
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
         } catch (err) {
             console.error('[NotificationContext] Failed to mark as read:', err);
         }
@@ -114,17 +108,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 };
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
 export const useNotifications = () => {
     const context = useContext(NotificationContext);
     if (context === undefined) {
-        console.warn('[NotificationContext] useNotifications outside provider. Returning safe stub to prevent crash loop.');
         return {
-            notifications: [],
-            unreadCount: 0,
-            loading: false,
-            markAsRead: async () => { },
-            markAllAsRead: async () => { }
+            notifications: [], unreadCount: 0, loading: false,
+            markAsRead: async () => { }, markAllAsRead: async () => { }
         };
     }
     return context;

@@ -63,19 +63,14 @@ if (IS_PRODUCTION && IS_DEMO_MODE) {
 const app = express();
 
 // ─── V1 FIX: CORS — env-based allowlist, dev wildcard fallback ───────────────
-// In production: set ALLOWED_ORIGINS=https://app.haemilife.com,https://haemilife.com
-// In dev/demo: all origins allowed (no bottleneck for investor demo)
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
     : null;
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, Postman, server-to-server)
         if (!origin) return callback(null, true);
-        // In dev/demo mode (no ALLOWED_ORIGINS set), allow everything
         if (!allowedOrigins) return callback(null, true);
-        // In production, enforce allowlist
         if (allowedOrigins.includes(origin)) return callback(null, true);
         callback(new Error(`CORS: Origin '${origin}' not allowed`));
     },
@@ -91,44 +86,37 @@ app.use(helmet({
         useDefaults: true,
         directives: {
             "default-src": ["'self'"],
-            "script-src": ["'self'", "'unsafe-inline'"], // Allow inline scripts for basic functionality if needed
+            "script-src": ["'self'", "'unsafe-inline'"],
             "style-src": ["'self'", "'unsafe-inline'"],
             "img-src": ["'self'", "data:", "blob:"],
-            "connect-src": ["'self'", "ws:", "wss:"], // Allow WebSocket connections
+            "connect-src": ["'self'", "ws:", "wss:"],
         }
     },
 }));
 
-// V3 FIX: HTTP Request Logging via Morgan (Piped to Secure Logger)
-// Uses 'combined' format for standard Apache-style logs
+// V3 FIX: HTTP Request Logging via Morgan
 const morganFormat = IS_PRODUCTION ? 'combined' : 'dev';
 app.use(morgan(morganFormat, {
     stream: {
         write: (message) => logger.info(message.trim(), { type: 'http' })
     },
-    skip: (req, res) => req.url === '/health' // Skip health checks to reduce noise
+    skip: (req) => req.url === '/health'
 }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
-// ─── V5 FIX: Tiered rate limiters — demo-safe but production-hardened ────────
-// Moved to src/middleware/rate-limit.middleware.ts to avoid circular dependencies
-
-// Apply auth limiter to login/signup/password-reset only
+// Tiered rate limiters
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/password-reset', authLimiter);
-
-// Apply general limiter to all other API routes
 app.use('/api/', apiLimiter);
 
 const httpServer = createServer(app);
 
-// ─── V10 FIX: Socket.io — JWT authentication middleware ──────────────────────
+// Socket.io initialization
 const io = new Server(httpServer, {
     cors: {
-        // Socket.io CORS follows the same policy as the HTTP server
         origin: allowedOrigins ?? '*',
         methods: ['GET', 'POST'],
         credentials: true,
@@ -136,17 +124,12 @@ const io = new Server(httpServer, {
 });
 
 interface AuthSocket extends Socket {
-    user?: any; // Replace 'any' with specific user interface if available globally
+    user?: any;
 }
 
-// Authenticate every socket connection with a valid JWT
 io.use((socket: AuthSocket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
-
-    if (!token) {
-        return next(new Error('Authentication required'));
-    }
-
+    if (!token) return next(new Error('Authentication required'));
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
         socket.user = decoded;
@@ -157,13 +140,11 @@ io.use((socket: AuthSocket, next) => {
 });
 
 const port = process.env.PORT || 5000;
-
 export { io };
 
-// --- Health Check ---
+// Health & Readiness Probes
 app.get('/health', async (req, res) => {
     try {
-        // Task 3: Execute real DB probe
         await pool.query('SELECT 1');
         sendResponse(res, 200, true, 'System Operational', {
             uptime: process.uptime(),
@@ -176,20 +157,17 @@ app.get('/health', async (req, res) => {
         sendResponse(res, 500, false, 'Database Disconnected', {
             uptime: process.uptime(),
             timestamp: new Date().toISOString(),
-            environment: process.env.NODE_ENV || 'development',
             db: 'disconnected',
             error: error.message
         });
     }
 });
 
-// --- Task 1: Readiness Probe ---
 app.get('/readiness', async (req, res) => {
     try {
         await pool.query('SELECT 1');
         res.status(200).json({ status: "ready", db: "connected" });
     } catch (error: any) {
-        logger.error('[Readiness] Fail:', error.message);
         res.status(500).json({ status: "not_ready", db: "disconnected" });
     }
 });
@@ -205,40 +183,22 @@ app.use('/api/records', recordRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
-app.use('/api/clinical-copilot', clinicalCopilotRoutes); // NEW: Clinical Copilot Secure Route
+app.use('/api/clinical-copilot', clinicalCopilotRoutes);
 app.use('/api/consents', consentRoutes);
 app.use('/api/common', commonRoutes);
 app.use('/api/files', fileRoutes);
 
-
-// Serve uploaded files
-// V12 FIX: Protected static assets.
-// DEPRECATED: Direct static access for /uploads is disabled to prevent BOLA guesswork.
-// All clinical files must now be routed through /api/files/ which enforces ownership.
-// app.use('/uploads', authenticateToken, express.static('uploads'));
-
-
-
-// Legacy root route
 app.get('/', (req, res) => {
     res.send('Haemi Life Backend is running');
 });
 
-// Global 404 Handler
 app.use(notFoundHandler);
-
-// Global Error Handler
 app.use(globalErrorHandler);
 
-// Socket.io Signaling Logic
+// Socket Logic
 io.on('connection', (socket: AuthSocket) => {
     const userId = socket.user?.id || socket.id;
-    logger.info(`[Socket] User connected: ${userId}`);
-
-    // Join personal room for targeted notifications
-    if (socket.user?.id) {
-        socket.join(`user:${socket.user.id}`);
-    }
+    if (socket.user?.id) socket.join(`user:${socket.user.id}`);
 
     socket.on('join-consultation', (appointmentId) => {
         socket.join(appointmentId);
@@ -247,11 +207,6 @@ io.on('connection', (socket: AuthSocket) => {
 
     socket.on('join_conversation', (conversationId) => {
         socket.join(conversationId);
-    });
-
-    socket.on('send_message', (message) => {
-        // logger.debug(`[Socket] Message received for conversation: ${message?.conversationId}`); 
-        // Commented out to reduce noise, enable if needed for debugging
     });
 
     socket.on('typing', ({ conversationId, userId: typingUserId, isTyping }) => {
@@ -275,81 +230,71 @@ io.on('connection', (socket: AuthSocket) => {
     });
 });
 
-// ─── Task 2: Safe Server Startup Check ──────────────────────────────
+let server: any;
+
+// ─── Task 1: Safe Server Startup ──────────────────────────────
 const startServer = async () => {
     try {
-        // Test DB connection before listening
         await pool.query('SELECT 1');
         logger.info('[DB] Connection verified. Starting server...');
 
-        const server = httpServer.listen(port, () => {
+        server = httpServer.listen(port, () => {
             logger.info(`[Server] Running on port ${port} (${process.env.NODE_ENV || 'development'})`);
         });
 
-        // Task 2: Backend Request Timeout
-        // Set a 15-second timeout for all HTTP requests to prevent resource exhaustion.
         server.timeout = 15000;
-
         return server;
     } catch (err: any) {
         logger.error('[Server] Fatal: DB connection failed during startup.');
-        logger.error(`[Server] Error: ${err.message}`);
         process.exit(1);
     }
 };
 
-let server: any;
-startServer().then(s => { server = s; });
+startServer();
 
-// server.timeout is already handled inside startServer() to ensure the instance is ready.
-// Removing redundant top-level call to prevent TypeError on boot.
-
-// ─── Task 2: Graceful Shutdown Implementation ──────────────────────────────
-/**
- * Gracefully shuts down the server and database connections.
- * 1. Stops accepting new HTTP requests.
- * 2. Closes the PostgreSQL connection pool.
- * 3. Exits the process.
- */
+// ─── FIX 1 & 6: Defensive Shutdown & Global Process Safety ──────────────
 const shutdown = (signal: string) => {
     logger.info(`[Server] ${signal} received. Starting graceful shutdown...`);
 
-    server.close(async (err: any) => {
-        if (err) {
-            logger.error('[Server] Error during server close:', err);
-            process.exit(1);
-        }
-
-        logger.info('[Server] HTTP server closed. No longer accepting requests.');
-
+    const closeDB = async () => {
         try {
-            await pool.end();
-            logger.info('[DB] PostgreSQL pool closed.');
+            if (pool) {
+                await pool.end();
+                logger.info('[DB] PostgreSQL pool closed.');
+            }
             process.exit(0);
         } catch (dbErr) {
-            logger.error('[DB] Error closing PG pool:', dbErr);
+            logger.error('[DB] Error during pool closure:', dbErr);
             process.exit(1);
         }
-    });
+    };
 
-    // Enforce a hard timeout for shutdown (10s)
+    if (server && typeof server.close === 'function') {
+        server.close(async (err: any) => {
+            if (err) logger.error('[Server] Error during close:', err);
+            logger.info('[Server] HTTP server closed.');
+            await closeDB();
+        });
+    } else {
+        logger.warn('[Server] No active server listener to close. Closing DB only.');
+        closeDB();
+    }
+
+    // Hard timeout for shutdown
     setTimeout(() => {
-        logger.error('[Server] Shutdown timed out. Forcing process exit.');
+        logger.error('[Server] Shutdown timed out. Forcing exit.');
         process.exit(1);
     }, 10000);
 };
 
+// Global Process Listeners (Guarded against duplicates)
+process.removeAllListeners('SIGTERM');
+process.removeAllListeners('SIGINT');
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-// ─── Task 6: Memory & Process Safety (DEMO SHIELD) ─────────────────────────
-/**
- * Global handlers to prevent the demo server from crashing 
- * due to unhandled promise rejections or uncaught exceptions.
- */
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('[Process] Unhandled Rejection', { promise, reason });
-    // In DEMO_SHIELD mode, we log but do NOT exit to keep the demo alive
+    logger.error('[Process] Unhandled Rejection at:', promise, 'reason:', reason);
     if (process.env.DEMO_SHIELD === 'true') {
         logger.warn('[DEMO SHIELD] Preserving process after unhandled rejection.');
     }
@@ -357,13 +302,10 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (err) => {
     logger.error('[Process] Uncaught Exception:', err.message);
-    logger.error(err.stack || 'No stack trace');
-
     if (process.env.DEMO_SHIELD === 'true') {
         logger.warn('[DEMO SHIELD] Preserving process after uncaught exception.');
     } else {
-        // In non-demo mode, we exit as it's unsafe to continue
-        process.exit(1);
+        shutdown('UncaughtException');
     }
 });
 
