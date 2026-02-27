@@ -36,7 +36,7 @@ export interface Conversation {
 }
 
 export const useChat = () => {
-    const { user, token } = useAuth();
+    const { user, token, authStatus } = useAuth();
     const [socket, setSocket] = useState<any>(null); // Use any for socket to bypass strict constructor matching in dev
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
@@ -52,6 +52,9 @@ export const useChat = () => {
 
     // Load Conversations
     const fetchConversations = useCallback(async () => {
+        // RESILIENCE GATE: If session is not fully ready, do not leak background calls.
+        if (authStatus !== 'authenticated') return;
+
         try {
             const res = await api.get('/chat/conversations');
             const data = res.data;

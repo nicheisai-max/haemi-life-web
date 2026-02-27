@@ -15,10 +15,33 @@ export const setAccessToken = (token: string | null) => {
 
 export const getAccessToken = () => accessToken;
 
-// Initialization guard — prevents background 401s from wiping the session
-// before initAuth() in AuthContext has completed its token refresh
+// ─── Request Buffer Logic (Resilience Engine) ────────────────────────────────
+// Buffers requests made while the app is stabilizing (init or HMR)
 let appInitialized = false;
-export const setAppInitialized = () => { appInitialized = true; };
+let initializationQueue: {
+    config: ExtendedRequestConfig;
+    resolve: (value: any) => void;
+    reject: (reason?: any) => void
+}[] = [];
+
+export const setAppInitialized = () => {
+    appInitialized = true;
+};
+
+// Process the initialization queue once the AuthContext is ready
+if (typeof window !== 'undefined') {
+    window.addEventListener('auth:ready', () => {
+        appInitialized = true;
+        initializationQueue.forEach(({ config, resolve, reject }) => {
+            // Re-inject token if it was missing during buffering
+            if (accessToken && config.headers) {
+                config.headers.Authorization = `Bearer ${accessToken}`;
+            }
+            api(config).then(resolve).catch(reject);
+        });
+        initializationQueue = [];
+    });
+}
 
 // Cache for successful GET responses
 const CACHE_KEY_PREFIX = 'haemi_api_cache_';
@@ -131,6 +154,15 @@ function showRetryToast(retryCount: number, maxRetries: number): void {
 // Add a request interceptor to include the auth token
 api.interceptors.request.use(
     (config: ExtendedRequestConfig) => {
+        // RESILIENCE GATE: If app is not initialized and route is sensitive, buffer it.
+        // This prevents 401 logout loops during HMR or slow session boots.
+        const isAuthRoute = config.url?.includes('/auth/');
+        if (!appInitialized && !isAuthRoute) {
+            return new Promise((resolve, reject) => {
+                initializationQueue.push({ config, resolve, reject });
+            }) as any;
+        }
+
         // Use memory token
         if (accessToken && config.headers) {
             config.headers.Authorization = `Bearer ${accessToken}`;
@@ -254,10 +286,13 @@ api.interceptors.response.use(
             } catch (err) {
                 processQueue(err, null);
                 isRefreshing = false;
+
+                // CIRCUIT BREAKER: If AuthContext hasn't finished its own boot yet,
+                // do NOT clear session. Let the initialization logic handle it.
+                if (!appInitialized) return Promise.reject(err);
+
                 // Session is truly expired ONLY when a core auth or data route fails
                 // AND the URL is not a session-neutral data endpoint.
-                // Session-neutral endpoints (e.g. /notifications, /chat/) returning 401
-                // means that specific request failed — not that the session is gone.
                 const isCritical = !isSessionNeutral(originalRequest.url) && !originalRequest.url?.includes('/auth/me');
                 if (isCritical) {
                     clearAuthSession();

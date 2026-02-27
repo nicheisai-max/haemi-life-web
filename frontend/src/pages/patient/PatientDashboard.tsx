@@ -260,7 +260,12 @@ export const PatientDashboard = () => {
                                     const dateInfo = formatDate(appointment.appointment_date);
                                     const isToday = new Date(appointment.appointment_date).toDateString() === new Date().toDateString();
                                     return (
-                                        <div key={appointment.id} className={`flex gap-3 p-3 rounded-xl transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 group cursor-pointer ${isToday ? 'bg-primary/5' : 'bg-transparent'}`} onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}>
+                                        <button
+                                            key={appointment.id}
+                                            type="button"
+                                            className={`w-full text-left flex gap-3 p-3 rounded-xl transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 group cursor-pointer ${isToday ? 'bg-primary/5' : 'bg-transparent'}`}
+                                            onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}
+                                        >
                                             <div className="flex flex-col items-center justify-center h-11 w-11 shrink-0 bg-slate-100 dark:bg-slate-800/50 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
                                                 <span className="text-sm font-bold text-slate-900 dark:text-white leading-none">{dateInfo.day}</span>
                                                 <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{dateInfo.month}</span>
@@ -274,7 +279,7 @@ export const PatientDashboard = () => {
                                                     {isToday && <span className="text-primary font-bold px-1.5 py-0.5 bg-primary/10 rounded ml-auto text-[9px]">TODAY</span>}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </button>
                                     );
                                 })
                             )}

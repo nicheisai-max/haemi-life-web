@@ -7,7 +7,7 @@ import { setAccessToken, setAppInitialized } from '../services/api';
 interface AuthContextType {
     user: User | null;
     token: string | null;
-    authStatus: 'initializing' | 'authenticated' | 'unauthenticated';
+    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing';
     profileImageVersion: number; // increments after every refreshUser() — use as cache-bust in avatar URLs
     login: (credentials: LoginCredentials) => Promise<void>;
     signup: (credentials: SignupCredentials) => Promise<void>;
@@ -22,16 +22,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 interface AuthState {
     user: User | null;
     token: string | null;
-    authStatus: 'initializing' | 'authenticated' | 'unauthenticated';
+    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing';
     profileImageVersion: number;
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // ─── Deterministic Initialization Phase ──────────────────────────────────
+    // Determine if we should start in 'initializing' or 'stabilizing' (session recovery)
+    const initialUser = sessionStorage.getItem('user');
     const [authState, setAuthState] = useState<AuthState>({
-        user: null,
+        user: initialUser ? JSON.parse(initialUser) : null,
         token: null,
-        authStatus: 'initializing',
+        authStatus: initialUser ? 'stabilizing' : 'initializing',
         profileImageVersion: Date.now()
     });
 
@@ -83,7 +85,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initAuth = async () => {
             try {
                 // PHASE 1: Proactively attempt to refresh the token using the HttpOnly cookie.
-                // This securely negotiates a new in-memory access token BEFORE assuming guest status.
                 const refreshResult = await authService.refreshToken();
 
                 if (refreshResult.authenticated && refreshResult.token) {
@@ -99,11 +100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             authStatus: 'authenticated',
                             profileImageVersion: Date.now()
                         });
-                        // Persist user for cross-tab sync / hydration
                         sessionStorage.setItem('user', JSON.stringify(user));
                     }
                 } else {
-                    // Genuine guest or expired session. Safe to become unauthenticated.
                     if (mounted) {
                         setAuthState({
                             user: null,
@@ -114,7 +113,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }
                 }
             } catch (error: any) {
-                // Safe degrade if network drops during initialization
                 if (mounted) {
                     setAuthState({
                         user: null,
@@ -124,9 +122,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     });
                 }
             } finally {
-                // CRITICAL: Always lift the initialization guard regardless of outcome.
-                // After this point, legitimate 401 responses will correctly clear the session.
+                // CRITICAL: Lift guard and notify global API buffer that we are ready
                 setAppInitialized();
+                window.dispatchEvent(new CustomEvent('auth:ready'));
             }
         };
 
@@ -213,7 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             signup,
             logout,
             refreshUser,
-            isLoading: authState.authStatus === 'initializing',
+            isLoading: authState.authStatus === 'initializing' || authState.authStatus === 'stabilizing',
             isAuthenticated: authState.authStatus === 'authenticated',
         }}>
             {children}
