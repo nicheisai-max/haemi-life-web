@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useConfirm } from '@/context/AlertDialogContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -135,6 +135,12 @@ export const MedicalRecords: React.FC = () => {
         }
     };
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
     return (
         <div className="space-y-8">
             <TransitionItem className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -143,28 +149,25 @@ export const MedicalRecords: React.FC = () => {
                     <p className="page-subheading italic">Secure repository of your clinical history in Botswana</p>
                 </div>
                 <div className="flex gap-2">
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                        <Button
-                            variant="default"
-                            disabled={uploading}
-                            className="gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
-                            asChild
-                        >
-                            <span>
-                                {uploading ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2" />}
-                                {uploading ? 'Uploading...' : 'Upload Record'}
-                            </span>
-                        </Button>
-                        <input
-                            id="file-upload"
-                            type="file"
-                            multiple
-                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                            onChange={handleFileUpload}
-                            className="hidden"
-                            disabled={uploading}
-                        />
-                    </label>
+                    <Button
+                        variant="default"
+                        disabled={uploading}
+                        className="gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
+                        onClick={handleUploadClick}
+                    >
+                        {uploading ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2" />}
+                        {uploading ? 'Uploading...' : 'Upload Record'}
+                    </Button>
+                    <input
+                        ref={fileInputRef}
+                        id="file-upload"
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        disabled={uploading}
+                    />
                 </div>
             </TransitionItem>
 
