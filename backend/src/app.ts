@@ -294,7 +294,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('[Process] Unhandled Rejection at:', promise, 'reason:', reason);
+    logger.error('[Process] Unhandled Rejection', { promise, reason });
     if (process.env.DEMO_SHIELD === 'true') {
         logger.warn('[DEMO SHIELD] Preserving process after unhandled rejection.');
     }

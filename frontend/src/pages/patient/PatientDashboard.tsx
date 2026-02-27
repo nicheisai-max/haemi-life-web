@@ -90,7 +90,7 @@ export const PatientDashboard = () => {
                             <span>Active Member</span>
                         </div>
                         <h1 className="page-heading !text-white !mb-0 transition-all duration-300">
-                            Welcome, {user?.name?.split(' ')[0]}
+                            Welcome, {user?.name}
                         </h1>
                         <p className="text-emerald-50/70 text-sm font-bold uppercase tracking-[0.2em] mb-1">Patient Hub</p>
                         <div className="page-subheading !text-white/80 !opacity-100 italic">
