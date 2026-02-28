@@ -82,7 +82,7 @@ export const PatientDashboard = () => {
 
         <div className="space-y-8">
             {/* Hero Section - Compact */}
-            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+            <TransitionItem className="relative overflow-hidden rounded-card border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="space-y-3">
@@ -236,7 +236,7 @@ export const PatientDashboard = () => {
                 <div className="w-full lg:w-1/3 flex flex-col h-full space-y-6">
 
                     {/* Appointments List */}
-                    <section className="bg-white dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-slate-800 flex-1 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
+                    <section className="bg-white dark:bg-slate-950/50 rounded-card border border-slate-200 dark:border-slate-800 flex-1 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
                         <div className="p-6 border-b border-transparent flex items-center justify-between">
                             <h2 className="font-bold text-slate-900 dark:text-white text-sm tracking-wide">Upcoming</h2>
                             <Button variant="ghost" size="sm" className="h-6 text-[10px] font-semibold text-primary/80 hover:text-primary px-2 uppercase tracking-wider" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
@@ -289,7 +289,7 @@ export const PatientDashboard = () => {
                     </section>
 
                     {/* Compact Health Tip */}
-                    <section className="bg-gradient-to-br from-teal-800 to-teal-950 rounded-2xl p-4 text-white relative overflow-hidden shadow-lg">
+                    <section className="bg-gradient-to-br from-teal-800 to-teal-950 rounded-card p-4 text-white relative overflow-hidden shadow-lg">
                         <GradientMesh variant="subtle" className="opacity-10" />
                         <div className="relative z-10 flex gap-4">
                             <div className="p-2.5 bg-white/10 rounded-xl h-fit backdrop-blur-sm">

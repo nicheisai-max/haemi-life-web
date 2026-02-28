@@ -3,10 +3,10 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
-import { systemSettingsRepository } from '../repositories/system_settings.repository';
 import { logger } from '../utils/logger';
 import { auditService } from '../services/audit.service';
 import { sendResponse, sendError } from '../utils/response';
+import { JWTPayload } from '../types/express';
 
 export const signup = async (req: Request, res: Response) => {
     const { email, password, role, name, phone_number, id_number } = req.body;
@@ -77,13 +77,14 @@ export const signup = async (req: Request, res: Response) => {
                     profile_image: newUser.profile_image
                 }
             });
-        } catch (e) {
+        } catch (e: unknown) {
             await client.query('ROLLBACK');
+            logger.error('Signup transaction failed', e);
             throw e;
         } finally {
             client.release();
         }
-    } catch (error) {
+    } catch (error: unknown) {
         logger.error('Error creating user', { error, email, phone_number, role });
         return sendError(res, 500, 'Error creating user');
     }
@@ -194,15 +195,16 @@ export const login = async (req: Request, res: Response) => {
                 profile_image: user.profile_image
             }
         });
-    } catch (error) {
+    } catch (error: unknown) {
         logger.error('Login server error', { error, identifier });
         return sendError(res, 500, 'Server error');
     }
 };
 
-export const getProfile = async (req: any, res: Response) => {
+export const getProfile = async (req: Request, res: Response) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user?.id;
+        if (!userId) return sendError(res, 401, 'Unauthorized');
         const user = await userRepository.findById(userId);
 
         if (!user) {
@@ -210,15 +212,16 @@ export const getProfile = async (req: any, res: Response) => {
         }
 
         return sendResponse(res, 200, true, 'Profile fetched', user);
-    } catch (error) {
-        console.error('Error fetching profile:', error);
+    } catch (error: unknown) {
+        logger.error('Error fetching profile:', error);
         return sendError(res, 500, 'Server error');
     }
 };
 
-export const updateProfile = async (req: any, res: Response) => {
+export const updateProfile = async (req: Request, res: Response) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user?.id;
+        if (!userId) return sendError(res, 401, 'Unauthorized');
         const { name, email, phone_number } = req.body;
 
         const updatedUser = await userRepository.updateProfile(userId, { name, email, phone_number });
@@ -228,19 +231,20 @@ export const updateProfile = async (req: any, res: Response) => {
         }
 
         return sendResponse(res, 200, true, 'Profile updated', updatedUser);
-    } catch (error) {
-        console.error('Error updating profile:', error);
+    } catch (error: unknown) {
+        logger.error('Error updating profile:', error);
         return sendError(res, 500, 'Server error');
     }
 };
 
-export const uploadProfileImage = async (req: any, res: Response) => {
+export const uploadProfileImage = async (req: Request, res: Response) => {
     try {
         if (!req.file) {
             return res.status(400).json({ message: 'No file uploaded' });
         }
 
-        const userId = req.user.id;
+        const userId = req.user?.id;
+        if (!userId) return sendError(res, 401, 'Unauthorized');
         const updatedUser = await userRepository.updateProfileImage(
             userId,
             req.file.buffer,
@@ -254,15 +258,16 @@ export const uploadProfileImage = async (req: any, res: Response) => {
         return sendResponse(res, 200, true, 'Profile image updated successfully', {
             user: updatedUser
         });
-    } catch (error: any) {
-        console.error('Error uploading profile image:', error);
+    } catch (error: unknown) {
+        logger.error('Error uploading profile image', { userId: req.user?.id, error });
         return sendError(res, 500, 'Server error during upload process');
     }
 };
 
-export const changePassword = async (req: any, res: Response) => {
+export const changePassword = async (req: Request, res: Response) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user?.id;
+        if (!userId) return sendError(res, 401, 'Unauthorized');
         const { current_password, new_password } = req.body;
 
         // Get current password hash
@@ -282,21 +287,21 @@ export const changePassword = async (req: any, res: Response) => {
         await userRepository.updatePassword(userId, hashedPassword);
 
         return sendResponse(res, 200, true, 'Password updated successfully');
-    } catch (error) {
-        console.error('Error changing password:', error);
+    } catch (error: unknown) {
+        logger.error('Error changing password:', error);
         return sendError(res, 500, 'Server error');
     }
 };
 
 export const refreshToken = async (req: Request, res: Response) => {
-    const refreshToken = req.cookies.refreshToken;
+    const refreshTokenHeader = req.cookies.refreshToken;
 
-    if (!refreshToken) {
+    if (!refreshTokenHeader) {
         return sendResponse(res, 200, false, 'No active session');
     }
 
     try {
-        const decoded: any = jwt.verify(refreshToken, process.env.JWT_SECRET as string);
+        const decoded = jwt.verify(refreshTokenHeader, process.env.JWT_SECRET as string) as JWTPayload;
 
         const user = await userRepository.findById(decoded.id);
 
@@ -314,9 +319,6 @@ export const refreshToken = async (req: Request, res: Response) => {
         }
 
         // Token Renewal: Update last_activity only.
-        // token_version is NOT incremented here — only on security events
-        // (password change, explicit logout, admin revocation) to prevent
-        // cascading 401 storms from concurrent requests during token refresh.
         await pool.query(
             'UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
             [user.id]
@@ -342,27 +344,25 @@ export const refreshToken = async (req: Request, res: Response) => {
         });
 
         return sendResponse(res, 200, true, 'Token refreshed', { token: accessToken });
-    } catch (error) {
+    } catch (err: unknown) {
+        logger.error('Token refresh failed', err);
         res.clearCookie('refreshToken');
         return sendResponse(res, 200, false, 'Invalid refresh token');
     }
 };
 
-export const logout = async (req: any, res: Response) => {
+export const logout = async (req: Request, res: Response) => {
     try {
         // CRITICAL: Increment token_version in DB to invalidate ALL outstanding refresh tokens
-        // for this user — regardless of which browser, tab, or device holds them.
-        // The Session Replay Protection check in refreshToken() rejects any token whose
-        // embedded token_version no longer matches the DB value.
         if (req.user?.id) {
             await pool.query(
                 'UPDATE users SET token_version = token_version + 1, last_activity = CURRENT_TIMESTAMP WHERE id = $1',
                 [req.user.id]
             );
         }
-    } catch (dbError) {
-        // Log but do not block logout — clearing the cookie is still the primary action
-        console.error('[Auth] Failed to increment token_version on logout:', dbError);
+    } catch (dbError: unknown) {
+        // Log but do not block logout
+        logger.error('[Auth] Failed to increment token_version on logout:', dbError);
     }
 
     res.clearCookie('refreshToken', {
@@ -373,23 +373,24 @@ export const logout = async (req: any, res: Response) => {
     return sendResponse(res, 200, true, 'Logged out successfully');
 };
 
-export const verifySession = async (req: any, res: Response) => {
+export const verifySession = async (req: Request, res: Response) => {
     try {
         const user = req.user;
         return sendResponse(res, 200, true, 'Session valid', { user });
-    } catch (error) {
+    } catch (err: unknown) {
+        logger.error('Session verification failed', err);
         return sendError(res, 500, 'Server error');
     }
 };
 
-export const getMe = async (req: any, res: Response) => {
+export const getMe = async (req: Request, res: Response) => {
     try {
         return sendResponse(res, 200, true, 'User data fetched', {
             authenticated: !!req.user,
             user: req.user || null
         });
-    } catch (error) {
+    } catch (err: unknown) {
+        logger.error('Get profile failed', err);
         return sendError(res, 500, 'Server error');
     }
 };
-

@@ -11,7 +11,13 @@ import { logger } from '../utils/logger';
  * This prevents information disclosure attacks where attackers probe error messages
  * to learn about the system's internals (DB schema, file paths, library versions).
  */
-export const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
+interface HttpError extends Error {
+    statusCode?: number;
+    status?: number;
+    code?: string | number;
+}
+
+export const errorHandler = (err: HttpError, req: Request, res: Response, _next: NextFunction) => {
     // Always log the full error internally for observability using secure logger
     logger.error(`[Error] ${req.method} ${req.url}:`, { error: err.message, stack: err.stack, body: req.body });
 

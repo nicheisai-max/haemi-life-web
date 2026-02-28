@@ -96,6 +96,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const initAuth = async () => {
             try {
+                // PHASE 5: Wait for backend readiness before attempting token discovery
+                const isBackendReady = await authService.waitForBackend();
+
+                if (!isBackendReady) {
+                    if (mounted) {
+                        setAuthState({
+                            user: null,
+                            token: null,
+                            authStatus: 'offline', // Switch to offline explicitly
+                            profileImageVersion: Date.now()
+                        });
+                    }
+                    return; // Abort token refresh
+                }
+
                 const refreshResult = await authService.refreshToken();
 
                 if (refreshResult.authenticated && refreshResult.token) {
@@ -127,7 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                     if (isNetworkError) {
                         setAuthState(prev => ({ ...prev, authStatus: 'offline' }));
-                    } else if (error.response?.status === 401) {
+                    } else if (error.response?.status === 401 || error.response?.status === 403) {
                         setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
                     } else {
                         setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });

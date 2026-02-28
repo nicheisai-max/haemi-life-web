@@ -1,14 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 
 /**
- * V8 FIX: Role middleware.
- * The 403 response no longer exposes the user's current role or the required roles.
- * Exposing role information in error responses is an information disclosure vulnerability
- * that helps attackers enumerate valid roles and craft targeted privilege escalation attacks.
+ * Role-Based Access Control (RBAC) Middleware.
+ * Standardized to authorize(...roles) and provides pre-configured guards.
  */
-export const requireRole = (allowedRoles: string[]) => {
+
+export const authorize = (...roles: string[]) => {
     return (req: Request, res: Response, next: NextFunction) => {
-        const user = (req as any).user;
+        const user = req.user;
 
         if (!user) {
             return res.status(401).json({
@@ -18,8 +17,8 @@ export const requireRole = (allowedRoles: string[]) => {
             });
         }
 
-        if (!allowedRoles.includes(user.role)) {
-            // Log internally (full details) but never expose to client
+        if (!roles.includes(user.role)) {
+            // Log internally but never expose to client
             console.warn(`[RBAC] Access denied: user ${user.id} (role: ${user.role}) → ${req.method} ${req.originalUrl}`);
             return res.status(403).json({
                 success: false,
@@ -32,9 +31,12 @@ export const requireRole = (allowedRoles: string[]) => {
     };
 };
 
-export const requireDoctor = requireRole(['doctor']);
-export const requirePatient = requireRole(['patient']);
-export const requireAdmin = requireRole(['admin']);
-export const requirePharmacist = requireRole(['pharmacist']);
-export const requireDoctorOrAdmin = requireRole(['doctor', 'admin']);
-export const requirePatientOrDoctor = requireRole(['patient', 'doctor']);
+// Backwards compatibility and convenience guards
+export const requireRole = (roles: string[]) => authorize(...roles);
+
+export const requireDoctor = authorize('doctor');
+export const requirePatient = authorize('patient');
+export const requireAdmin = authorize('admin');
+export const requirePharmacist = authorize('pharmacist');
+export const requireDoctorOrAdmin = authorize('doctor', 'admin');
+export const requirePatientOrDoctor = authorize('patient', 'doctor');

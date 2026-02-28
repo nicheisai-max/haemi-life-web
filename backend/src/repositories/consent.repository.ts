@@ -9,7 +9,7 @@ export const consentRepository = {
         return (result.rowCount ?? 0) > 0;
     },
 
-    async recordConsent(patientId: string, ipAddress: string, userAgent: string, signatureData: string, version: string = 'v1.0'): Promise<any> {
+    async recordConsent(patientId: string, ipAddress: string, userAgent: string, signatureData: string, version: string = 'v1.0'): Promise<{ id: string; agreed_at: Date; version: string }> {
         // Use UPSERT (ON CONFLICT) just in case, though the controller will likely check first.
         const result = await pool.query(
             `INSERT INTO telemedicine_consents (patient_id, ip_address, user_agent, signature_data, version, agreed_at) 

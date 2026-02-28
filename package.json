@@ -13,7 +13,15 @@
     "eslint": "^9.39.3",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "husky": "^9.1.7",
     "playwright": "^1.58.2",
     "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "test:backend": "npm --prefix backend run test:backend",
+    "test:frontend": "npm --prefix frontend run test:frontend",
+    "test:e2e": "npm --prefix e2e run test",
+    "test:auth": "npm run test:backend && npm run test:frontend && npm run test:e2e && powershell -Command \"Get-NetTCPConnection -LocalPort 5173,5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
+    "prepare": "husky"
   }
 }

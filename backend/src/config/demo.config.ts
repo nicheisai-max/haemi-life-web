@@ -10,7 +10,7 @@ export const demoConfig = {
     },
 
     // Demo mode logging
-    log: (action: string, data?: any) => {
+    log: (_action: string, _data?: unknown) => {
         if (demoConfig.isDemoMode()) {
             // Silenced for production-grade terminal clarity
         }

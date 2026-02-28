@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { prescriptionRepository } from '../repositories/prescription.repository';
+import { sendError } from '../utils/response';
 
 // Create a new prescription (Doctor only)
 export const createPrescription = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const doctorId = user.id;
         const { patient_id, appointment_id, notes, medications } = req.body;
 
@@ -66,7 +68,8 @@ export const createPrescription = async (req: Request, res: Response) => {
 // Get user's prescriptions (Patient/Doctor)
 export const getMyPrescriptions = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const userId = user.id;
         const role = user.role;
 
@@ -82,7 +85,8 @@ export const getMyPrescriptions = async (req: Request, res: Response) => {
 export const getPrescriptionById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         // Get prescription
         const prescription = await prescriptionRepository.findByIdWithDetails(id as string, user.id as string, user.role as string);
@@ -137,7 +141,8 @@ export const getPendingPrescriptions = async (req: Request, res: Response) => {
 export const deletePrescription = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         const deleted = await prescriptionRepository.softDelete(id as string, user.id as string);
 

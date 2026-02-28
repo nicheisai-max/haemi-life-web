@@ -87,13 +87,13 @@ export class UserRepository {
         return this.decryptUser(result.rows[0]);
     }
 
-    private decryptUser(user: any): User {
-        if (!user) return user;
+    private decryptUser(user: Record<string, unknown>): User {
+        if (!user) return user as unknown as User;
         return {
             ...user,
-            phone_number: decrypt(user.phone_number),
-            id_number: user.id_number ? decrypt(user.id_number) : null
-        };
+            phone_number: decrypt(user.phone_number as string),
+            id_number: user.id_number ? decrypt(user.id_number as string) : null
+        } as User;
     }
 
     async updateProfileImage(userId: string, imageBuffer: Buffer, mimeType: string): Promise<User> {

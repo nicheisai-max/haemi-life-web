@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
+import { sendError } from '../utils/response';
 
 // Get all verified doctors (Public/Patient access)
 export const listDoctors = async (req: Request, res: Response) => {
@@ -15,15 +16,15 @@ export const listDoctors = async (req: Request, res: Response) => {
             WHERE u.role = 'doctor' AND dp.is_verified = true AND u.status = 'ACTIVE'
         `;
 
-        const params: any[] = [];
+        const params: (string | number | boolean | null)[] = [];
 
         if (specialization) {
-            params.push(specialization);
+            params.push(specialization as string);
             query += ` AND dp.specialization = $${params.length}`;
         }
 
         if (search) {
-            params.push(`%${search}%`);
+            params.push(`%${search as string}%`);
             query += ` AND u.name ILIKE $${params.length}`;
         }
 
@@ -83,7 +84,8 @@ export const getSpecializations = async (req: Request, res: Response) => {
 // Update doctor's own profile (Doctor only)
 export const updateDoctorProfile = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const doctorId = user.id;
         const { specialization, years_of_experience, bio, consultation_fee } = req.body;
 
@@ -113,7 +115,8 @@ export const updateDoctorProfile = async (req: Request, res: Response) => {
 // Get doctor's schedule
 export const getDoctorSchedule = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const doctorId = user.id;
 
         const result = await pool.query(`
@@ -132,7 +135,8 @@ export const getDoctorSchedule = async (req: Request, res: Response) => {
 // Update doctor's schedule
 export const updateDoctorSchedule = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const doctorId = user.id;
         const { schedule } = req.body; // Array of { day_of_week, start_time, end_time, is_available }
 
@@ -168,7 +172,8 @@ export const updateDoctorSchedule = async (req: Request, res: Response) => {
 // Get doctor's patient list
 export const getDoctorPatients = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const doctorId = user.id;
 
         const result = await pool.query(`

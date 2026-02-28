@@ -37,7 +37,7 @@ export const PredictiveInsights: React.FC<PredictiveInsightsProps> = ({ insights
                         transition={{ delay: index * 0.1 }}
                         className="h-full"
                     >
-                        <div className="relative group h-full overflow-hidden rounded-2xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all duration-300">
+                        <div className="relative group h-full overflow-hidden rounded-card bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all duration-300">
                             {/* Subtle Gradient Overlay */}
                             <div className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-500 bg-gradient-to-br ${insight.variant === 'primary' ? 'from-emerald-500 to-teal-500' :
                                 insight.variant === 'secondary' ? 'from-blue-500 to-indigo-500' :

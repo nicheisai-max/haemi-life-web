@@ -203,7 +203,7 @@ export const MedicalRecords: React.FC = () => {
                         <MedicalLoader message="Retrieving clinical records from MoH database..." />
                     </div>
                 ) : filteredRecords.length === 0 ? (
-                    <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-80 border-dashed">
+                    <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-80 border-dashed rounded-card">
                         <div className="bg-muted/30 p-6 rounded-full mb-6">
                             <FolderOpen className="h-12 w-12 opacity-30" />
                         </div>
@@ -225,7 +225,7 @@ export const MedicalRecords: React.FC = () => {
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     layout
                                 >
-                                    <Card className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full">
+                                    <Card className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full rounded-card">
                                         {/* Left Accent Strip */}
                                         <div className={`w-full md:w-1.5 h-1.5 md:h-auto ${record.record_type === 'Lab Result' ? 'bg-purple-500' :
                                             record.record_type === 'Radiology' ? 'bg-blue-500' :

@@ -55,7 +55,7 @@ export const PharmacistDashboard = () => {
     return (
         <div className="space-y-8">
             {/* Hero Section - Standardized Premium Style */}
-            <TransitionItem className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl shadow-teal-900/20">
+            <TransitionItem className="relative overflow-hidden rounded-card bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl shadow-teal-900/20">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">

@@ -2,21 +2,14 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { auditService } from '../services/audit.service';
-
-interface AuthRequest extends Request {
-    user?: any;
-}
+import { JWTPayload } from '../types/express';
+import { logger } from '../utils/logger';
+import { sendError } from '../utils/response';
 
 /**
- * V9 FIX: JWT verification middleware.
- * - Missing token → 401 (Unauthorized)
- * - Invalid/expired token → 401 (Unauthorized)
- *
- * HTTP semantics:
- *   401 = "I don't know who you are" (unauthenticated)
- *   403 = "I know who you are, but you can't do this" (unauthorized/forbidden)
+ * Standard Authentication Middleware
  */
-export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
@@ -28,7 +21,7 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
         });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET!, async (err: any, decoded: any) => {
+    jwt.verify(token, process.env.JWT_SECRET as string, async (err: jwt.VerifyErrors | null, decoded: unknown) => {
         if (err) {
             return res.status(401).json({
                 success: false,
@@ -37,14 +30,22 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
             });
         }
 
+        if (!decoded || typeof decoded !== 'object') {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid session payload.',
+                statusCode: 401,
+            });
+        }
+
+        const payload = decoded as JWTPayload;
+
         try {
-            // ULTRA-STRICT PRODUCTION LOCKDOWN: 
-            // 1. Fetch user status, role, token_version, and inactivity data from DB
             const userResult = await pool.query(
                 `SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity, 
                 (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
                 FROM users WHERE id = $1`,
-                [decoded.id]
+                [payload.id]
             );
 
             if (userResult.rows.length === 0) {
@@ -57,9 +58,8 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 
             const userData = userResult.rows[0];
 
-            // 2. Token Version Validation (Revocation Check)
-            if (decoded.token_version !== undefined && userData.token_version !== undefined) {
-                if (decoded.token_version !== userData.token_version) {
+            if (payload.token_version !== undefined && userData.token_version !== undefined) {
+                if (payload.token_version !== userData.token_version) {
                     return res.status(401).json({
                         success: false,
                         error: 'Session revoked. Please log in again.',
@@ -68,7 +68,6 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
                 }
             }
 
-            // 2. Status Validation (Standardized)
             if (userData.status !== 'ACTIVE') {
                 return res.status(403).json({
                     success: false,
@@ -77,7 +76,6 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
                 });
             }
 
-            // 3. Backend Inactivity Enforcement (60 Minute Threshold)
             const timeoutMinutes = 60;
             if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
                 return res.status(401).json({
@@ -87,12 +85,10 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
                 });
             }
 
-            // 4. Update activity heartbeat (Sliding Expiration)
-            await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [decoded.id]);
+            await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [payload.id]);
 
-            // Update request user with latest data from DB
             req.user = {
-                ...decoded,
+                ...payload,
                 role: userData.role,
                 name: userData.name,
                 initials: userData.initials,
@@ -101,44 +97,48 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
                 status: userData.status
             };
             next();
-        } catch (dbError) {
-            console.error('Auth middleware DB error:', dbError);
-            return res.status(500).json({
-                success: false,
-                error: 'Internal server error during authentication.',
-                statusCode: 500,
-            });
+        } catch (error: unknown) {
+            logger.error('Session verification failed', error);
+            return sendError(res, 500, 'Server error');
         }
     });
 };
 
 /**
- * Relaxed Authentication Middleware (Discovery)
- * NEVER returns 401/403. Used for endpoints like /auth/me to check session status silently.
+ * Alias for authenticateToken to support both legacy and new names
  */
-export const relaxedAuthenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const protect = authenticateToken;
+
+/**
+ * Relaxed Authentication Middleware (Discovery)
+ */
+export const relaxedAuthenticateToken = (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) return next();
 
-    jwt.verify(token, process.env.JWT_SECRET!, async (err: any, decoded: any) => {
+    jwt.verify(token, process.env.JWT_SECRET as string, async (err: jwt.VerifyErrors | null, decoded: unknown) => {
         if (err) return next();
+
+        if (!decoded || typeof decoded !== 'object') return next();
+
+        const payload = decoded as JWTPayload;
 
         try {
             const userResult = await pool.query(
                 `SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity, 
                 (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
                 FROM users WHERE id = $1`,
-                [decoded.id]
+                [payload.id]
             );
 
             if (userResult.rows.length === 0) return next();
 
             const userData = userResult.rows[0];
 
-            if (decoded.token_version !== undefined && userData.token_version !== undefined) {
-                if (decoded.token_version !== userData.token_version) return next();
+            if (payload.token_version !== undefined && userData.token_version !== undefined) {
+                if (payload.token_version !== userData.token_version) return next();
             }
 
             if (userData.status !== 'ACTIVE') return next();
@@ -149,7 +149,7 @@ export const relaxedAuthenticateToken = (req: AuthRequest, res: Response, next: 
             }
 
             req.user = {
-                ...decoded,
+                ...payload,
                 role: userData.role,
                 name: userData.name,
                 initials: userData.initials,
@@ -158,31 +158,22 @@ export const relaxedAuthenticateToken = (req: AuthRequest, res: Response, next: 
                 status: userData.status
             };
             next();
-        } catch (dbError) {
+        } catch (error: unknown) {
+            logger.error('Unexpected error in relaxed authentication', error);
             next();
         }
     });
 };
 
 /**
- * requireRole: Single-role guard. Returns 403 (Forbidden) when role doesn't match.
- * V8 FIX: Does NOT expose the user's current role in the response body.
+ * Single-role guard
  */
 export const requireRole = (allowedRole: string) => {
-    return async (req: AuthRequest, res: Response, next: NextFunction) => {
-        if (!req.user) {
-            return res.status(401).json({
-                success: false,
-                error: 'Authentication required',
-                statusCode: 401,
-            });
-        }
-
-        if (req.user.role !== allowedRole) {
-            // Log the access violation internally (full details for audit)
+    return async (req: Request, res: Response, next: NextFunction) => {
+        if (!req.user || req.user.role !== allowedRole) {
             await auditService.log({
-                actor_id: req.user.id,
-                actor_role: req.user.role,
+                actor_id: req.user?.id,
+                actor_role: req.user?.role,
                 action_type: 'ACCESS_DENIED_RBAC',
                 metadata: {
                     required_role: allowedRole,
@@ -193,7 +184,6 @@ export const requireRole = (allowedRole: string) => {
                 user_agent: req.headers['user-agent'],
             });
 
-            // V8: Never expose the user's current role or the required role in the response
             return res.status(403).json({
                 success: false,
                 error: 'Access denied. Insufficient permissions.',
@@ -205,11 +195,10 @@ export const requireRole = (allowedRole: string) => {
 };
 
 /**
- * authorizeRole: Multi-role guard. Returns 403 when none of the allowed roles match.
- * V8 FIX: Does NOT expose the user's current role in the response body.
+ * Multi-role guard
  */
 export const authorizeRole = (roles: string[]) => {
-    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+    return async (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || !roles.includes(req.user.role)) {
             await auditService.log({
                 actor_id: req.user?.id,
@@ -233,3 +222,8 @@ export const authorizeRole = (roles: string[]) => {
         next();
     };
 };
+
+/**
+ * Alias for authorizeRole to support 'restrictTo' pattern
+ */
+export const restrictTo = (...roles: string[]) => authorizeRole(roles);

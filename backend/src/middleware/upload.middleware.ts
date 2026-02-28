@@ -1,10 +1,9 @@
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import { Request } from 'express';
 
 const storage = multer.memoryStorage();
 
-const fileFilter = (req: any, file: any, cb: any) => {
+const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = [
         'image/jpeg', 'image/png', 'image/jpg', 'image/webp',
         'application/pdf', 'application/msword',
@@ -13,7 +12,7 @@ const fileFilter = (req: any, file: any, cb: any) => {
     if (allowedTypes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Only images and documents are allowed.'), false);
+        cb(new Error('Invalid file type. Only images and documents are allowed.'));
     }
 };
 
@@ -24,4 +23,3 @@ export const upload = multer({
         fileSize: 10 * 1024 * 1024 // 10MB limit
     }
 });
-

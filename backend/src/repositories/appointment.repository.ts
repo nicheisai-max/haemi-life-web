@@ -1,4 +1,4 @@
-import { Pool, PoolClient } from 'pg';
+import { Pool } from 'pg';
 import { pool } from '../config/db';
 
 export interface Appointment {
@@ -58,7 +58,7 @@ export class AppointmentRepository {
         return result.rows[0];
     }
 
-    async findByUserId(userId: string, status?: string, upcoming?: boolean): Promise<any[]> {
+    async findByUserId(userId: string, status?: string, upcoming?: boolean): Promise<AppointmentWithDetails[]> {
         let query = `
             SELECT 
                 a.*,
@@ -76,10 +76,10 @@ export class AppointmentRepository {
             WHERE (a.patient_id = $1 OR a.doctor_id = $1) AND a.deleted_at IS NULL
         `;
 
-        const params: any[] = [userId];
+        const params: (string | number | boolean | null)[] = [userId];
 
         if (status) {
-            params.push(status);
+            params.push(status as string);
             query += ` AND a.status = $${params.length}`;
         }
 
@@ -131,7 +131,7 @@ export class AppointmentRepository {
         return result.rows[0] || null;
     }
 
-    async getDoctorSchedule(doctorId: string, dayOfWeek: number): Promise<any[]> {
+    async getDoctorSchedule(doctorId: string, dayOfWeek: number): Promise<{ start_time: string; end_time: string }[]> {
         const result = await this.db.query(`
             SELECT start_time, end_time FROM doctor_schedules
             WHERE doctor_id = $1 AND day_of_week = $2 AND is_available = true

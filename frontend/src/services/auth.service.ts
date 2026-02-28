@@ -2,6 +2,11 @@ import axios from 'axios';
 import api from './api';
 import type { LoginCredentials, SignupCredentials, AuthResponse, User } from '../types/auth.types';
 
+// Track backend check status for UI (optional, can be exported if needed)
+let isCheckingBackend = false;
+export const getIsCheckingBackend = () => isCheckingBackend;
+const setIsCheckingBackend = (status: boolean) => { isCheckingBackend = status; };
+
 export const authService = {
     login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
         const response = await api.post<AuthResponse>('/auth/login', credentials);
@@ -21,6 +26,28 @@ export const authService = {
     getMe: async (): Promise<{ user: User | null; authenticated: boolean }> => {
         const response = await api.get<{ user: User | null; authenticated: boolean }>('/auth/me');
         return response.data;
+    },
+
+    waitForBackend: async (maxRetries = 8, baseInterval = 1000): Promise<boolean> => {
+        setIsCheckingBackend(true);
+        let interval = baseInterval;
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await axios.get(
+                    `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/health`,
+                    { timeout: 3000 }
+                );
+                if (response.status === 200) {
+                    setIsCheckingBackend(false);
+                    return true;
+                }
+            } catch (error) {
+                await new Promise(r => setTimeout(r, interval));
+                interval = Math.min(interval * 1.5, 5000); // Exponential backoff capped at 5s
+            }
+        }
+        setIsCheckingBackend(false);
+        return false;
     },
 
     refreshToken: async (): Promise<{ token?: string; authenticated: boolean }> => {

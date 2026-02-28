@@ -6,7 +6,7 @@ export interface AuditLogEntry {
     actor_role?: string;
     action_type: string;
     target_id?: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
     ip_address?: string;
     user_agent?: string;
 }

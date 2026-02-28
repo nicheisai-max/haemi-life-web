@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { encrypt, decrypt } from '../utils/security';
 import { notificationService } from '../services/notification.service';
-
+import { sendError } from '../utils/response';
 // Configure Multer Storage (Centralized Memory Storage preferred for Bytea)
 const storage = multer.memoryStorage();
 
@@ -56,7 +56,9 @@ export const uploadAttachment = async (req: Request, res: Response) => {
 
 // Get all conversations for the current user
 export const getConversations = async (req: Request, res: Response) => {
-    const userId = (req as any).user.id;
+    const user = req.user;
+    if (!user) return sendError(res, 401, 'Unauthorized');
+    const userId = user.id;
 
     try {
         const result = await pool.query(
@@ -111,7 +113,9 @@ export const getConversations = async (req: Request, res: Response) => {
 
 // Get messages for a specific conversation
 export const getMessages = async (req: Request, res: Response) => {
-    const userId = (req as any).user.id;
+    const user = req.user;
+    if (!user) return sendError(res, 401, 'Unauthorized');
+    const userId = user.id;
     const { conversationId } = req.params;
 
     try {
@@ -198,7 +202,9 @@ export const getMessages = async (req: Request, res: Response) => {
 // Send a message (and optionally start a conversation if ID not provided - logic for frontend to handle ID creation is better, but here we assume ID exists or is created via another endpoint. For simplicity, we assume conversation exists or we can create ad-hoc)
 // For this refactor, we'll assume conversation creation happens via a separate 'startConversation' or checked here.
 export const sendMessage = async (req: Request, res: Response) => {
-    const senderId = (req as any).user.id;
+    const user = req.user;
+    if (!user) return sendError(res, 401, 'Unauthorized');
+    const senderId = user.id;
     const { conversationId, content, messageType = 'text', attachment } = req.body;
 
     const client = await pool.connect();
@@ -311,7 +317,7 @@ export const sendMessage = async (req: Request, res: Response) => {
         // We stored encrypted, so decrypt it back for the user/socket
         newMessage.content = content; // Optimistic: we know what we sent
 
-        const senderName = (req as any).user.name || 'Someone';
+        const senderName = user.name || 'Someone';
 
         // Emit socket event to room (conversationId)
         if (io) {
@@ -367,7 +373,9 @@ export const sendMessage = async (req: Request, res: Response) => {
 
 // Start a new conversation
 export const startConversation = async (req: Request, res: Response) => {
-    const userId = (req as any).user.id;
+    const user = req.user;
+    if (!user) return sendError(res, 401, 'Unauthorized');
+    const userId = user.id;
     const { participantId } = req.body;
 
     try {
@@ -411,7 +419,9 @@ export const startConversation = async (req: Request, res: Response) => {
 
 // Mark messages as delivered
 export const markAsDelivered = async (req: Request, res: Response) => {
-    const userId = (req as any).user.id;
+    const user = req.user;
+    if (!user) return sendError(res, 401, 'Unauthorized');
+    const userId = user.id;
     const { conversationId } = req.params;
 
     try {
@@ -443,7 +453,9 @@ export const markAsDelivered = async (req: Request, res: Response) => {
 
 // Mark messages as read
 export const markAsRead = async (req: Request, res: Response) => {
-    const userId = (req as any).user.id;
+    const user = req.user;
+    if (!user) return sendError(res, 401, 'Unauthorized');
+    const userId = user.id;
     const { conversationId } = req.params;
 
     try {
@@ -475,7 +487,9 @@ export const markAsRead = async (req: Request, res: Response) => {
 
 // React to a Message
 export const reactToMessage = async (req: Request, res: Response) => {
-    const userId = (req as any).user.id;
+    const user = req.user;
+    if (!user) return sendError(res, 401, 'Unauthorized');
+    const userId = user.id;
     const { messageId } = req.params;
     const { reactionType } = req.body; // e.g. 'like', 'love'
 
@@ -527,7 +541,9 @@ export const reactToMessage = async (req: Request, res: Response) => {
 
 // Delete Message
 export const deleteMessage = async (req: Request, res: Response) => {
-    const userId = (req as any).user.id;
+    const user = req.user;
+    if (!user) return sendError(res, 401, 'Unauthorized');
+    const userId = user.id;
     const { messageId } = req.params;
     const { forEveryone } = req.body;
 

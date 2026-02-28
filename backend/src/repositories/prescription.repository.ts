@@ -105,7 +105,7 @@ export class PrescriptionRepository {
         return result.rows[0];
     }
 
-    async findItemsByPrescriptionId(id: string): Promise<any[]> {
+    async findItemsByPrescriptionId(id: string): Promise<PrescriptionItem[]> {
         const result = await this.db.query(`
             SELECT 
                 pi.*,

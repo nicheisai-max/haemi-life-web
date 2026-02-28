@@ -3,24 +3,17 @@ import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
-import demoConfig from '../config/demo.config';
+import { randomInt } from 'crypto';
 
 const router = Router();
 
 // Helper function to generate cryptographically adequate 6-digit OTP
 const generateOTP = (): string => {
-    // Use crypto.randomInt for better randomness than Math.random()
-    const { randomInt } = require('crypto');
     return randomInt(100000, 999999).toString();
 };
 
 /**
  * V3 FIX: OTP store with brute-force protection.
- * Each entry tracks attempt count. After MAX_OTP_ATTEMPTS failed verifications,
- * the OTP is invalidated and a new request-reset is required.
- *
- * NOTE: This is an in-process Map (suitable for single-instance dev/demo).
- * For production multi-instance deployments, replace with Redis.
  */
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -33,13 +26,13 @@ interface OtpEntry {
 
 const otpStore: Map<string, OtpEntry> = new Map();
 
-// Cleanup expired OTPs periodically to prevent memory leaks
+// Cleanup expired OTPs periodically
 setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of otpStore.entries()) {
         if (now > entry.expiresAt) otpStore.delete(key);
     }
-}, 5 * 60 * 1000); // Every 5 minutes
+}, 5 * 60 * 1000).unref(); // Every 5 minutes (unrefed for Jest safety)
 
 /**
  * POST /api/password-reset/request-reset
@@ -63,8 +56,6 @@ router.post(
                 : 'SELECT id, email, phone_number FROM users WHERE phone_number = $1';
 
             const result = await pool.query(query, [identifier]);
-
-            // Always return the same response whether user exists or not (prevents user enumeration)
             const GENERIC_RESPONSE = { message: 'If the account exists, an OTP has been sent.' };
 
             if (result.rows.length === 0) {
@@ -77,13 +68,8 @@ router.post(
             // Store OTP with attempt counter initialized to 0
             otpStore.set(identifier, { otp, expiresAt, identifier, attempts: 0 });
 
-            // Log to server console only (for development debugging via server logs).
-            // In a real production deployment, integrate with email/SMS provider here.
-            // TODO: await emailService.sendOTP(user.email, otp);
-            // TODO: await smsService.sendOTP(user.phone_number, otp);
-
             return res.status(200).json(GENERIC_RESPONSE);
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Request reset error:', error);
             res.status(500).json({ message: 'Failed to process request' });
         }
@@ -115,9 +101,8 @@ router.post(
                 return res.status(400).json({ message: 'Invalid or expired OTP' });
             }
 
-            // V3 FIX: Check brute-force attempt counter BEFORE validating OTP
             if (storedData.attempts >= MAX_OTP_ATTEMPTS) {
-                otpStore.delete(identifier); // Invalidate after max attempts
+                otpStore.delete(identifier);
                 return res.status(429).json({
                     message: 'Too many failed attempts. Please request a new OTP.',
                 });
@@ -129,7 +114,6 @@ router.post(
             }
 
             if (storedData.otp !== otp) {
-                // V3: Increment attempt counter on failure
                 storedData.attempts += 1;
                 const remainingAttempts = MAX_OTP_ATTEMPTS - storedData.attempts;
                 return res.status(400).json({
@@ -137,18 +121,15 @@ router.post(
                 });
             }
 
-            // OTP is valid — generate reset token and remove OTP from store
             const resetToken = jwt.sign(
                 { identifier },
-                process.env.JWT_SECRET!,
+                process.env.JWT_SECRET as string,
                 { expiresIn: '30m' }
             );
 
-            // Consume the OTP immediately (single-use)
             otpStore.delete(identifier);
-
             return res.status(200).json({ message: 'OTP verified successfully', resetToken });
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Verify OTP error:', error);
             res.status(500).json({ message: 'Failed to verify OTP' });
         }
@@ -176,7 +157,7 @@ router.post(
         const { resetToken, newPassword } = req.body;
 
         try {
-            const decoded = jwt.verify(resetToken, process.env.JWT_SECRET!) as { identifier: string };
+            const decoded = jwt.verify(resetToken, process.env.JWT_SECRET as string) as { identifier: string };
             const { identifier } = decoded;
 
             const isEmail = identifier.includes('@');
@@ -193,24 +174,21 @@ router.post(
             const userId = result.rows[0].id;
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-            // Update password AND increment token_version to invalidate all existing sessions
-            // This ensures that after a password reset, all previously issued JWTs are rejected
             await pool.query(
                 'UPDATE users SET password = $1, token_version = COALESCE(token_version, 0) + 1 WHERE id = $2',
                 [hashedPassword, userId]
             );
 
             return res.status(200).json({ message: 'Password reset successfully' });
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Reset password error:', error);
-
-            if (error.name === 'JsonWebTokenError') {
+            const err = error as { name?: string };
+            if (err.name === 'JsonWebTokenError') {
                 return res.status(400).json({ message: 'Invalid reset token' });
             }
-            if (error.name === 'TokenExpiredError') {
+            if (err.name === 'TokenExpiredError') {
                 return res.status(400).json({ message: 'Reset token has expired' });
             }
-
             res.status(500).json({ message: 'Failed to reset password' });
         }
     }
@@ -234,26 +212,20 @@ router.post(
         try {
             const isEmail = identifier.includes('@');
             const query = isEmail
-                ? 'SELECT id FROM users WHERE email = $1'
-                : 'SELECT id FROM users WHERE phone_number = $1';
+                ? 'SELECT id, email, phone_number FROM users WHERE email = $1'
+                : 'SELECT id, email, phone_number FROM users WHERE phone_number = $1';
 
             const result = await pool.query(query, [identifier]);
-
-            // Always return same response (prevents user enumeration)
             if (result.rows.length === 0) {
                 return res.status(200).json({ message: 'If the account exists, an OTP has been sent.' });
             }
 
             const otp = generateOTP();
             const expiresAt = Date.now() + 10 * 60 * 1000;
-
-            // Reset attempt counter on resend
             otpStore.set(identifier, { otp, expiresAt, identifier, attempts: 0 });
 
-            // V2 FIX: Never return OTP in production response
-
             return res.status(200).json({ message: 'OTP resent successfully' });
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Resend OTP error:', error);
             res.status(500).json({ message: 'Failed to resend OTP' });
         }

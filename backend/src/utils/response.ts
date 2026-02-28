@@ -8,7 +8,7 @@ export const sendResponse = (
     statusCode: number,
     success: boolean,
     message: string,
-    data: any = null
+    data: unknown = null
 ) => {
     res.status(statusCode).json({
         success,
@@ -22,7 +22,7 @@ export const sendError = (
     res: Response,
     statusCode: number,
     message: string,
-    error: any = null
+    error: unknown = null
 ) => {
     res.status(statusCode).json({
         success: false,

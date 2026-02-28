@@ -1,9 +1,12 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { pool } from '../config/db';
+import { sendError } from '../utils/response';
 
-export const getNotifications = async (req: any, res: Response) => {
+export const getNotifications = async (req: Request, res: Response) => {
     try {
-        const userId = req.user.id;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = user.id;
         const result = await pool.query(
             'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC',
             [userId]
@@ -16,9 +19,11 @@ export const getNotifications = async (req: any, res: Response) => {
     }
 };
 
-export const markAsRead = async (req: any, res: Response) => {
+export const markAsRead = async (req: Request, res: Response) => {
     try {
-        const userId = req.user.id;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = user.id;
         const { notificationId } = req.params;
 
         await pool.query(
@@ -33,9 +38,11 @@ export const markAsRead = async (req: any, res: Response) => {
     }
 };
 
-export const markAllAsRead = async (req: any, res: Response) => {
+export const markAllAsRead = async (req: Request, res: Response) => {
     try {
-        const userId = req.user.id;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = user.id;
 
         await pool.query(
             'UPDATE notifications SET is_read = true WHERE user_id = $1',

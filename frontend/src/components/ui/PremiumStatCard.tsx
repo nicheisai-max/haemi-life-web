@@ -54,7 +54,7 @@ export const PremiumStatCard: React.FC<PremiumStatCardProps> = ({
             className={cn(
                 "relative overflow-hidden group",
                 "p-5 flex flex-col items-start gap-3",
-                "rounded-2xl", // Slightly tighter radius
+                "rounded-card", // Slightly tighter radius
                 cardBg,
                 className
             )}

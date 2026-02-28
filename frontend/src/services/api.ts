@@ -1,4 +1,4 @@
-import axios, { AxiosError, type InternalAxiosRequestConfig, type AxiosRequestConfig } from 'axios';
+import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api';
 
@@ -52,13 +52,6 @@ interface ExtendedRequestConfig extends InternalAxiosRequestConfig {
     __cachedData?: unknown;
     __retryCount?: number;
     _retry?: boolean;
-}
-
-const SENSITIVE_ROUTE_PATTERNS = ['/auth/', '/admin/', '/records/', '/prescriptions/', '/chat/', '/notifications/', '/password-reset/'];
-
-function isSensitiveRoute(url: string | undefined): boolean {
-    if (!url) return true;
-    return SENSITIVE_ROUTE_PATTERNS.some(pattern => url.includes(pattern));
 }
 
 const MAX_RETRIES = 2;
@@ -156,9 +149,6 @@ const clearAuthSession = () => {
     window.dispatchEvent(new CustomEvent('auth:unauthorized'));
 };
 
-const SESSION_NEUTRAL_ENDPOINTS = ['/notifications', '/chat/messages', '/chat/'];
-const isSessionNeutral = (url?: string): boolean => !!url && SESSION_NEUTRAL_ENDPOINTS.some(p => url.includes(p));
-
 api.interceptors.response.use(
     async (response) => {
         if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
@@ -173,8 +163,31 @@ api.interceptors.response.use(
 
         if (!originalRequest) return Promise.reject(error);
 
-        // 401 Handling with Single-Flight Refresh
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // --- HARDENED NETWORK & STATUS HANDLING ---
+
+        // 1. Network Error (Backend unreachable, CORS failure, etc.)
+        if (!error.response) {
+            // Do NOT trigger refresh. Just reject immediately. No console spam.
+            return Promise.reject(error);
+        }
+
+        // 2. 500 Internal Server Error -> Do not loop, just reject
+        if (error.response.status >= 500) {
+            // We do NOT retry 500s here to prevent infinite retry storms, unless it's 502/503/429
+            const isRetryable = error.response.status === 502 || error.response.status === 503 || error.response.status === 429;
+            if (!isRetryable) {
+                return Promise.reject(error);
+            }
+        }
+
+        // 3. 403 Forbidden -> Force logout immediately
+        if (error.response.status === 403) {
+            clearAuthSession();
+            return Promise.reject(error);
+        }
+
+        // 4. 401 Unauthorized Handling with Single-Flight Refresh
+        if (error.response.status === 401 && !originalRequest._retry) {
             // If the refresh-token endpoint itself fails with 401, session is dead.
             if (originalRequest.url?.includes('/auth/refresh-token')) {
                 clearAuthSession();
@@ -199,7 +212,7 @@ api.interceptors.response.use(
                 const response = await axios.post<{ success?: boolean; data?: { token?: string } }>(
                     `${API_URL}/auth/refresh-token`,
                     {},
-                    { withCredentials: true }
+                    { withCredentials: true, timeout: 5000 } // Hardcode short timeout for refresh
                 );
 
                 if (!response.data.success || !response.data.data?.token) throw new Error('Refresh failed');
@@ -217,17 +230,22 @@ api.interceptors.response.use(
 
                 if (!appInitialized) return Promise.reject(rawErr);
 
+                // Handle refresh failure (could be 401, 403, or Network Error)
+                const isNetworkErr = !rawErr.response;
                 const isAuthRejection = rawErr.response && (rawErr.response.status === 401 || rawErr.response.status === 403);
-                const isCritical = !isSessionNeutral(originalRequest.url) && !originalRequest.url?.includes('/auth/me');
 
-                if (isCritical && isAuthRejection) clearAuthSession();
+                // If it's a network error during refresh, or explicit rejection, we mark session invalid
+                if (isNetworkErr || isAuthRejection) {
+                    clearAuthSession();
+                }
+
                 return Promise.reject(rawErr);
             }
         }
 
-        // Retry logic for 5xx/429
+        // Retry logic for 502/503/429
         if (originalRequest.__retryCount === undefined) originalRequest.__retryCount = 0;
-        const isRetryable = error.response && (error.response.status >= 500 || error.response.status === 429);
+        const isRetryable = error.response && (error.response.status === 502 || error.response.status === 503 || error.response.status === 429);
 
         if (originalRequest.__retryCount < MAX_RETRIES && isRetryable) {
             originalRequest.__retryCount += 1;

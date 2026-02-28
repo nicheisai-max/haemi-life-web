@@ -113,7 +113,7 @@ export const DoctorDashboard = () => {
             <ClinicalCopilot isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
 
             {/* Hero Section - Standardized Premium Style */}
-            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+            <TransitionItem className="relative overflow-hidden rounded-card border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
@@ -324,7 +324,7 @@ export const DoctorDashboard = () => {
                         </Button>
                     </div>
 
-                    <div className="flex-1 bg-white dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
+                    <div className="flex-1 bg-white dark:bg-slate-950/50 rounded-card border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
                         <div className="p-6 flex-1 overflow-y-auto min-h-0">
                             {loading ? (
                                 <div className="flex justify-center p-12 h-full items-center">

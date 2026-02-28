@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
+import { JWTPayload } from '../types/express';
 
 export const getProfileImage = async (req: Request, res: Response) => {
     try {
@@ -42,7 +43,7 @@ export const getProfileImage = async (req: Request, res: Response) => {
 export const getChatAttachment = async (req: Request, res: Response) => {
     try {
         const { messageId } = req.params;
-        const user = (req as any).user;
+        const user = req.user as JWTPayload;
 
         // BOLA Fix: Check if user is a participant in the conversation this message belongs to
         const accessCheck = await pool.query(`
@@ -61,7 +62,7 @@ export const getChatAttachment = async (req: Request, res: Response) => {
         if (message.attachment_data && message.attachment_mime) {
             res.setHeader('Content-Type', message.attachment_mime);
             // Send the original filename so the browser saves with the right name and extension
-            const safeFileName = (message.attachment_name || `attachment-${messageId}`).replace(/[^a-zA-Z0-9._\-]/g, '_');
+            const safeFileName = (message.attachment_name || `attachment-${messageId}`).replace(/[^a-z0-9\-.]/gi, '_');
             res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
             return res.send(message.attachment_data);
         }
@@ -80,7 +81,7 @@ export const getChatAttachment = async (req: Request, res: Response) => {
 export const getMedicalRecordFile = async (req: Request, res: Response) => {
     try {
         const { recordId } = req.params;
-        const user = (req as any).user;
+        const user = req.user as JWTPayload;
 
         // BOLA Fix: Patients can only see their own records. Doctors/Admins can see any record.
         let query = `
@@ -88,7 +89,7 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
             FROM medical_records 
             WHERE id = $1 AND deleted_at IS NULL
         `;
-        const params: any[] = [recordId];
+        const params: (string | number)[] = [recordId as string];
 
         if (user.role === 'patient') {
             query += ' AND patient_id = $2';

@@ -25,26 +25,20 @@ const BOTSWANA_NAMES = {
     ]
 };
 
-const LOCATIONS = ['Gaborone', 'Francistown', 'Maun', 'Lobatse', 'Serowe', 'Molepolole', 'Kasane', 'Palapye', 'Selibe Phikwe', 'Mochudi'];
-
-const SPECIALIZATIONS = [
-    'Cardiologist', 'Pediatrician', 'General Practitioner', 'Dermatologist',
-    'Gynecologist', 'Orthopedic Surgeon', 'Neurologist', 'Psychiatrist',
-    'Ophthalmologist', 'Oncologist', 'Dentist', 'ENT Specialist'
-];
+// Removed unused LOCATIONS and SPECIALIZATIONS constants to satisfy lint
 
 // Helper to generate distinct Botswana specific data
-const generateBotswanaUser = (role: string, index: number, specificData: any = {}) => {
+const generateBotswanaUser = (role: string, index: number, specificData: Record<string, unknown> = {}) => {
     const firstName = BOTSWANA_NAMES.first[index % BOTSWANA_NAMES.first.length];
     const lastName = BOTSWANA_NAMES.last[index % BOTSWANA_NAMES.last.length];
-    const name = specificData.name || `${firstName} ${lastName}`;
-    const email = specificData.email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}${index}@haemilife.com`;
-    const phone = specificData.phone || `+2677${index}${Math.floor(Math.random() * 900000 + 100000)}`; // +267 7X XXXXXX
+    const name = (specificData.name as string) || `${firstName} ${lastName}`;
+    const email = (specificData.email as string) || `${firstName.toLowerCase()}.${lastName.toLowerCase()}${index}@haemilife.com`;
+    const phone = (specificData.phone as string) || `+2677${index}${Math.floor(Math.random() * 900000 + 100000)}`; // +267 7X XXXXXX
 
     return { name, email, phone, role, ...specificData };
 };
 
-const safeCreateUser = async (client: any, userData: any, passwordHash: string) => {
+const safeCreateUser = async (client: import('pg').PoolClient, userData: Record<string, unknown>, passwordHash: string) => {
     // 1. Check if user exists
     const existing = await client.query('SELECT id FROM users WHERE email = $1', [userData.email]);
 
@@ -71,7 +65,7 @@ const safeCreateUser = async (client: any, userData: any, passwordHash: string) 
     return res.rows[0].id;
 };
 
-const seedMedicalRecords = async (client: any, patientId: string, patientName: string) => {
+const seedMedicalRecords = async (client: import('pg').PoolClient, patientId: string, patientName: string) => {
     // Check if records exist to avoid duplicates
     const check = await client.query('SELECT id FROM medical_records WHERE patient_id = $1 LIMIT 1', [patientId]);
     if (check.rows.length > 0) {

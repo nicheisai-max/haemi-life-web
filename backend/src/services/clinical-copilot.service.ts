@@ -1,16 +1,28 @@
-
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 
 export class ClinicalCopilotService {
-    private model;
+    private model: GenerativeModel | null = null;
+    private genAI: GoogleGenerativeAI | null = null;
 
     constructor() {
-        if (!process.env.GEMINI_API_KEY) {
-            console.error('[ClinicalCopilot] FATAL: GEMINI_API_KEY is missing.');
+        // We no longer instantiate immediately to avoid "missing key" errors 
+        // during module resolution/hoisting.
+    }
+
+    private initModel() {
+        if (this.model) return;
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            // Only log an error if we actually try to use the model and it's missing.
+            throw new Error('MISSING_API_KEY');
         }
-        this.model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+        if (!this.genAI) {
+            this.genAI = new GoogleGenerativeAI(apiKey);
+        }
+
+        this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     }
 
     /**
@@ -19,13 +31,22 @@ export class ClinicalCopilotService {
      * @param context Patient context (optional, but highly recommended for relevance).
      * @returns A string response from the AI.
      */
-    async generateResponse(query: string, context?: any): Promise<string> {
+    async generateResponse(query: string, context?: Record<string, unknown>): Promise<string> {
+        try {
+            this.initModel();
+        } catch {
+            console.error('[ClinicalCopilot] FATAL: GEMINI_API_KEY is missing.');
+            throw new Error('SERVICE_UNAVAILABLE');
+        }
+
         // Institutional Hardening: Prevent event loop stalling with a 15s timeout
         const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('AI_TIMEOUT')), 15000)
+            setTimeout(() => reject(new Error('AI_TIMEOUT')), 15000).unref()
         );
 
         try {
+            if (!this.model) throw new Error('SERVICE_UNAVAILABLE');
+
             const systemInstruction = `
                 You are the 'Haemi Life Clinical Copilot', an advanced AI assistant for doctors in Botswana.
                 
@@ -44,15 +65,16 @@ export class ClinicalCopilotService {
 
             // Race the AI call against the timeout
             const resultPromise = this.model.generateContent(systemInstruction);
-            const result = await Promise.race([resultPromise, timeoutPromise]) as any;
+            const result = await Promise.race([resultPromise, timeoutPromise]) as { response: { text: () => string } };
 
-            const response = await result.response;
+            const response = result.response;
             const text = response.text();
 
             return text;
 
-        } catch (error: any) {
-            if (error.message === 'AI_TIMEOUT') {
+        } catch (error: unknown) {
+            const err = error as Error;
+            if (err.message === 'AI_TIMEOUT') {
                 console.error('[ClinicalCopilot] Request timed out after 15s');
                 throw new Error('SERVICE_UNAVAILABLE');
             }

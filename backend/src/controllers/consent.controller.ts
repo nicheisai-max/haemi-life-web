@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { consentRepository } from '../repositories/consent.repository';
+import { sendError } from '../utils/response';
 
 // Check if current user has signed the telemedicine consent
 export const getConsentStatus = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         if (user.role !== 'patient') {
             return res.status(403).json({ message: 'Only patients have telemedicine consent records.' });
@@ -21,7 +23,8 @@ export const getConsentStatus = async (req: Request, res: Response) => {
 // Sign telemedicine consent
 export const signConsent = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown';
         const userAgent = req.headers['user-agent'] || 'unknown';
         const { signature } = req.body;

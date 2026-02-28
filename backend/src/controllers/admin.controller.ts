@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { systemSettingsRepository } from '../repositories/system_settings.repository';
+import { sendResponse, sendError } from '../utils/response';
+import { JWTPayload } from '../types/express';
 
 // Get pending doctor verifications (Admin only)
 export const getPendingVerifications = async (req: Request, res: Response) => {
@@ -18,7 +20,7 @@ export const getPendingVerifications = async (req: Request, res: Response) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching pending verifications:', error);
-        res.status(500).json({ message: 'Error fetching pending verifications' });
+        sendError(res, 500, 'Error fetching pending verifications');
     }
 };
 
@@ -27,7 +29,8 @@ export const verifyDoctor = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { verified } = req.body; // true or false
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         const client = await pool.connect();
         try {
@@ -58,8 +61,7 @@ export const verifyDoctor = async (req: Request, res: Response) => {
             ]);
 
             await client.query('COMMIT');
-            res.json({
-                message: verified ? 'Doctor verified successfully' : 'Doctor rejected',
+            sendResponse(res, 200, true, verified ? 'Doctor verified successfully' : 'Doctor rejected', {
                 profile: result.rows[0]
             });
         } catch (error) {
@@ -70,7 +72,7 @@ export const verifyDoctor = async (req: Request, res: Response) => {
         }
     } catch (error) {
         console.error('Error verifying doctor:', error);
-        res.status(500).json({ message: 'Error verifying doctor' });
+        sendError(res, 500, 'Error verifying doctor');
     }
 };
 
@@ -80,20 +82,20 @@ export const getAllUsers = async (req: Request, res: Response) => {
         const { role, status, search } = req.query;
 
         let query = 'SELECT id, name, email, phone_number, role, status, initials, created_at FROM users WHERE 1=1';
-        const params: any[] = [];
+        const params: (string | number | boolean | null)[] = [];
 
         if (role) {
-            params.push(role);
+            params.push(role as string);
             query += ` AND role = $${params.length}`;
         }
 
-        if (status) { // Filter by status ('ACTIVE', 'INACTIVE', etc.)
-            params.push(status);
+        if (status) {
+            params.push(status as string);
             query += ` AND status = $${params.length}`;
         }
 
         if (search) {
-            params.push(`%${search}%`);
+            params.push(`%${search as string}%`);
             const idx = params.length;
             query += ` AND (name ILIKE $${idx} OR email ILIKE $${idx} OR phone_number ILIKE $${idx})`;
         }
@@ -104,7 +106,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching users:', error);
-        res.status(500).json({ message: 'Error fetching users' });
+        sendError(res, 500, 'Error fetching users');
     }
 };
 
@@ -112,8 +114,9 @@ export const getAllUsers = async (req: Request, res: Response) => {
 export const updateUserStatus = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { status } = req.body; // Expect 'ACTIVE' or 'INACTIVE'
-        const user = (req as any).user;
+        const { status } = req.body;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         const client = await pool.connect();
         try {
@@ -143,7 +146,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
             ]);
 
             await client.query('COMMIT');
-            res.json({ message: 'User status updated', user: result.rows[0] });
+            sendResponse(res, 200, true, 'User status updated', { user: result.rows[0] });
         } catch (error) {
             await client.query('ROLLBACK');
             throw error;
@@ -152,13 +155,16 @@ export const updateUserStatus = async (req: Request, res: Response) => {
         }
     } catch (error) {
         console.error('Error updating user status:', error);
-        res.status(500).json({ message: 'Error updating user status' });
+        sendError(res, 500, 'Error updating user status');
     }
 };
 
 // Get system statistics (Admin only)
 export const getSystemStats = async (req: Request, res: Response) => {
     try {
+        const user = req.user as JWTPayload;
+        if (!user || user.role !== 'admin') return sendError(res, 403, 'Unauthorized');
+
         const stats = await Promise.all([
             pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['patient']),
             pool.query('SELECT COUNT(*) FROM users WHERE role = $1 AND status = $2', ['doctor', 'ACTIVE']),
@@ -166,7 +172,7 @@ export const getSystemStats = async (req: Request, res: Response) => {
             pool.query('SELECT COUNT(*) FROM appointments WHERE status = $1', ['scheduled']),
             pool.query('SELECT COUNT(*) FROM prescriptions WHERE status = $1', ['pending']),
             pool.query('SELECT COUNT(*) FROM users WHERE status = $1', ['ACTIVE']),
-            pool.query('SELECT COUNT(*) FROM users') // Added: Total Users Unfiltered
+            pool.query('SELECT COUNT(*) FROM users')
         ]);
 
         res.json({
@@ -180,7 +186,7 @@ export const getSystemStats = async (req: Request, res: Response) => {
         });
     } catch (error) {
         console.error('Error fetching system stats:', error);
-        res.status(500).json({ message: 'Error fetching system stats' });
+        sendError(res, 500, 'Error fetching system stats');
     }
 };
 
@@ -204,7 +210,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching audit logs:', error);
-        res.status(500).json({ message: 'Error fetching audit logs' });
+        sendError(res, 500, 'Error fetching audit logs');
     }
 };
 
@@ -215,7 +221,7 @@ export const getSessionTimeout = async (req: Request, res: Response) => {
         res.json({ timeout: parseInt(timeout || '60') });
     } catch (error) {
         console.error('Error fetching session timeout:', error);
-        res.status(500).json({ message: 'Error fetching session timeout' });
+        sendError(res, 500, 'Error fetching session timeout');
     }
 };
 
@@ -224,17 +230,16 @@ export const updateSessionTimeout = async (req: Request, res: Response) => {
     try {
         const { timeout } = req.body;
 
-        // Validation: 5 to 1440 minutes
         const timeoutNum = parseInt(timeout);
         if (isNaN(timeoutNum) || timeoutNum < 5 || timeoutNum > 1440) {
-            return res.status(400).json({ message: 'Invalid timeout value. Must be between 5 and 1440 minutes.' });
+            return sendError(res, 400, 'Invalid timeout value. Must be between 5 and 1440 minutes.');
         }
 
         await systemSettingsRepository.updateSetting('SESSION_TIMEOUT_MINUTES', timeoutNum.toString());
 
-        res.json({ message: 'Session timeout updated successfully', timeout: timeoutNum });
+        sendResponse(res, 200, true, 'Session timeout updated successfully', { timeout: timeoutNum });
     } catch (error) {
         console.error('Error updating session timeout:', error);
-        res.status(500).json({ message: 'Error updating session timeout' });
+        sendError(res, 500, 'Error updating session timeout');
     }
 };

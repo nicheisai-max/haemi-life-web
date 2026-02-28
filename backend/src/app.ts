@@ -1,30 +1,22 @@
-import express from 'express';
+import './config/env'; // Must be first to load environment variables before other imports
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
-
 import { createServer } from 'http';
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
+import { JWTPayload, AuthenticatedSocket } from './types/express';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 
-import { globalErrorHandler } from './middleware/error.middleware';
-import { notFoundHandler } from './middleware/notFound.middleware';
-import { authenticateToken } from './middleware/auth.middleware';
-
+import { notFound } from './middleware/notFound.middleware';
+import { errorHandler } from './middleware/error.middleware';
 import { authLimiter, apiLimiter } from './middleware/rate-limit.middleware';
-import { sendResponse } from './utils/response';
 import { logger } from './utils/logger';
-
-
-// Load environment variables first
-dotenv.config();
-
-// Force restart trigger
-
-
 import { pool } from './config/db';
+import { env } from './config/env';
+
+// Routes
 import authRoutes from './routes/auth.routes';
 import doctorRoutes from './routes/doctor.routes';
 import appointmentRoutes from './routes/appointment.routes';
@@ -40,125 +32,90 @@ import commonRoutes from './routes/common.routes';
 import fileRoutes from './routes/file.routes';
 import consentRoutes from './routes/consent.routes';
 
-
-// --- Production Hardening: Fail-Fast Environment Check ---
-const REQUIRED_ENV = ['JWT_SECRET', 'DB_PASSWORD', 'GEMINI_API_KEY', 'ENCRYPTION_KEY'];
-const missingEnv = REQUIRED_ENV.filter(key => !process.env[key]);
-
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const IS_DEMO_MODE = process.env.DEMO_MODE === 'true';
-
-if (missingEnv.length > 0) {
-    logger.error(`[FATAL] Missing critical environment variables: ${missingEnv.join(', ')}`);
-    process.exit(1);
-}
-
-// ─── CRITICAL SECURITY GUARD: Prevent "Prod-Demo" accidental deployment ──────
-if (IS_PRODUCTION && IS_DEMO_MODE) {
-    logger.error(`[FATAL] SECURITY VIOLATION: NODE_ENV is 'production' but DEMO_MODE is active.`);
-    logger.error(`[REASON] DEMO_MODE bypasses critical security rate-limiters and backdoors.`);
-    process.exit(1);
-}
-
 const app = express();
 
-// ─── V1 FIX: CORS — env-based allowlist, dev wildcard fallback ───────────────
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : null;
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        if (!allowedOrigins) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
-        callback(new Error(`CORS: Origin '${origin}' not allowed`));
+        if (!origin || !env.isProduction || allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error('CORS blocked'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires', 'Accept', 'X-Requested-With', 'Origin'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Pragma', 'Cache-Control'],
 }));
 
-// V2 FIX: Helmet Hardening (CSP Enabled)
 app.use(helmet({
     crossOriginResourcePolicy: false,
-    contentSecurityPolicy: {
-        useDefaults: true,
-        directives: {
-            "default-src": ["'self'"],
-            "script-src": ["'self'", "'unsafe-inline'"],
-            "style-src": ["'self'", "'unsafe-inline'"],
-            "img-src": ["'self'", "data:", "blob:"],
-            "connect-src": ["'self'", "ws:", "wss:"],
-        }
-    },
+    contentSecurityPolicy: env.isProduction ? undefined : false,
 }));
 
-// V3 FIX: HTTP Request Logging via Morgan
-const morganFormat = IS_PRODUCTION ? 'combined' : 'dev';
-app.use(morgan(morganFormat, {
-    stream: {
-        write: (message) => logger.info(message.trim(), { type: 'http' })
-    },
-    skip: (req) => req.url === '/health'
-}));
-
-app.use(express.json({ limit: '10mb' }));
-app.use(cookieParser());
-
-// Tiered rate limiters
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/signup', authLimiter);
-app.use('/api/password-reset', authLimiter);
-app.use('/api/', apiLimiter);
-
-const httpServer = createServer(app);
-
-// Socket.io initialization
-const io = new Server(httpServer, {
-    cors: {
-        origin: allowedOrigins ?? '*',
-        methods: ['GET', 'POST'],
-        credentials: true,
-    }
-});
-
-interface AuthSocket extends Socket {
-    user?: any;
+if (!env.isDemoMode) {
+    app.use(morgan(env.isProduction ? 'combined' : 'dev', {
+        stream: { write: (msg) => logger.info(msg.trim()) },
+        skip: (req) => req.url === '/health'
+    }));
 }
 
-io.use((socket: AuthSocket, next) => {
-    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
-    if (!token) return next(new Error('Authentication required'));
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
-        socket.user = decoded;
+app.use(express.json({ limit: '5mb' }));
+app.use(cookieParser());
+
+// Rate Limiting
+if (!env.isDemoMode) {
+    app.use('/api/auth/login', authLimiter);
+    app.use('/api/auth/signup', authLimiter);
+    app.use('/api/', apiLimiter);
+}
+
+// Phase 6: DEMO_MODE Bypass (Auto-Auth)
+if (env.isDemoMode) {
+    app.use('/api', async (req: Request, _res: Response, next: NextFunction) => {
+        const demoRole = req.headers['x-demo-role'];
+        if (demoRole && !req.headers.authorization) {
+            const role = (demoRole as string) || 'patient';
+            (req as Request & { user: JWTPayload }).user = {
+                id: 'demo-id',
+                email: 'demo@haemi.life',
+                role: role as 'patient' | 'doctor' | 'pharmacist' | 'admin',
+                name: 'Demo User'
+            };
+            return next();
+        }
         next();
-    } catch {
-        next(new Error('Invalid authentication token'));
+    });
+}
+
+// DB Connection with Retry
+async function connectDB(retries = 5) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const client = await pool.connect();
+            logger.info('✅ DB Connected');
+            client.release();
+            return;
+        } catch (err) {
+            logger.error(`DB Attempt ${i + 1} fail: ${err instanceof Error ? err.message : ''}`);
+            if (i < retries - 1) await new Promise(r => setTimeout(r, 3000));
+        }
     }
-});
+    if (env.isProduction) process.exit(1);
+}
 
-const port = process.env.PORT || 5000;
-export { io };
-
-// Health & Readiness Probes
-app.get('/health', async (req, res) => {
+// Health Probes
+app.get('/health', async (_req, res) => {
     try {
         await pool.query('SELECT 1');
-        sendResponse(res, 200, true, 'System Operational', {
-            uptime: process.uptime(),
-            timestamp: new Date().toISOString(),
-            environment: process.env.NODE_ENV || 'development',
-            db: 'connected'
+        res.status(200).json({
+            success: true,
+            data: { status: 'OK', db: 'connected', demo: env.isDemoMode }
         });
-    } catch (error: any) {
-        logger.error('[Health] DB probe failed:', error.message);
-        sendResponse(res, 500, false, 'Database Disconnected', {
-            uptime: process.uptime(),
-            timestamp: new Date().toISOString(),
-            db: 'disconnected',
-            error: error.message
+    } catch {
+        res.status(500).json({
+            success: false,
+            data: { status: 'ERROR', db: 'disconnected', demo: env.isDemoMode }
         });
     }
 });
@@ -166,13 +123,21 @@ app.get('/health', async (req, res) => {
 app.get('/readiness', async (req, res) => {
     try {
         await pool.query('SELECT 1');
-        res.status(200).json({ status: "ready", db: "connected" });
-    } catch (error: any) {
-        res.status(500).json({ status: "not_ready", db: "disconnected" });
+        res.status(200).json({ status: 'ready' });
+    } catch {
+        res.status(503).json({ status: 'not_ready' });
     }
 });
 
-// Routes
+// Standard Response Headers
+app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+});
+
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
@@ -188,125 +153,84 @@ app.use('/api/consents', consentRoutes);
 app.use('/api/common', commonRoutes);
 app.use('/api/files', fileRoutes);
 
-app.get('/', (req, res) => {
-    res.send('Haemi Life Backend is running');
-});
+app.use(notFound);
+app.use(errorHandler);
 
-app.use(notFoundHandler);
-app.use(globalErrorHandler);
+let io: Server | undefined;
 
-// Socket Logic
-io.on('connection', (socket: AuthSocket) => {
-    const userId = socket.user?.id || socket.id;
-    if (socket.user?.id) socket.join(`user:${socket.user.id}`);
-
-    socket.on('join-consultation', (appointmentId) => {
-        socket.join(appointmentId);
-        socket.to(appointmentId).emit('participant-joined', socket.id);
-    });
-
-    socket.on('join_conversation', (conversationId) => {
-        socket.join(conversationId);
-    });
-
-    socket.on('typing', ({ conversationId, userId: typingUserId, isTyping }) => {
-        socket.to(conversationId).emit('user_typing', { userId: typingUserId, isTyping });
-    });
-
-    socket.on('call-user', ({ offer, to }) => {
-        socket.to(to).emit('call-made', { offer, socket: socket.id });
-    });
-
-    socket.on('make-answer', ({ answer, to }) => {
-        socket.to(to).emit('answer-made', { answer, socket: socket.id });
-    });
-
-    socket.on('ice-candidate', ({ candidate, to }) => {
-        socket.to(to).emit('ice-candidate', { candidate, socket: socket.id });
-    });
-
-    socket.on('disconnect', () => {
-        logger.info(`[Socket] User disconnected: ${userId}`);
-    });
-});
-
-let server: any;
-
-// ─── Task 1: Safe Server Startup ──────────────────────────────
+// Server & Sockets
 const startServer = async () => {
-    try {
-        await pool.query('SELECT 1');
-        logger.info('[DB] Connection verified. Starting server...');
+    await connectDB();
+    const server = createServer(app);
+    io = new Server(server, {
+        cors: { origin: "*", credentials: true }
+    });
 
-        server = httpServer.listen(port, () => {
-            logger.info(`[Server] Running on port ${port} (${process.env.NODE_ENV || 'development'})`);
+    io.use((socket, next) => {
+        const token = socket.handshake.auth.token;
+        if (!token) return next(new Error('Auth failed'));
+        jwt.verify(token, process.env.JWT_SECRET as string, (err: jwt.VerifyErrors | null, decoded: unknown) => {
+            if (err || !decoded) return next(new Error('Auth failed'));
+            (socket as AuthenticatedSocket).user = decoded as JWTPayload;
+            next();
         });
+    });
 
-        server.timeout = 15000;
-        return server;
-    } catch (err: any) {
-        logger.error('[Server] Fatal: DB connection failed during startup.');
-        process.exit(1);
-    }
-};
-
-startServer();
-
-// ─── FIX 1 & 6: Defensive Shutdown & Global Process Safety ──────────────
-const shutdown = (signal: string) => {
-    logger.info(`[Server] ${signal} received. Starting graceful shutdown...`);
-
-    const closeDB = async () => {
-        try {
-            if (pool) {
-                await pool.end();
-                logger.info('[DB] PostgreSQL pool closed.');
-            }
-            process.exit(0);
-        } catch (dbErr) {
-            logger.error('[DB] Error during pool closure:', dbErr);
-            process.exit(1);
+    io.on('connection', (socket: import('socket.io').Socket) => {
+        const authSocket = socket as AuthenticatedSocket;
+        if (!authSocket.user) {
+            logger.error('Socket connected without user data');
+            return socket.disconnect();
         }
-    };
+        const userId = authSocket.user.id;
+        socket.join(`user:${userId}`);
+        logger.info(`Socket: ${socket.id} user:${userId}`);
 
-    if (server && typeof server.close === 'function') {
-        server.close(async (err: any) => {
-            if (err) logger.error('[Server] Error during close:', err);
-            logger.info('[Server] HTTP server closed.');
-            await closeDB();
+        // Chat events
+        socket.on('join_chat', (id: string) => socket.join(`chat:${id}`));
+        socket.on('send_message', (data: { chat_id: string; message: JWTPayload }) => {
+            if (io) io.to(`chat:${data.chat_id}`).emit('new_message', data);
         });
-    } else {
-        logger.warn('[Server] No active server listener to close. Closing DB only.');
-        closeDB();
-    }
+        socket.on('mark_read', (data: { chat_id: string; user_id: string }) => {
+            if (io) io.to(`chat:${data.chat_id}`).emit('messages_read', data);
+        });
+        socket.on('typing', (data: { chat_id: string; name: string }) => {
+            socket.to(`chat:${data.chat_id}`).emit('user_typing', data);
+        });
 
-    // Hard timeout for shutdown
-    setTimeout(() => {
-        logger.error('[Server] Shutdown timed out. Forcing exit.');
-        process.exit(1);
-    }, 10000);
+        // WebRTC hooks
+        socket.on('call-user', (data: { to: string; offer: JWTPayload }) => {
+            if (io) io.to(data.to).emit('call-made', { offer: data.offer, socket: socket.id });
+        });
+        socket.on('make-answer', (data: { to: string; answer: JWTPayload }) => {
+            if (io) io.to(data.to).emit('answer-made', { answer: data.answer, socket: socket.id });
+        });
+        socket.on('ice-candidate', (data: { to: string; candidate: JWTPayload }) => {
+            if (io) io.to(data.to).emit('ice-candidate', { candidate: data.candidate, socket: socket.id });
+        });
+
+        socket.on('disconnect', () => logger.info(`Socket disconnected: ${socket.id}`));
+    });
+
+    const PORT = env.port;
+
+    if (process.env.NODE_ENV !== 'test') {
+        server.listen(PORT, () => logger.info(`🚀 Server on port ${PORT}`));
+    }
+    return server;
 };
 
-// Global Process Listeners (Guarded against duplicates)
-process.removeAllListeners('SIGTERM');
-process.removeAllListeners('SIGINT');
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+if (process.env.NODE_ENV !== 'test') startServer();
 
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error('[Process] Unhandled Rejection', { promise, reason });
-    if (process.env.DEMO_SHIELD === 'true') {
-        logger.warn('[DEMO SHIELD] Preserving process after unhandled rejection.');
-    }
-});
+export { app, startServer, io };
 
-process.on('uncaughtException', (err) => {
-    logger.error('[Process] Uncaught Exception:', err.message);
-    if (process.env.DEMO_SHIELD === 'true') {
-        logger.warn('[DEMO SHIELD] Preserving process after uncaught exception.');
-    } else {
-        shutdown('UncaughtException');
-    }
-});
+// Graceful Shutdown
+const shutdown = () => {
+    logger.info('Shutting down...');
+    pool.end().then(() => process.exit(0));
+};
 
-logger.info(`[DEMO SHIELD] Status: ${process.env.DEMO_SHIELD === 'true' ? 'ACTIVE' : 'INACTIVE'}`);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+process.on('unhandledRejection', (err) => logger.error('Unhandled Rejection', err));
+process.on('uncaughtException', (err) => logger.error('Uncaught Exception', err));

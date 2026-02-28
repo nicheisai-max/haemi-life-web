@@ -13,7 +13,7 @@ async function setupDatabase() {
 
         console.log('📄 Reading init.sql...');
         const sqlPath = path.join(__dirname, '../db/init.sql');
-        let sql = fs.readFileSync(sqlPath, 'utf8');
+        const sql = fs.readFileSync(sqlPath, 'utf8');
 
         // Hash the demo password
         console.log('🔐 Hashing demo password (123456)...');

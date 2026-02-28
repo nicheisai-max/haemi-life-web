@@ -35,14 +35,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
                 {/* Main Content Area */}
                 <main className="flex-1 w-full min-w-0 lg:pl-[260px] flex flex-col min-h-[calc(100vh-72px)] bg-muted/5 dark:bg-background">
-                    <div className="flex-1 w-full max-w-[1800px] mx-auto px-6 md:px-8 pt-4 pb-12 transition-all duration-300">
+                    <div className="flex-1 w-full max-w-[1800px] mx-auto px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8 transition-all duration-300">
                         {children}
                     </div>
 
                     {/* Footer behaves within the content flow or strictly at bottom? 
                         Keeping it consistent with flow for now, but usually footers in dashboards are at end of content.
                     */}
-                    <div className="w-full max-w-[1800px] mx-auto px-6 md:px-8 pb-6">
+                    <div className="w-full max-w-[1800px] mx-auto px-6 pb-6 md:px-8 md:pb-8">
                         <Footer />
                     </div>
                 </main>

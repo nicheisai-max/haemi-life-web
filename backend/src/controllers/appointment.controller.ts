@@ -8,7 +8,8 @@ import { notificationService } from '../services/notification.service';
 // Book a new appointment (Patient)
 export const bookAppointment = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const patientId = user.id;
         const { doctor_id, appointment_date, appointment_time, consultation_type, reason } = req.body;
 
@@ -85,7 +86,8 @@ export const bookAppointment = async (req: Request, res: Response) => {
 // Get user's appointments
 export const getMyAppointments = async (req: Request, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
         const userId = user.id;
         const { status, upcoming } = req.query;
 
@@ -105,7 +107,8 @@ export const getMyAppointments = async (req: Request, res: Response) => {
 export const getAppointmentById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         const appointment = await appointmentRepository.findByIdWithDetails(id as string, user.id as string);
 
@@ -125,7 +128,8 @@ export const updateAppointmentStatus = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { status, notes } = req.body;
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         const appointment = await appointmentRepository.updateStatus(id as string, user.id as string, status as string, notes as string);
 
@@ -144,7 +148,8 @@ export const updateAppointmentStatus = async (req: Request, res: Response) => {
 export const cancelAppointment = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         const appointment = await appointmentRepository.cancel(id as string, user.id as string);
 
@@ -163,7 +168,8 @@ export const cancelAppointment = async (req: Request, res: Response) => {
 export const deleteAppointment = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const user = (req as any).user;
+        const user = req.user;
+        if (!user) return sendError(res, 401, 'Unauthorized');
 
         if (user.role !== 'patient') {
             return res.status(403).json({ message: 'Only patients can permanently delete appointments' });
@@ -210,7 +216,7 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
 
         const slots: string[] = [];
         for (const row of schedule) {
-            let current = new Date(`2000-01-01T${row.start_time}`);
+            const current = new Date(`2000-01-01T${row.start_time}`);
             const end = new Date(`2000-01-01T${row.end_time}`);
 
             while (current < end) {
