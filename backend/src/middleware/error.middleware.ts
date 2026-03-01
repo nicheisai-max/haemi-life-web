@@ -1,16 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
+import { sendError } from '../utils/response';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-import { logger } from '../utils/logger';
-
-/**
- * V7 FIX: Global error handler.
- * - In production: returns a generic message — never exposes err.message or stack traces.
- * - In development: returns full error details for debugging.
- * This prevents information disclosure attacks where attackers probe error messages
- * to learn about the system's internals (DB schema, file paths, library versions).
- */
 interface HttpError extends Error {
     statusCode?: number;
     status?: number;
@@ -18,8 +11,13 @@ interface HttpError extends Error {
 }
 
 export const errorHandler = (err: HttpError, req: Request, res: Response, _next: NextFunction) => {
-    // Always log the full error internally for observability using secure logger
-    logger.error(`[Error] ${req.method} ${req.url}:`, { error: err.message, stack: err.stack, body: req.body });
+    // Always log the full error internally for observability
+    logger.error(`[Error] ${req.method} ${req.url}:`, {
+        error: err.message,
+        stack: err.stack,
+        body: req.body,
+        requestId: req.headers['x-request-id']
+    });
 
     let statusCode = err.statusCode || err.status || 500;
 
@@ -32,23 +30,14 @@ export const errorHandler = (err: HttpError, req: Request, res: Response, _next:
     }
 
     if (IS_PRODUCTION) {
-        // Never leak internal error details in production
+        // Institutional Hardening: Never leak internal error details in production
         const safeMessage = statusCode < 500
-            ? err.message || 'Request failed'  // 4xx: safe to show client errors
-            : 'An unexpected error occurred. Please try again.'; // 5xx: always generic
+            ? err.message || 'Request failed'
+            : 'An unexpected error occurred. Please try again.';
 
-        return res.status(statusCode).json({
-            success: false,
-            error: safeMessage,
-            statusCode,
-        });
+        return sendError(res, statusCode, safeMessage);
     }
 
     // Development: full details for debugging
-    return res.status(statusCode).json({
-        success: false,
-        error: err.message || 'Internal Server Error',
-        statusCode,
-        stack: err.stack,
-    });
+    return sendError(res, statusCode, err.message || 'Internal Server Error', err.stack);
 };

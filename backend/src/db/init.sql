@@ -146,6 +146,36 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_doctor_profiles_user_id ON doctor_profiles(user_id);
+
+-- Patient Profiles
+CREATE TABLE IF NOT EXISTS patient_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    date_of_birth DATE,
+    gender VARCHAR(20),
+    blood_group VARCHAR(10),
+    emergency_contact_name VARCHAR(255),
+    emergency_contact_phone VARCHAR(50),
+    allergies TEXT,
+    medical_conditions TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_patient_profiles_user_id ON patient_profiles(user_id);
+
+-- Pharmacist Profiles
+CREATE TABLE IF NOT EXISTS pharmacist_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    license_number VARCHAR(50) UNIQUE,
+    workplace_name VARCHAR(255),
+    years_of_experience INTEGER,
+    bio TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pharmacist_profiles_user_id ON pharmacist_profiles(user_id);
 
 -- Doctor Schedules
 CREATE TABLE IF NOT EXISTS doctor_schedules (

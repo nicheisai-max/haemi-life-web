@@ -56,7 +56,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^9.39.3",
     "@tailwindcss/vite": "^4.1.18",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -75,7 +75,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.48.0",
+    "typescript-eslint": "^8.56.1",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
   }

@@ -1,21 +1,21 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { prescriptionRepository } from '../repositories/prescription.repository';
-import { sendError } from '../utils/response';
+import { sendResponse, sendError } from '../utils/response';
+import { logger } from '../utils/logger';
 
 // Create a new prescription (Doctor only)
 export const createPrescription = async (req: Request, res: Response) => {
     try {
-        const user = req.user;
-        if (!user) return sendError(res, 401, 'Unauthorized');
-        const doctorId = user.id;
+        const userId = req.user?.id;
+        if (!userId) return sendError(res, 401, 'Unauthorized');
         const { patient_id, appointment_id, notes, medications } = req.body;
 
         // Validate that appointment exists and belongs to this doctor
         if (appointment_id) {
-            const hasAccess = await prescriptionRepository.checkAppointmentAccess(appointment_id, doctorId);
+            const hasAccess = await prescriptionRepository.checkAppointmentAccess(appointment_id, userId);
             if (!hasAccess) {
-                return res.status(403).json({ message: 'Invalid appointment' });
+                return sendError(res, 403, 'Invalid appointment or access denied');
             }
         }
 
@@ -26,7 +26,7 @@ export const createPrescription = async (req: Request, res: Response) => {
             // Create prescription
             const prescription = await prescriptionRepository.create({
                 patient_id,
-                doctor_id: doctorId,
+                doctor_id: userId,
                 appointment_id: appointment_id || null,
                 notes
             }, client);
@@ -49,35 +49,31 @@ export const createPrescription = async (req: Request, res: Response) => {
             }
 
             await client.query('COMMIT');
-            res.status(201).json({
-                message: 'Prescription created successfully',
-                prescription
-            });
+            return sendResponse(res, 201, true, 'Prescription created successfully', prescription);
         } catch (error) {
             await client.query('ROLLBACK');
             throw error;
         } finally {
             client.release();
         }
-    } catch (error) {
-        console.error('Error creating prescription:', error);
-        res.status(500).json({ message: 'Error creating prescription' });
+    } catch (error: unknown) {
+        logger.error('Error creating prescription:', { error: (error as Error).message, userId: req.user?.id });
+        return sendError(res, 500, 'Failed to create prescription');
     }
 };
 
 // Get user's prescriptions (Patient/Doctor)
 export const getMyPrescriptions = async (req: Request, res: Response) => {
     try {
-        const user = req.user;
-        if (!user) return sendError(res, 401, 'Unauthorized');
-        const userId = user.id;
-        const role = user.role;
+        const userId = req.user?.id;
+        const role = req.user?.role;
+        if (!userId) return sendError(res, 401, 'Unauthorized');
 
-        const prescriptions = await prescriptionRepository.findByUserId(userId as string, role as string);
-        res.json(prescriptions);
-    } catch (error) {
-        console.error('Error fetching prescriptions:', error);
-        res.status(500).json({ message: 'Error fetching prescriptions' });
+        const prescriptions = await prescriptionRepository.findByUserId(userId, role as string);
+        return sendResponse(res, 200, true, 'Prescriptions fetched successfully', prescriptions);
+    } catch (error: unknown) {
+        logger.error('Error fetching prescriptions:', { error: (error as Error).message, userId: req.user?.id });
+        return sendError(res, 500, 'Failed to fetch prescriptions');
     }
 };
 
@@ -85,26 +81,27 @@ export const getMyPrescriptions = async (req: Request, res: Response) => {
 export const getPrescriptionById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const user = req.user;
-        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = req.user?.id;
+        const role = req.user?.role;
+        if (!userId) return sendError(res, 401, 'Unauthorized');
 
         // Get prescription
-        const prescription = await prescriptionRepository.findByIdWithDetails(id as string, user.id as string, user.role as string);
+        const prescription = await prescriptionRepository.findByIdWithDetails(id as string, userId, role as string);
 
         if (!prescription) {
-            return res.status(404).json({ message: 'Prescription not found' });
+            return sendError(res, 404, 'Prescription not found');
         }
 
         // Get prescription items
         const items = await prescriptionRepository.findItemsByPrescriptionId(id as string);
 
-        res.json({
+        return sendResponse(res, 200, true, 'Prescription fetched successfully', {
             ...prescription,
             items
         });
-    } catch (error) {
-        console.error('Error fetching prescription:', error);
-        res.status(500).json({ message: 'Error fetching prescription' });
+    } catch (error: unknown) {
+        logger.error('Error fetching prescription:', { error: (error as Error).message, prescriptionId: req.params.id });
+        return sendError(res, 500, 'Failed to fetch prescription details');
     }
 };
 
@@ -117,13 +114,13 @@ export const updatePrescriptionStatus = async (req: Request, res: Response) => {
         const prescription = await prescriptionRepository.updateStatus(id as string, status as string);
 
         if (!prescription) {
-            return res.status(404).json({ message: 'Prescription not found' });
+            return sendError(res, 404, 'Prescription not found');
         }
 
-        res.json({ message: 'Prescription status updated', prescription });
-    } catch (error) {
-        console.error('Error updating prescription status:', error);
-        res.status(500).json({ message: 'Error updating prescription status' });
+        return sendResponse(res, 200, true, 'Prescription status updated', prescription);
+    } catch (error: unknown) {
+        logger.error('Error updating prescription status:', { error: (error as Error).message, prescriptionId: req.params.id });
+        return sendError(res, 500, 'Failed to update prescription status');
     }
 };
 
@@ -131,28 +128,29 @@ export const updatePrescriptionStatus = async (req: Request, res: Response) => {
 export const getPendingPrescriptions = async (req: Request, res: Response) => {
     try {
         const prescriptions = await prescriptionRepository.findPending();
-        res.json(prescriptions);
-    } catch (error) {
-        console.error('Error fetching pending prescriptions:', error);
-        res.status(500).json({ message: 'Error fetching pending prescriptions' });
+        return sendResponse(res, 200, true, 'Pending prescriptions fetched successfully', prescriptions);
+    } catch (error: unknown) {
+        logger.error('Error fetching pending prescriptions:', { error: (error as Error).message });
+        return sendError(res, 500, 'Failed to fetch pending prescriptions');
     }
 };
+
 // Delete a prescription (Soft delete)
 export const deletePrescription = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const user = req.user;
-        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = req.user?.id;
+        if (!userId) return sendError(res, 401, 'Unauthorized');
 
-        const deleted = await prescriptionRepository.softDelete(id as string, user.id as string);
+        const deleted = await prescriptionRepository.softDelete(id as string, userId);
 
         if (!deleted) {
-            return res.status(404).json({ message: 'Prescription not found or access denied' });
+            return sendError(res, 404, 'Prescription not found or access denied');
         }
 
-        res.json({ message: 'Prescription deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting prescription:', error);
-        res.status(500).json({ message: 'Error deleting prescription' });
+        return sendResponse(res, 200, true, 'Prescription deleted successfully');
+    } catch (error: unknown) {
+        logger.error('Error deleting prescription:', { error: (error as Error).message, prescriptionId: req.params.id });
+        return sendError(res, 500, 'Failed to delete prescription');
     }
 };

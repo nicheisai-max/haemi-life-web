@@ -84,9 +84,16 @@ export const useChat = () => {
                 reconnectionDelayMax: 5000,
             });
 
-            newSocket.on('connect_error', (error: Error) => {
-                if (error.message === 'Authentication required' || error.message === 'Invalid authentication token') {
+            newSocket.on('connect_error', (err: Error) => {
+                const isAuthError = err.message === 'Authentication required' ||
+                    err.message === 'Invalid authentication token' ||
+                    err.message === 'Session expired or revoked';
+
+                if (isAuthError) {
                     // Handled by auth:token-refreshed listener
+                    console.warn('[useChat] Socket Auth Failed. Waiting for silent refresh...');
+                } else {
+                    console.error('[useChat] Connection error:', err.message);
                 }
             });
 

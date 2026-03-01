@@ -138,7 +138,7 @@ export const Settings: React.FC = () => {
                             </div>
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Name</div>
-                                <div className="font-medium">{user?.name}</div>
+                                <div className="font-medium">{user?.profile?.fullName || user?.name || 'N/A'}</div>
                             </div>
                         </div>
 
@@ -148,7 +148,7 @@ export const Settings: React.FC = () => {
                             </div>
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Email</div>
-                                <div className="font-medium">{user?.email}</div>
+                                <div className="font-medium">{user?.email || 'N/A'}</div>
                             </div>
                         </div>
 
@@ -158,7 +158,7 @@ export const Settings: React.FC = () => {
                             </div>
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Phone</div>
-                                <div className="font-medium">{user?.phone_number}</div>
+                                <div className="font-medium">{user?.phone_number || 'N/A'}</div>
                             </div>
                         </div>
 

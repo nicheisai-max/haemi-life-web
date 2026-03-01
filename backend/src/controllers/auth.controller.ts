@@ -59,7 +59,8 @@ export const signup = async (req: Request, res: Response) => {
             res.cookie('refreshToken', refreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
+                sameSite: 'strict',
+                path: '/',
                 maxAge: 7 * 24 * 60 * 60 * 1000
             });
 
@@ -177,6 +178,7 @@ export const login = async (req: Request, res: Response) => {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
+            path: '/',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -312,10 +314,10 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         // Session Replay Protection
         if (decoded.token_version !== user.token_version) {
-            // If a token reuse is detected, invalidate all current sessions for the user
+            logger.warn('Token reuse detected - potential session hijacking', { userId: user.id });
             await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [user.id]);
-            res.clearCookie('refreshToken');
-            return sendResponse(res, 200, false, 'Session revoked due to reuse detection');
+            res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/' });
+            return sendResponse(res, 401, false, 'Session revoked due to security violation');
         }
 
         // Token Renewal: Update last_activity only.
@@ -340,6 +342,7 @@ export const refreshToken = async (req: Request, res: Response) => {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
+            path: '/',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -369,6 +372,7 @@ export const logout = async (req: Request, res: Response) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
+        path: '/'
     });
     return sendResponse(res, 200, true, 'Logged out successfully');
 };

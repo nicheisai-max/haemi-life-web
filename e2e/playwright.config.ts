@@ -5,28 +5,28 @@ export default defineConfig({
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
-    workers: process.env.CI ? 1 : undefined,
+    workers: 1, // Sequential execution for stable auth race testing
     reporter: 'html',
     use: {
-        baseURL: 'http://localhost:5173',
+        baseURL: 'http://127.0.0.1:5173',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
         video: 'retain-on-failure',
     },
     webServer: [
         {
-            command: 'npm --prefix ../backend run dev',
-            url: 'http://localhost:5000/health',
-            reuseExistingServer: false,
-            timeout: 600000,
+            command: 'npm --prefix ../backend run test:e2e:backend',
+            url: 'http://127.0.0.1:5000/health',
+            reuseExistingServer: true,
+            timeout: 60000,
             stdout: 'pipe',
             stderr: 'pipe',
         },
         {
             command: 'npm --prefix ../frontend run dev',
-            url: 'http://localhost:5173',
-            reuseExistingServer: false,
-            timeout: 600000,
+            url: 'http://127.0.0.1:5173',
+            reuseExistingServer: true,
+            timeout: 60000,
             stdout: 'pipe',
             stderr: 'pipe',
         }

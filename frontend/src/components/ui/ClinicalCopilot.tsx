@@ -4,6 +4,7 @@ import { Sparkles, AlertTriangle, Lightbulb, Zap, X, ChevronRight, BrainCircuit,
 import { Button } from './button';
 import { useLocation } from 'react-router-dom';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import api from '../../services/api';
 
 
 
@@ -213,30 +214,23 @@ export const ClinicalCopilot: React.FC<ClinicalCopilotProps> = ({ isOpen, onClos
                                     setIsLoading(true);
 
                                     try {
-                                        const token = sessionStorage.getItem('token'); // Isolated token retrieval
-                                        const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
-                                        const response = await fetch(`${baseUrl}/api/clinical-copilot/chat`, {
-                                            method: 'POST',
-                                            headers: {
-                                                'Content-Type': 'application/json',
-                                                'Authorization': `Bearer ${token}`
-                                            },
-                                            body: JSON.stringify({ query: userMsg.content })
+                                        const response = await api.post('/clinical-copilot/chat', {
+                                            query: userMsg.content
                                         });
 
-                                        const data = await response.json();
+                                        const data = response.data;
 
-                                        if (data.success) {
+                                        if (data.response) {
                                             const aiMsg: Message = {
                                                 id: (Date.now() + 1).toString(),
                                                 role: 'assistant',
-                                                content: data.data.response,
+                                                content: data.response,
                                                 timestamp: new Date()
                                             };
                                             setMessages(prev => [...prev, aiMsg]);
                                         } else {
-                                            // Handle error (maybe add a system message)
-                                            console.error('AI Error:', data.message);
+                                            // Handle error
+                                            console.error('AI Error: No response data');
                                         }
                                     } catch (err) {
                                         console.error('Network Error:', err);

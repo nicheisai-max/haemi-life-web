@@ -1,15 +1,22 @@
 export type UserRole = 'patient' | 'doctor' | 'admin' | 'pharmacist';
 
+export interface UserProfile {
+    fullName: string;
+    avatar: string | null;
+    metadata: Record<string, any>;
+}
+
 export interface User {
     id: string;
     email: string | null;
-    phone_number: string;
+    phone_number?: string;
     name: string;
     role: UserRole;
     id_number?: string | null;
     initials?: string;
     profile_image?: string | null;
     profile_image_mime?: string | null;
+    profile?: UserProfile;
 }
 
 

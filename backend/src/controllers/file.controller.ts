@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { JWTPayload } from '../types/express';
+import { sendError } from '../utils/response';
+import { logger } from '../utils/logger';
 
 export const getProfileImage = async (req: Request, res: Response) => {
     try {
@@ -11,7 +13,7 @@ export const getProfileImage = async (req: Request, res: Response) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'User not found' });
+            return sendError(res, 404, 'User not found');
         }
 
         const user = result.rows[0];
@@ -19,24 +21,19 @@ export const getProfileImage = async (req: Request, res: Response) => {
         // 1. Try to serve from DB (BYTEA)
         if (user.profile_image_data && user.profile_image_mime) {
             res.setHeader('Content-Type', user.profile_image_mime);
-            res.setHeader('Cache-Control', 'no-cache'); // Always revalidate — profile images change
+            res.setHeader('Cache-Control', 'no-cache');
             return res.send(user.profile_image_data);
         }
 
         // 2. Fallback to existing path if available (Legacy Support)
         if (user.profile_image) {
-            // For now, redirect to the old path or handle logic elsewhere.
-            // Since we are standardizing, we should probably handle the redirect here
-            // to maintain a single source of truth for the frontend URL.
-            // But since the frontend uses http://localhost:5000/api/files/profile/:id,
-            // we should probably just serve the file from disk if it exists.
             return res.redirect(user.profile_image);
         }
 
-        res.status(404).json({ message: 'Image not found' });
-    } catch (error) {
-        console.error('Error fetching profile image:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 404, 'Profile image not found');
+    } catch (error: unknown) {
+        logger.error('Error fetching profile image:', { error: (error as Error).message, userId: req.params.userId });
+        return sendError(res, 500, 'Internal Server Error');
     }
 };
 
@@ -54,14 +51,13 @@ export const getChatAttachment = async (req: Request, res: Response) => {
         `, [messageId, user.id]);
 
         if (accessCheck.rows.length === 0) {
-            return res.status(403).json({ message: 'Access denied. You are not a participant in this conversation.' });
+            return sendError(res, 403, 'Access denied to attachment');
         }
 
         const message = accessCheck.rows[0];
 
         if (message.attachment_data && message.attachment_mime) {
             res.setHeader('Content-Type', message.attachment_mime);
-            // Send the original filename so the browser saves with the right name and extension
             const safeFileName = (message.attachment_name || `attachment-${messageId}`).replace(/[^a-z0-9\-.]/gi, '_');
             res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
             return res.send(message.attachment_data);
@@ -71,10 +67,10 @@ export const getChatAttachment = async (req: Request, res: Response) => {
             return res.redirect(message.attachment_url);
         }
 
-        res.status(404).json({ message: 'Attachment not found' });
-    } catch (error) {
-        console.error('Error fetching chat attachment:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 404, 'Attachment not found');
+    } catch (error: unknown) {
+        logger.error('Error fetching chat attachment:', { error: (error as Error).message, messageId: req.params.messageId });
+        return sendError(res, 500, 'Internal Server Error');
     }
 };
 
@@ -99,7 +95,7 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
         const result = await pool.query(query, params);
 
         if (result.rows.length === 0) {
-            return res.status(403).json({ message: 'Access denied or record not found' });
+            return sendError(res, 403, 'Access denied or record not found');
         }
 
         const record = result.rows[0];
@@ -110,13 +106,12 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
         }
 
         if (record.file_path) {
-            // Institutional Hardening: Prevent direct static guesswork by serving via controller
             return res.redirect(`/${record.file_path}`);
         }
 
-        res.status(404).json({ message: 'File not found' });
-    } catch (error) {
-        console.error('Error fetching medical record:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 404, 'Record file not found');
+    } catch (error: unknown) {
+        logger.error('Error fetching medical record file:', { error: (error as Error).message, recordId: req.params.recordId });
+        return sendError(res, 500, 'Internal Server Error');
     }
 };

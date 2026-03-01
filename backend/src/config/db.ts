@@ -1,7 +1,5 @@
+import './env';
 import { Pool } from 'pg';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 export const pool = new Pool({
     user: process.env.DB_USER || 'postgres',
@@ -12,7 +10,7 @@ export const pool = new Pool({
     // Production Hardening: Explicit Pool Constraints
     max: 20, // Max concurrent connections
     idleTimeoutMillis: 30000, // Close idle clients after 30s
-    connectionTimeoutMillis: 2000, // Fail fast if connection cannot be established
+    connectionTimeoutMillis: 10000, // Increased for stability during setup
 });
 
 // Task 1: Pool Error Listener

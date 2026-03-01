@@ -173,8 +173,18 @@ api.interceptors.response.use(
 
         // 2. 500 Internal Server Error -> Do not loop, just reject
         if (error.response.status >= 500) {
-            // We do NOT retry 500s here to prevent infinite retry storms, unless it's 502/503/429
             const isRetryable = error.response.status === 502 || error.response.status === 503 || error.response.status === 429;
+
+            // Institutional Hardening: Notify user of catastrophic failure via global toast
+            if (!isRetryable && typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('system:error', {
+                    detail: {
+                        message: 'A critical system error occurred. Our technical team has been notified.',
+                        statusCode: error.response.status
+                    }
+                }));
+            }
+
             if (!isRetryable) {
                 return Promise.reject(error);
             }

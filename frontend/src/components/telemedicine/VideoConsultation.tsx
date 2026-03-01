@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import Peer from 'simple-peer';
+import { getAccessToken } from '../../services/api';
 import type { Instance, SignalData } from 'simple-peer';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -40,14 +41,27 @@ export const VideoConsultation: React.FC = () => {
 
     // 1. Fetch Appointment Data
     useEffect(() => {
+        const handleTokenRefreshed = (e: any) => {
+            const newToken = e.detail.token;
+            if (socketRef.current && newToken) {
+                // @ts-ignore - Update token directly to prevent re-renders
+                socketRef.current.auth.token = newToken;
+            }
+        };
+
         const fetchAppointment = async () => {
             if (!appointmentId) return;
             try {
                 const data = await appointmentService.getAppointmentById(Number(appointmentId));
                 setAppointment(data);
 
-                // Initialize Socket
-                socketRef.current = io(SOCKET_URL);
+                // Initialize Socket with Auth - ZERO UI DAMAGE
+                const token = getAccessToken();
+                socketRef.current = io(SOCKET_URL, {
+                    auth: { token }
+                });
+
+                window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
             } catch (err) {
                 console.error("Failed to fetch appointment", err);
                 toast.error("Invalid appointment room.");
@@ -66,6 +80,7 @@ export const VideoConsultation: React.FC = () => {
             if (socketRef.current) {
                 socketRef.current.disconnect();
             }
+            window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
             if (peerRef.current) {
                 peerRef.current.destroy();
             }

@@ -14,6 +14,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "playwright": "^1.58.2",
     "typescript": "^5.9.3"
   },
@@ -23,5 +24,14 @@
     "test:e2e": "npm --prefix e2e run test",
     "test:auth": "npm run test:backend && npm run test:frontend && npm run test:e2e && powershell -Command \"Get-NetTCPConnection -LocalPort 5173,5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
     "prepare": "husky"
+  },
+  "lint-staged": {
+    "backend/src/**/*.ts": [
+      "npm --prefix backend run build"
+    ],
+    "frontend/src/**/*.{ts,tsx}": [
+      "npm --prefix frontend run lint",
+      "npm --prefix frontend run typecheck"
+    ]
   }
 }

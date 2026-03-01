@@ -14,28 +14,16 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({
-            success: false,
-            error: 'Authentication required',
-            statusCode: 401,
-        });
+        return sendError(res, 401, 'Authentication required');
     }
 
     jwt.verify(token, process.env.JWT_SECRET as string, async (err: jwt.VerifyErrors | null, decoded: unknown) => {
         if (err) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid or expired session. Please log in again.',
-                statusCode: 401,
-            });
+            return sendError(res, 401, 'Invalid or expired session. Please log in again.');
         }
 
         if (!decoded || typeof decoded !== 'object') {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid session payload.',
-                statusCode: 401,
-            });
+            return sendError(res, 401, 'Invalid session payload.');
         }
 
         const payload = decoded as JWTPayload;
@@ -49,40 +37,24 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
             );
 
             if (userResult.rows.length === 0) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'User session invalid. Please log in again.',
-                    statusCode: 401,
-                });
+                return sendError(res, 401, 'User session invalid. Please log in again.');
             }
 
             const userData = userResult.rows[0];
 
             if (payload.token_version !== undefined && userData.token_version !== undefined) {
                 if (payload.token_version !== userData.token_version) {
-                    return res.status(401).json({
-                        success: false,
-                        error: 'Session revoked. Please log in again.',
-                        statusCode: 401,
-                    });
+                    return sendError(res, 401, 'Session revoked. Please log in again.');
                 }
             }
 
             if (userData.status !== 'ACTIVE') {
-                return res.status(403).json({
-                    success: false,
-                    error: 'Access denied. Account restricted.',
-                    statusCode: 403,
-                });
+                return sendError(res, 403, 'Access denied. Account restricted.');
             }
 
             const timeoutMinutes = 60;
             if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Session expired due to inactivity. Please log in again.',
-                    statusCode: 401,
-                });
+                return sendError(res, 401, 'Session expired due to inactivity. Please log in again.');
             }
 
             await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [payload.id]);
@@ -184,11 +156,7 @@ export const requireRole = (allowedRole: string) => {
                 user_agent: req.headers['user-agent'],
             });
 
-            return res.status(403).json({
-                success: false,
-                error: 'Access denied. Insufficient permissions.',
-                statusCode: 403,
-            });
+            return sendError(res, 403, 'Access denied. Insufficient permissions.');
         }
         next();
     };
@@ -213,11 +181,7 @@ export const authorizeRole = (roles: string[]) => {
                 user_agent: req.headers['user-agent'],
             });
 
-            return res.status(403).json({
-                success: false,
-                error: 'Access denied. Insufficient permissions.',
-                statusCode: 403,
-            });
+            return sendError(res, 403, 'Access denied. Insufficient permissions.');
         }
         next();
     };

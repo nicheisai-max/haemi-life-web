@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
@@ -35,13 +35,13 @@ interface ToastProviderProps {
 }
 
 export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
-    const [toasts, setToasts] = useState<Toast[]>([]);
+    const [toasts, setToasts] = React.useState<Toast[]>([]);
 
-    const removeToast = useCallback((id: string) => {
+    const removeToast = React.useCallback((id: string) => {
         setToasts(prev => prev.filter(toast => toast.id !== id));
     }, []);
 
-    const showToast = useCallback((message: string, type: ToastType = 'info', duration: number = 4000) => {
+    const showToast = React.useCallback((message: string, type: ToastType = 'info', duration: number = 4000) => {
         const id = `toast-${Date.now()}-${Math.random()}`;
         const newToast: Toast = { id, message, type, duration };
 
@@ -52,21 +52,32 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
         }
     }, [removeToast]);
 
-    const success = useCallback((message: string, duration?: number) => {
+    const success = React.useCallback((message: string, duration?: number) => {
         showToast(message, 'success', duration);
     }, [showToast]);
 
-    const error = useCallback((message: string, duration?: number) => {
+    const error = React.useCallback((message: string, duration?: number) => {
         showToast(message, 'error', duration);
     }, [showToast]);
 
-    const warning = useCallback((message: string, duration?: number) => {
+    const warning = React.useCallback((message: string, duration?: number) => {
         showToast(message, 'warning', duration);
     }, [showToast]);
 
-    const info = useCallback((message: string, duration?: number) => {
+    const info = React.useCallback((message: string, duration?: number) => {
         showToast(message, 'info', duration);
     }, [showToast]);
+
+    // Phase 4: Institutional Safety Layer - Global Error Listener
+    React.useEffect(() => {
+        const handleSystemError = (e: any) => {
+            const { message } = e.detail;
+            error(message || 'A critical system error occurred.');
+        };
+
+        window.addEventListener('system:error', handleSystemError);
+        return () => window.removeEventListener('system:error', handleSystemError);
+    }, [error]);
 
     const getIcon = (type: ToastType): React.ReactElement => {
         switch (type) {

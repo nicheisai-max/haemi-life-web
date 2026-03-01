@@ -31,21 +31,25 @@ import clinicalCopilotRoutes from './routes/clinical-copilot.routes';
 import commonRoutes from './routes/common.routes';
 import fileRoutes from './routes/file.routes';
 import consentRoutes from './routes/consent.routes';
+import profileRoutes from './routes/profile.routes';
 
 const app = express();
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : ['http://localhost:5173', 'http://127.0.0.1:5173'];
-
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || !env.isProduction || allowedOrigins.includes(origin)) return callback(null, true);
-        callback(new Error('CORS blocked'));
+        // Allow requests with no origin (like mobile apps or curl) 
+        // OR if origin is in our whitelist.
+        if (!origin || env.allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        callback(new Error('CORS_NOT_ALLOWED'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Pragma', 'Cache-Control'],
+    // Reflect requested headers in Access-Control-Allow-Headers.
+    // This permanently solves the 'expires' or any custom header issue.
+    allowedHeaders: undefined,
+    optionsSuccessStatus: 204,
 }));
 
 app.use(helmet({
@@ -152,6 +156,7 @@ app.use('/api/clinical-copilot', clinicalCopilotRoutes);
 app.use('/api/consents', consentRoutes);
 app.use('/api/common', commonRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/profiles', profileRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -166,14 +171,38 @@ const startServer = async () => {
         cors: { origin: "*", credentials: true }
     });
 
-    io.use((socket, next) => {
+    io.use(async (socket, next) => {
         const token = socket.handshake.auth.token;
-        if (!token) return next(new Error('Auth failed'));
-        jwt.verify(token, process.env.JWT_SECRET as string, (err: jwt.VerifyErrors | null, decoded: unknown) => {
-            if (err || !decoded) return next(new Error('Auth failed'));
-            (socket as AuthenticatedSocket).user = decoded as JWTPayload;
+        if (!token) return next(new Error('Authentication required'));
+
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as JWTPayload;
+
+            // Database-level verification: Check token_version and status
+            const userResult = await pool.query(
+                'SELECT token_version, status FROM users WHERE id = $1',
+                [decoded.id]
+            );
+
+            if (userResult.rows.length === 0) {
+                return next(new Error('User not found'));
+            }
+
+            const user = userResult.rows[0];
+            if (user.status !== 'ACTIVE') {
+                return next(new Error('User account is inactive'));
+            }
+
+            if (decoded.token_version !== user.token_version) {
+                return next(new Error('Session expired or revoked'));
+            }
+
+            (socket as AuthenticatedSocket).user = decoded;
             next();
-        });
+        } catch (err) {
+            logger.error('Socket authentication failed', { error: err });
+            next(new Error('Invalid authentication token'));
+        }
     });
 
     io.on('connection', (socket: import('socket.io').Socket) => {

@@ -19,15 +19,37 @@ export const authService = {
     },
 
     verifySession: async (): Promise<{ user: User }> => {
-        const response = await api.get<{ user: User }>('/auth/verify');
-        return response.data;
+        const response = await api.get<any>('/profiles/me');
+        const data = response.data;
+        return {
+            user: {
+                ...data,
+                name: data.profile.fullName,
+                profile_image: data.profile.avatar,
+                profile: data.profile
+            }
+        };
     },
 
     getMe: async (): Promise<{ user: User | null; authenticated: boolean }> => {
-        const response = await api.get<{ user: User | null; authenticated: boolean }>('/auth/me');
-        return response.data;
-    },
+        try {
+            const response = await api.get<any>('/profiles/me');
+            const data = response.data;
+            if (!data) return { user: null, authenticated: false };
 
+            return {
+                user: {
+                    ...data,
+                    name: data.profile.fullName,
+                    profile_image: data.profile.avatar,
+                    profile: data.profile
+                },
+                authenticated: true
+            };
+        } catch (error) {
+            return { user: null, authenticated: false };
+        }
+    },
     waitForBackend: async (maxRetries = 8, baseInterval = 1000): Promise<boolean> => {
         setIsCheckingBackend(true);
         let interval = baseInterval;

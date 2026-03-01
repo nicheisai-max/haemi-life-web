@@ -64,10 +64,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         };
 
         socket.on('connect_error', (err: Error) => {
-            // If socket 401s, it might need a refresh. 
-            // api.ts handles the actual refresh, we just wait for the event.
-            if (err.message === 'Authentication required' || err.message === 'Invalid authentication token') {
-                console.warn('[NotificationContext] Socket Auth Failed. Waiting for refresh...');
+            // Institutional Hardening: Silent re-auth via token refresh event
+            const isAuthError = err.message === 'Authentication required' ||
+                err.message === 'Invalid authentication token' ||
+                err.message === 'Session expired or revoked';
+
+            if (isAuthError) {
+                console.warn('[NotificationContext] Socket Auth Failed. Waiting for silent refresh...');
+            } else {
+                console.error('[NotificationContext] Connection error:', err.message);
             }
         });
 

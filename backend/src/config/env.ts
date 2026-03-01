@@ -24,4 +24,8 @@ export const env = {
     isProduction: process.env.NODE_ENV === 'production',
     isDemoMode: process.env.DEMO_MODE === 'true',
     port: process.env.PORT || 5000,
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+    allowedOrigins: process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+        : ['http://localhost:5173', 'http://127.0.0.1:5173']
 };
