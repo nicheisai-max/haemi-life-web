@@ -17,10 +17,11 @@ async function verifyPush() {
 
     console.log('[STEP] Environment Cleanup...');
     try {
-        execSync('node scripts/purgeStaleJS.js', { stdio: 'inherit' });
+        // Force delete stale JS files from src to prevent module resolution regressions
+        execSync('powershell -Command "Get-ChildItem -Path backend/src -Filter *.js -Recurse | Remove-Item -Force"', { stdio: 'inherit' });
         console.log('[PASS] Environment Cleanup');
     } catch (e) {
-        // Continue even if purge fails
+        console.warn('[WARN] Cleanup encountered an issue, continuing...');
     }
 
     if (!runStep('Backend Boot', 'npm --prefix backend run preflight')) process.exit(1);
