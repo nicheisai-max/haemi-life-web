@@ -15,6 +15,14 @@ function runStep(name, command) {
 async function verifyPush() {
     console.log('--- HAEMI LIFE SAFE PUSH PROTOCOL ---');
 
+    console.log('[STEP] Environment Cleanup...');
+    try {
+        execSync('node scripts/purgeStaleJS.js', { stdio: 'inherit' });
+        console.log('[PASS] Environment Cleanup');
+    } catch (e) {
+        // Continue even if purge fails
+    }
+
     if (!runStep('Backend Boot', 'npm --prefix backend run preflight')) process.exit(1);
 
     // Multi-role Verification Simulation
