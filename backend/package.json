@@ -12,7 +12,9 @@
     "db:seed": "tsx src/scripts/seed.ts",
     "test": "jest",
     "test:backend": "jest --runInBand --detectOpenHandles",
-    "test:e2e:backend": "tsx src/app.ts"
+    "test:e2e:backend": "tsx src/app.ts",
+    "preflight": "tsx src/utils/preflight.ts",
+    "wait-for-backend": "tsx src/utils/wait-for-backend.ts"
   },
   "keywords": [],
   "author": "",

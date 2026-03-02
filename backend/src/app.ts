@@ -13,7 +13,7 @@ import { notFound } from './middleware/notFound.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { authLimiter, apiLimiter } from './middleware/rate-limit.middleware';
 import { logger } from './utils/logger';
-import { pool } from './config/db';
+import { pool, checkConnection } from './config/db';
 import { env } from './config/env';
 
 // Routes
@@ -108,18 +108,24 @@ async function connectDB(retries = 5) {
     if (env.isProduction) process.exit(1);
 }
 
-// Health Probes
+// Health Probes (Phase 3 Contract)
 app.get('/health', async (_req, res) => {
     try {
-        await pool.query('SELECT 1');
+        await checkConnection();
         res.status(200).json({
-            success: true,
-            data: { status: 'OK', db: 'connected', demo: env.isDemoMode }
+            server: "up",
+            database: "connected",
+            uptime: process.uptime(),
+            version: process.env.npm_package_version || "1.0.0",
+            timestamp: new Date().toISOString()
         });
-    } catch {
-        res.status(500).json({
-            success: false,
-            data: { status: 'ERROR', db: 'disconnected', demo: env.isDemoMode }
+    } catch (err) {
+        res.status(503).json({
+            server: "up",
+            database: "disconnected",
+            uptime: process.uptime(),
+            version: process.env.npm_package_version || "1.0.0",
+            timestamp: new Date().toISOString()
         });
     }
 });
@@ -165,12 +171,46 @@ let io: Server | undefined;
 
 // Server & Sockets
 const startServer = async () => {
-    await connectDB();
-    const server = createServer(app);
-    io = new Server(server, {
-        cors: { origin: "*", credentials: true }
-    });
+    try {
+        logger.info('Starting boot sequence...');
 
+        // Phase 3: Strict DB Verification
+        await checkConnection();
+        logger.info('✅ Database verified.');
+
+        const server = createServer(app);
+        io = new Server(server, {
+            cors: { origin: "*", credentials: true }
+        });
+
+        // ... (Socket logic remains identical)
+        setupSockets(io);
+
+        const PORT = env.port;
+
+        if (process.env.NODE_ENV !== 'test') {
+            server.listen(PORT, () => {
+                console.log('\n-------------------------------------------');
+                console.log('🩺 HAEMI LIFE BACKEND STARTED');
+                console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+                console.log(`Port:        ${PORT}`);
+                console.log(`DB Status:   CONNECTED`);
+                console.log(`Timestamp:   ${new Date().toLocaleString()}`);
+                console.log('-------------------------------------------\n');
+            });
+        }
+        return server;
+    } catch (err: any) {
+        console.error('\n-------------------------------------------');
+        console.error('❌ FATAL: BACKEND BOOT FAILED');
+        console.error(`Reason: ${err.message}`);
+        console.error('-------------------------------------------\n');
+        process.exit(1);
+    }
+};
+
+// Extracted socket setup to keep startServer clean
+function setupSockets(io: Server) {
     io.use(async (socket, next) => {
         const token = socket.handshake.auth.token;
         if (!token) return next(new Error('Authentication required'));
@@ -240,14 +280,7 @@ const startServer = async () => {
 
         socket.on('disconnect', () => logger.info(`Socket disconnected: ${socket.id}`));
     });
-
-    const PORT = env.port;
-
-    if (process.env.NODE_ENV !== 'test') {
-        server.listen(PORT, () => logger.info(`🚀 Server on port ${PORT}`));
-    }
-    return server;
-};
+}
 
 if (process.env.NODE_ENV !== 'test') startServer();
 

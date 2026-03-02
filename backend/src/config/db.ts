@@ -17,3 +17,16 @@ export const pool = new Pool({
 pool.on('error', (err) => {
     console.error('[DB] Unexpected error on idle client:', err.message);
 });
+
+/**
+ * Verifies database connectivity.
+ * Fails fast if connection cannot be established.
+ */
+export async function checkConnection(): Promise<void> {
+    const client = await pool.connect();
+    try {
+        await client.query('SELECT 1');
+    } finally {
+        client.release();
+    }
+}

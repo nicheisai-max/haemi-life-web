@@ -8,6 +8,7 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "@types/node": "^25.3.3",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^9.39.3",
@@ -16,6 +17,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "playwright": "^1.58.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "scripts": {
@@ -23,7 +25,9 @@
     "test:frontend": "npm --prefix frontend run test:frontend",
     "test:e2e": "npm --prefix e2e run test",
     "test:auth": "npm run test:backend && npm run test:frontend && npm run test:e2e && powershell -Command \"Get-NetTCPConnection -LocalPort 5173,5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
-    "prepare": "husky"
+    "prepare": "husky",
+    "safe-dev": "tsx scripts/safe-dev.ts",
+    "demo": "tsx scripts/safe-dev.ts"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
