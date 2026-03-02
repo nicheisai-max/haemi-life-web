@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { app } from '../../app';
 import { pool } from '../../config/db';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 
 // Mock DB to prevent real schema mutations during test
 jest.mock('../../config/db', () => ({
@@ -46,7 +46,7 @@ describe('Profile API (Integration)', () => {
     it('should fetch patient profile with metadata', async () => {
         const mockQuery = pool.query as jest.Mock;
 
-        // Mock DB result for auth middleware
+        // 1. SELECT user (for authenticateToken)
         mockQuery.mockResolvedValueOnce({
             rows: [{
                 name: 'Test Patient',
@@ -60,8 +60,10 @@ describe('Profile API (Integration)', () => {
                 minutes_since_activity: 0
             }]
         });
+        // 2. UPDATE last_activity (for authenticateToken)
+        mockQuery.mockResolvedValueOnce({ rows: [] });
 
-        // Mock DB result for profile controller
+        // 3. Mock DB result for profile controller
         mockQuery.mockResolvedValueOnce({
             rows: [{
                 id: patientId,
@@ -97,7 +99,7 @@ describe('Profile API (Integration)', () => {
     it('should fetch doctor profile with metadata', async () => {
         const mockQuery = pool.query as jest.Mock;
 
-        // Mock DB result for auth middleware
+        // 1. SELECT user (for authenticateToken)
         mockQuery.mockResolvedValueOnce({
             rows: [{
                 name: 'Test Doctor',
@@ -111,8 +113,10 @@ describe('Profile API (Integration)', () => {
                 minutes_since_activity: 0
             }]
         });
+        // 2. UPDATE last_activity (for authenticateToken)
+        mockQuery.mockResolvedValueOnce({ rows: [] });
 
-        // Mock DB result for profile controller
+        // 3. Mock DB result for profile controller
         mockQuery.mockResolvedValueOnce({
             rows: [{
                 id: doctorId,
@@ -153,7 +157,7 @@ describe('Profile API (Integration)', () => {
     it('should return 404 if profile not found in DB', async () => {
         const mockQuery = pool.query as jest.Mock;
 
-        // Mock DB result for auth middleware
+        // 1. SELECT user (for authenticateToken)
         mockQuery.mockResolvedValueOnce({
             rows: [{
                 name: 'Test Patient',
@@ -167,8 +171,10 @@ describe('Profile API (Integration)', () => {
                 minutes_since_activity: 0
             }]
         });
+        // 2. UPDATE last_activity (for authenticateToken)
+        mockQuery.mockResolvedValueOnce({ rows: [] });
 
-        // Mock DB result for profile controller (not found)
+        // 3. Mock DB result for profile controller (not found)
         mockQuery.mockResolvedValueOnce({ rows: [] });
 
         const res = await request(app)

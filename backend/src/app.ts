@@ -6,7 +6,7 @@ import morgan from 'morgan';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { JWTPayload, AuthenticatedSocket } from './types/express';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 
 import { notFound } from './middleware/notFound.middleware';
@@ -93,20 +93,7 @@ if (env.isDemoMode) {
 }
 
 // DB Connection with Retry
-async function connectDB(retries = 5) {
-    for (let i = 0; i < retries; i++) {
-        try {
-            const client = await pool.connect();
-            logger.info('✅ DB Connected');
-            client.release();
-            return;
-        } catch (err) {
-            logger.error(`DB Attempt ${i + 1} fail: ${err instanceof Error ? err.message : ''}`);
-            if (i < retries - 1) await new Promise(r => setTimeout(r, 3000));
-        }
-    }
-    if (env.isProduction) process.exit(1);
-}
+// Removed redundant connectDB as startServer uses checkConnection
 
 // Health Probes (Phase 3 Contract)
 app.get('/health', async (_req, res) => {
@@ -119,7 +106,7 @@ app.get('/health', async (_req, res) => {
             version: process.env.npm_package_version || "1.0.0",
             timestamp: new Date().toISOString()
         });
-    } catch (err) {
+    } catch {
         res.status(503).json({
             server: "up",
             database: "disconnected",
@@ -200,10 +187,11 @@ const startServer = async () => {
             });
         }
         return server;
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const error = err as Error;
         console.error('\n-------------------------------------------');
         console.error('❌ FATAL: BACKEND BOOT FAILED');
-        console.error(`Reason: ${err.message}`);
+        console.error(`Reason: ${error.message}`);
         console.error('-------------------------------------------\n');
         process.exit(1);
     }
@@ -294,5 +282,5 @@ const shutdown = () => {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-process.on('unhandledRejection', (err) => logger.error('Unhandled Rejection', err));
-process.on('uncaughtException', (err) => logger.error('Uncaught Exception', err));
+process.on('unhandledRejection', (err) => logger.error('Unhandled Rejection', { error: err }));
+process.on('uncaughtException', (err) => logger.error('Uncaught Exception', { error: err }));

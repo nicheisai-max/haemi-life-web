@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { auditService } from '../services/audit.service';
 import { JWTPayload } from '../types/express';

@@ -2,17 +2,14 @@
     "compilerOptions": {
         "target": "ESNext",
         "module": "ESNext",
-        "moduleResolution": "node",
+        "moduleResolution": "bundler",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "types": [
-            "node"
-        ]
+        "allowSyntheticDefaultImports": true
     },
-    "include": [
-        "scripts/**/*.ts",
-        "backend/src/utils/preflight.ts"
+    "exclude": [
+        "node_modules"
     ]
 }

@@ -27,11 +27,15 @@
     "test:auth": "npm run test:backend && npm run test:frontend && npm run test:e2e && powershell -Command \"Get-NetTCPConnection -LocalPort 5173,5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
     "prepare": "husky",
     "safe-dev": "tsx scripts/safe-dev.ts",
-    "demo": "tsx scripts/safe-dev.ts"
+    "demo": "tsx scripts/safe-dev.ts",
+    "type-check": "npm --prefix backend run typecheck",
+    "lint": "npm --prefix backend run lint",
+    "test:ci": "npm run test:backend",
+    "verify:integrity": "node scripts/verifyCommitIntegrity.js"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
-      "npm --prefix backend run build"
+      "npm --prefix backend run lint"
     ],
     "frontend/src/**/*.{ts,tsx}": [
       "npm --prefix frontend run lint",

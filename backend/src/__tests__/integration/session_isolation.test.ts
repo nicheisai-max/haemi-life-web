@@ -1,12 +1,13 @@
 import request from 'supertest';
 import { app } from '../../app';
 import { pool } from '../../config/db';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 
 // Mock DB to prevent real schema mutations during test
 jest.mock('../../config/db', () => ({
     pool: {
         query: jest.fn(),
+        connect: jest.fn(),
         end: jest.fn(),
     }
 }));
@@ -49,6 +50,9 @@ describe('Session Isolation (Phase 2)', () => {
                 }]
             });
 
+            // Mock the version increment on reuse detection
+            mockQuery.mockResolvedValueOnce({ rows: [] });
+
             // 3. Attempt to refresh
             const res = await request(app)
                 .post('/api/auth/refresh-token')
@@ -61,8 +65,8 @@ describe('Session Isolation (Phase 2)', () => {
 
             // Verify that the cookie was cleared
             const setCookie = res.headers['set-cookie'][0];
-            expect(setCookie).toMatch(/refreshToken=;/);
-            expect(setCookie).toMatch(/HttpOnly/);
+            expect(setCookie).toMatch(/refreshToken=;/i);
+            expect(setCookie).toMatch(/HttpOnly/i);
         });
 
         it('should accept refresh token with matching token_version', async () => {
@@ -101,9 +105,9 @@ describe('Session Isolation (Phase 2)', () => {
 
             // Verify new cookie is set with strict settings
             const setCookie = res.headers['set-cookie'][0];
-            expect(setCookie).toMatch(/HttpOnly/);
-            expect(setCookie).toMatch(/SameSite=Strict/);
-            expect(setCookie).toMatch(/path=\//);
+            expect(setCookie).toMatch(/HttpOnly/i);
+            expect(setCookie).toMatch(/SameSite=Strict/i);
+            expect(setCookie).toMatch(/path=\//i);
         });
     });
 
@@ -118,9 +122,7 @@ describe('Session Isolation (Phase 2)', () => {
                 { expiresIn: '1h' }
             );
 
-            // Mock DB for auth middleware verifySession logic if needed, 
-            // but logout uses req.user which is populated by authenticateToken.
-            // authenticateToken calls findById.
+            // 1. SELECT user (for authenticateToken)
             mockQuery.mockResolvedValueOnce({
                 rows: [{
                     name: 'Test',
@@ -128,9 +130,12 @@ describe('Session Isolation (Phase 2)', () => {
                     profile_image: null,
                     status: 'ACTIVE',
                     role: 'patient',
-                    token_version: 1
+                    token_version: 1,
+                    minutes_since_activity: 5
                 }]
             });
+            // 2. UPDATE last_activity (for authenticateToken)
+            mockQuery.mockResolvedValueOnce({ rows: [] });
 
             // Mock the UPDATE query in logout
             mockQuery.mockResolvedValueOnce({ rows: [] });
@@ -144,14 +149,14 @@ describe('Session Isolation (Phase 2)', () => {
 
             // Verify the UPDATE query was called to increment token_version
             expect(mockQuery).toHaveBeenCalledWith(
-                expect.stringMatching(/UPDATE users SET token_version = token_version \+ 1/),
+                expect.stringMatching(/UPDATE users SET token_version = token_version \+ 1/i),
                 [userId]
             );
 
             // Verify cookie is cleared with path=/
             const setCookie = res.headers['set-cookie'][0];
-            expect(setCookie).toMatch(/refreshToken=;/);
-            expect(setCookie).toMatch(/path=\//);
+            expect(setCookie).toMatch(/refreshToken=;/i);
+            expect(setCookie).toMatch(/path=\//i);
         });
     });
 });

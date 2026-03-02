@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import multer from 'multer';
-import path from 'path';
+import * as multer from 'multer';
+import * as path from 'path';
 import { authenticateToken, requireRole } from '../middleware/auth.middleware';
 import { getMyRecords, uploadRecord, deleteRecord } from '../controllers/record.controller';
 

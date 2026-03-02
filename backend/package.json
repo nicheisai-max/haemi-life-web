@@ -6,7 +6,7 @@
     "start": "node dist/app.js",
     "dev": "tsx watch src/app.ts",
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings=0",
     "db:setup": "tsx src/utils/setup-db.ts",
     "db:seed": "tsx src/scripts/seed.ts",

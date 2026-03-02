@@ -1,5 +1,5 @@
-import dotenv from 'dotenv';
-import path from 'path';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 import { logger } from '../utils/logger';
 
 // Explicitly load .env from the root of the backend directory

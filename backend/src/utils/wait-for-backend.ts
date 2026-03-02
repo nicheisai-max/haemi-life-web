@@ -15,7 +15,7 @@ async function waitForBackend() {
                 console.log('\n[WAIT] Backend is UP and Healthy.');
                 process.exit(0);
             }
-        } catch (err) {
+        } catch {
             // Silence errors during polling
         }
 
