@@ -41,11 +41,13 @@ export const VideoConsultation: React.FC = () => {
 
     // 1. Fetch Appointment Data
     useEffect(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const handleTokenRefreshed = (e: any) => {
-            const newToken = e.detail.token;
+            const newToken = e.detail?.token;
             if (socketRef.current && newToken) {
-                // @ts-ignore - Update token directly to prevent re-renders
-                socketRef.current.auth.token = newToken;
+                // Enterprise Fix: Safely update token on existing socket instance
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (socketRef.current as any).auth.token = newToken;
             }
         };
 

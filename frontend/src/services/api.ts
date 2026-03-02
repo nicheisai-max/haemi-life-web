@@ -3,15 +3,10 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api';
 
 // DEMO MODE FLAG
-// @ts-ignore
 const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 
 // Memory Token Storage (Closure)
 let accessToken: string | null = null;
-
-// Task 5: DEMO SHIELD LOCK
-// @ts-ignore
-const DEMO_SHIELD = import.meta.env.VITE_DEMO_SHIELD === 'true' || IS_DEMO_MODE;
 
 export const setAccessToken = (token: string | null) => {
     accessToken = token;
@@ -27,8 +22,8 @@ export const getAccessToken = () => accessToken;
 let appInitialized = false;
 let initializationQueue: {
     config: ExtendedRequestConfig;
-    resolve: (value: any) => void;
-    reject: (reason?: any) => void
+    resolve: (value: unknown) => void;
+    reject: (reason?: unknown) => void
 }[] = [];
 
 export const setAppInitialized = () => {
@@ -37,14 +32,48 @@ export const setAppInitialized = () => {
 
 // Process initialization queue
 if (typeof window !== 'undefined') {
-    window.addEventListener('auth:ready', () => {
+    const checkBackendReady = async () => {
+        try {
+            const res = await axios.get(`${API_URL}/health/ready`, { timeout: 2000 });
+            if (res.data?.status === 'ready') {
+                return true;
+            }
+        } catch {
+            return false;
+        }
+        return false;
+    };
+
+    const flushQueue = () => {
         appInitialized = true;
         initializationQueue.forEach(({ config, resolve, reject }) => {
             if (accessToken && config.headers) config.headers.Authorization = `Bearer ${accessToken}`;
             api(config).then(resolve).catch(reject);
         });
         initializationQueue = [];
-    });
+    };
+
+    const orchestrateStartup = async () => {
+        // Phase 1: Wait for backend readiness (Exponential Backoff)
+        let ready = false;
+        let attempts = 0;
+        while (!ready && attempts < 15) {
+            ready = await checkBackendReady();
+            if (!ready) {
+                attempts++;
+                await new Promise(r => setTimeout(r, Math.min(1000 * attempts, 5000)));
+            }
+        }
+
+        // Phase 2: Wait for Auth Ready (if not already handled)
+        if (appInitialized) {
+            flushQueue();
+        } else {
+            window.addEventListener('auth:ready', flushQueue, { once: true });
+        }
+    };
+
+    orchestrateStartup();
 }
 
 // Custom interface for request configuration
@@ -116,11 +145,13 @@ api.interceptors.request.use(
             return Promise.reject(new Error('Circuit is OPEN.'));
         }
 
-        const isAuthRoute = config.url?.includes('/auth/');
-        if (!appInitialized && !isAuthRoute) {
+        const isDiscoveryRoute = config.url?.includes('/auth/') ||
+            config.url?.includes('/health/') ||
+            config.url?.includes('/profiles/me');
+        if (!appInitialized && !isDiscoveryRoute) {
             return new Promise((resolve, reject) => {
                 initializationQueue.push({ config, resolve, reject });
-            }) as any;
+            }) as unknown as Promise<InternalAxiosRequestConfig>;
         }
 
         if (accessToken && config.headers) config.headers.Authorization = `Bearer ${accessToken}`;
@@ -131,9 +162,9 @@ api.interceptors.request.use(
 
 // ─── FIX 3 & 5: Single-Flight Refresh & Race Condition Handling ──────────────
 let isRefreshing = false;
-let failedQueue: { resolve: (token: string) => void; reject: (err: any) => void }[] = [];
+let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
     failedQueue.forEach(prom => {
         if (error) prom.reject(error);
         else if (token) prom.resolve(token);
@@ -209,9 +240,36 @@ api.interceptors.response.use(
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
                 }).then(token => {
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    if (originalRequest.headers) {
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                    }
                     return api(originalRequest);
                 }).catch(err => Promise.reject(err));
+            }
+
+            // Institutional Hardening: Session Recovery Window
+            // If the app is still initializing (discovering session), we wait up to 5s
+            // before giving up on a 401. This prevents race-based logouts on refresh.
+            if (!appInitialized) {
+                return new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        window.removeEventListener('auth:ready', onAuthReady);
+                        reject(error);
+                    }, 5000);
+
+                    const onAuthReady = () => {
+                        clearTimeout(timeout);
+                        if (accessToken) {
+                            if (originalRequest.headers) {
+                                originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                            }
+                            resolve(api(originalRequest));
+                        } else {
+                            reject(error);
+                        }
+                    };
+                    window.addEventListener('auth:ready', onAuthReady, { once: true });
+                }) as unknown as Promise<unknown>;
             }
 
             originalRequest._retry = true;
@@ -232,17 +290,20 @@ api.interceptors.response.use(
                 isRefreshing = false;
                 processQueue(null, token);
 
-                originalRequest.headers.Authorization = `Bearer ${token}`;
+                if (originalRequest.headers) {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                }
                 return api(originalRequest);
-            } catch (rawErr: any) {
+            } catch (rawErr: unknown) {
                 isRefreshing = false;
                 processQueue(rawErr, null);
 
                 if (!appInitialized) return Promise.reject(rawErr);
 
                 // Handle refresh failure (could be 401, 403, or Network Error)
-                const isNetworkErr = !rawErr.response;
-                const isAuthRejection = rawErr.response && (rawErr.response.status === 401 || rawErr.response.status === 403);
+                const error = rawErr as AxiosError;
+                const isNetworkErr = !error.response;
+                const isAuthRejection = error.response && (error.response.status === 401 || error.response.status === 403);
 
                 // If it's a network error during refresh, or explicit rejection, we mark session invalid
                 if (isNetworkErr || isAuthRejection) {

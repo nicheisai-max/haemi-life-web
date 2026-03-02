@@ -2,8 +2,9 @@ import { Request, Response } from 'express';
 import { recordRepository } from '../repositories/record-repository';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
+import { pool } from '../config/db';
 
-// Get patient's medical records
+// Get current patient's own medical records
 export const getMyRecords = async (req: Request, res: Response) => {
     try {
         const user = req.user as JWTPayload;
@@ -18,7 +19,42 @@ export const getMyRecords = async (req: Request, res: Response) => {
     }
 };
 
-// Upload a new medical record
+// Get records for a specific patient (Doctor/Pharmacist oversight)
+export const getPatientRecords = async (req: Request, res: Response) => {
+    try {
+        const user = req.user as JWTPayload;
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = user.id;
+        const role = user.role;
+        const { patientId } = req.params;
+
+        if (role === 'patient' && userId !== patientId) {
+            return sendError(res, 403, 'Cannot access other patients records');
+        }
+
+        // Institutional Hardening: Relationship check for clinical roles
+        if (role === 'doctor' || role === 'pharmacist') {
+            const relationship = await pool.query(
+                `SELECT 1 FROM appointments 
+                 WHERE (doctor_id = $1 OR 1=1) AND patient_id = $2 
+                 LIMIT 1`,
+                [userId, patientId]
+            );
+
+            if (relationship.rows.length === 0 && role === 'doctor') {
+                return sendError(res, 403, 'No clinical relationship established with this patient');
+            }
+        }
+
+        const records = await recordRepository.findByPatientId(patientId as string);
+        sendResponse(res, 200, true, 'Patient records fetched', records);
+    } catch (error) {
+        console.error('Error fetching patient records:', error);
+        sendError(res, 500, 'Error fetching patient records');
+    }
+};
+
+// Upload a new medical record (Patient only)
 export const uploadRecord = async (req: Request, res: Response) => {
     try {
         const user = req.user as JWTPayload;
@@ -36,7 +72,7 @@ export const uploadRecord = async (req: Request, res: Response) => {
         const newRecord = await recordRepository.create({
             patientId: patientId as string,
             name: originalname,
-            filePath: 'DB_ONLY', // Indicate file stored in DB
+            filePath: 'DB_ONLY',
             fileData: buffer,
             fileMime: mimetype,
             fileSize: fileSize,
@@ -54,14 +90,15 @@ export const uploadRecord = async (req: Request, res: Response) => {
     }
 };
 
-// Get a medical record by ID
+// Get a medical record by ID (Role-based access)
 export const getRecordById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
+        const { id: userId, role } = user;
 
-        const record = await recordRepository.findById(id as string, user.id as string);
+        const record = await recordRepository.findById(id as string, userId as string, role as string);
 
         if (!record) {
             return sendError(res, 404, 'Record not found or access denied');
@@ -74,24 +111,26 @@ export const getRecordById = async (req: Request, res: Response) => {
     }
 };
 
-// Delete a medical record (soft delete)
+// Delete a medical record (Soft delete, Patient owner only)
 export const deleteRecord = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
+        const { id: userId, role } = user;
 
-        const record = await recordRepository.findById(id as string, user.id as string);
+        // Institutional Hardening: Only patients can delete their own records
+        if (role !== 'patient') {
+            return sendError(res, 403, 'Only patients can delete their own records');
+        }
+
+        const record = await recordRepository.findById(id as string, userId as string, role as string);
 
         if (!record) {
             return sendError(res, 404, 'Record not found or access denied');
         }
 
         await recordRepository.softDelete(id as string);
-
-        // Enterprise Compliance: Do NOT delete physical files.
-        // We preserve them for audit and recovery purposes.
-
         sendResponse(res, 200, true, 'Medical record deleted successfully');
     } catch (error) {
         console.error('Error deleting medical record:', error);

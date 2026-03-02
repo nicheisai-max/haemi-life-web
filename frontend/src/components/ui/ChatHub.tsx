@@ -226,7 +226,6 @@ export const ChatHub: React.FC = () => {
         if (!user?.id) return;
         // DEMO SHIELD: Reduce background polling to near-zero to prioritize socket performance
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-        // @ts-ignore
         const DEMO_SHIELD = import.meta.env.VITE_DEMO_SHIELD === 'true' || IS_DEMO_MODE;
         const intervalTime = DEMO_SHIELD ? 600000 : 30000; // 10m vs 30s
 
@@ -338,7 +337,7 @@ export const ChatHub: React.FC = () => {
         }
 
         const displayName = other.name && other.name !== 'Unknown' ? other.name : 'Health Professional';
-        const participant = other as any;
+        const participant = other as { id: string; name: string; role: string; profile_image?: string; initials?: string };
         const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
         const dbImage = participant.id !== 'unknown' ? `${baseUrl}/api/files/profile/${participant.id}` : '';
 
@@ -355,11 +354,7 @@ export const ChatHub: React.FC = () => {
             const other = getOtherParticipant(c);
             const matchesSearch = other.name.toLowerCase().includes(searchTerm.toLowerCase());
 
-            // Hide broken/ghost conversations definitely
-            const isEncryptedRaw = c.last_message?.startsWith('enc:') || c.last_message?.startsWith('enc-');
-            const hasMessages = parseInt(c.message_count || '0') > 0;
-
-            return matchesSearch && !isEncryptedRaw && hasMessages;
+            return matchesSearch;
         });
     }, [conversations, searchTerm, getOtherParticipant]);
 
@@ -729,16 +724,16 @@ export const ChatHub: React.FC = () => {
                                                 No doctors found.
                                             </div>
                                         ) : (
-                                            filteredDoctors.map((doc: any) => (
+                                            filteredDoctors.map((doc: DoctorProfile) => (
                                                 <button
                                                     key={doc.id}
                                                     onClick={() => handleStartNewChat(doc)}
                                                     className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 dark:hover:bg-accent/20 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
                                                 >
-                                                    <Avatar name={doc.user?.name || doc.name} initials={doc.user?.initials || doc.initials} image={getDoctorImage(doc.user?.name || doc.name)} size="md" />
+                                                    <Avatar name={doc.name} image={getDoctorImage(doc.name)} size="md" />
                                                     <div className="flex-1 min-w-0">
                                                         <h4 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-primary transition-colors">
-                                                            {doc.user?.name || doc.name}
+                                                            {doc.name}
                                                         </h4>
                                                         <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">
                                                             {doc.specialization || 'General Practitioner'}

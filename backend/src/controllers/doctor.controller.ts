@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { sendError } from '../utils/response';
+import { logger } from '../utils/logger';
 
 // Get all verified doctors (Public/Patient access)
 export const listDoctors = async (req: Request, res: Response) => {
@@ -107,8 +108,8 @@ export const updateDoctorProfile = async (req: Request, res: Response) => {
 
         res.json({ message: 'Profile updated successfully', profile: result.rows[0] });
     } catch (error) {
-        console.error('Error updating doctor profile:', error);
-        res.status(500).json({ message: 'Error updating profile' });
+        logger.error('Error updating doctor profile:', error);
+        return sendError(res, 500, 'Error updating profile');
     }
 };
 

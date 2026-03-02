@@ -24,11 +24,23 @@ export const recordRepository = {
         return result.rows;
     },
 
-    async findById(id: string, patientId: string): Promise<MedicalRecord | null> {
-        const result = await pool.query(
-            'SELECT * FROM medical_records WHERE id = $1 AND patient_id = $2 AND deleted_at IS NULL',
-            [id, patientId]
-        );
+    async findById(id: string, userId: string, role: string): Promise<MedicalRecord | null> {
+        let query = '';
+        let params: (string | number | boolean | null)[] = [];
+
+        if (role === 'patient') {
+            query = 'SELECT * FROM medical_records WHERE id = $1 AND patient_id = $2 AND deleted_at IS NULL';
+            params = [id, userId];
+        } else if (role === 'doctor' || role === 'pharmacist' || role === 'admin') {
+            // Doctors and Pharmacists can view any record they have the ID for (Enterprise Context)
+            // Admin has full oversight.
+            query = 'SELECT * FROM medical_records WHERE id = $1 AND deleted_at IS NULL';
+            params = [id];
+        } else {
+            return null;
+        }
+
+        const result = await pool.query(query, params);
         return result.rows.length ? result.rows[0] : null;
     },
 

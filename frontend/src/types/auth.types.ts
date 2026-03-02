@@ -3,7 +3,7 @@ export type UserRole = 'patient' | 'doctor' | 'admin' | 'pharmacist';
 export interface UserProfile {
     fullName: string;
     avatar: string | null;
-    metadata: Record<string, any>;
+    metadata: Record<string, unknown>;
 }
 
 export interface User {
@@ -38,5 +38,5 @@ export interface SignupCredentials {
     role: UserRole;
     id_number?: string;
     // Dynamic fields for other roles can be added here or in extended types
-    [key: string]: any;
+    [key: string]: unknown;
 }

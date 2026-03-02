@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import multer from 'multer';   // ✅ FIXED
+import multer from 'multer';
 import path from 'path';
 import { authenticateToken, requireRole } from '../middleware/auth.middleware';
-import { getMyRecords, uploadRecord, deleteRecord } from '../controllers/record.controller';
+import { getMyRecords, uploadRecord, deleteRecord, getRecordById, getPatientRecords } from '../controllers/record.controller';
 
 const router = Router();
 
@@ -23,10 +23,14 @@ const upload = multer({
 });
 
 router.use(authenticateToken);
-router.use(requireRole('patient'));
 
+// GET is allowed for all authenticated clinical roles (access logic in controller/repo)
 router.get('/', getMyRecords);
-router.post('/upload', upload.single('file'), uploadRecord);
-router.delete('/:id', deleteRecord);
+router.get('/patient/:patientId', getPatientRecords);
+router.get('/:id', getRecordById);
+
+// POST/DELETE is restricted to patients (uploading their own data)
+router.post('/upload', requireRole('patient'), upload.single('file'), uploadRecord);
+router.delete('/:id', requireRole('patient'), deleteRecord);
 
 export default router;

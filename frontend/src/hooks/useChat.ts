@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import io from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { encrypt, decrypt } from '../utils/security';
-
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { socketService } from '../services/socket.service';
 
 export interface Message {
+    // ... existing interface
     id: string; conversation_id: string; sender_id: string; content: string;
     message_type: 'text' | 'file'; attachments?: { url: string; type: string; size: number; name?: string }[];
     is_read: boolean; status: 'sent' | 'delivered' | 'read'; delivered_at?: string;
@@ -22,8 +21,7 @@ export interface Conversation {
 }
 
 export const useChat = () => {
-    const { user, token, authStatus } = useAuth();
-    const [socket, setSocket] = useState<any>(null);
+    const { user, token, isAuthenticated } = useAuth();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -34,25 +32,25 @@ export const useChat = () => {
     useEffect(() => { activeConversationRef.current = activeConversation; }, [activeConversation]);
 
     const fetchConversations = useCallback(async () => {
-        if (authStatus !== 'authenticated') return;
+        if (!isAuthenticated) return;
         try {
             const res = await api.get('/chat/conversations');
             const data = res.data;
-            const decryptedConversations = await Promise.all(data.map(async (conv: any) => ({
+            const decryptedConversations = await Promise.all(data.map(async (conv: Conversation) => ({
                 ...conv,
                 last_message: conv.last_message ? await decrypt(conv.last_message) : conv.last_message
             })));
             setConversations(decryptedConversations);
-        } catch (error) {
-            console.error('Failed to fetch conversations', error);
+        } catch {
+            console.error('Failed to fetch conversations');
         }
-    }, [authStatus]);
+    }, [isAuthenticated]);
 
     const loadMessages = useCallback(async (conversationId: string) => {
         setLoading(true);
         try {
             const res = await api.get(`/chat/messages/${conversationId}`);
-            const formattedMessages = await Promise.all(res.data.map(async (msg: any) => ({
+            const formattedMessages = await Promise.all(res.data.map(async (msg: Message) => ({
                 ...msg,
                 content: await decrypt(msg.content),
                 isMe: msg.sender_id === user?.id,
@@ -67,114 +65,81 @@ export const useChat = () => {
             }
             await api.put(`/chat/conversations/${conversationId}/read`);
             fetchConversations();
-        } catch (error) {
-            console.error('Failed to load messages', error);
+        } catch {
+            console.error('Failed to load messages');
         } finally {
             setLoading(false);
         }
     }, [user, fetchConversations]);
 
     useEffect(() => {
-        if (user && token && authStatus === 'authenticated') {
-            const newSocket = io(SOCKET_URL, {
-                auth: { token },
-                transports: ['websocket'],
-                reconnection: true,
-                reconnectionDelay: 1000,
-                reconnectionDelayMax: 5000,
-            });
+        if (!isAuthenticated || !token || !user?.id) return;
 
-            newSocket.on('connect_error', (err: Error) => {
-                const isAuthError = err.message === 'Authentication required' ||
-                    err.message === 'Invalid authentication token' ||
-                    err.message === 'Session expired or revoked';
-
-                if (isAuthError) {
-                    // Handled by auth:token-refreshed listener
-                    console.warn('[useChat] Socket Auth Failed. Waiting for silent refresh...');
-                } else {
-                    console.error('[useChat] Connection error:', err.message);
-                }
-            });
-
-            // FIX 4: Socket Auth Revalidation
-            const handleTokenRefreshed = (e: any) => {
-                const newToken = e.detail.token;
-                if (newSocket && newToken) {
-                    // @ts-ignore
-                    newSocket.auth.token = newToken;
-                    if (!newSocket.connected) newSocket.connect();
-                }
-            };
-
-            window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
-
-            newSocket.on('message_reaction', ({ messageId, userId, reactionType, action }: any) => {
-                setMessages(prev => prev.map(msg => {
-                    if (msg.id === messageId) {
-                        const reactions = msg.reactions || [];
-                        if (action === 'added') {
-                            const filtered = reactions.filter(r => r.userId !== userId);
-                            return { ...msg, reactions: [...filtered, { type: reactionType, userId }] };
-                        } else {
-                            return { ...msg, reactions: reactions.filter(r => !(r.userId === userId && r.type === reactionType)) };
-                        }
+        const onReaction = ({ messageId, userId, reactionType, action }: { messageId: string, userId: string, reactionType: string, action: 'added' | 'removed' }) => {
+            setMessages(prev => prev.map(msg => {
+                if (msg.id === messageId) {
+                    const reactions = msg.reactions || [];
+                    if (action === 'added') {
+                        const filtered = reactions.filter(r => r.userId !== userId);
+                        return { ...msg, reactions: [...filtered, { type: reactionType, userId }] };
+                    } else {
+                        return { ...msg, reactions: reactions.filter(r => !(r.userId === userId && r.type === reactionType)) };
                     }
-                    return msg;
-                }));
-            });
-
-            newSocket.on('message_deleted', ({ messageId, forEveryone }: any) => {
-                if (forEveryone) setMessages(prev => prev.filter(msg => msg.id !== messageId));
-            });
-
-            newSocket.on('user_typing', ({ userId, isTyping }: { userId: string, isTyping: boolean }) => {
-                if (isTyping) setTypingUsers((prev: string[]) => [...new Set([...prev, userId])]);
-                else setTypingUsers((prev: string[]) => prev.filter(id => id !== userId));
-            });
-
-            newSocket.on('messages_delivered', ({ conversation_id, message_ids }: any) => {
-                if (activeConversationRef.current?.id === conversation_id) {
-                    setMessages(prev => prev.map(msg =>
-                        message_ids.includes(msg.id) ? { ...msg, status: 'delivered' } : msg
-                    ));
                 }
-            });
+                return msg;
+            }));
+        };
 
-            newSocket.on('messages_read', ({ conversation_id, message_ids }: any) => {
-                if (activeConversationRef.current?.id === conversation_id) {
-                    setMessages(prev => prev.map(msg =>
-                        message_ids.includes(msg.id) ? { ...msg, status: 'read', is_read: true } : msg
-                    ));
-                }
-                fetchConversations();
-            });
+        const onDeleted = ({ messageId, forEveryone }: { messageId: string, forEveryone: boolean }) => {
+            if (forEveryone) setMessages(prev => prev.filter(msg => msg.id !== messageId));
+        };
 
-            setSocket(newSocket);
-            return () => {
-                window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
-                newSocket.disconnect();
-            };
-        }
-    }, [user?.id, token]); // Re-run if user ID or token changes
+        const onTyping = ({ userId, isTyping }: { userId: string, isTyping: boolean }) => {
+            if (isTyping) setTypingUsers((prev: string[]) => [...new Set([...prev, userId])]);
+            else setTypingUsers((prev: string[]) => prev.filter(id => id !== userId));
+        };
 
-    useEffect(() => {
-        if (!socket) return;
-        const handler = async (message: Message) => {
+        const onDelivered = ({ conversation_id, message_ids }: { conversation_id: string, message_ids: string[] }) => {
+            if (activeConversationRef.current?.id === conversation_id) {
+                setMessages(prev => prev.map(msg =>
+                    message_ids.includes(msg.id) ? { ...msg, status: 'delivered' } : msg
+                ));
+            }
+        };
+
+        const onRead = ({ conversation_id, message_ids }: { conversation_id: string, message_ids: string[] }) => {
+            if (activeConversationRef.current?.id === conversation_id) {
+                setMessages(prev => prev.map(msg =>
+                    message_ids.includes(msg.id) ? { ...msg, status: 'read', is_read: true } : msg
+                ));
+            }
+            fetchConversations();
+        };
+
+        const onReceiveMessage = async (message: Message) => {
             const decryptedContent = await decrypt(message.content);
             const decryptedReplyContent = message.reply_to ? await decrypt(message.reply_to.content) : undefined;
 
-            if (activeConversation && message.conversation_id === activeConversation.id) {
+            if (activeConversationRef.current && message.conversation_id === activeConversationRef.current.id) {
                 setMessages((prev: Message[]) => {
                     if (prev.some(m => String(m.id) === String(message.id))) return prev;
-                    return [...prev, {
-                        ...message,
-                        content: decryptedContent,
-                        isMe: message.sender_id === user?.id,
-                        reply_to: message.reply_to ? { ...message.reply_to, content: decryptedReplyContent! } : undefined
-                    }];
+
+                    return [
+                        ...prev,
+                        {
+                            ...message,
+                            content: decryptedContent,
+                            isMe: message.sender_id === user?.id,
+                            reply_to:
+                                message.reply_to && decryptedReplyContent
+                                    ? { ...message.reply_to, content: decryptedReplyContent }
+                                    : undefined
+                        }
+                    ];
                 });
-                api.put(`/chat/conversations/${activeConversation.id}/delivered`).catch(console.error);
+                api.put(`/chat/conversations/${activeConversationRef.current.id}/delivered`).catch(() => {
+                    // Silent optimization failure
+                });
             } else if (message.sender_id !== user?.id) {
                 setConversations(prev => {
                     const index = prev.findIndex(c => c.id === message.conversation_id);
@@ -194,9 +159,24 @@ export const useChat = () => {
             }
             fetchConversations();
         };
-        socket.on('receive_message', handler);
-        return () => { socket.off('receive_message', handler); };
-    }, [socket, activeConversation, user, fetchConversations]);
+
+        socketService.connect(token);
+        socketService.on('message_reaction', onReaction);
+        socketService.on('message_deleted', onDeleted);
+        socketService.on('user_typing', onTyping);
+        socketService.on('messages_delivered', onDelivered);
+        socketService.on('messages_read', onRead);
+        socketService.on('receive_message', onReceiveMessage);
+
+        return () => {
+            socketService.off('message_reaction', onReaction);
+            socketService.off('message_deleted', onDeleted);
+            socketService.off('user_typing', onTyping);
+            socketService.off('messages_delivered', onDelivered);
+            socketService.off('messages_read', onRead);
+            socketService.off('receive_message', onReceiveMessage);
+        };
+    }, [isAuthenticated, user?.id, token, fetchConversations]);
 
     const sendMessage = async (content: string, conversationId: string, attachmentUrl?: string, attachmentType?: string, replyToId?: string) => {
         try {
@@ -207,13 +187,13 @@ export const useChat = () => {
                 attachment: attachmentUrl ? { url: attachmentUrl, type: attachmentType } : undefined,
                 replyToId
             });
-        } catch (error) { console.error('Failed to send message', error); }
+        } catch { console.error('Failed to send message'); }
     };
 
     const selectConversation = (conversation: Conversation) => {
         setActiveConversation(conversation);
         loadMessages(conversation.id);
-        if (socket) socket.emit('join_conversation', conversation.id);
+        socketService.emit('join_conversation', conversation.id);
         api.put(`/chat/conversations/${conversation.id}/read`).then(() => fetchConversations()).catch(console.error);
     };
 
@@ -223,13 +203,13 @@ export const useChat = () => {
             const { conversationId } = res.data;
             await fetchConversations();
             const newConv = conversations.find((c: Conversation) => c.id === conversationId) ||
-                (await api.get('/chat/conversations')).data.find((c: any) => c.id === conversationId);
+                (await api.get('/chat/conversations')).data.find((c: Conversation) => c.id === conversationId);
             if (newConv) selectConversation(newConv);
-        } catch (error) { console.error('Failed to start conversation', error); }
+        } catch { console.error('Failed to start conversation'); }
     };
 
     const emitTyping = (conversationId: string, isTyping: boolean) => {
-        if (socket && user) socket.emit('typing', { conversationId, userId: user.id, isTyping });
+        if (user) socketService.emit('typing', { conversationId, userId: user.id, isTyping });
     };
 
     const uploadAttachment = async (file: File) => {
@@ -238,14 +218,14 @@ export const useChat = () => {
         try {
             const res = await api.post('/chat/attachments', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             return res.data;
-        } catch (error) { console.error('Failed to upload', error); return null; }
+        } catch { console.error('Failed to upload'); return null; }
     };
 
     const deleteMessage = async (messageId: string, forEveryone: boolean) => {
         const previousMessages = [...messages];
         setMessages(prev => prev.filter(msg => msg.id !== messageId));
         try { await api.post(`/chat/messages/${messageId}/delete`, { forEveryone }); }
-        catch (error) { setMessages(previousMessages); }
+        catch { setMessages(previousMessages); }
     };
 
     const reactToMessage = async (messageId: string, reactionType: string) => {
@@ -256,17 +236,17 @@ export const useChat = () => {
                 const existing = reactions.find(r => r.userId === user?.id && r.type === reactionType);
                 if (existing) return { ...msg, reactions: reactions.filter(r => r.userId !== user?.id) };
                 const withoutMyReactions = reactions.filter(r => r.userId !== user?.id);
-                return { ...msg, reactions: [...withoutMyReactions, { type: reactionType, userId: user?.id! }] };
+                return { ...msg, reactions: [...withoutMyReactions, { type: reactionType, userId: user?.id ?? '' }] };
             }
             return msg;
         }));
         try { await api.post(`/chat/messages/${messageId}/react`, { reactionType }); }
-        catch (error) { setMessages(previousMessages); }
+        catch { setMessages(previousMessages); }
     };
 
     const markAsRead = useCallback(async (conversationId: string) => {
         try { await api.put(`/chat/conversations/${conversationId}/read`); fetchConversations(); }
-        catch (error) { console.error('Failed to mark read', error); }
+        catch { console.error('Failed to mark read'); }
     }, [fetchConversations]);
 
     return {

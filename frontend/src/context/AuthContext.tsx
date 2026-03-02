@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { AxiosError } from 'axios';
 
 import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
 import { authService } from '../services/auth.service';
@@ -96,20 +97,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const initAuth = async () => {
             try {
+                // Determine if we have a stale session to "recover"
+                const hasStaleSession = !!sessionStorage.getItem('user');
+                if (hasStaleSession && mounted) {
+                    setAuthState(prev => ({ ...prev, authStatus: 'initializing' }));
+                }
+
                 // PHASE 5: Wait for backend readiness before attempting token discovery
+                // waitForBackend is already used, but we'll add 'discovering' state here
+                if (mounted) setAuthState(prev => ({ ...prev, authStatus: 'initializing' }));
+
                 const isBackendReady = await authService.waitForBackend();
+
+                if (mounted) setAuthState(prev => ({ ...prev, authStatus: 'initializing' }));
 
                 if (!isBackendReady) {
                     if (mounted) {
                         setAuthState({
                             user: null,
                             token: null,
-                            authStatus: 'offline', // Switch to offline explicitly
+                            authStatus: 'offline',
                             profileImageVersion: Date.now()
                         });
                     }
-                    return; // Abort token refresh
+                    return;
                 }
+
+                // Discovery Stage
+                if (mounted) setAuthState(prev => ({ ...prev, authStatus: 'initializing' }));
 
                 const refreshResult = await authService.refreshToken();
 
@@ -136,13 +151,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         });
                     }
                 }
-            } catch (error: any) {
+            } catch (error: unknown) {
                 if (mounted) {
-                    const isNetworkError = !error.response || error.code === 'ECONNABORTED' || error.message?.includes('Network Error');
+                    const err = error as AxiosError;
+                    const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.message?.includes('Network Error');
 
                     if (isNetworkError) {
                         setAuthState(prev => ({ ...prev, authStatus: 'offline' }));
-                    } else if (error.response?.status === 401 || error.response?.status === 403) {
+                    } else if (err.response?.status === 401 || err.response?.status === 403) {
                         setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
                     } else {
                         setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
@@ -231,6 +247,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');

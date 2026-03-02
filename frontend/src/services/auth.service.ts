@@ -19,7 +19,7 @@ export const authService = {
     },
 
     verifySession: async (): Promise<{ user: User }> => {
-        const response = await api.get<any>('/profiles/me');
+        const response = await api.get<User & { profile: { fullName: string; avatar: string } }>('/profiles/me');
         const data = response.data;
         return {
             user: {
@@ -33,7 +33,7 @@ export const authService = {
 
     getMe: async (): Promise<{ user: User | null; authenticated: boolean }> => {
         try {
-            const response = await api.get<any>('/profiles/me');
+            const response = await api.get<User & { profile: { fullName: string; avatar: string } }>('/profiles/me');
             const data = response.data;
             if (!data) return { user: null, authenticated: false };
 
@@ -46,7 +46,7 @@ export const authService = {
                 },
                 authenticated: true
             };
-        } catch (error) {
+        } catch {
             return { user: null, authenticated: false };
         }
     },
@@ -56,14 +56,14 @@ export const authService = {
         for (let i = 0; i < maxRetries; i++) {
             try {
                 const response = await axios.get(
-                    `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/health`,
+                    `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/health/ready`,
                     { timeout: 3000 }
                 );
                 if (response.status === 200) {
                     setIsCheckingBackend(false);
                     return true;
                 }
-            } catch (error) {
+            } catch {
                 await new Promise(r => setTimeout(r, interval));
                 interval = Math.min(interval * 1.5, 5000); // Exponential backoff capped at 5s
             }
@@ -88,7 +88,7 @@ export const authService = {
                 return { token: response.data.data.token, authenticated: true };
             }
             return { authenticated: false };
-        } catch (error) {
+        } catch {
             return { authenticated: false };
         }
     },
@@ -98,17 +98,17 @@ export const authService = {
     },
 
     requestPasswordReset: async (identifier: string): Promise<{ message: string; dev_otp?: string }> => {
-        const response = await api.post('/password-reset/request-reset', { identifier });
-        return response.data as any;
+        const response = await api.post<{ message: string; dev_otp?: string }>('/password-reset/request-reset', { identifier });
+        return response.data;
     },
 
     verifyOTP: async (identifier: string, otp: string): Promise<{ message: string; resetToken: string }> => {
-        const response = await api.post('/password-reset/verify-otp', { identifier, otp });
-        return response.data as any;
+        const response = await api.post<{ message: string; resetToken: string }>('/password-reset/verify-otp', { identifier, otp });
+        return response.data;
     },
 
     resetPassword: async (resetToken: string, newPassword: string): Promise<{ message: string }> => {
-        const response = await api.post('/password-reset/reset-password', { resetToken, newPassword });
-        return response.data as any;
+        const response = await api.post<{ message: string }>('/password-reset/reset-password', { resetToken, newPassword });
+        return response.data;
     },
 };

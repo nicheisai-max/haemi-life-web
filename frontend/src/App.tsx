@@ -7,7 +7,7 @@ import { ToastProvider } from './context/ToastContext';
 import { NetworkStatusProvider } from './context/NetworkStatus';
 import { SessionManagerProvider } from './context/SessionManager';
 import { AlertDialogProvider } from './context/AlertDialogContext';
-import { NotificationProvider } from './context/NotificationContext';
+import { NotificationProvider } from './context/NotificationProvider';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DelayedFallback } from './components/layout/DelayedFallback';
 const LazyDashboardLayout = lazy(() => import('./components/layout/DashboardLayout').then(m => ({ default: m.DashboardLayout })));

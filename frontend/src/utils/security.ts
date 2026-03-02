@@ -32,7 +32,7 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
     // Filter out potential non-ArrayBuffer errors
     const baseKey = await window.crypto.subtle.importKey(
         'raw',
-        keyData as any,
+        keyData as unknown as BufferSource,
         'PBKDF2',
         false,
         ['deriveKey']
@@ -91,7 +91,7 @@ export const decrypt = async (text: string): Promise<string> => {
         const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_CBC, iv }, key, encryptedData);
         return new TextDecoder().decode(buffer);
 
-    } catch (error) {
+    } catch {
         // Silently return original text if decryption fails (likely legacy/corrupted data)
         return text;
     }

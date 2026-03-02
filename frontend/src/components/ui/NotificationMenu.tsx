@@ -9,7 +9,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { type Notification } from '../../services/notification.service';
-import { useNotifications } from '../../context/NotificationContext';
+import { useNotifications } from '../../hooks/useNotifications';
 import { decrypt } from '@/utils/security';
 import React, { useState, useEffect } from 'react';
 
@@ -20,18 +20,18 @@ const DecryptedDescription: React.FC<{ text: string }> = ({ text }) => {
         if (text && text.startsWith('enc:')) {
             decrypt(text)
                 .then(res => {
-                    // Check if the result is STILL encrypted (double encryption case)
-                    if (res.startsWith('enc:')) {
-                        return decrypt(res);
-                    }
+                    if (res.startsWith('enc:')) return decrypt(res);
                     return res;
                 })
-                .then(setDecrypted)
+                .then(res => {
+                    if (res !== decrypted) setDecrypted(res);
+                })
                 .catch(() => setDecrypted('Message encrypted. Check key.'));
-        } else {
+        } else if (text !== decrypted) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setDecrypted(text);
         }
-    }, [text]);
+    }, [text, decrypted]);
 
     // Handle string overflow with break-all to prevent panel break
     return <span className="break-all">{decrypted}</span>;

@@ -117,12 +117,20 @@ app.get('/health', async (_req, res) => {
     }
 });
 
-app.get('/readiness', async (req, res) => {
+// Readiness Probe for Orchestration (Phase 1 Contract)
+app.get('/api/health/ready', async (_req, res) => {
     try {
+        // 1. Check DB
         await pool.query('SELECT 1');
-        res.status(200).json({ status: 'ready' });
+        // 2. Check Socket.IO (if initialized)
+        const isSocketReady = !!io;
+
+        if (isSocketReady) {
+            return res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
+        }
+        res.status(503).json({ status: 'initializing', reason: 'socket_not_ready' });
     } catch {
-        res.status(503).json({ status: 'not_ready' });
+        res.status(503).json({ status: 'not_ready', reason: 'db_connection_failed' });
     }
 });
 
@@ -282,5 +290,21 @@ const shutdown = () => {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-process.on('unhandledRejection', (err) => logger.error('Unhandled Rejection', { error: err }));
-process.on('uncaughtException', (err) => logger.error('Uncaught Exception', { error: err }));
+
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+    const errorReason = reason as Error;
+    logger.error('Unhandled Rejection at:', {
+        promise,
+        reason: errorReason?.message || reason,
+        stack: errorReason?.stack
+    });
+});
+
+process.on('uncaughtException', (err: Error) => {
+    logger.error('Uncaught Exception thrown:', {
+        message: err.message,
+        stack: err.stack
+    });
+    // Institutional Hardening: Graceful exit on uncaught exception
+    shutdown();
+});
