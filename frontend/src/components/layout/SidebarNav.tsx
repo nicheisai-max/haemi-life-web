@@ -19,7 +19,7 @@ export const SidebarNav: React.FC<{ onItemClick?: () => void }> = ({ onItemClick
                         end={isDashboardRoot}
                         onClick={onItemClick}
                         className={({ isActive }) => cn(
-                            "flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 group w-full relative mb-1",
+                            "flex items-center gap-3 px-4 py-3 rounded-[var(--card-radius)] text-sm transition-all duration-200 group w-full relative mb-1",
                             isActive
                                 ? "active-nav-item bg-primary/10 font-semibold"
                                 : "text-muted-foreground font-medium hover:bg-slate-100/50 dark:hover:bg-white/5 hover:text-foreground"

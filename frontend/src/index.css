@@ -146,6 +146,7 @@
 
   /* Dashboard Card Radius (System Actions unified value) */
   --dashboard-card-radius: 12px;
+  --card-radius: 8px;
 }
 
 .dark {

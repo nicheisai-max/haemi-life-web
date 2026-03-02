@@ -39,11 +39,10 @@
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
-      "npm --prefix backend run lint"
+      "eslint -c backend/eslint.config.mjs --max-warnings=0"
     ],
     "frontend/src/**/*.{ts,tsx}": [
-      "npm --prefix frontend run lint",
-      "npm --prefix frontend run typecheck"
+      "eslint -c frontend/eslint.config.js --max-warnings=0"
     ]
   }
 }
