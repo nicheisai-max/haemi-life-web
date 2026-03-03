@@ -88,8 +88,8 @@ describe('Authentication API Lifecycle (Integration)', () => {
     });
 
     describe('POST /api/auth/refresh-token', () => {
-        it('should return 200 with success false if no cookies provided', async () => {
-            const res = await request(app).post('/api/auth/refresh-token');
+        it('should return 200 with success false if no refreshToken body provided', async () => {
+            const res = await request(app).post('/api/auth/refresh-token').send({});
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(false);
             expect(res.body.message).toMatch(/No active session/i);
@@ -98,7 +98,7 @@ describe('Authentication API Lifecycle (Integration)', () => {
         it('should return 200 with success false on tampered refresh token', async () => {
             const res = await request(app)
                 .post('/api/auth/refresh-token')
-                .set('Cookie', [`refreshToken=eyJhbGc...fake`]);
+                .send({ refreshToken: 'eyJhbGc...fake' });
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(false);

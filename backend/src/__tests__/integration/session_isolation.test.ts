@@ -56,17 +56,15 @@ describe('Session Isolation (Phase 2)', () => {
             // 3. Attempt to refresh
             const res = await request(app)
                 .post('/api/auth/refresh-token')
-                .set('Cookie', [`refreshToken=${staleToken}`]);
+                .send({ refreshToken: staleToken });
 
             // 4. Verify rejection
             expect(res.status).toBe(401);
             expect(res.body.success).toBe(false);
             expect(res.body.message).toMatch(/Session revoked/i);
 
-            // Verify that the cookie was cleared
-            const setCookie = res.headers['set-cookie'][0];
-            expect(setCookie).toMatch(/refreshToken=;/i);
-            expect(setCookie).toMatch(/HttpOnly/i);
+            // Verify that the cookie is NOT set anymore (no need to check clearing since we don't use it)
+            expect(res.headers['set-cookie']).toBeUndefined();
         });
 
         it('should accept refresh token with matching token_version', async () => {
@@ -96,18 +94,16 @@ describe('Session Isolation (Phase 2)', () => {
             // 4. Attempt to refresh
             const res = await request(app)
                 .post('/api/auth/refresh-token')
-                .set('Cookie', [`refreshToken=${validToken}`]);
+                .send({ refreshToken: validToken });
 
             // 5. Verify success
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.data.token).toBeDefined();
+            expect(res.body.data.refreshToken).toBeDefined();
 
-            // Verify new cookie is set with strict settings
-            const setCookie = res.headers['set-cookie'][0];
-            expect(setCookie).toMatch(/HttpOnly/i);
-            expect(setCookie).toMatch(/SameSite=Strict/i);
-            expect(setCookie).toMatch(/path=\//i);
+            // Verify no cookie is set
+            expect(res.headers['set-cookie']).toBeUndefined();
         });
     });
 
@@ -153,10 +149,8 @@ describe('Session Isolation (Phase 2)', () => {
                 [userId]
             );
 
-            // Verify cookie is cleared with path=/
-            const setCookie = res.headers['set-cookie'][0];
-            expect(setCookie).toMatch(/refreshToken=;/i);
-            expect(setCookie).toMatch(/path=\//i);
+            // Verify no cookie is cleared
+            expect(res.headers['set-cookie']).toBeUndefined();
         });
     });
 });

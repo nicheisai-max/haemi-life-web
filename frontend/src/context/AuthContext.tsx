@@ -130,6 +130,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 if (refreshResult.authenticated && refreshResult.token) {
                     setAccessToken(refreshResult.token);
+                    if (refreshResult.refreshToken) {
+                        sessionStorage.setItem('refreshToken', refreshResult.refreshToken);
+                    }
                     const { user } = await authService.verifySession();
 
                     if (mounted) {
@@ -175,8 +178,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const login = useCallback(async (credentials: LoginCredentials) => {
-        const { token: newToken, user: newUser } = await authService.login(credentials);
+        const { token: newToken, refreshToken: newRefreshToken, user: newUser } = await authService.login(credentials);
         setAccessToken(newToken);
+        sessionStorage.setItem('refreshToken', newRefreshToken);
         sessionStorage.setItem('user', JSON.stringify(newUser));
         setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated', profileImageVersion: Date.now() });
 
@@ -189,8 +193,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const signup = useCallback(async (credentials: SignupCredentials) => {
-        const { token: newToken, user: newUser } = await authService.signup(credentials);
+        const { token: newToken, refreshToken: newRefreshToken, user: newUser } = await authService.signup(credentials);
         setAccessToken(newToken);
+        sessionStorage.setItem('refreshToken', newRefreshToken);
         sessionStorage.setItem('user', JSON.stringify(newUser));
         setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated', profileImageVersion: Date.now() });
     }, []);
@@ -199,6 +204,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const currentUserId = authStateRef.current.user?.id;
         setAccessToken(null);
         sessionStorage.removeItem('user');
+        sessionStorage.removeItem('refreshToken');
         setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
 
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';

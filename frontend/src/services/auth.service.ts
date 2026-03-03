@@ -72,20 +72,26 @@ export const authService = {
         return false;
     },
 
-    refreshToken: async (): Promise<{ token?: string; authenticated: boolean }> => {
+    refreshToken: async (): Promise<{ token?: string; refreshToken?: string; authenticated: boolean }> => {
         // Use raw axios to bypass global interceptors for the refresh token endpoint
         // This prevents loud 401 errors in the console when the user is simply not logged in
         try {
+            const currentRefreshToken = sessionStorage.getItem('refreshToken');
+
             // Note: Since raw axios is used, we must manually unwrap the `{ success, data }` format here.
             // Our global `api.ts` interceptor does not apply to this raw `axios` call.
-            const response = await axios.post<{ success?: boolean; data?: { token?: string } }>(
+            const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
                 `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/refresh-token`,
-                {},
-                { withCredentials: true }
+                { refreshToken: currentRefreshToken }, // PATCH: Send refreshToken in body
+                { withCredentials: false } // No cookies used
             );
 
             if (response.data.success && response.data.data?.token) {
-                return { token: response.data.data.token, authenticated: true };
+                return {
+                    token: response.data.data.token,
+                    refreshToken: response.data.data.refreshToken,
+                    authenticated: true
+                };
             }
             return { authenticated: false };
         } catch {

@@ -56,18 +56,23 @@ export const signup = async (req: Request, res: Response) => {
                 { expiresIn: '7d' }
             );
 
-            res.cookie('refreshToken', refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                path: '/',
-                maxAge: 7 * 24 * 60 * 60 * 1000
-            });
+            /* 
+               PATCH: Removing cookie-based refresh token for multi-tab isolation.
+               Now returning refreshToken in the JSON response body.
+            */
+            // res.cookie('refreshToken', refreshToken, {
+            //     httpOnly: true,
+            //     secure: process.env.NODE_ENV === 'production',
+            //     sameSite: 'strict',
+            //     path: '/',
+            //     maxAge: 7 * 24 * 60 * 60 * 1000
+            // });
 
             await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [newUser.id]);
 
             return sendResponse(res, 201, true, 'User created successfully', {
                 token: accessToken,
+                refreshToken: refreshToken,
                 user: {
                     id: newUser.id,
                     email: newUser.email,
@@ -173,20 +178,24 @@ export const login = async (req: Request, res: Response) => {
             { expiresIn: '7d' }
         );
 
-        // Send Refresh Token as HTTP-Only Cookie
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            path: '/',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        });
+        /* 
+           PATCH: Removing cookie-based refresh token for multi-tab isolation.
+           Now returning refreshToken in the JSON response body.
+        */
+        // res.cookie('refreshToken', refreshToken, {
+        //     httpOnly: true,
+        //     secure: process.env.NODE_ENV === 'production',
+        //     sameSite: 'strict',
+        //     path: '/',
+        //     maxAge: 7 * 24 * 60 * 60 * 1000
+        // });
 
         // Update activity heartbeat on login
         await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
         return sendResponse(res, 200, true, 'Login successful', {
             token: accessToken,
+            refreshToken: refreshToken,
             user: {
                 id: user.id,
                 email: user.email,
@@ -296,7 +305,10 @@ export const changePassword = async (req: Request, res: Response) => {
 };
 
 export const refreshToken = async (req: Request, res: Response) => {
-    const refreshTokenHeader = req.cookies.refreshToken;
+    /* 
+       PATCH: Reading refreshToken from body for multi-tab isolation.
+    */
+    const refreshTokenHeader = req.body.refreshToken;
 
     if (!refreshTokenHeader) {
         return sendResponse(res, 200, false, 'No active session');
@@ -308,7 +320,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         const user = await userRepository.findById(decoded.id);
 
         if (!user || user.status !== 'ACTIVE') {
-            res.clearCookie('refreshToken');
+            // res.clearCookie('refreshToken');
             return sendResponse(res, 200, false, 'Invalid session');
         }
 
@@ -316,7 +328,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         if (decoded.token_version !== user.token_version) {
             logger.warn('Token reuse detected - potential session hijacking', { userId: user.id });
             await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [user.id]);
-            res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/' });
+            // res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/' });
             return sendResponse(res, 401, false, 'Session revoked due to security violation');
         }
 
@@ -338,18 +350,24 @@ export const refreshToken = async (req: Request, res: Response) => {
             { expiresIn: '7d' }
         );
 
-        res.cookie('refreshToken', newRefreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            path: '/',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        });
+        /* 
+           PATCH: Returning refreshToken in JSON body instead of cookie.
+        */
+        // res.cookie('refreshToken', newRefreshToken, {
+        //     httpOnly: true,
+        //     secure: process.env.NODE_ENV === 'production',
+        //     sameSite: 'strict',
+        //     path: '/',
+        //     maxAge: 7 * 24 * 60 * 60 * 1000
+        // });
 
-        return sendResponse(res, 200, true, 'Token refreshed', { token: accessToken });
+        return sendResponse(res, 200, true, 'Token refreshed', {
+            token: accessToken,
+            refreshToken: newRefreshToken
+        });
     } catch (err: unknown) {
         logger.error('Token refresh failed', err);
-        res.clearCookie('refreshToken');
+        // res.clearCookie('refreshToken');
         return sendResponse(res, 200, false, 'Invalid refresh token');
     }
 };
@@ -368,12 +386,15 @@ export const logout = async (req: Request, res: Response) => {
         logger.error('[Auth] Failed to increment token_version on logout:', dbError);
     }
 
-    res.clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: '/'
-    });
+    /* 
+       PATCH: No longer clearing cookie on logout as we use body-based storage.
+    */
+    // res.clearCookie('refreshToken', {
+    //     httpOnly: true,
+    //     secure: process.env.NODE_ENV === 'production',
+    //     sameSite: 'strict',
+    //     path: '/'
+    // });
     return sendResponse(res, 200, true, 'Logged out successfully');
 };
 

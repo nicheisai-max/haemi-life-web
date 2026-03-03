@@ -92,7 +92,8 @@ const api = axios.create({
         'Content-Type': 'application/json',
         ...(IS_DEMO_MODE ? { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } : {}),
     },
-    withCredentials: true,
+    // PATCH: withCredentials false as we move away from cookies for multi-tab isolation
+    withCredentials: false,
     timeout: 10000,
 });
 
@@ -276,22 +277,30 @@ api.interceptors.response.use(
             isRefreshing = true;
 
             try {
+                // PATCH: Send refreshToken in body for multi-tab isolation
+                const currentRefreshToken = sessionStorage.getItem('refreshToken');
+
                 // Perform the single refresh flight
-                const response = await axios.post<{ success?: boolean; data?: { token?: string } }>(
+                const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
                     `${API_URL}/auth/refresh-token`,
-                    {},
-                    { withCredentials: true, timeout: 5000 } // Hardcode short timeout for refresh
+                    { refreshToken: currentRefreshToken },
+                    { timeout: 5000 } // No withCredentials needed anymore
                 );
 
                 if (!response.data.success || !response.data.data?.token) throw new Error('Refresh failed');
 
-                const token = response.data.data.token;
-                setAccessToken(token);
+                const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
+                setAccessToken(newToken);
+
+                if (newRefreshToken) {
+                    sessionStorage.setItem('refreshToken', newRefreshToken);
+                }
+
                 isRefreshing = false;
-                processQueue(null, token);
+                processQueue(null, newToken);
 
                 if (originalRequest.headers) {
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
                 }
                 return api(originalRequest);
             } catch (rawErr: unknown) {

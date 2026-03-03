@@ -64,8 +64,11 @@ export const NotificationMenu: React.FC = () => {
 
     const hasUnread = unreadCount > 0;
 
-    const getIcon = (type: Notification['type']) => {
-        switch (type) {
+    const getIcon = (notif: Notification) => {
+        if (notif.is_read && notif.type === 'info') {
+            return <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />;
+        }
+        switch (notif.type) {
             case 'success': return <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />;
             case 'warning': return <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={3} />;
             case 'info': return <Zap className="h-4 w-4 text-indigo-600 dark:text-indigo-400" strokeWidth={3} fill="currentColor" />;
@@ -73,8 +76,11 @@ export const NotificationMenu: React.FC = () => {
         }
     };
 
-    const getBgColor = (type: Notification['type']) => {
-        switch (type) {
+    const getBgColor = (notif: Notification) => {
+        if (notif.is_read && notif.type === 'info') {
+            return 'bg-emerald-100 dark:bg-emerald-900/30';
+        }
+        switch (notif.type) {
             case 'success': return 'bg-emerald-100 dark:bg-emerald-900/30';
             case 'warning': return 'bg-amber-100 dark:bg-amber-900/30';
             case 'info': return 'bg-indigo-100 dark:bg-indigo-900/30';
@@ -122,6 +128,7 @@ export const NotificationMenu: React.FC = () => {
                                 {notifications.map((notif) => (
                                     <DropdownMenuItem
                                         key={notif.id}
+                                        onSelect={(e) => e.preventDefault()}
                                         onClick={() => !notif.is_read && markAsRead(notif.id)}
                                         className={`px-5 py-4 cursor-pointer outline-none transition-all duration-150 flex items-start gap-4 border-b border-border/5 last:border-0
                                             ${!notif.is_read
@@ -129,8 +136,8 @@ export const NotificationMenu: React.FC = () => {
                                                 : 'hover:bg-slate-50 dark:hover:bg-white/[0.02]'}
                                         `}
                                     >
-                                        <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${getBgColor(notif.type)}`}>
-                                            {getIcon(notif.type)}
+                                        <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${getBgColor(notif)}`}>
+                                            {getIcon(notif)}
                                         </div>
                                         <div className="flex-1 min-w-0 pr-1">
                                             <div className="flex items-start justify-between gap-3 mb-1.5">
