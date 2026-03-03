@@ -75,10 +75,16 @@ export default {
                 },
             },
             borderRadius: {
-                lg: "var(--radius)",
-                md: "calc(var(--radius) - 2px)",
-                sm: "calc(var(--radius) - 4px)",
-                card: "0.75rem",
+                none: "0",
+                sm: "0.35rem",
+                DEFAULT: "0.35rem",
+                md: "0.35rem",
+                lg: "0.35rem",
+                xl: "0.35rem",
+                "2xl": "0.35rem",
+                "3xl": "0.35rem",
+                "4xl": "0.35rem",
+                card: "0.35rem",
             },
             keyframes: {
                 "accordion-down": {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -6,7 +6,7 @@ import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { MedicalLoader } from '../../components/ui/MedicalLoader';
 import { AlertCircle, CheckCircle2, Pencil, Save, Shield, Calendar, BadgeCheck, Settings as SettingsIcon, Lock, User, Camera } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -37,11 +37,7 @@ export const Profile: React.FC = () => {
         },
     });
 
-    useEffect(() => {
-        fetchProfile();
-    }, []);
-
-    const fetchProfile = async () => {
+    const fetchProfile = useCallback(async () => {
         try {
             setLoading(true);
             const data = await getProfile();
@@ -51,12 +47,17 @@ export const Profile: React.FC = () => {
                 email: data.email,
                 phone_number: data.phone_number
             });
-        } catch (err: any) {
-            setGeneralError(err.response?.data?.message || 'Failed to load profile');
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setGeneralError(apiErr.response?.data?.message || 'Failed to load profile');
         } finally {
             setLoading(false);
         }
-    };
+    }, [form]);
+
+    useEffect(() => {
+        fetchProfile();
+    }, [fetchProfile]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -71,9 +72,10 @@ export const Profile: React.FC = () => {
             await fetchProfile(); // Refresh local profile state
             setSuccess('Profile image updated successfully!');
             setTimeout(() => setSuccess(null), 3000);
-        } catch (err: any) {
-            console.error('[Profile] Upload error:', err.response?.data);
-            const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to upload image';
+        } catch (err: unknown) {
+            const uploadErr = err as { response?: { data?: { message?: string; error?: string } } };
+            console.error('[Profile] Upload error:', err);
+            const errorMsg = uploadErr.response?.data?.message || uploadErr.response?.data?.error || 'Failed to upload image';
             setGeneralError(errorMsg);
         } finally {
             setUploading(false);
@@ -89,8 +91,9 @@ export const Profile: React.FC = () => {
             setSuccess('Profile updated successfully!');
             setEditing(false);
             setTimeout(() => setSuccess(null), 3000);
-        } catch (err: any) {
-            setGeneralError(err.response?.data?.message || 'Failed to update profile');
+        } catch (err: unknown) {
+            const submitErr = err as { response?: { data?: { message?: string } } };
+            setGeneralError(submitErr.response?.data?.message || 'Failed to update profile');
         }
     };
 
@@ -106,11 +109,8 @@ export const Profile: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="pt-8 space-y-8">
-                <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8">
-                    <Skeleton className="h-96 rounded-xl" />
-                    <Skeleton className="h-96 rounded-xl" />
-                </div>
+            <div className="flex justify-center items-center min-h-[32rem]">
+                <MedicalLoader message="Loading your profile..." />
             </div>
         );
     }
@@ -320,9 +320,9 @@ export const Profile: React.FC = () => {
                             </div>
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Account Status</div>
-                                <div className={`font-medium ${(profile as any)?.is_active ? 'text-green-600 dark:text-green-400' : 'text-destructive'} flex items-center gap-2`}>
-                                    <span>{(profile as any)?.is_active ? 'Active' : 'Inactive'}</span>
-                                    <span className={`h-2 w-2 rounded-full ${(profile as any)?.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                                <div className={`font-medium ${profile?.is_active ? 'text-green-600 dark:text-green-400' : 'text-destructive'} flex items-center gap-2`}>
+                                    <span>{profile?.is_active ? 'Active' : 'Inactive'}</span>
+                                    <span className={`h-2 w-2 rounded-full ${profile?.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
                                 </div>
                             </div>
                         </div>

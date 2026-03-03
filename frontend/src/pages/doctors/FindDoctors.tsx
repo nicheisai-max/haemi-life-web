@@ -37,6 +37,7 @@ export const FindDoctors: React.FC = () => {
 
     useEffect(() => {
         filterDoctors();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchTerm, selectedSpecialization, doctors]);
 
     const fetchData = async () => {
@@ -49,8 +50,9 @@ export const FindDoctors: React.FC = () => {
             setDoctors(doctorsData);
             setFilteredDoctors(doctorsData);
             setSpecializations(specializationsData);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load specialists');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+            setError(msg || 'Failed to load specialists');
         } finally {
             setLoading(false);
         }
@@ -89,7 +91,7 @@ export const FindDoctors: React.FC = () => {
 
     return (
         <div className="space-y-8">
-            <TransitionItem className="mb-0">
+            <TransitionItem>
                 <h1 className="page-heading !mb-0 transition-all duration-300">Find Specialists</h1>
                 <p className="page-subheading italic">Search for verified healthcare professionals and book appointments</p>
             </TransitionItem>

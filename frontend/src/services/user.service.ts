@@ -12,6 +12,7 @@ export interface UserProfile {
     role: string;
     id_number?: string;
     status: string; // 'ACTIVE', 'INACTIVE'
+    is_active?: boolean;
     profile_image: string | null;
     created_at: string;
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { MedicalLoader } from '../../components/ui/MedicalLoader';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getMyPrescriptions, type Prescription } from '../../services/prescription.service';
 import { getMyRecords, uploadRecord, deleteRecord, type MedicalRecord } from '../../services/record.service';
@@ -33,8 +33,9 @@ export const Prescriptions: React.FC = () => {
             ]);
             setPrescriptions(prescriptionsData);
             setUploadedRecords(recordsData);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load data');
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setError(apiErr.response?.data?.message || 'Failed to load data');
         } finally {
             setLoading(false);
         }
@@ -52,9 +53,10 @@ export const Prescriptions: React.FC = () => {
                 const newRecord = await uploadRecord(file);
                 setUploadedRecords(prev => [newRecord, ...prev]);
             }
-        } catch (error: any) {
-            console.error('Error uploading file:', error);
-            setError(error.message || 'Failed to upload file');
+        } catch (err: unknown) {
+            const uploadErr = err as { message?: string };
+            console.error('Error uploading file:', err);
+            setError(uploadErr.message || 'Failed to upload file');
         } finally {
             setUploading(false);
         }
@@ -73,9 +75,10 @@ export const Prescriptions: React.FC = () => {
                 try {
                     await deleteRecord(id);
                     setUploadedRecords(prev => prev.filter(r => r.id !== id));
-                } catch (error: any) {
-                    console.error('Error deleting record:', error);
-                    setError(error.message || 'Failed to delete file');
+                } catch (err: unknown) {
+                    const delErr = err as { message?: string };
+                    console.error('Error deleting record:', err);
+                    setError(delErr.message || 'Failed to delete file');
                 }
             }
         });
@@ -105,16 +108,8 @@ export const Prescriptions: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="space-y-8">
-                <div className="mb-8">
-                    <Skeleton className="h-10 w-64 mb-2" />
-                    <Skeleton className="h-4 w-96" />
-                </div>
-                <div className="space-y-4">
-                    <Skeleton className="h-32 w-full" />
-                    <Skeleton className="h-32 w-full" />
-                    <Skeleton className="h-32 w-full" />
-                </div>
+            <div className="flex justify-center items-center min-h-[32rem]">
+                <MedicalLoader message="Loading your prescriptions..." />
             </div>
         );
     }
