@@ -34,7 +34,7 @@ export const DoctorPatientList: React.FC = () => {
                     <h1 className="page-heading">Patient Registry</h1>
                     <p className="page-subheading">Manage and monitor your assigned patients in Botswana.</p>
                 </div>
-                <Button className="shrink-0 gap-2">
+                <Button className="shrink-0 flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300">
                     <Plus className="h-4 w-4" /> Add New Patient
                 </Button>
             </div>

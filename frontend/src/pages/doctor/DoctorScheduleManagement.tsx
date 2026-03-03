@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card } from '@/components/ui/card';
@@ -41,11 +41,7 @@ export const DoctorScheduleManagement: React.FC = () => {
         name: "schedule",
     });
 
-    useEffect(() => {
-        fetchSchedule();
-    }, []);
-
-    const fetchSchedule = async () => {
+    const fetchSchedule = useCallback(async () => {
         try {
             setLoading(true);
             const data = await getDoctorSchedule();
@@ -67,12 +63,17 @@ export const DoctorScheduleManagement: React.FC = () => {
             });
 
             form.reset({ schedule: fullSchedule });
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load schedule');
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setError(apiErr.response?.data?.message || 'Failed to load schedule');
         } finally {
             setLoading(false);
         }
-    };
+    }, [form]);
+
+    useEffect(() => {
+        fetchSchedule();
+    }, [fetchSchedule]);
 
     const onSubmit = async (data: FullDoctorScheduleFormData) => {
         try {
@@ -82,8 +83,9 @@ export const DoctorScheduleManagement: React.FC = () => {
             await updateDoctorSchedule(data.schedule);
             setSuccess('Schedule updated successfully!');
             setTimeout(() => setSuccess(null), 3000);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to update schedule');
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setError(apiErr.response?.data?.message || 'Failed to update schedule');
         }
     };
 
@@ -106,7 +108,7 @@ export const DoctorScheduleManagement: React.FC = () => {
                     <Button
                         type="submit"
                         disabled={form.formState.isSubmitting}
-                        className="min-w-[140px]"
+                        className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300 min-w-[140px]"
                     >
                         {form.formState.isSubmitting ? (
                             <>

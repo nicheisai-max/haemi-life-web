@@ -60,12 +60,14 @@ export const ForgotPassword: React.FC = () => {
 
     // OTP timer countdown
     useEffect(() => {
-        if (step === 'verify' && otpTimer > 0) {
-            const timer = setTimeout(() => setOtpTimer(otpTimer - 1), 1000);
-            return () => clearTimeout(timer);
-        } else if (otpTimer === 0) {
-            setCanResend(true);
-        }
+        if (step !== 'verify' || otpTimer <= 0) return;
+        const timer = setTimeout(() => {
+            if (otpTimer === 1) {
+                setCanResend(true);
+            }
+            setOtpTimer(prev => prev - 1);
+        }, 1000);
+        return () => clearTimeout(timer);
     }, [step, otpTimer]);
 
     const handleRequestSubmit = async (data: ForgotPasswordFormData) => {
@@ -75,8 +77,9 @@ export const ForgotPassword: React.FC = () => {
             setStep('verify');
             setOtpTimer(60);
             setCanResend(false);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to send reset code');
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setError(apiErr.response?.data?.message || 'Failed to send reset code');
         }
     };
 
@@ -84,8 +87,9 @@ export const ForgotPassword: React.FC = () => {
         try {
             setError(null);
             setStep('reset');
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Invalid verification code');
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setError(apiErr.response?.data?.message || 'Invalid verification code');
         }
     };
 
@@ -94,8 +98,9 @@ export const ForgotPassword: React.FC = () => {
             setError(null);
             setStep('success');
             setTimeout(() => navigate('/login'), 3000);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to reset password');
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setError(apiErr.response?.data?.message || 'Failed to reset password');
         }
     };
 
@@ -104,8 +109,9 @@ export const ForgotPassword: React.FC = () => {
             setError(null);
             setOtpTimer(60);
             setCanResend(false);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to resend code');
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setError(apiErr.response?.data?.message || 'Failed to resend code');
         }
     };
 
@@ -163,7 +169,7 @@ export const ForgotPassword: React.FC = () => {
 
                 {step === 'request' && (
                     <Form {...requestForm}>
-                        <form onSubmit={requestForm.handleSubmit(handleRequestSubmit)} className="space-y-4">
+                        <form onSubmit={requestForm.handleSubmit(handleRequestSubmit)} className="space-y-4" noValidate>
                             <FormField
                                 control={requestForm.control}
                                 name="email"

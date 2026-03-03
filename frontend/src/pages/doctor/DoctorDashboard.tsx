@@ -135,7 +135,7 @@ export const DoctorDashboard = () => {
                         <Button
                             size="lg"
                             variant="outline"
-                            className="bg-white/10 hover:bg-white/20 text-white border-white/20 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto"
+                            className="bg-white/10 hover:bg-white hover:text-teal-900 dark:hover:bg-white/20 dark:hover:text-white text-white border-white/20 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-200"
                             onClick={() => {
                                 // Coordination: Close chathub when opening copilot
                                 if (!isCopilotOpen) {
