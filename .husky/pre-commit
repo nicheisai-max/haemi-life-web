@@ -3,6 +3,15 @@
 
 echo "Running enterprise pre-commit guardrails..."
 
+WORKTREE_COUNT=$(git worktree list | wc -l)
+
+if [ "$WORKTREE_COUNT" -gt 1 ]; then
+  echo "❌ Enterprise policy: AI worktrees are not allowed."
+  echo "Remove additional worktrees before committing."
+  git worktree list
+  exit 1
+fi
+
 branch="$(git rev-parse --abbrev-ref HEAD)"
 if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
   echo ""
