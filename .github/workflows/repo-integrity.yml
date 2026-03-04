@@ -24,6 +24,15 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Verify No Worktrees
+        run: |
+          COUNT=$(git worktree list | wc -l)
+          if [ "$COUNT" -gt 1 ]; then
+            echo "Enterprise policy violation: extra git worktrees detected."
+            git worktree list
+            exit 1
+          fi
+
       - name: Install Root Dependencies
         run: npm ci
 
