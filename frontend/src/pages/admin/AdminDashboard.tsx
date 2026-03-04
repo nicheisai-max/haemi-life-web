@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
     Users, ShieldCheck, Activity, Server, AlertTriangle,
@@ -19,7 +19,7 @@ import { IconWrapper } from '@/components/ui/IconWrapper';
 import { PATHS } from '../../routes/paths';
 
 // Realistic Growth Data for a National Platform
-interface GrowthDataPoint { name: string; users: number; [key: string]: string | number | undefined; }
+interface GrowthDataPoint { name: string; users: number;[key: string]: string | number | undefined; }
 const SYSTEM_GROWTH_DATA: GrowthDataPoint[] = [
     { name: 'Jan', users: 1200 },
     { name: 'Feb', users: 1450 },

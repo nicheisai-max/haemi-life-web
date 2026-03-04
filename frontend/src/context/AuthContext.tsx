@@ -1,24 +1,9 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AxiosError } from 'axios';
-
-import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
 import { authService } from '../services/auth.service';
 import { setAccessToken, setAppInitialized } from '../services/api';
-
-interface AuthContextType {
-    user: User | null;
-    token: string | null;
-    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing' | 'offline';
-    profileImageVersion: number; // increments after every refreshUser() — use as cache-bust in avatar URLs
-    login: (credentials: LoginCredentials) => Promise<void>;
-    signup: (credentials: SignupCredentials) => Promise<void>;
-    logout: () => void;
-    refreshUser: () => Promise<void>;
-    isLoading: boolean;
-    isAuthenticated: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext } from './AuthContextDef';
+import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
 
 interface AuthState {
     user: User | null;
@@ -253,9 +238,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
-export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
-    return context;
-};
+// AuthContext and useAuth moved to AuthContextDef.ts and useAuth.ts to satisfy Fast Refresh rules.

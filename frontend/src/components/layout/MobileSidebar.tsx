@@ -4,7 +4,7 @@ import { SidebarNav } from "./SidebarNav";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "../ui/Logo";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { Link } from 'react-router-dom';
 
 export const MobileSidebar: React.FC = () => {

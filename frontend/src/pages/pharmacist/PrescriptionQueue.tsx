@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useConfirm } from '@/context/AlertDialogContext';
+import { useConfirm } from '@/hooks/useConfirm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';

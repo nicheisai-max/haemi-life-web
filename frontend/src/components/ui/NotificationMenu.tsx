@@ -16,6 +16,13 @@ import React, { useState, useEffect } from 'react';
 const DecryptedDescription: React.FC<{ text: string }> = ({ text }) => {
     const [decrypted, setDecrypted] = useState(text);
 
+    const [prevText, setPrevText] = useState(text);
+
+    if (text !== prevText) {
+        setPrevText(text);
+        setDecrypted(text);
+    }
+
     useEffect(() => {
         if (text && text.startsWith('enc:')) {
             decrypt(text)
@@ -24,14 +31,11 @@ const DecryptedDescription: React.FC<{ text: string }> = ({ text }) => {
                     return res;
                 })
                 .then(res => {
-                    if (res !== decrypted) setDecrypted(res);
+                    setDecrypted(res);
                 })
                 .catch(() => setDecrypted('Message encrypted. Check key.'));
-        } else if (text !== decrypted) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setDecrypted(text);
         }
-    }, [text, decrypted]);
+    }, [text]);
 
     // Handle string overflow with break-all to prevent panel break
     return <span className="break-all">{decrypted}</span>;

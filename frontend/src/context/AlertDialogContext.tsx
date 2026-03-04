@@ -1,21 +1,6 @@
-/* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { GlobalAlertDialog, type AlertOptions } from '../components/ui/GlobalAlertDialog';
-
-// Define a local extended AlertOptions type to include onAsyncConfirm
-// This allows the AlertDialogContext to pass this prop to GlobalAlertDialog
-// without modifying the original AlertOptions type directly in GlobalAlertDialog.tsx
-// The GlobalAlertDialog component itself will need to be updated to accept and handle this prop.
-type ExtendedAlertOptions = AlertOptions & {
-    onAsyncConfirm?: () => Promise<void>;
-};
-
-interface AlertDialogContextType {
-    confirm: (options: ExtendedAlertOptions) => Promise<boolean>;
-    alert: (options: ExtendedAlertOptions) => Promise<void>;
-}
-
-const AlertDialogContext = createContext<AlertDialogContextType | undefined>(undefined);
+import React, { useState, useCallback } from 'react';
+import { GlobalAlertDialog } from '../components/ui/GlobalAlertDialog';
+import { AlertDialogContext, type ExtendedAlertOptions } from './AlertDialogContextDef';
 
 interface AlertRequest {
     id: string;
@@ -92,10 +77,4 @@ export const AlertDialogProvider: React.FC<{ children: React.ReactNode }> = ({ c
     );
 };
 
-export const useConfirm = () => {
-    const context = useContext(AlertDialogContext);
-    if (!context) {
-        throw new Error('useConfirm must be used within an AlertDialogProvider');
-    }
-    return context;
-};
+// useConfirm moved to hooks/useConfirm.ts.

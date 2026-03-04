@@ -10,7 +10,7 @@ interface DashboardLayoutProps {
 import { ChatHub } from '../ui/ChatHub';
 import { Footer } from './Footer';
 import { Sidebar } from './Sidebar';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     const { user } = useAuth();

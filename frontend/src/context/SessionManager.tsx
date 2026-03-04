@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Clock, RotateCw } from 'lucide-react';
 import { SessionManagerContext } from './SessionContext';

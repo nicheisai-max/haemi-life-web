@@ -8,8 +8,7 @@ const SOCKET_URL = (import.meta.env?.VITE_API_URL || 'http://localhost:5000');
 class SocketService {
     private static instance: SocketService;
     private socket: Socket | null = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private listeners: Map<string, Set<(...args: any[]) => void>> = new Map();
+    private listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
 
     private constructor() {
         if (typeof window !== 'undefined') {
@@ -81,18 +80,16 @@ class SocketService {
         }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    public on(event: string, callback: (...args: any[]) => void) {
+    public on<T extends unknown[]>(event: string, callback: (...args: T) => void) {
         if (!this.listeners.has(event)) {
             this.listeners.set(event, new Set());
         }
-        this.listeners.get(event)?.add(callback);
+        this.listeners.get(event)?.add(callback as (...args: unknown[]) => void);
         this.socket?.on(event, callback as (...args: unknown[]) => void);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    public off(event: string, callback: (...args: any[]) => void) {
-        this.listeners.get(event)?.delete(callback);
+    public off<T extends unknown[]>(event: string, callback: (...args: T) => void) {
+        this.listeners.get(event)?.delete(callback as (...args: unknown[]) => void);
         this.socket?.off(event, callback as (...args: unknown[]) => void);
     }
 

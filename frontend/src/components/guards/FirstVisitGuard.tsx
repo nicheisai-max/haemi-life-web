@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { MedicalLoader } from '../ui/MedicalLoader';
 
 const Onboarding = lazy(() =>

@@ -5,7 +5,7 @@ import { MedicalLoader } from '../../components/ui/MedicalLoader';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getMyPrescriptions, type Prescription } from '../../services/prescription.service';
 import { getMyRecords, uploadRecord, deleteRecord, type MedicalRecord } from '../../services/record.service';
-import { useConfirm } from '@/context/AlertDialogContext';
+import { useConfirm } from '@/hooks/useConfirm';
 import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, UploadCloud, Trash2, Download, Image as ImageIcon, File } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
 

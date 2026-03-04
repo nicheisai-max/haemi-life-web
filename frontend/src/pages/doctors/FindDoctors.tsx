@@ -35,11 +35,6 @@ export const FindDoctors: React.FC = () => {
         fetchData();
     }, []);
 
-    useEffect(() => {
-        filterDoctors();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchTerm, selectedSpecialization, doctors]);
-
     const fetchData = async () => {
         try {
             setLoading(true);
@@ -58,7 +53,7 @@ export const FindDoctors: React.FC = () => {
         }
     };
 
-    const filterDoctors = () => {
+    const filterDoctors = React.useCallback(() => {
         let filtered = doctors;
 
         // Filter by search term
@@ -75,7 +70,11 @@ export const FindDoctors: React.FC = () => {
         }
 
         setFilteredDoctors(filtered);
-    };
+    }, [searchTerm, selectedSpecialization, doctors]);
+
+    useEffect(() => {
+        filterDoctors();
+    }, [filterDoctors]);
 
     const handleBookAppointment = (doctorId: string | number) => {
         navigate(`${PATHS.PATIENT.BOOK_APPOINTMENT}?doctorId=${doctorId}`);

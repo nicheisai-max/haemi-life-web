@@ -10,7 +10,7 @@ import { GradientMesh } from '@/components/ui/GradientMesh';
 import { getPrescriptionById, updatePrescriptionStatus } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
-import { useToast } from '../../context/ToastContext';
+import { useToast } from '@/hooks/useToast';
 import { PATHS } from '../../routes/paths';
 import { getErrorMessage } from '../../lib/error';
 

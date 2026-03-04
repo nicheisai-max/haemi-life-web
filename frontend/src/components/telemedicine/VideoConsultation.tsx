@@ -4,7 +4,7 @@ import io from 'socket.io-client';
 import Peer from 'simple-peer';
 import { getAccessToken } from '../../services/api';
 import type { Instance, SignalData } from 'simple-peer';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import {
     CheckCircle2, Mic, MicOff, Video, VideoOff, PhoneOff,
     ShieldCheck, Settings, AlertCircle, Info, User, ArrowLeft
@@ -41,13 +41,12 @@ export const VideoConsultation: React.FC = () => {
 
     // 1. Fetch Appointment Data
     useEffect(() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleTokenRefreshed = (e: any) => {
-            const newToken = e.detail?.token;
+        const handleTokenRefreshed = (e: Event) => {
+            const customEvent = e as CustomEvent<{ token: string }>;
+            const newToken = customEvent.detail?.token;
             if (socketRef.current && newToken) {
                 // Enterprise Fix: Safely update token on existing socket instance
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (socketRef.current as any).auth.token = newToken;
+                (socketRef.current as unknown as { auth: { token: string } }).auth.token = newToken;
             }
         };
 

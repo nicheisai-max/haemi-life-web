@@ -11,7 +11,7 @@ import {
     Search,
     Video
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from './useAuth';
 import { PATHS } from '../routes/paths';
 
 export const useNavigation = () => {

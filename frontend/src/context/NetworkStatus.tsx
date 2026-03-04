@@ -1,6 +1,6 @@
-/* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import React, { useState, useEffect, type ReactNode } from 'react';
 import { WifiOff, SignalLow } from 'lucide-react';
+import { NetworkStatusContext } from './NetworkStatusDef';
 
 interface NavigatorWithConnection extends Navigator {
     connection?: {
@@ -9,19 +9,6 @@ interface NavigatorWithConnection extends Navigator {
         removeEventListener: (type: string, listener: EventListener) => void;
     };
 }
-
-
-interface NetworkStatusContextValue {
-    isOnline: boolean;
-    isSlowConnection: boolean;
-}
-
-const NetworkStatusContext = createContext<NetworkStatusContextValue>({
-    isOnline: true,
-    isSlowConnection: false,
-});
-
-export const useNetworkStatus = () => useContext(NetworkStatusContext);
 
 interface NetworkStatusProviderProps {
     children: ReactNode;

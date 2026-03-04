@@ -1,35 +1,8 @@
-/* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, type ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
-
-
-type ToastType = 'success' | 'error' | 'warning' | 'info';
-
-interface Toast {
-    id: string;
-    message: string;
-    type: ToastType;
-    duration?: number;
-}
-
-interface ToastContextValue {
-    showToast: (message: string, type?: ToastType, duration?: number) => void;
-    success: (message: string, duration?: number) => void;
-    error: (message: string, duration?: number) => void;
-    warning: (message: string, duration?: number) => void;
-    info: (message: string, duration?: number) => void;
-}
-
-const ToastContext = createContext<ToastContextValue | undefined>(undefined);
-
-export const useToast = () => {
-    const context = useContext(ToastContext);
-    if (!context) {
-        throw new Error('useToast must be used within ToastProvider');
-    }
-    return context;
-};
+import { ToastContext } from './ToastContextDef';
+import type { ToastType, Toast } from './ToastContextDef';
 
 interface ToastProviderProps {
     children: ReactNode;
