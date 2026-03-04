@@ -57,3 +57,14 @@ TEST_CREDENTIALS.md
 # Package lock files (use npm ci in CI/CD)
 package-lock.json
 backend/uploads/
+
+# Clean Solution
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+*.bundle
+*.zip
+eslint_out.json
+lint_output.txt
+lint_results.json
+
