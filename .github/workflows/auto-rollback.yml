@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Root Dependencies
         run: npm ci
@@ -37,17 +38,8 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
-      - name: Run TypeScript Strict Check
-        run: npm run type-check
-
-      - name: Run ESLint (zero warnings)
-        run: npm run lint
-
-      - name: Run Unit Tests
-        run: npm run test:ci
-
-      - name: Run Production Build
-        run: npm run build
+      - name: Parallel CI Execution (Speed Optimized)
+        run: npx concurrently "npm run type-check" "npm run lint" "npm run test:ci" "npm --prefix backend run build" "npm --prefix frontend run build"
 
       - name: Execute Automatic Rollback (main branch only)
         if: failure() && github.ref == 'refs/heads/main'
