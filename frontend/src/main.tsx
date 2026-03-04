@@ -14,6 +14,14 @@ import '@fontsource/sacramento';
 import '@fontsource/allura';
 import App from './App.tsx'
 
+// DEFENSIVE SAFEGUARD: Hard-block PWA installability signals
+// This prevents the 'beforeinstallprompt' event from propagating, 
+// ensuring the browser never shows an automated install banner.
+window.addEventListener('beforeinstallprompt', (e: Event) => {
+  e.preventDefault();
+  return false;
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

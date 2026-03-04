@@ -386,32 +386,32 @@ const AppRoutes = () => {
 };
 
 import { LanguageProvider } from './context/LanguageContext';
-import { PWAProvider } from './context/PWAContext';
+
 
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <Router>
-        <PWAProvider>
-          <AuthProvider>
-            <ThemeProvider>
-              <ToastProvider>
-                <AlertDialogProvider>
-                  <NetworkStatusProvider>
-                    <SessionManagerProvider>
-                      <LanguageProvider>
-                        <AuthGatedNotifications>
-                          <ScrollToTop />
-                          <AppRoutes />
-                        </AuthGatedNotifications>
-                      </LanguageProvider>
-                    </SessionManagerProvider>
-                  </NetworkStatusProvider>
-                </AlertDialogProvider>
-              </ToastProvider>
-            </ThemeProvider>
-          </AuthProvider>
-        </PWAProvider>
+
+        <AuthProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <AlertDialogProvider>
+                <NetworkStatusProvider>
+                  <SessionManagerProvider>
+                    <LanguageProvider>
+                      <AuthGatedNotifications>
+                        <ScrollToTop />
+                        <AppRoutes />
+                      </AuthGatedNotifications>
+                    </LanguageProvider>
+                  </SessionManagerProvider>
+                </NetworkStatusProvider>
+              </AlertDialogProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </AuthProvider>
+
       </Router>
     </ErrorBoundary>
   );
