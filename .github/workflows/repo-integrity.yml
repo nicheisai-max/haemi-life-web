@@ -2,38 +2,46 @@ name: Enterprise Integrity Gate
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'ai/**'
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
-  verify:
+  integrity-gate:
+    name: CI Integrity Check
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Use Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        
-    - name: Install Root Dependencies
-      run: npm install
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Install Backend Dependencies
-      working-directory: ./backend
-      run: npm install
-      
-    - name: Install Frontend Dependencies
-      working-directory: ./frontend
-      run: npm install
-      
-    - name: Run Enterprise Type Check
-      run: npm run type-check
-      
-    - name: Run Enterprise Lint
-      run: npm run lint --max-warnings=0
-      
-    - name: Run Enterprise Build
-      run: npm run build
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Root Dependencies
+        run: npm ci
+
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: TypeScript Strict Check
+        run: npm run type-check
+
+      - name: ESLint Validation (zero warnings)
+        run: npm run lint
+
+      - name: Unit Tests
+        run: npm run test:ci
+
+      - name: Production Build
+        run: npm run build

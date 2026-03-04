@@ -2,10 +2,15 @@ name: Auto-Rollback Protection
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   verify-and-rollback:
+    name: Validate & Rollback on Failure
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,35 +21,38 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Root Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Backend Dependencies
         working-directory: ./backend
-        run: npm install
+        run: npm ci
 
       - name: Install Frontend Dependencies
         working-directory: ./frontend
-        run: npm install
+        run: npm ci
 
-      - name: Run Type Check
+      - name: Run TypeScript Strict Check
         run: npm run type-check
 
-      - name: Run Lint
-        run: npm run lint --max-warnings=0
+      - name: Run ESLint (zero warnings)
+        run: npm run lint
 
-      - name: Run Build
+      - name: Run Unit Tests
+        run: npm run test:ci
+
+      - name: Run Production Build
         run: npm run build
 
-      - name: Execute Automatic Rollback
-        if: failure()
+      - name: Execute Automatic Rollback (main branch only)
+        if: failure() && github.ref == 'refs/heads/main'
         run: |
-          echo "Validation check failed! Initiating automatic rollback..."
+          echo "Validation failed! Initiating automatic rollback of main..."
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git revert HEAD --no-edit

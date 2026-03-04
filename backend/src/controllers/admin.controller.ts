@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
-import { systemSettingsRepository } from '../repositories/system_settings.repository';
+import { systemSettingsRepository } from '../repositories/system-settings.repository';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
 
