@@ -24,6 +24,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Verify Repository Cleanliness
+        run: |
+          git fetch --prune
+          git worktree prune
+          node scripts/git-prune-check.js
+
       - name: Verify No Worktrees
         run: |
           COUNT=$(git worktree list | wc -l)

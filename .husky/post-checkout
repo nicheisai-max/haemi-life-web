@@ -1,0 +1,5 @@
+#!/bin/sh
+
+echo "Running enterprise post-checkout branch cleanup..."
+
+node scripts/git-prune-check.js || echo "Warning: Orphan branch check failed."
