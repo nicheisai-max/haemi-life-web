@@ -22,6 +22,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Root Dependencies
         run: npm ci
@@ -34,14 +35,5 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
-      - name: TypeScript Strict Check
-        run: npm run type-check
-
-      - name: ESLint Validation (zero warnings)
-        run: npm run lint
-
-      - name: Unit Tests
-        run: npm run test:ci
-
-      - name: Production Build
-        run: npm run build
+      - name: Parallel CI Execution (Speed Optimized)
+        run: npx concurrently "npm run type-check" "npm run lint" "npm run test:ci" "npm --prefix backend run build" "npm --prefix frontend run build"

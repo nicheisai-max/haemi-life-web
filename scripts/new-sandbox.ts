@@ -40,6 +40,11 @@ try {
         console.warn("⚠️  Working tree has uncommitted changes. Sandbox branch will include them.");
     }
 
+    // Enterprise safe start: always branch from latest origin/main
+    execSync("git fetch origin", { stdio: "inherit" });
+    execSync("git checkout main", { stdio: "inherit" });
+    execSync("git reset --hard origin/main", { stdio: "inherit" });
+
     // Create and checkout the branch
     execSync(`git checkout -b ${branchName}`, { stdio: "inherit" });
 
