@@ -10,7 +10,7 @@ import { JWTPayload, AuthenticatedSocket } from './types/express';
 import * as jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 
-import { notFound } from './middleware/notFound.middleware';
+import { notFound } from './middleware/not-found.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { authLimiter, apiLimiter } from './middleware/rate-limit.middleware';
 import { logger } from './utils/logger';

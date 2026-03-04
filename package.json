@@ -36,7 +36,8 @@
     "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "test:ci": "npm run test:backend",
-    "verify": "node scripts/verifyCommitIntegrity.js"
+    "verify": "node scripts/verifyCommitIntegrity.js",
+    "sandbox": "tsx scripts/new-sandbox.ts"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
