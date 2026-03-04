@@ -3,6 +3,17 @@
 
 echo "Running enterprise pre-commit guardrails..."
 
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+  echo ""
+  echo "❌ [ENFORCEMENT ACTION] DIRECT COMMIT BLOCKED ❌"
+  echo "Enterprise constraints forbid direct commits to the protected main branch."
+  echo "You must perform all work in an isolated sandbox branch."
+  echo "Example: git checkout -b ai/sandbox-YYYY-MM-DD-session"
+  echo ""
+  exit 1
+fi
+
 npx lint-staged || { echo "Lint Staged Failed"; exit 1; }
 
 npm run type-check || { echo "Type Check Failed"; exit 1; }
