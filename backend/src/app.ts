@@ -1,5 +1,6 @@
 import './config/env'; // Must be first to load environment variables before other imports
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
+
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -74,25 +75,8 @@ if (!env.isDemoMode) {
     app.use('/api/', apiLimiter);
 }
 
-// Phase 6: DEMO_MODE Bypass (Auto-Auth)
-if (env.isDemoMode) {
-    app.use('/api', async (req: Request, _res: Response, next: NextFunction) => {
-        const demoRole = req.headers['x-demo-role'];
-        if (demoRole && !req.headers.authorization) {
-            const role = (demoRole as string) || 'patient';
-            (req as Request & { user: JWTPayload }).user = {
-                id: 'demo-id',
-                email: 'demo@haemi.life',
-                role: role as 'patient' | 'doctor' | 'pharmacist' | 'admin',
-                name: 'Demo User'
-            };
-            return next();
-        }
-        next();
-    });
-}
-
 // DB Connection with Retry
+
 // Removed redundant connectDB as startServer uses checkConnection
 
 // Health Probes (Phase 3 Contract)

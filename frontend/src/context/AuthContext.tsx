@@ -41,21 +41,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const latestState = authStateRef.current;
 
                 if (type === 'LOGOUT') {
-                    // DEMO SHIELD: Only logout if the message targets our current user identity
+                    // SECURE SYNC: Only logout if the message targets our current user identity
                     if (payload?.userId && latestState.user?.id === payload.userId) {
                         setAccessToken(null);
                         sessionStorage.removeItem('user');
+                        sessionStorage.removeItem('refreshToken');
                         setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
                     }
-                } else if (type === 'LOGIN') {
-                    const { user, token } = payload;
-                    // DEMO SHIELD: If we are already authenticated as a DIFFERENT user, ignore cross-tab login
-                    if (latestState.user && latestState.user.id !== user.id) return;
-
-                    setAccessToken(token);
-                    sessionStorage.setItem('user', JSON.stringify(user));
-                    setAuthState({ user, token, authStatus: 'authenticated', profileImageVersion: Date.now() });
                 }
+
             };
             authChannel.onmessage = handleMessage;
         }
@@ -169,12 +163,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionStorage.setItem('user', JSON.stringify(newUser));
         setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated', profileImageVersion: Date.now() });
 
-        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-        if (!IS_DEMO_MODE) {
-            const authChannel = new BroadcastChannel('haemi_auth_sync');
-            authChannel.postMessage({ type: 'LOGIN', payload: { user: newUser, token: newToken, userId: newUser.id } });
-            authChannel.close();
-        }
+        // Multi-tab isolation: We no longer broadcast LOGIN events.
+        // Each tab maintains its own unique session to support multi-role testing.
+
     }, []);
 
     const signup = useCallback(async (credentials: SignupCredentials) => {
