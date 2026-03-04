@@ -57,7 +57,7 @@ frontend_backup/
 TEST_CREDENTIALS.md
 
 # Package lock files (use npm ci in CI/CD)
-package-lock.json
+# NOTE: root package-lock.json is intentionally committed for CI determinism
 backend/uploads/
 
 # Clean Solution
