@@ -1,1 +1,10 @@
-npx lint-staged
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running enterprise pre-commit guardrails..."
+
+npx lint-staged || { echo "Lint Staged Failed"; exit 1; }
+
+npm run type-check || { echo "Type Check Failed"; exit 1; }
+npm run lint --max-warnings=0 || { echo "Linting Failed"; exit 1; }
+npm run build || { echo "Build Failed"; exit 1; }

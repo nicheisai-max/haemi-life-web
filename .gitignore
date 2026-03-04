@@ -67,4 +67,6 @@ backend/uploads/
 eslint_out.json
 lint_output.txt
 lint_results.json
-
+frontend/build_verify.txt
+frontend/lint_errors.txt
+frontend/tsc_errors.txt

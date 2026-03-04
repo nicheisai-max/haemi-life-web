@@ -32,10 +32,11 @@
     "prepare": "husky",
     "safe-dev": "tsx scripts/safe-dev.ts",
     "demo": "tsx scripts/safe-dev.ts",
-    "type-check": "npm --prefix backend run typecheck",
-    "lint": "npm --prefix backend run lint",
+    "type-check": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
+    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "test:ci": "npm run test:backend",
-    "verify:integrity": "node scripts/verifyCommitIntegrity.js"
+    "verify": "node scripts/verifyCommitIntegrity.js"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
