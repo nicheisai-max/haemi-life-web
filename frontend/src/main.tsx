@@ -12,7 +12,7 @@ import '@fontsource/roboto/900.css';
 import '@fontsource/great-vibes';
 import '@fontsource/sacramento';
 import '@fontsource/allura';
-import App from './App.tsx'
+import App from './app.tsx'
 
 // DEFENSIVE SAFEGUARD: Hard-block PWA installability signals
 // This prevents the 'beforeinstallprompt' event from propagating, 

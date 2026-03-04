@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { type VariantProps } from "class-variance-authority"
-import { PremiumLoader } from "./PremiumLoader"
+import { PremiumLoader } from "./premium-loader"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "./button-variants"
 
