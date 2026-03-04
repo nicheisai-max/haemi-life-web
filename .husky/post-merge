@@ -1,0 +1,8 @@
+#!/bin/sh
+
+echo "Running enterprise post-merge cleanup..."
+
+git fetch --prune origin
+git worktree prune
+
+echo "✅ Enterprise Cleanup: Stale remote branches and worktrees pruned."
