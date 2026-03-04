@@ -1,5 +1,3 @@
-/* eslint-disable no-restricted-globals */
-
 // Service Worker for Haemi Life PWA
 // Optimized for Botswana's low bandwidth conditions
 

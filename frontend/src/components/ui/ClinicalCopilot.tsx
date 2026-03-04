@@ -44,7 +44,7 @@ export const ClinicalCopilot: React.FC<ClinicalCopilotProps> = ({ isOpen, onClos
     // Auto-close on route change
     useEffect(() => {
         if (isOpen) onClose();
-    }, [location.pathname]);
+    }, [location.pathname, isOpen, onClose]);
 
     // Close on click outside using robust capture-phase hook
 

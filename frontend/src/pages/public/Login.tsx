@@ -12,6 +12,7 @@ import { AlertCircle, Mail, Lock } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthLayout } from '../../components/layout/AuthLayout';
 import { loginSchema, type LoginFormData } from '../../lib/validation/auth.schema';
+import { getErrorMessage } from '../../lib/error';
 import loginBg from '../../assets/images/login_bg_premium.png';
 
 export const Login: React.FC = () => {
@@ -48,11 +49,9 @@ export const Login: React.FC = () => {
 
             await login(credentials);
             // The useEffect above will handle the navigation once state updates
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Login failed:', error);
-            setGeneralError(
-                error.response?.data?.message || 'Login failed. Please check your credentials.'
-            );
+            setGeneralError(getErrorMessage(error, 'Login failed. Please check your credentials.'));
         }
     };
 

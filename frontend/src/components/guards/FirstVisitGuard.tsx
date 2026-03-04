@@ -36,13 +36,6 @@ export const FirstVisitGuard: React.FC<FirstVisitGuardProps> = ({ children }) =>
         return () => window.removeEventListener('haemiOnboardingSkipped', handleSkip);
     }, []);
 
-    // When user logs out (auth → unauthenticated), reset so onboarding shows on next load.
-    // (This handles the case where authStatus toggles within the same tab without a full refresh.)
-    useEffect(() => {
-        if (authStatus === 'unauthenticated') {
-            setShowLogin(false);
-        }
-    }, [authStatus]);
 
     // Auth still resolving — show loader to prevent flicker.
     if (authStatus === 'initializing') {

@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle, Activity, Microscope, Zap, Heart, Wind, Filter } from 'lucide-react';
 import { inventorySchema } from '../../lib/validation/inventory.schema';
 
+
+
 import { PremiumNumberInput } from '@/components/ui/PremiumNumberInput';
 
 import { TransitionItem } from '../../components/layout/PageTransition';
@@ -54,9 +56,9 @@ export const Inventory: React.FC = () => {
         },
     });
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: z.input<typeof inventorySchema>) => {
         const newItem: InventoryItem = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: crypto.randomUUID(),
             name: data.name,
             category: data.category,
             stock: Number(data.stock),

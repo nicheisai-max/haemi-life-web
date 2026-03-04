@@ -9,6 +9,7 @@ import type { Prescription } from '../../services/prescription.service';
 import { AlertCircle, X, CheckCircle2, AlertTriangle, Clock, Calendar, Pill, Check } from 'lucide-react';
 import { MedicalLoader } from '../../components/ui/MedicalLoader';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
+import { getErrorMessage } from '../../lib/error';
 
 export const PrescriptionQueue: React.FC = () => {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
@@ -25,8 +26,8 @@ export const PrescriptionQueue: React.FC = () => {
             setLoading(true);
             const data = await getPendingPrescriptions();
             setPrescriptions(data);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load prescription queue');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to load prescription queue'));
         } finally {
             setLoading(false);
         }
@@ -37,8 +38,8 @@ export const PrescriptionQueue: React.FC = () => {
             setProcessing(prescriptionId.toString());
             await updatePrescriptionStatus(prescriptionId, 'filled');
             await fetchPrescriptions();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to fill prescription');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to fill prescription'));
         } finally {
             setProcessing(null);
         }
@@ -60,8 +61,8 @@ export const PrescriptionQueue: React.FC = () => {
             setProcessing(prescriptionId.toString());
             await updatePrescriptionStatus(prescriptionId, 'cancelled');
             await fetchPrescriptions();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to reject prescription');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to reject prescription'));
         } finally {
             setProcessing(null);
         }

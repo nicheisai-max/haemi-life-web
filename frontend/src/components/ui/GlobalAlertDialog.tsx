@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { AlertTriangle, Info, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -50,7 +50,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
     const getIcon = () => {
         if (icon) return icon;
 
-        const draw = {
+        const draw: Variants = {
             hidden: { pathLength: 0, opacity: 0 },
             visible: {
                 pathLength: 1,
@@ -62,7 +62,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
             }
         };
 
-        const pop = {
+        const pop: Variants = {
             hidden: { scale: 0.5, opacity: 0 },
             visible: {
                 scale: 1,
@@ -93,7 +93,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                             stroke="currentColor"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            variants={draw as any}
+                            variants={draw}
                         />
                     </motion.svg>
                 );
@@ -114,7 +114,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                             strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            variants={draw as any}
+                            variants={draw}
                         />
                     </motion.svg>
                 );
@@ -123,7 +123,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                     <motion.div
                         initial="hidden"
                         animate="visible"
-                        variants={pop as any}
+                        variants={pop}
                         className="relative"
                     >
                         <AlertTriangle className="h-10 w-10 text-amber-500 fill-amber-500/10 stroke-[2.5px]" />

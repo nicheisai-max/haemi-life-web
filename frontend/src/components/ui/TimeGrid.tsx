@@ -91,7 +91,7 @@ export const TimeGrid: React.FC<TimeGridProps> = ({
 interface SectionProps {
     title: string;
     items: string[];
-    icon: any;
+    icon: React.ElementType;
     selectedTime: string;
     onTimeSelect: (time: string) => void;
 }

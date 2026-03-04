@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useConfirm } from '@/context/AlertDialogContext';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import type { UserListItem } from '../../services/admin.service';
 import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail, CheckCircle2, CircleOff, Filter } from 'lucide-react';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
+import { getErrorMessage } from '../../lib/error';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<UserListItem[]>([]);
@@ -23,27 +24,7 @@ export const UserManagement: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
     const { confirm } = useConfirm();
 
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    useEffect(() => {
-        applyFilters();
-    }, [searchTerm, roleFilter, statusFilter, users]);
-
-    const fetchUsers = async () => {
-        try {
-            setLoading(true);
-            const data = await getAllUsers();
-            setUsers(data);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load users');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const applyFilters = () => {
+    const applyFilters = useCallback(() => {
         let filtered = users;
 
         // Search filter
@@ -67,6 +48,26 @@ export const UserManagement: React.FC = () => {
         }
 
         setFilteredUsers(filtered);
+    }, [users, searchTerm, roleFilter, statusFilter]);
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    useEffect(() => {
+        applyFilters();
+    }, [searchTerm, roleFilter, statusFilter, users, applyFilters]);
+
+    const fetchUsers = async () => {
+        try {
+            setLoading(true);
+            const data = await getAllUsers();
+            setUsers(data);
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to load users'));
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleToggleStatus = async (userId: number, currentActive: boolean, userName: string) => {
@@ -84,8 +85,8 @@ export const UserManagement: React.FC = () => {
                     setProcessing(userId);
                     await updateUserStatus(userId, newStatus);
                     await fetchUsers();
-                } catch (err: any) {
-                    setError(err.response?.data?.message || 'Failed to update user status');
+                } catch (err: unknown) {
+                    setError(getErrorMessage(err, 'Failed to update user status'));
                 } finally {
                     setProcessing(null);
                 }

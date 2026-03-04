@@ -332,7 +332,7 @@ export const sendMessage = async (req: Request, res: Response) => {
                     }
                 ] : []
             };
-            io.to(conversationId).emit('receive_message', socketPayload);
+            io.to(`conversation:${conversationId}`).emit('receive_message', socketPayload);
         }
 
         // Emit real-time notification to all other participants in this conversation
@@ -436,7 +436,7 @@ export const markAsDelivered = async (req: Request, res: Response) => {
 
         if (result.rows.length > 0 && io) {
             // Notify the sender(s) that their messages were delivered
-            io.to(conversationId).emit('messages_delivered', {
+            io.to(`conversation:${conversationId}`).emit('messages_delivered', {
                 conversation_id: conversationId,
                 receiver_id: userId,
                 message_ids: result.rows.map(r => r.id)
@@ -470,7 +470,7 @@ export const markAsRead = async (req: Request, res: Response) => {
 
         if (result.rows.length > 0 && io) {
             // Notify the sender(s) that their messages were read
-            io.to(conversationId).emit('messages_read', {
+            io.to(`conversation:${conversationId}`).emit('messages_read', {
                 conversation_id: conversationId,
                 receiver_id: userId,
                 message_ids: result.rows.map(r => r.id)
@@ -519,7 +519,7 @@ export const reactToMessage = async (req: Request, res: Response) => {
                 'DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND reaction_type = $3',
                 [messageId, userId, reactionType]
             );
-            if (io) io.to(conversationId).emit('message_reaction', { messageId, userId, reactionType, action: 'removed' });
+            if (io) io.to(`conversation:${conversationId}`).emit('message_reaction', { messageId, userId, reactionType, action: 'removed' });
         } else {
             // TOGGLE: Add or update (one reaction per user per message - if they want to switch, we delete all then add)
             // But requirement says "Allow user to change reaction", let's clear existing and add new
@@ -528,7 +528,7 @@ export const reactToMessage = async (req: Request, res: Response) => {
                 'INSERT INTO message_reactions (message_id, user_id, reaction_type) VALUES ($1, $2, $3)',
                 [messageId, userId, reactionType]
             );
-            if (io) io.to(conversationId).emit('message_reaction', { messageId, userId, reactionType, action: 'added' });
+            if (io) io.to(`conversation:${conversationId}`).emit('message_reaction', { messageId, userId, reactionType, action: 'added' });
         }
 
         res.sendStatus(200);
@@ -586,7 +586,7 @@ export const deleteMessage = async (req: Request, res: Response) => {
             await pool.query('DELETE FROM messages WHERE id = $1', [messageId]);
 
 
-            if (io) io.to(conversationId).emit('message_deleted', { messageId, forEveryone: true });
+            if (io) io.to(`conversation:${conversationId}`).emit('message_deleted', { messageId, forEveryone: true });
         } else {
             // Delete for me
             await pool.query(

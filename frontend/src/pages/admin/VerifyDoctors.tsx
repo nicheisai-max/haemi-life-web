@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { getPendingVerifications, verifyDoctor } from '../../services/admin.service';
 import type { PendingVerification } from '../../services/admin.service';
 import { Clock, AlertCircle, X, ShieldCheck, User, Check, Mail, Phone, Calendar, Briefcase, FileText } from 'lucide-react';
+import { getErrorMessage } from '../../lib/error';
 
 export const VerifyDoctors: React.FC = () => {
     const [verifications, setVerifications] = useState<PendingVerification[]>([]);
@@ -21,8 +22,8 @@ export const VerifyDoctors: React.FC = () => {
             setLoading(true);
             const data = await getPendingVerifications();
             setVerifications(data);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load verifications');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to load verifications'));
         } finally {
             setLoading(false);
         }
@@ -33,8 +34,8 @@ export const VerifyDoctors: React.FC = () => {
             setProcessing(doctorId);
             await verifyDoctor(parseInt(doctorId, 10), approved);
             await fetchVerifications();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to process verification');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to process verification'));
         } finally {
             setProcessing(null);
         }

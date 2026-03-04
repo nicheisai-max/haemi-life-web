@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,6 +17,7 @@ import { bookAppointmentSchema, type BookAppointmentFormData } from '../../lib/v
 import type { DoctorProfile } from '../../services/doctor.service';
 import type { AvailableSlots } from '../../services/appointment.service';
 import { getConsentStatus } from '../../services/consent.service';
+import { getErrorMessage } from '../../lib/error';
 import { CheckCircle, AlertTriangle, User, Calendar, Clock, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { DateScroller } from '@/components/ui/DateScroller';
@@ -62,7 +63,7 @@ export const BookAppointment: React.FC = () => {
         try {
             const data = await getConsentStatus();
             setHasConsent(data.hasConsent);
-        } catch (err) {
+        } catch {
             setHasConsent(false);
         }
     };
@@ -84,42 +85,42 @@ export const BookAppointment: React.FC = () => {
                 form.setValue('consultation_type', 'video');
                 // Clean up draft after restoring to avoid sticking state
                 sessionStorage.removeItem('book_appointment_draft');
-            } catch (e) {
-                console.error("Failed to parse appointment draft", e);
+            } catch {
+                console.error("Failed to parse appointment draft");
             }
         }
-    }, [preselectedDoctorId, doctors]);
-
-    useEffect(() => {
-        if (watchedDoctorId && watchedDate) {
-            fetchAvailableSlots();
-        }
-    }, [watchedDoctorId, watchedDate]);
+    }, [preselectedDoctorId, doctors, form]);
 
     const fetchDoctors = async () => {
         try {
             setLoading(true);
             const data = await getDoctors();
             setDoctors(data);
-        } catch (err: any) {
-            setGeneralError(err.response?.data?.message || 'Failed to load doctors');
+        } catch (err: unknown) {
+            setGeneralError(getErrorMessage(err, 'Failed to load doctors'));
         } finally {
             setLoading(false);
         }
     };
 
-    const fetchAvailableSlots = async () => {
+    const fetchAvailableSlots = useCallback(async () => {
         try {
             const doctorId = watchedDoctorId as string;
             if (!doctorId) return;
 
             const slots = await getAvailableSlots(doctorId, watchedDate);
             setAvailableSlots(slots);
-        } catch (err: any) {
-            console.error('Failed to fetch slots:', err);
+        } catch (err: unknown) {
+            console.error('Failed to fetch slots:', getErrorMessage(err));
             setAvailableSlots(null);
         }
-    };
+    }, [watchedDoctorId, watchedDate]);
+
+    useEffect(() => {
+        if (watchedDoctorId && watchedDate) {
+            fetchAvailableSlots();
+        }
+    }, [watchedDoctorId, watchedDate, fetchAvailableSlots]);
 
     const onSubmit = async (data: BookAppointmentFormData) => {
         try {
@@ -129,8 +130,8 @@ export const BookAppointment: React.FC = () => {
             setTimeout(() => {
                 navigate('/appointments');
             }, 2000);
-        } catch (err: any) {
-            setGeneralError(err.response?.data?.message || 'Failed to book appointment');
+        } catch (err: unknown) {
+            setGeneralError(getErrorMessage(err, 'Failed to book appointment'));
         }
     };
 

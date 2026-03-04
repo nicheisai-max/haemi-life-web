@@ -24,7 +24,7 @@ export const notificationService = {
 
         // Emit to the user's personal room — user joins `user:<id>` on socket connect
         if (io) {
-            io.to(`user:${userId}`).emit('new_notification', notification);
+            io.to(`user:${userId}`).emit('notification:new', notification);
         }
 
         return notification;

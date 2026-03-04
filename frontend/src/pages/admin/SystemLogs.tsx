@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { getAuditLogs } from '../../services/admin.service';
 import type { AuditLog } from '../../services/admin.service';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { getErrorMessage } from '../../lib/error';
 
 export const SystemLogs: React.FC = () => {
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -23,8 +24,8 @@ export const SystemLogs: React.FC = () => {
             setLoading(true);
             const data = await getAuditLogs();
             setLogs(data);
-        } catch (err: any) {
-            console.error("Failed to fetch logs:", err);
+        } catch (err: unknown) {
+            console.error("Failed to fetch logs:", getErrorMessage(err));
         } finally {
             setLoading(false);
             setRefreshing(false);

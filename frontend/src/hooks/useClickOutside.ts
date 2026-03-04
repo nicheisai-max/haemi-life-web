@@ -40,7 +40,7 @@ export const useClickOutside = <T extends HTMLElement>(
         return () => {
             document.removeEventListener('pointerdown', listener, true);
         };
-    }, []); // Empty dependency array properly stabilizes the listener
+    }, [ignoredRefs]); // Empty dependency array properly stabilizes the listener
 
     return ref;
 };

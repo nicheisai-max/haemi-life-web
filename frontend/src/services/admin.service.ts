@@ -6,7 +6,7 @@ export interface AuditLog {
     action: string;
     entity_type: string;
     entity_id: number;
-    details: any;
+    details: Record<string, unknown> | string | null;
     ip_address: string;
     created_at: string;
     user_name?: string;
@@ -58,8 +58,8 @@ export const getAllUsers = async (params?: { role?: string; status?: string; sea
     return response.data;
 };
 
-export const updateUserStatus = async (userId: number, status: string): Promise<{ message: string; user: any }> => {
-    const response = await api.put<{ message: string; user: any }>(`/admin/users/${userId}/status`, { status });
+export const updateUserStatus = async (userId: number, status: string): Promise<{ message: string; user: UserListItem }> => {
+    const response = await api.put<{ message: string; user: UserListItem }>(`/admin/users/${userId}/status`, { status });
     return response.data;
 };
 
@@ -68,8 +68,8 @@ export const getPendingVerifications = async (): Promise<PendingVerification[]> 
     return response.data;
 };
 
-export const verifyDoctor = async (id: number, verified: boolean): Promise<{ message: string; profile: any }> => {
-    const response = await api.put<{ message: string; profile: any }>(`/admin/verify-doctor/${id}`, { verified });
+export const verifyDoctor = async (id: number, verified: boolean): Promise<{ message: string; profile: PendingVerification }> => {
+    const response = await api.put<{ message: string; profile: PendingVerification }>(`/admin/verify-doctor/${id}`, { verified });
     return response.data;
 };
 

@@ -34,9 +34,11 @@ export const PremiumTimePicker: React.FC<PremiumTimePickerProps> = ({
         let nh12 = nh24 % 12;
         if (nh12 === 0) nh12 = 12;
 
-        setHour(nh12);
-        setMinute(nm24);
-        setPeriod(np);
+        Promise.resolve().then(() => {
+            setHour(nh12);
+            setMinute(nm24);
+            setPeriod(np);
+        });
     }, [value]);
 
     useEffect(() => {

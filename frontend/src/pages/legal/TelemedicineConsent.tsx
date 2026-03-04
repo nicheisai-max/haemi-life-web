@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { ShieldCheck, AlertTriangle, MonitorPlay, Wifi, Lock, CheckCircle2, X, A
 import { telemedicineConsentSchema, type TelemedicineConsentFormData } from '../../lib/validation/legal.schema';
 import { signConsent } from '@/services/consent.service';
 import { toast } from 'sonner';
+import { getErrorMessage } from '../../lib/error';
 
 import { SignaturePad } from '@/components/ui/SignaturePad';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,9 @@ export const TelemedicineConsent: React.FC = () => {
         },
     });
 
+    const accepted = useWatch({ control: form.control, name: 'accepted' });
+    const signature = useWatch({ control: form.control, name: 'signature' });
+
     const onSubmit = async (data: TelemedicineConsentFormData) => {
         if (data.accepted && data.signature) {
             try {
@@ -38,9 +42,9 @@ export const TelemedicineConsent: React.FC = () => {
 
                 // Navigate to the Telemedicine Hub (reliable, predictable destination)
                 navigate(PATHS.TELEMEDICINE);
-            } catch (error: any) {
+            } catch (error: unknown) {
                 toast.error('Failed to save consent', {
-                    description: error.response?.data?.message || 'An error occurred while saving your signature. Please try again.',
+                    description: getErrorMessage(error, 'An error occurred while saving your signature. Please try again.'),
                 });
             }
         }
@@ -238,10 +242,10 @@ export const TelemedicineConsent: React.FC = () => {
                             <Button
                                 type="submit"
                                 variant="default"
-                                disabled={!form.watch('accepted') || !form.watch('signature') || form.formState.isSubmitting}
+                                disabled={!accepted || !signature || form.formState.isSubmitting}
                                 className={cn(
                                     "flex items-center justify-center gap-2 sm:min-w-52 h-11 text-base rounded-lg font-medium transition-all duration-500",
-                                    form.watch('accepted') && form.watch('signature')
+                                    accepted && signature
                                         ? "bg-gradient-to-r from-primary to-teal-600 hover:from-primary/90 hover:to-teal-700 shadow-lg shadow-primary/20 hover:-translate-y-0.5 animate-in slide-in-from-bottom-2 fade-in border border-transparent"
                                         : "border border-transparent"
                                 )}

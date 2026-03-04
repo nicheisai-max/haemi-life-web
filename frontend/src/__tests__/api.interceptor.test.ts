@@ -37,8 +37,9 @@ describe('Global Axios Interceptors (api.ts)', () => {
 
         try {
             await api.get('/admin-dashboard');
-        } catch (e: any) {
-            expect(e.response.status).toBe(403);
+        } catch (e: unknown) {
+            const err = e as { response?: { status?: number } };
+            expect(err.response?.status).toBe(403);
         }
 
         expect(spyEvent).toHaveBeenCalled();

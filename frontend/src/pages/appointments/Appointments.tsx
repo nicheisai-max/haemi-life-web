@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useConfirm } from '../../context/AlertDialogContext';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -11,6 +11,7 @@ import { Plus, AlertCircle, CalendarX, Clock, Calendar, Trash2 } from 'lucide-re
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
 
 import { TransitionItem } from '../../components/layout/PageTransition';
+import { getErrorMessage } from '../../lib/error';
 
 export const Appointments: React.FC = () => {
     const navigate = useNavigate();
@@ -21,27 +22,7 @@ export const Appointments: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming');
 
-    useEffect(() => {
-        fetchAppointments();
-    }, []);
-
-    useEffect(() => {
-        applyFilter();
-    }, [filter, appointments]);
-
-    const fetchAppointments = async () => {
-        try {
-            setLoading(true);
-            const data = await getMyAppointments({});
-            setAppointments(data);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to load appointments');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const applyFilter = () => {
+    const applyFilter = useCallback(() => {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         let filtered = appointments;
@@ -61,6 +42,26 @@ export const Appointments: React.FC = () => {
         }
 
         setFilteredAppointments(filtered);
+    }, [appointments, filter]);
+
+    useEffect(() => {
+        fetchAppointments();
+    }, []);
+
+    useEffect(() => {
+        applyFilter();
+    }, [filter, appointments, applyFilter]);
+
+    const fetchAppointments = async () => {
+        try {
+            setLoading(true);
+            const data = await getMyAppointments({});
+            setAppointments(data);
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to load appointments'));
+        } finally {
+            setLoading(false);
+        }
     };
 
     const { confirm } = useConfirm();
@@ -79,8 +80,8 @@ export const Appointments: React.FC = () => {
         try {
             await cancelAppointment(appointmentId);
             await fetchAppointments();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to cancel appointment');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to cancel appointment'));
         }
     };
 
@@ -104,8 +105,8 @@ export const Appointments: React.FC = () => {
         try {
             await updateAppointmentStatus(appointmentId, 'completed');
             await fetchAppointments();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to update appointment');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to update appointment'));
         }
     };
 

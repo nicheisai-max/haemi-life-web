@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
@@ -70,8 +71,8 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
 
     // Phase 4: Institutional Safety Layer - Global Error Listener
     React.useEffect(() => {
-        const handleSystemError = (e: any) => {
-            const { message } = e.detail;
+        const handleSystemError: EventListener = (e) => {
+            const { message } = (e as CustomEvent<{ message?: string }>).detail;
             error(message || 'A critical system error occurred.');
         };
 

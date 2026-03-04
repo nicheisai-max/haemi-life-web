@@ -12,6 +12,7 @@ import type { Prescription } from '../../services/prescription.service';
 import { PremiumLoader } from '@/components/ui/PremiumLoader';
 import { useToast } from '../../context/ToastContext';
 import { PATHS } from '../../routes/paths';
+import { getErrorMessage } from '../../lib/error';
 
 const DispensePrescription: React.FC = () => {
     const [rxId, setRxId] = useState('');
@@ -35,8 +36,8 @@ const DispensePrescription: React.FC = () => {
             }
             const data = await getPrescriptionById(parseInt(numericId));
             setPrescription(data);
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Prescription not found');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Prescription not found'));
             setPrescription(null);
         } finally {
             setLoading(false);
@@ -50,8 +51,8 @@ const DispensePrescription: React.FC = () => {
             await updatePrescriptionStatus(prescription.id, 'filled');
             showToast('Prescription dispensed successfully', 'success');
             navigate(PATHS.PHARMACIST.QUEUE);
-        } catch (err: any) {
-            showToast(err.response?.data?.message || 'Failed to dispense', 'error');
+        } catch (err: unknown) {
+            showToast(getErrorMessage(err, 'Failed to dispense'), 'error');
         } finally {
             setDispensing(false);
         }

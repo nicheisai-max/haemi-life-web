@@ -4,6 +4,7 @@ export interface GrowthStat {
     name: string;
     value: number;
     new_users?: number;
+    [key: string]: string | number | undefined;
 }
 
 export const getGrowthStats = async () => {

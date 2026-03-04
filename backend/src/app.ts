@@ -251,16 +251,13 @@ function setupSockets(io: Server) {
         socket.join(`user:${userId}`);
         logger.info(`Socket: ${socket.id} user:${userId}`);
 
-        // Chat events
-        socket.on('join_chat', (id: string) => socket.join(`chat:${id}`));
-        socket.on('send_message', (data: { chat_id: string; message: JWTPayload }) => {
-            if (io) io.to(`chat:${data.chat_id}`).emit('new_message', data);
+        // Chat events — canonical protocol: room = conversation:{id}, join = join_conversation
+        socket.on('join_conversation', (conversationId: string) => socket.join(`conversation:${conversationId}`));
+        socket.on('mark_read', (data: { conversationId: string; user_id: string }) => {
+            if (io) io.to(`conversation:${data.conversationId}`).emit('messages_read', data);
         });
-        socket.on('mark_read', (data: { chat_id: string; user_id: string }) => {
-            if (io) io.to(`chat:${data.chat_id}`).emit('messages_read', data);
-        });
-        socket.on('typing', (data: { chat_id: string; name: string }) => {
-            socket.to(`chat:${data.chat_id}`).emit('user_typing', data);
+        socket.on('typing', (data: { conversationId: string; name: string }) => {
+            socket.to(`conversation:${data.conversationId}`).emit('user_typing', data);
         });
 
         // WebRTC hooks

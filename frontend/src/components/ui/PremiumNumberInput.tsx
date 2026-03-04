@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -28,29 +28,14 @@ export const PremiumNumberInput: React.FC<PremiumNumberInputProps> = ({
     const initialDelayRef = useRef<NodeJS.Timeout | null>(null);
     const valueRef = useRef(value);
 
-    // Sync state and ref if prop changes
-    useEffect(() => {
-        setInputValue(value.toString());
-        valueRef.current = value;
-    }, [value]);
-
-    useEffect(() => {
-        return () => stopContinuous();
+    const stopContinuous = useCallback(() => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        if (initialDelayRef.current) clearTimeout(initialDelayRef.current);
+        timerRef.current = null;
+        initialDelayRef.current = null;
     }, []);
 
-    const handleIncrement = () => {
-        const next = Math.min(valueRef.current + step, max);
-        const fixedNext = parseFloat(next.toFixed(2));
-        onChange(fixedNext);
-    };
-
-    const handleDecrement = () => {
-        const next = Math.max(valueRef.current - step, min);
-        const fixedNext = parseFloat(next.toFixed(2));
-        onChange(fixedNext);
-    };
-
-    const startContinuous = (action: () => void) => {
+    const startContinuous = useCallback((action: () => void) => {
         stopContinuous(); // Safety clear
         action();
         initialDelayRef.current = setTimeout(() => {
@@ -58,14 +43,31 @@ export const PremiumNumberInput: React.FC<PremiumNumberInputProps> = ({
                 action();
             }, 80);
         }, 500);
-    };
+    }, [stopContinuous]);
 
-    const stopContinuous = () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        if (initialDelayRef.current) clearTimeout(initialDelayRef.current);
-        timerRef.current = null;
-        initialDelayRef.current = null;
-    };
+    const handleIncrement = useCallback(() => {
+        const next = Math.min(valueRef.current + step, max);
+        const fixedNext = parseFloat(next.toFixed(2));
+        onChange(fixedNext);
+    }, [max, onChange, step]);
+
+    const handleDecrement = useCallback(() => {
+        const next = Math.max(valueRef.current - step, min);
+        const fixedNext = parseFloat(next.toFixed(2));
+        onChange(fixedNext);
+    }, [min, onChange, step]);
+
+    // Sync state and ref if prop changes
+    useEffect(() => {
+        Promise.resolve().then(() => {
+            setInputValue(value.toString());
+        });
+        valueRef.current = value;
+    }, [value]);
+
+    useEffect(() => {
+        return () => stopContinuous();
+    }, [stopContinuous]);
 
     const handleBlur = () => {
         let val = parseFloat(inputValue);

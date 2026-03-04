@@ -11,6 +11,7 @@ import { User, Stethoscope, Building2, AlertCircle, ArrowLeft, Mail, Lock, Shiel
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthLayout } from '../../components/layout/AuthLayout';
 import { signupSchema, type SignupFormData } from '../../lib/validation/auth.schema';
+import { getErrorMessage } from '../../lib/error';
 import loginBg from '../../assets/images/login_bg_premium.png';
 import type { UserRole } from '../../types/auth.types';
 
@@ -37,7 +38,7 @@ export const Signup: React.FC = () => {
 
     const handleRoleSelect = (role: UserRole) => {
         setSelectedRole(role);
-        form.setValue('role', role as any);
+        form.setValue('role', role as 'patient' | 'doctor' | 'pharmacist');
         setStep('form');
     };
 
@@ -56,11 +57,9 @@ export const Signup: React.FC = () => {
 
             // Navigation is now handled by the AuthContext state change effect
             // which detects the new user and redirects to /dashboard automatically.
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Signup failed:', error);
-            setGeneralError(
-                error.response?.data?.message || 'Signup failed. Please try again.'
-            );
+            setGeneralError(getErrorMessage(error, 'Signup failed. Please try again.'));
         }
     };
 

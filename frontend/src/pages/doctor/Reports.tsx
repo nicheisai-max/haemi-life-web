@@ -9,10 +9,18 @@ import { GradientMesh } from '@/components/ui/GradientMesh';
 import { getGrowthStats, getClinicalPerformance } from '../../services/analytics.service';
 import type { GrowthStat } from '../../services/analytics.service';
 import { MedicalLoader } from '@/components/ui/MedicalLoader';
+import { getErrorMessage } from '../../lib/error';
+
+interface DiagnosisEntry { name: string; count: number; percentage: number; }
+interface ClinicalPerformance {
+    retentionRate?: string | number;
+    patientSatisfaction?: string | number;
+    topDiagnoses?: DiagnosisEntry[];
+}
 
 const Reports: React.FC = () => {
     const [stats, setStats] = useState<GrowthStat[]>([]);
-    const [performance, setPerformance] = useState<any>(null);
+    const [performance, setPerformance] = useState<ClinicalPerformance | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -29,8 +37,8 @@ const Reports: React.FC = () => {
             ]);
             setStats(growthData);
             setPerformance(performanceData);
-        } catch (err: any) {
-            setError(err.message || 'Failed to load clinical data');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to load clinical data'));
         } finally {
             setLoading(false);
         }
@@ -90,7 +98,7 @@ const Reports: React.FC = () => {
                         <PremiumAreaChart
                             title="Patient Volume Trend"
                             description="Historical consultation volume"
-                            data={stats as any[]}
+                            data={stats}
                             dataKey="patients"
                             categoryKey="month"
                             color="#148C8B"
@@ -108,7 +116,7 @@ const Reports: React.FC = () => {
                                 { name: 'Type 2 Diabetes', count: 32, percentage: 25 },
                                 { name: 'Influenza', count: 28, percentage: 22 },
                                 { name: 'Asthma', count: 15, percentage: 12 },
-                            ]).map((item: any, i: number) => (
+                            ]).map((item: DiagnosisEntry, i: number) => (
                                 <div key={i} className="space-y-1">
                                     <div className="flex justify-between text-sm">
                                         <span className="font-medium">{item.name}</span>

@@ -25,7 +25,15 @@ interface PremiumAreaChartProps {
     valueSuffix?: string;
 }
 
-const CustomTooltip = ({ active, payload, label, prefix, suffix }: any) => {
+interface CustomTooltipProps {
+    active?: boolean;
+    payload?: Array<{ value?: number | string }>;
+    label?: string;
+    prefix?: string;
+    suffix?: string;
+}
+
+const CustomTooltip = ({ active, payload, label, prefix, suffix }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-popover border border-border shadow-xl rounded-lg p-3 animate-in fade-in-0 zoom-in-95">

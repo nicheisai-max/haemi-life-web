@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, type ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { Button } from '../components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Clock, RotateCw } from 'lucide-react';
 import { SessionManagerContext } from './SessionContext';
 
@@ -53,12 +53,20 @@ export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ 
         };
     }, [isAuthenticated, updateActivity]);
 
+    const hasResetOnAuth = useRef(false);
+
     // P1 FIX: Reset idle timer the moment user becomes authenticated.
-    // This prevents "inheriting" idle time spent on the login page.
     useEffect(() => {
         if (isAuthenticated) {
-            setLastActivity(Date.now());
-            setShowWarning(false);
+            if (!hasResetOnAuth.current) {
+                Promise.resolve().then(() => {
+                    setLastActivity(Date.now());
+                    setShowWarning(false);
+                });
+                hasResetOnAuth.current = true;
+            }
+        } else {
+            hasResetOnAuth.current = false;
         }
     }, [isAuthenticated]);
 
@@ -87,7 +95,9 @@ export const SessionManagerProvider: React.FC<SessionManagerProviderProps> = ({ 
     // Countdown timer for warning
     useEffect(() => {
         if (!showWarning) {
-            setCountdown(120);
+            Promise.resolve().then(() => {
+                setCountdown(120);
+            });
             return;
         }
 

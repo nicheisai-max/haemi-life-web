@@ -15,6 +15,7 @@ import { changePasswordSchema, type ChangePasswordFormData } from '../../lib/val
 import { preferencesSchema, type PreferencesFormData } from '../../lib/validation/preferences.schema';
 import { adminSettingsService } from '../../services/admin.service';
 import { PremiumNumberInput } from '@/components/ui/PremiumNumberInput';
+import { getErrorMessage } from '../../lib/error';
 import { Clock } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -44,8 +45,8 @@ export const Settings: React.FC = () => {
 
             setSuccess('Session timeout updated successfully!');
             setTimeout(() => setSuccess(null), 3000);
-        } catch (err: any) {
-            setGeneralError(err.response?.data?.message || 'Failed to update session timeout');
+        } catch (err: unknown) {
+            setGeneralError(getErrorMessage(err, 'Failed to update session timeout'));
         } finally {
             setIsSavingTimeout(false);
         }
@@ -82,8 +83,8 @@ export const Settings: React.FC = () => {
             setSuccess('Password changed successfully!');
             form.reset();
             setTimeout(() => setSuccess(null), 3000);
-        } catch (err: any) {
-            setGeneralError(err.response?.data?.message || 'Failed to change password');
+        } catch (err: unknown) {
+            setGeneralError(getErrorMessage(err, 'Failed to change password'));
         }
     };
 
@@ -94,7 +95,7 @@ export const Settings: React.FC = () => {
             // Simulate API call
             setSuccess('Preferences updated successfully!');
             setTimeout(() => setSuccess(null), 3000);
-        } catch (err: any) {
+        } catch {
             setGeneralError('Failed to update preferences');
         }
     };
