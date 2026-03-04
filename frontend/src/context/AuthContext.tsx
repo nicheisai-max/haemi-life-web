@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AxiosError } from 'axios';
+import { logger } from '../utils/logger';
 import { authService } from '../services/auth.service';
 import { setAccessToken, setAppInitialized } from '../services/api';
 import { AuthContext } from './AuthContextDef';
@@ -193,7 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             await authService.logout();
         } catch (e) {
-            console.error('Logout failed', e);
+            logger.error('Logout failed', e);
         }
     }, []);
 
@@ -207,7 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }));
             sessionStorage.setItem('user', JSON.stringify(verifiedUser));
         } catch (error) {
-            console.error('[Auth] Failed to refresh user:', error);
+            logger.error('[Auth] Failed to refresh user:', error);
         }
     }, []);
 

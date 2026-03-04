@@ -50,10 +50,10 @@ export const Login: React.FC = () => {
             await login(credentials);
             // The useEffect above will handle the navigation once state updates
         } catch (error: unknown) {
-            console.error('Login failed:', error);
             setGeneralError(getErrorMessage(error, 'Login failed. Please check your credentials.'));
         }
     };
+
 
     return (
         <AuthLayout

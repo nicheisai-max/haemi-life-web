@@ -84,7 +84,7 @@ export const getMe = async (req: Request, res: Response) => {
         if (result.rows.length === 0) {
             const duration = Date.now() - start;
             logger.error('Profile not found', { userId, requestId, duration });
-            return sendError(res, 404, 'Profile not found');
+            return sendError(res, 404, 'Profile not found', 'NOT_FOUND');
         }
 
         const user = result.rows[0];
@@ -121,6 +121,6 @@ export const getMe = async (req: Request, res: Response) => {
             requestId,
             duration: `${duration}ms`
         });
-        return sendError(res, 500, 'Internal server error');
+        return sendError(res, 500, 'Internal server error', 'SERVER_ERROR');
     }
 };

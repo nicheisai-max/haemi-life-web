@@ -13,6 +13,7 @@ export const authService = {
         return response.data;
     },
 
+
     signup: async (credentials: SignupCredentials): Promise<AuthResponse> => {
         const response = await api.post<AuthResponse>('/auth/signup', credentials);
         return response.data;

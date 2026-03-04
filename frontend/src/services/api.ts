@@ -203,9 +203,25 @@ api.interceptors.response.use(
             return Promise.reject(error);
         }
 
+        // Institutional Hardening: Identify "Expected" Failures
+        const isExpectedAuthFailure =
+            (error.response.status === 400 || error.response.status === 401 || error.response.status === 403) &&
+            originalRequest.url?.includes('/auth/');
+
+        if (isExpectedAuthFailure) {
+            // SILENT REJECTION: Return pre-normalized data to prevent Axios stack traces in console
+            const normalizedError = {
+                ...(error.response.data as object),
+                status: error.response.status,
+                _isSilent: true
+            };
+            return Promise.reject(normalizedError);
+        }
+
         // 2. 500 Internal Server Error -> Do not loop, just reject
         if (error.response.status >= 500) {
             const isRetryable = error.response.status === 502 || error.response.status === 503 || error.response.status === 429;
+
 
             // Institutional Hardening: Notify user of catastrophic failure via global toast
             if (!isRetryable && typeof window !== 'undefined') {

@@ -13,14 +13,14 @@ export const signup = async (req: Request, res: Response) => {
 
     // Institutional Hardening: Input Validation
     if (!email || !password || !role || !name || !phone_number) {
-        return sendError(res, 400, 'Missing required fields (name, email, phone, password, role)');
+        return sendError(res, 400, 'Missing required fields (name, email, phone, password, role)', 'MISSING_FIELDS');
     }
 
     try {
         // Check if user exists (by phone or email if provided)
         const userCheck = await userRepository.findByPhoneOrEmail(phone_number, email);
         if (userCheck) {
-            return sendError(res, 400, 'User already exists with this phone number or email');
+            return sendError(res, 400, 'User already exists with this phone number or email', 'USER_EXISTS');
         }
 
         // Hash password
@@ -111,7 +111,7 @@ export const login = async (req: Request, res: Response) => {
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
-            return sendError(res, 400, 'Invalid credentials');
+            return sendError(res, 400, 'Invalid credentials', 'INVALID_CREDENTIALS');
         }
 
         // STRICT STATUS CHECK
@@ -139,7 +139,7 @@ export const login = async (req: Request, res: Response) => {
                 user_agent: req.headers['user-agent']
             });
             logger.auth('Failed login attempt: Invalid password', { identifier, ip: req.ip });
-            return sendError(res, 400, 'Invalid credentials');
+            return sendError(res, 400, 'Invalid credentials', 'INVALID_CREDENTIALS');
         }
 
         // Audit Successful Login
@@ -208,7 +208,7 @@ export const login = async (req: Request, res: Response) => {
         });
     } catch (error: unknown) {
         logger.error('Login server error', { error, identifier });
-        return sendError(res, 500, 'Server error');
+        return sendError(res, 500, 'Server error', 'SERVER_ERROR', error);
     }
 };
 

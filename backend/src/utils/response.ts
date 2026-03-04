@@ -22,12 +22,15 @@ export const sendError = (
     res: Response,
     statusCode: number,
     message: string,
+    code: string = 'INTERNAL_ERROR',
     error: unknown = null
 ) => {
     res.status(statusCode).json({
         success: false,
-        error: message,
+        code,
+        message,
         details: process.env.NODE_ENV === 'development' ? error : undefined,
         statusCode
     });
 };
+

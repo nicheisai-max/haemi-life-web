@@ -1,3 +1,11 @@
+export interface ApiErrorResponse {
+    success: boolean;
+    code: string;
+    message: string;
+    details?: unknown;
+    statusCode: number;
+}
+
 /**
  * Canonical error message extractor.
  * Safely narrows an `unknown` catch block value to a human-readable string.
@@ -5,21 +13,31 @@
  */
 export function getErrorMessage(err: unknown, fallback = 'An unexpected error occurred'): string {
     if (typeof err === 'string') return err;
+
     if (err && typeof err === 'object') {
-        // Axios error shape: err.response.data.message
         const errObj = err as Record<string, unknown>;
-        const response = errObj['response'];
+
+        // 1. Unified Backend Response Structure (err.response.data.message)
+        const response = errObj['response'] as Record<string, unknown> | undefined;
         if (response && typeof response === 'object') {
-            const data = (response as Record<string, unknown>)['data'];
+            const data = response['data'] as ApiErrorResponse | undefined;
             if (data && typeof data === 'object') {
-                const msg = (data as Record<string, unknown>)['message'];
-                if (typeof msg === 'string' && msg) return msg;
+                if (typeof data.message === 'string' && data.message) return data.message;
             }
         }
-        // Native Error
+
+        // 2. Direct ApiErrorResponse Shape (Pre-normalized by interceptor)
+        if (typeof errObj.message === 'string' && errObj.message) {
+            return errObj.message;
+        }
+
+        // 3. Native Error
         if ('message' in errObj && typeof errObj['message'] === 'string') {
             return errObj['message'] || fallback;
         }
+
     }
+
     return fallback;
 }
+
