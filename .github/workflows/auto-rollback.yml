@@ -1,0 +1,53 @@
+name: Auto-Rollback Protection
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  verify-and-rollback:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Root Dependencies
+        run: npm install
+
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Run Type Check
+        run: npm run type-check
+
+      - name: Run Lint
+        run: npm run lint --max-warnings=0
+
+      - name: Run Build
+        run: npm run build
+
+      - name: Execute Automatic Rollback
+        if: failure()
+        run: |
+          echo "Validation check failed! Initiating automatic rollback..."
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git revert HEAD --no-edit
+          git push origin main
+          echo "Rollback successfully pushed to origin/main."
+          exit 1
