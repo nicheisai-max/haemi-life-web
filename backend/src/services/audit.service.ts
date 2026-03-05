@@ -12,19 +12,29 @@ export interface AuditLogEntry {
 }
 
 export const auditService = {
-    log: async (entry: AuditLogEntry) => {
+    log: async (entry: Partial<AuditLogEntry> & Record<string, unknown>) => {
         try {
+            // SCHEMA GUARDS & LEGACY COMPATIBILITY
+            // Map common legacy property names to the new enterprise schema
+            const actor_user_id = entry.actor_user_id || entry.actor_id || entry.user_id;
+            const action_type = entry.action_type || entry.action || 'UNKNOWN_ACTION';
+            const target_id = entry.target_entity_id || entry.target_id || entry.entity_id;
+            const change_summary = entry.change_summary ||
+                (entry.metadata ? JSON.stringify(entry.metadata) : null) ||
+                (entry.details ? JSON.stringify(entry.details) : '{}');
+            const request_ip = entry.request_ip || entry.ip_address || null;
+
+            if (!action_type) return; // Silent discard if no action type provided
+
             await pool.query(
-                `INSERT INTO audit_logs (actor_id, actor_role, action_type, target_id, metadata, ip_address, user_agent, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+                `INSERT INTO audit_logs (actor_user_id, action_type, target_entity_id, change_summary, request_ip, created_at)
+                 VALUES ($1, $2, $3, $4, $5, NOW())`,
                 [
-                    entry.actor_id || null,
-                    entry.actor_role || null,
-                    entry.action_type,
-                    entry.target_id || null,
-                    entry.metadata || {},
-                    entry.ip_address || null,
-                    entry.user_agent || null
+                    actor_user_id || null,
+                    action_type,
+                    target_id || null,
+                    change_summary,
+                    request_ip
                 ]
             );
         } catch (error) {
