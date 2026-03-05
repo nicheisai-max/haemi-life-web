@@ -14,7 +14,8 @@
     "test:backend": "jest --runInBand --detectOpenHandles",
     "test:e2e:backend": "tsx src/app.ts",
     "preflight": "tsx src/utils/preflight.ts",
-    "wait-for-backend": "tsx src/utils/wait-for-backend.ts"
+    "wait-for-backend": "tsx src/utils/wait-for-backend.ts",
+    "db:health": "node scripts/db_health_check.js"
   },
   "keywords": [],
   "author": "",
@@ -33,9 +34,10 @@
     "express-validator": "^6.15.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "knex": "^3.1.0",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
-    "pg": "^8.18.0",
+    "pg": "^8.20.0",
     "socket.io": "^4.8.3",
     "zod": "^4.3.6"
   },
