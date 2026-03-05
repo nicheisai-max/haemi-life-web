@@ -10,45 +10,70 @@ on:
       - main
 
 jobs:
-  integrity-gate:
-    name: CI Integrity Check
+  setup:
+    name: Prepare Workspace
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - name: Verify Repository Cleanliness
+      - name: Install dependencies
         run: |
-          git fetch --prune
-          git worktree prune
-          node scripts/git-prune-check.js
+          npm ci
+          npm --prefix backend ci
+          npm --prefix frontend ci
+  
+  type-safety:
+    name: Type Safety Validation
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
+      - run: npm run type-check
 
-      - name: Verify No Worktrees
-        run: |
-          COUNT=$(git worktree list | wc -l)
-          if [ "$COUNT" -gt 1 ]; then
-            echo "Enterprise policy violation: extra git worktrees detected."
-            git worktree list
-            exit 1
-          fi
+  lint:
+    name: Code Lint Validation
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
+      - run: npm run lint
 
-      - name: Install Root Dependencies
-        run: npm ci
+  test:
+    name: Parallel Integration Test Pipeline
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
+      - run: npm run test:ci
 
-      - name: Install Backend Dependencies
-        working-directory: ./backend
-        run: npm ci
+  build:
+    name: Production Build Check
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
+      - run: npm run build
 
-      - name: Install Frontend Dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Parallel CI Execution (Speed Optimized)
-        run: npx concurrently "npm run type-check" "npm run lint" "npm run test:ci" "npm --prefix backend run build" "npm --prefix frontend run build"

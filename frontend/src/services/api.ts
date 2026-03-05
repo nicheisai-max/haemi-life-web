@@ -162,6 +162,7 @@ api.interceptors.request.use(
 );
 
 // ─── FIX 3 & 5: Single-Flight Refresh & Race Condition Handling ──────────────
+let lastSystemErrorTime = 0;
 let isRefreshing = false;
 let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
 
@@ -225,12 +226,16 @@ api.interceptors.response.use(
 
             // Institutional Hardening: Notify user of catastrophic failure via global toast
             if (!isRetryable && typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('system:error', {
-                    detail: {
-                        message: 'A critical system error occurred. Our technical team has been notified.',
-                        statusCode: error.response.status
-                    }
-                }));
+                const now = Date.now();
+                if (now - lastSystemErrorTime > 500) {
+                    lastSystemErrorTime = now;
+                    window.dispatchEvent(new CustomEvent('system:error', {
+                        detail: {
+                            message: 'A critical system error occurred. Our technical team has been notified.',
+                            statusCode: error.response.status
+                        }
+                    }));
+                }
             }
 
             if (!isRetryable) {
