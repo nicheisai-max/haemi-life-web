@@ -73,8 +73,34 @@ frontend/build_verify.txt
 frontend/lint_errors.txt
 frontend/tsc_errors.txt
 
-# Local Demo Data Protection
-/database/
-/local-data/
-/uploads/
-/demo-data/
+# Enterprise Governance
+/backups/
+/backend/backups/
+*.sql
+*.dump
+
+# Environment Files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node
+node_modules/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Protected Directories (Negative ignores to ensure they are tracked)
+!backend/db/
+!backend/scripts/

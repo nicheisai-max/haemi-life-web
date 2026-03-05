@@ -2,6 +2,7 @@
 
 
 echo "Running enterprise pre-commit guardrails..."
+powershell.exe -ExecutionPolicy Bypass -File scripts/pre-commit-guard.ps1 || { echo "Security Guard Failed"; exit 1; }
 
 WORKTREE_COUNT=$(git worktree list | wc -l)
 

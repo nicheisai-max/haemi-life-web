@@ -111,6 +111,15 @@ async function start() {
     nukePort(5173); // Frontend
     console.log('[SUCCESS] Environment is clear.\n');
 
+    // Step 0.5: Database Health Check
+    console.log('[STEP 0.5] Generating Database Observability Health Report...');
+    try {
+        execSync('npm run db:health', { cwd: BACKEND_DIR, stdio: 'inherit' });
+    } catch (err) {
+        console.warn('[WARNING] Database Health Check reported issues (non-blocking).');
+    }
+    console.log('[SUCCESS] Observability report generated.\n');
+
     // Step 1: Preflight
     console.log('[STEP 1] Running Preflight Integrity Gate...');
     const preflight = spawn('npm', ['run', 'preflight'], { cwd: BACKEND_DIR, stdio: 'inherit', shell: true });
