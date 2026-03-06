@@ -40,7 +40,8 @@
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "test:ci": "npm run test:backend",
     "verify": "node scripts/verifyCommitIntegrity.js",
-    "sandbox": "tsx scripts/new-sandbox.ts"
+    "sandbox": "tsx scripts/new-sandbox.ts",
+    "orchestrate": "tsx scripts/orchestrator.ts"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [

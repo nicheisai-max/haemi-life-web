@@ -104,3 +104,12 @@ Thumbs.db
 # Protected Directories (Negative ignores to ensure they are tracked)
 !backend/db/
 !backend/scripts/
+
+# AI Pipeline Artifacts
+bundle-report.html
+.cache/
+tmp/
+dist/tmp/
+scripts/tmp-*
+scripts/temp-*
+scripts/devops-runner*.ts

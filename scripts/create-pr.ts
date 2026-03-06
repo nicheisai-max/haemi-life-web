@@ -4,7 +4,7 @@ dotenv.config();
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO = 'nicheisai-max/haemi-life-web';
-const HEAD = 'ai/sandbox-devops-upgrade-2026-03-06';
+const HEAD = 'ai/sandbox-pipeline-v2-2026-03-06';
 const BASE = 'main';
 
 async function createPR() {
