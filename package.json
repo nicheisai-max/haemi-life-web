@@ -41,7 +41,9 @@
     "test:ci": "npm run test:backend",
     "verify": "node scripts/verifyCommitIntegrity.js",
     "sandbox": "tsx scripts/new-sandbox.ts",
-    "orchestrate": "tsx scripts/orchestrator.ts"
+    "orchestrate": "tsx scripts/orchestrator.ts",
+    "ai-review": "tsx scripts/ai-self-review.ts",
+    "quality-gate": "tsx scripts/ai-self-review.ts --enforce"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [

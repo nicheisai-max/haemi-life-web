@@ -84,7 +84,11 @@ async function main() {
     if (statusOut) {
         console.log('⚠️ Working tree is not clean. Attempting to add and commit remaining changes to safely integrate...');
         runCmd('git add .');
-        runCmd('git commit -m "chore(ai): prepare branch for pipeline orchestration"');
+
+        console.log('\n🛡️ Triggering AI Code Quality Review...');
+        runCmd('npm run ai-review'); // Phase 1-12 validation
+
+        runCmd('git commit -m "chore(ai): prepare branch with architecture-validated changes"');
     }
 
     const currentBranch = runCmd('git rev-parse --abbrev-ref HEAD');
