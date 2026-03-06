@@ -10,24 +10,8 @@ on:
       - main
 
 jobs:
-  setup:
-    name: Prepare Workspace
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm --prefix backend ci
-          npm --prefix frontend ci
-  
   type-safety:
     name: Type Safety Validation
-    needs: setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +24,6 @@ jobs:
 
   lint:
     name: Code Lint Validation
-    needs: setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +36,6 @@ jobs:
 
   test:
     name: Parallel Integration Test Pipeline
-    needs: setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,9 +46,20 @@ jobs:
       - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
       - run: npm run test:ci
 
+  migration-safety:
+    name: Migration Safety Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run migration:guard
+
   build:
     name: Production Build Check
-    needs: setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,4 +69,18 @@ jobs:
           cache: 'npm'
       - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
       - run: npm run build
+
+  auto-merge:
+    name: GitHub Auto Merge
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'ai/')
+    needs: [type-safety, lint, test, migration-safety, build]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: write
+    steps:
+      - name: Enable Auto-Merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge "${{ github.event.pull_request.html_url }}" --auto --merge --delete-branch
 

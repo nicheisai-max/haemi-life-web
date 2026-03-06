@@ -7,10 +7,12 @@ interface DashboardLayoutProps {
     children: ReactNode;
 }
 
-import { ChatHub } from '../ui/chat-hub';
+const ChatHub = React.lazy(() => import('../ui/chat-hub').then(m => ({ default: m.ChatHub })));
+const ClinicalCopilot = React.lazy(() => import('../ui/clinical-copilot').then(m => ({ default: m.ClinicalCopilot })));
 import { Footer } from './footer';
 import { Sidebar } from './sidebar';
 import { useAuth } from '@/hooks/use-auth';
+import { Suspense } from 'react';
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     const { user } = useAuth();
@@ -48,7 +50,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                 </main>
             </div>
 
-            {!isAdmin && <ChatHub />}
+            {!isAdmin && (
+                <>
+                    <Suspense fallback={null}>
+                        <ChatHub />
+                    </Suspense>
+                    <Suspense fallback={null}>
+                        <ClinicalCopilot isOpen={false} onClose={() => { }} />
+                    </Suspense>
+                </>
+            )}
         </div>
     );
 };

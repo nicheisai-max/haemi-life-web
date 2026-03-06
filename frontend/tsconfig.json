@@ -29,7 +29,9 @@
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo"
   },
   "include": [
     "src"
