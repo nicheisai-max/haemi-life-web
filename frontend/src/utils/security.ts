@@ -18,7 +18,10 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
 
     // CRITICAL: Handle the hex key from .env correctly.
     let keyData: Uint8Array;
-    const rawKey = ENCRYPTION_KEY || 'demo_key_32_bytes_at_least_123456';
+    const rawKey = ENCRYPTION_KEY;
+    if (!rawKey) {
+        throw new Error('🔥 SECURITY ARCHITECTURE BLOCK: VITE_ENCRYPTION_KEY is mandatory for secure operations.');
+    }
 
     if (/^[0-9a-fA-F]+$/.test(rawKey)) {
         const matches = rawKey.match(/.{1,2}/g);

@@ -65,9 +65,14 @@ export class ClinicalCopilotService {
 
             // Race the AI call against the timeout
             const resultPromise = this.model.generateContent(systemInstruction);
-            const result = await Promise.race([resultPromise, timeoutPromise]) as { response: { text: () => string } };
+            const result = await Promise.race([resultPromise, timeoutPromise]);
 
-            const response = result.response;
+            // Type guard to handle GenerateContentResponse structure safely
+            if (!result || typeof result !== 'object' || !('response' in result)) {
+                throw new Error('INVALID_AI_RESPONSE');
+            }
+
+            const response = (result as { response: { text: () => string } }).response;
             const text = response.text();
 
             return text;

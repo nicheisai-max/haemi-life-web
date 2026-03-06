@@ -62,7 +62,7 @@ export const Navbar: React.FC = () => {
         if (!user) return '';
 
         // Prioritize Secure API Endpoint (BYTEA or Legacy Redirection)
-        const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
+        const baseUrl = (import.meta.env.VITE_API_URL || '');
         const apiImage = `${baseUrl}/api/files/profile/${user.id}`;
 
         // However, we only return the API image if we aren't using a default asset.

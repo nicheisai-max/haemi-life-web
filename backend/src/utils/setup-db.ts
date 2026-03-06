@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcrypt';
 
-const DEMO_PASSWORD = '123456';
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '123456';
 
 async function setupDatabase() {
     let client;

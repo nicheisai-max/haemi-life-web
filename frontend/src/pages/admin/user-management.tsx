@@ -114,7 +114,7 @@ export const UserManagement: React.FC = () => {
     };
 
     const getUserImageUrl = (userId: number) => {
-        const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
+        const baseUrl = (import.meta.env.VITE_API_URL || '');
         return `${baseUrl}/api/files/profile/${userId}`;
     };
 
