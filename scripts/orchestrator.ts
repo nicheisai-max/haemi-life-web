@@ -202,6 +202,37 @@ function verifyFinalState() {
 }
 
 /**
+ * PHASE 20: Sandbox Garbage Collector
+ * Removes orphan local and remote ai/sandbox-* branches.
+ */
+function cleanupSandboxBranches() {
+    console.log('\n🧹 PHASE 20: Sandbox Garbage Collector...');
+    const activeBranch = runCmd('git rev-parse --abbrev-ref HEAD', true);
+
+    // Local cleanup
+    const localBranches = runCmd('git branch --list "ai/sandbox-*"', true)
+        .split('\n')
+        .map(b => b.replace('*', '').trim())
+        .filter(b => b.length > 0 && b !== activeBranch);
+
+    for (const b of localBranches) {
+        console.log(`🗑️ Deleting local orphan branch: ${b}`);
+        runCmd(`git branch -D ${b}`, true);
+    }
+
+    // Remote cleanup
+    const remoteBranches = runCmd('git branch -r --list "origin/ai/sandbox-*"', true)
+        .split('\n')
+        .map(b => b.trim().replace('origin/', ''))
+        .filter(b => b.length > 0 && b !== activeBranch);
+
+    for (const b of remoteBranches) {
+        console.log(`🌐 Deleting remote orphan branch: ${b}`);
+        runCmd(`git push origin --delete ${b}`, true);
+    }
+}
+
+/**
  * ANTI-HALLUCINATION GUARD
  * Aborts if on main branch during modification.
  */
@@ -225,11 +256,14 @@ async function main() {
 
     // Phase 1: Git Guardian
     console.log('\n🛡️ PHASE 1: Git Guardian (Self-Healing)...');
-    runCmd('git fetch origin', true);
+    runCmd('git fetch --prune', true);
     runCmd('git reset --hard', true);
     runCmd('git clean -fd', true);
     runCmd('git checkout main', true);
     runCmd('git reset --hard origin/main', true);
+
+    // Initial cleanup of any stale branches before we start
+    cleanupSandboxBranches();
 
     // Phase 2: Sandbox Enforcement
     const sandbox = ensureSandboxBranch();
@@ -280,6 +314,9 @@ async function main() {
                 await api.put(`/pulls/${prNumber}/merge`, { merge_method: 'squash' });
                 updateTaskStatus(sandbox, 'merged');
                 console.log('✅ PR merged. Platform upgrade complete.');
+
+                // Post-merge cleanup
+                cleanupSandboxBranches();
 
             } catch (e: any) {
                 console.warn('⚠️ PR operation failed:', e.response?.data || e.message);
