@@ -17,13 +17,14 @@ function checkAndPruneStaleBranches() {
 
         // 4. Identify branches matching our target patterns (ai/sandbox-* and copilot-worktree-*)
         const targetPatterns = [/^ai\/sandbox-/, /^copilot-worktree-/];
+        const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
 
         let prunedCount = 0;
 
         for (const localBranch of localBranches) {
             const isTargetBranch = targetPatterns.some(pattern => pattern.test(localBranch));
 
-            if (isTargetBranch) {
+            if (isTargetBranch && localBranch !== currentBranch) {
                 // If the branch exists locally but not on the remote, it's an orphan
                 if (!remoteBranches.includes(localBranch)) {
                     console.log(`🧹 Stale sandbox branch detected: ${localBranch}. Remote counterpart is gone.`);
