@@ -45,7 +45,8 @@ export function enforceSandboxBranch() {
             throw new Error(`🔥 AI FIREWALL BLOCK: Branch must match pattern "ai/*" for sandbox operations.`);
         }
         return currentBranch;
-    } catch (error: any) {
-        throw new Error(`🔥 AI FIREWALL BLOCK: Failed to verify branch.\n${error.message}`);
+    } catch (error: unknown) {
+        const err = error as Error;
+        throw new Error(`🔥 AI FIREWALL BLOCK: Failed to verify branch.\n${err.message}`);
     }
 }

@@ -52,8 +52,9 @@ export function runSafeGitCleanup(action: 'reset' | 'clean' | 'force-push' | 'sy
             try { execSync(cmdRemote, { stdio: 'inherit' }); } catch (e) { console.log('Remote deletion skipped.'); }
             try { execSync(`git branch -D ${targetBranch}`, { stdio: 'inherit' }); } catch (e) { console.log('Local deletion skipped.'); }
         }
-    } catch (error: any) {
-        console.error(`❌ Safe Git Command Failed: ${error.message}`);
+    } catch (error: unknown) {
+        const err = error as Error;
+        console.error(`❌ Safe Git Command Failed: ${err.message}`);
         process.exit(1);
     }
 }

@@ -18,12 +18,13 @@ function runCmd(cmd: string, ignoreError = false): string {
     try {
         console.log(`\n> ${cmd}`);
         return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const err = error as { stderr?: string; stdout?: string; message: string };
         if (!ignoreError) {
-            console.error(`❌ Command failed: ${cmd}\n${error.stderr || error.message}`);
+            console.error(`❌ Command failed: ${cmd}\n${err.stderr || err.message}`);
             process.exit(1);
         }
-        return error.stdout || '';
+        return err.stdout || '';
     }
 }
 
@@ -31,7 +32,7 @@ async function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function createPR(head: string, base: string, title: string): Promise<any> {
+async function createPR(head: string, base: string, title: string): Promise<void> {
     try {
         const payload = {
             title,
@@ -43,8 +44,9 @@ async function createPR(head: string, base: string, title: string): Promise<any>
             headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
         });
         return response.data;
-    } catch (e: any) {
-        console.error('❌ PR Creation Failed:', e.response?.data || e.message);
+    } catch (e: unknown) {
+        const err = e as { response?: { data?: unknown }; message: string };
+        console.error('❌ PR Creation Failed:', err.response?.data || err.message);
         process.exit(1);
     }
 }

@@ -57,7 +57,7 @@ export const authService = {
         for (let i = 0; i < maxRetries; i++) {
             try {
                 const response = await axios.get(
-                    `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/health/ready`,
+                    `${import.meta.env.VITE_API_URL || ''}/api/health/ready`,
                     { timeout: 3000 }
                 );
                 if (response.status === 200) {
@@ -82,7 +82,7 @@ export const authService = {
             // Note: Since raw axios is used, we must manually unwrap the `{ success, data }` format here.
             // Our global `api.ts` interceptor does not apply to this raw `axios` call.
             const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
-                `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/refresh-token`,
+                `${import.meta.env.VITE_API_URL || ''}/api/auth/refresh-token`,
                 { refreshToken: currentRefreshToken }, // PATCH: Send refreshToken in body
                 { withCredentials: false } // No cookies used
             );

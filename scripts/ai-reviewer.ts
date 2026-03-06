@@ -101,8 +101,9 @@ async function analyzePR() {
             console.log('[AI REVIEWER] Analysis complete. Safely passed.');
         }
 
-    } catch (error: any) {
-        console.error('[AI REVIEWER] Analysis failed:', error.response?.data || error.message);
+    } catch (error: unknown) {
+        const err = error as { response?: { data?: unknown }; message: string };
+        console.error('[AI REVIEWER] Analysis failed:', err.response?.data || err.message);
         process.exit(1); // Fail safe
     }
 }

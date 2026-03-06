@@ -1,6 +1,10 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api';
+const API_BASE = import.meta.env.VITE_API_URL;
+if (!API_BASE) {
+    console.error('[API] WARNING: VITE_API_URL is missing. Falling back to relative path.');
+}
+const API_URL = (API_BASE || '') + '/api';
 
 // DEMO MODE FLAG
 const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';

@@ -16,7 +16,8 @@ function getKey() {
     if (/^[0-9a-fA-F]+$/.test(ENCRYPTION_KEY)) {
         keyData = Buffer.from(ENCRYPTION_KEY, 'hex');
     }
-    return crypto.pbkdf2Sync(keyData, 'haemi_salt', 100000, 32, 'sha256');
+    const salt = process.env.SECURITY_SALT || 'haemi_salt_legacy_fallback';
+    return crypto.pbkdf2Sync(keyData, salt, 100000, 32, 'sha256');
 }
 
 /**
