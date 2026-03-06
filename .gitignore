@@ -60,7 +60,11 @@ TEST_CREDENTIALS.md
 # NOTE: root package-lock.json is intentionally committed for CI determinism
 backend/uploads/
 
-# Clean Solution
+# Clean Repository Policy (AI-Native)
+.ai-system/
+*.analysis.json
+*.ai-log
+*.ai-report.md
 .vscode/settings.json
 .vscode/tasks.json
 .vscode/launch.json
