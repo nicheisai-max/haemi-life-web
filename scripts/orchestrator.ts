@@ -47,6 +47,7 @@ async function sleep(ms: number) {
  */
 function protectDesignTokens() {
     console.log('\n🎨 PHASE 6: Design System Guardian...');
+    verifyNotMain();
     const tokensPath = '.ai-system/design-tokens.ai-report.md';
     const report = `# Design System Token Audit\n\n- Typography: Roboto Variable (Confirmed)\n- Primary Colors: #083E44 - #ECFCFA (Verified)\n- Radius: 12px (Dashboard Cards), 8px (Buttons)\n- Spacing: 8pt grid (Verified)`;
     if (!fs.existsSync('.ai-system')) fs.mkdirSync('.ai-system', { recursive: true });
@@ -85,6 +86,25 @@ function verifyDesignSafety(): boolean {
 }
 
 /**
+ * PHASE 2: Sandbox Isolation Engine
+ * Ensures AI never works on the main branch.
+ */
+function ensureSandboxBranch(seedTaskName?: string): string {
+    const branch = runCmd('git rev-parse --abbrev-ref HEAD');
+    if (branch === 'main') {
+        const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
+        const task = seedTaskName || 'autonomous-update';
+        const sandboxBranch = `ai/sandbox-${task}-${timestamp}`;
+        console.log(`\n🛡️ PHASE 2: Sandbox Enforcement...`);
+        console.log(`⚠️ Currently on main. Creating sandbox: ${sandboxBranch}`);
+        runCmd(`git checkout -b ${sandboxBranch}`);
+        return sandboxBranch;
+    }
+    console.log(`\n✅ PHASE 2: Sandbox verified (${branch})`);
+    return branch;
+}
+
+/**
  * PHASE 21: Final Validation
  */
 function verifyFinalState() {
@@ -102,6 +122,18 @@ function verifyFinalState() {
     }
 }
 
+/**
+ * ANTI-HALLUCINATION GUARD
+ * Aborts if on main branch during modification.
+ */
+function verifyNotMain() {
+    const branch = runCmd('git rev-parse --abbrev-ref HEAD');
+    if (branch === 'main') {
+        console.error('🔥 CRITICAL SECURITY ERROR: Modification attempted on main branch. ABORTING.');
+        process.exit(1);
+    }
+}
+
 async function main() {
     console.log('🚀 Starting 21-Phase AI Engineering & Design System Controller...');
 
@@ -113,22 +145,11 @@ async function main() {
     runCmd('git checkout main', true);
     runCmd('git reset --hard origin/main', true);
 
-    const sandboxes = runCmd('git branch -a').split('\n')
-        .map(b => b.trim().replace('* ', '').replace('remotes/origin/', ''))
-        .filter(b => b.startsWith('ai/sandbox-'))
-        .filter((v, i, a) => a.indexOf(v) === i); // unique
-
-    if (sandboxes.length === 0) {
-        console.log('✅ Environment clean.');
-        process.exit(0);
-    }
-
-    const sandbox = sandboxes[0];
+    // Phase 2: Sandbox Enforcement
+    const sandbox = ensureSandboxBranch();
     const taskName = sandbox.replace('ai/sandbox-', '');
 
     try {
-        runCmd(`git checkout ${sandbox}`);
-
         // Intelligence Layers
         console.log('\n📊 Intelligence Engines (Phases 3-13)...');
         protectDesignTokens();
@@ -148,6 +169,7 @@ async function main() {
         console.log('\n📤 PHASE 19: Autonomous DevOps (Mandatory Approval Gate)...');
         if (process.argv.includes('--push')) {
             console.log('🚀 Push command confirmed. Finalizing update...');
+            verifyNotMain();
             // PR, CI and Merge logic...
             runCmd('git add .');
             runCmd(`git commit -m "feat(ai): design-aware 21-phase update for ${taskName}"`);
