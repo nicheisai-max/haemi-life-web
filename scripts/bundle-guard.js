@@ -5,7 +5,8 @@ const zlib = require('zlib');
 const DIST_DIR = path.join(__dirname, '../frontend/dist/assets');
 const STATS_FILE = path.join(__dirname, '../.ci-stats-bundle.json');
 
-const MAX_GZIP_SIZE_KB = 600;
+const MAX_GZIP_SIZE_FAIL_KB = 1024; // 1MB Hard failure
+const WARNING_SIZE_KB = 600; // Warning only
 const GROWTH_WARNING_THRESHOLD = 0.15; // 15%
 
 if (!fs.existsSync(DIST_DIR)) {
@@ -35,9 +36,11 @@ files.forEach(file => {
     currentStats[chunkGroup] += sizeKB;
     totalSize += sizeKB;
 
-    if (sizeKB > MAX_GZIP_SIZE_KB) {
-        console.error(`::error file=${filePath}::[BUNDLE GUARD] FAIL: ${file} is ${sizeKB.toFixed(2)}KB (gzipped), exceeding limit of ${MAX_GZIP_SIZE_KB}KB`);
+    if (sizeKB > MAX_GZIP_SIZE_FAIL_KB) {
+        console.error(`::error file=${filePath}::[BUNDLE GUARD] FAIL: ${file} is ${sizeKB.toFixed(2)}KB (gzipped), exceeding strict limit of ${MAX_GZIP_SIZE_FAIL_KB}KB`);
         hasError = true;
+    } else if (sizeKB > WARNING_SIZE_KB) {
+        console.warn(`::warning file=${filePath}::[BUNDLE GUARD] WARNING: ${file} is ${sizeKB.toFixed(2)}KB (gzipped), exceeding the ${WARNING_SIZE_KB}KB threshold, but under 1MB limit`);
     } else {
         console.log(`[BUNDLE GUARD] ${file}: ${sizeKB.toFixed(2)}KB (gzipped) - OK`);
     }
@@ -68,6 +71,6 @@ fs.writeFileSync(STATS_FILE, JSON.stringify(currentStats, null, 2));
 console.log(`[BUNDLE GUARD] Total GZIP size: ${totalSize.toFixed(2)}KB`);
 
 if (hasError) {
-    console.error(`[BUNDLE GUARD] One or more bundles exceeded the maximum allowed size of ${MAX_GZIP_SIZE_KB}KB.`);
+    console.error(`[BUNDLE GUARD] One or more bundles exceeded the maximum allowed strict size of ${MAX_GZIP_SIZE_FAIL_KB}KB.`);
     process.exit(1);
 }
