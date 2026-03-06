@@ -46,6 +46,18 @@ jobs:
       - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
       - run: npm run test:ci
 
+  security-audit:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Run Dependency Audit
+        run: npm audit --audit-level=high
+
   migration-safety:
     name: Migration Safety Guard
     runs-on: ubuntu-latest
@@ -67,13 +79,44 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+      - name: Cache Turborepo and Vite
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache
+            frontend/node_modules/.cache
+            frontend/dist
+          key: ${{ runner.os }}-build-cache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-build-cache-
       - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
-      - run: npm run build
+      - run: node scripts/build-performance.js
+      - run: node scripts/bundle-guard.js
+
+  auto-rollback:
+    name: Auto Rollback Protection
+    if: failure() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Revert last commit
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git revert HEAD --no-edit
+          git commit --amend -m "auto-revert: failed production build safeguard"
+          git push
 
   auto-merge:
     name: GitHub Auto Merge
-    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'ai/')
-    needs: [type-safety, lint, test, migration-safety, build]
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'ai/') && success()
+    needs: [type-safety, lint, test, security-audit, migration-safety, build]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -82,5 +125,5 @@ jobs:
       - name: Enable Auto-Merge
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr merge "${{ github.event.pull_request.html_url }}" --auto --merge --delete-branch
-
+        run: |
+          gh pr merge "${{ github.event.pull_request.html_url }}" --auto --merge --delete-branch || echo "Pull request is not mergeable"

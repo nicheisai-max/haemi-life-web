@@ -1,0 +1,15 @@
+frontend:
+  - changed-files:
+    - any-glob-to-any-file: 'frontend/**/*'
+
+backend:
+  - changed-files:
+    - any-glob-to-any-file: 'backend/**/*'
+
+security:
+  - changed-files:
+    - any-glob-to-any-file: ['package.json', 'package-lock.json', '**/*.guard.ts', 'backend/src/middleware/**/*']
+
+performance:
+  - changed-files:
+    - any-glob-to-any-file: ['vite.config.ts', 'turbo.json', 'scripts/*.js']
