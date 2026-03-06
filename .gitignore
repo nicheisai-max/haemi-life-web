@@ -65,6 +65,7 @@ backend/uploads/
 *.analysis.json
 *.ai-log
 *.ai-report.md
+*.ai-report.md
 .vscode/settings.json
 .vscode/tasks.json
 .vscode/launch.json
