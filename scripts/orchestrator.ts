@@ -176,60 +176,83 @@ async function waitForCI(ref: string) {
 }
 
 /**
- * PHASE 21: Final Validation
+ * ENTERPRISE CLEAN STATE ENFORCEMENT PROTOCOL (Phase 34)
+ * Guarantees a deterministic clean state: branch=main, tree=clean, no sandboxes.
  */
-function verifyFinalState() {
-    console.log('\n🛡️ PHASE 21: Final State Validation...');
-    const branch = runCmd('git rev-parse --abbrev-ref HEAD', true);
-    const status = runCmd('git status --porcelain', true);
+function enforceCleanState(recursive = false) {
+    console.log(`\n🛡️  ENTERPRISE CLEAN STATE ENFORCEMENT (Recursive: ${recursive})...`);
+    const activeBranch = runCmd('git rev-parse --abbrev-ref HEAD', true);
 
-    if (branch.startsWith('ai/sandbox-')) {
-        console.log(`🧹 Cleaning up sandbox: ${branch}`);
-        runCmd('git checkout main', true);
-        runCmd(`git branch -D ${branch}`, true);
-        runCmd(`git push origin --delete ${branch}`, true);
-    }
-
-    if (branch !== 'main' || status.length > 0) {
-        runCmd('git reset --hard', true);
-        runCmd('git clean -fd', true);
+    try {
+        // PHASE 1: HARD RESET ENGINE
+        console.log('🔄 PHASE 1: Hard Reset Engine...');
         runCmd('git checkout main', true);
         runCmd('git fetch origin', true);
         runCmd('git reset --hard origin/main', true);
-    } else {
-        console.log('✅ Final State Verified: branch = main, status = clean, sandbox = 0');
+
+        // PHASE 2: ORPHAN FILE CLEANUP
+        console.log('🧹 PHASE 2: Orphan File Cleanup...');
+        runCmd('git clean -fd', true);
+
+        // PHASE 3 & 4: GARBAGE COLLECTOR (Local & Remote)
+        console.log('🗑️  PHASE 3 & 4: Global Sandbox Garbage Collector...');
+        runCmd('git fetch --prune', true);
+
+        const allLocalSandboxes = runCmd('git branch --list "ai/sandbox-*"', true)
+            .split('\n')
+            .map(b => b.replace('*', '').trim())
+            .filter(b => b.length > 0 && b !== activeBranch);
+
+        for (const b of allLocalSandboxes) {
+            console.log(`🗑️ Deleting local orphan branch: ${b}`);
+            runCmd(`git branch -D ${b}`, true);
+        }
+
+        const allRemoteSandboxes = runCmd('git branch -r --list "origin/ai/sandbox-*"', true)
+            .split('\n')
+            .map(b => b.trim().replace('origin/', ''))
+            .filter(b => b.length > 0 && b !== activeBranch);
+
+        for (const b of allRemoteSandboxes) {
+            console.log(`🌐 Deleting remote orphan branch: ${b}`);
+            runCmd(`git push origin --delete ${b}`, true);
+        }
+
+        // PHASE 5: FINAL MAIN SYNC
+        console.log('🔄 PHASE 5: Final Main Sync...');
+        runCmd('git checkout main', true);
+        runCmd('git reset --hard origin/main', true);
+        runCmd('git clean -fd', true);
+
+        // PHASE 6: FINAL STATE VERIFICATION
+        console.log('⚖️  PHASE 6: Final State Verification...');
+        const finalBranch = runCmd('git rev-parse --abbrev-ref HEAD', true);
+        const finalStatus = runCmd('git status --porcelain', true);
+
+        if (finalBranch !== 'main' || finalStatus.length > 0) {
+            // PHASE 7: AUTO RECOVERY
+            if (recursive) {
+                console.error('🔥 CRITICAL: Clean state enforcement failed recursively. Manual intervention required.');
+                process.exit(1);
+            }
+            console.log('⚠️  Verification failed. Triggering Auto Recovery...');
+            enforceCleanState(true);
+        } else {
+            console.log('✅ CLEAN STATE GUARANTEED: branch=main, status=clean.');
+        }
+
+    } catch (err) {
+        console.error('❌ Clean state enforcement failed:', err);
+        if (!recursive) enforceCleanState(true);
+        else process.exit(1);
     }
 }
 
 /**
- * PHASE 20: Sandbox Garbage Collector
- * Removes orphan local and remote ai/sandbox-* branches.
+ * PHASE 21: Final Validation (Legacy Wrapper for Clean State Enforcement)
  */
-function cleanupSandboxBranches() {
-    console.log('\n🧹 PHASE 20: Sandbox Garbage Collector...');
-    const activeBranch = runCmd('git rev-parse --abbrev-ref HEAD', true);
-
-    // Local cleanup
-    const localBranches = runCmd('git branch --list "ai/sandbox-*"', true)
-        .split('\n')
-        .map(b => b.replace('*', '').trim())
-        .filter(b => b.length > 0 && b !== activeBranch);
-
-    for (const b of localBranches) {
-        console.log(`🗑️ Deleting local orphan branch: ${b}`);
-        runCmd(`git branch -D ${b}`, true);
-    }
-
-    // Remote cleanup
-    const remoteBranches = runCmd('git branch -r --list "origin/ai/sandbox-*"', true)
-        .split('\n')
-        .map(b => b.trim().replace('origin/', ''))
-        .filter(b => b.length > 0 && b !== activeBranch);
-
-    for (const b of remoteBranches) {
-        console.log(`🌐 Deleting remote orphan branch: ${b}`);
-        runCmd(`git push origin --delete ${b}`, true);
-    }
+function verifyFinalState() {
+    enforceCleanState();
 }
 
 /**
@@ -254,16 +277,8 @@ async function main() {
         console.table(memory.tasks.slice(-5));
     }
 
-    // Phase 1: Git Guardian
-    console.log('\n🛡️ PHASE 1: Git Guardian (Self-Healing)...');
-    runCmd('git fetch --prune', true);
-    runCmd('git reset --hard', true);
-    runCmd('git clean -fd', true);
-    runCmd('git checkout main', true);
-    runCmd('git reset --hard origin/main', true);
-
-    // Initial cleanup of any stale branches before we start
-    cleanupSandboxBranches();
+    // Phase 1: Deterministic Clean State Enforcement
+    enforceCleanState();
 
     // Phase 2: Sandbox Enforcement
     const sandbox = ensureSandboxBranch();
@@ -315,8 +330,8 @@ async function main() {
                 updateTaskStatus(sandbox, 'merged');
                 console.log('✅ PR merged. Platform upgrade complete.');
 
-                // Post-merge cleanup
-                cleanupSandboxBranches();
+                // Post-merge cleanup (Full Enforcement)
+                enforceCleanState();
 
             } catch (e: any) {
                 console.warn('⚠️ PR operation failed:', e.response?.data || e.message);
