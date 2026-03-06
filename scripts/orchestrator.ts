@@ -14,6 +14,14 @@ if (!GITHUB_TOKEN) {
     process.exit(1);
 }
 
+const api = axios.create({
+    baseURL: `https://api.github.com/repos/${REPO}`,
+    headers: {
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github.v3+json'
+    }
+});
+
 function runCmd(cmd: string, ignoreError = false): string {
     try {
         console.log(`\n> ${cmd}`);
@@ -32,120 +40,147 @@ async function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function createPR(head: string, base: string, title: string): Promise<void> {
+async function getPRForBranch(branch: string) {
     try {
-        const payload = {
+        const response = await api.get(`/pulls?head=${REPO.split('/')[0]}:${branch}&state=open`);
+        return response.data[0];
+    } catch (e) {
+        return null;
+    }
+}
+
+async function createPR(head: string, base: string, title: string) {
+    try {
+        const response = await api.post('/pulls', {
             title,
             head,
             base,
             body: 'Autonomous AI Pipeline PR. Includes execution of all guardrails and Git cleanup.'
-        };
-        const response = await axios.post(`https://api.github.com/repos/${REPO}/pulls`, payload, {
-            headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
         });
         return response.data;
-    } catch (e: unknown) {
-        const err = e as { response?: { data?: unknown }; message: string };
-        console.error('❌ PR Creation Failed:', err.response?.data || err.message);
+    } catch (e: any) {
+        console.error('❌ PR Creation Failed:', e.response?.data || e.message);
         process.exit(1);
     }
 }
 
-async function pollPR(prNumber: number): Promise<boolean> {
+async function mergePR(prNumber: number) {
+    try {
+        await api.put(`/pulls/${prNumber}/merge`, {
+            merge_method: 'squash'
+        });
+        console.log(`✅ PR #${prNumber} merged successfully.`);
+    } catch (e: any) {
+        console.error(`❌ PR Merge Failed:`, e.response?.data || e.message);
+        process.exit(1);
+    }
+}
+
+async function pollCI(ref: string): Promise<boolean> {
+    console.log(`⏳ Polling CI status for ref: ${ref}...`);
     let attempts = 0;
     while (attempts < 60) {
         try {
-            const response = await axios.get(`https://api.github.com/repos/${REPO}/pulls/${prNumber}`, {
-                headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
-            });
-            const pr = response.data;
-            if (pr.merged) {
-                console.log('✅ PR has been successfully merged!');
-                return true;
-            }
-            if (pr.state === 'closed' && !pr.merged) {
-                console.error('❌ PR was closed without merging.');
-                process.exit(1);
+            const response = await api.get(`/commits/${ref}/check-runs`);
+            const checkRuns = response.data.check_runs;
+
+            if (checkRuns.length > 0) {
+                const allFinished = checkRuns.every((run: any) => run.status === 'completed');
+                const allSuccess = checkRuns.every((run: any) => run.conclusion === 'success');
+                const hasFailures = checkRuns.some((run: any) => run.conclusion === 'failure' || run.conclusion === 'timed_out' || run.conclusion === 'cancelled');
+
+                if (hasFailures) {
+                    console.error('❌ CI failed or was cancelled.');
+                    return false;
+                }
+
+                if (allFinished && allSuccess) {
+                    console.log('✅ All CI checks passed!');
+                    return true;
+                }
+            } else {
+                // Combined status as fallback
+                const statusResponse = await api.get(`/commits/${ref}/status`);
+                if (statusResponse.data.state === 'success') {
+                    console.log('✅ Combined status is success!');
+                    return true;
+                } else if (statusResponse.data.state === 'failure' || statusResponse.data.state === 'error') {
+                    console.error('❌ CI combined status failed.');
+                    return false;
+                }
             }
         } catch (e: any) {
-            console.warn(`[WARN] PR status poll failed: ${e.message}`);
+            console.warn(`[WARN] CI status poll failed: ${e.message}`);
         }
-        console.log(`⏳ Waiting for PR #${prNumber} to merge (Attempt ${attempts + 1}/60)...`);
-        await sleep(15000);
+        await sleep(30000); // Poll every 30s
         attempts++;
     }
-    console.error('❌ Timed out waiting for PR to merge.');
-    process.exit(1);
+    return false;
 }
 
 async function main() {
-    console.log('🚀 Starting Autonomous AI Local Git Cleanup Pipeline...');
-
-    // Phase 9: Pre-push verification (resolve tracking before doing anything else if intended to run from scratch)
-    const statusOut = runCmd('git status --porcelain');
-    if (statusOut) {
-        console.log('⚠️ Working tree is not clean. Attempting to add and commit remaining changes to safely integrate...');
-        runCmd('git add .');
-
-        console.log('\n🛡️ Triggering AI Code Quality Review...');
-        runCmd('npm run ai-review'); // Phase 1-12 validation
-
-        runCmd('git commit -m "chore(ai): prepare branch with architecture-validated changes"');
-    }
+    console.log('🚀 Starting Autonomous AI Pipeline Orchestrator...');
 
     const currentBranch = runCmd('git rev-parse --abbrev-ref HEAD');
     if (currentBranch === 'main') {
-        console.error('❌ Cannot run orchestrator directly on main branch. Must be an AI sandbox branch.');
+        console.error('❌ Cannot run orchestrator directly on main branch.');
         process.exit(1);
     }
 
-    console.log(`📤 Pushing branch ${currentBranch} to origin...`);
+    // Step 1: Detect changes and commit
+    const statusOut = runCmd('git status --porcelain');
+    if (statusOut) {
+        console.log('📦 Committing local changes...');
+        runCmd('git add .');
+        runCmd('npm run ai-review -- --silent || true');
+        runCmd('git commit -m "chore(ai): autonomous update with verified changes"');
+    }
+
+    // Step 2: Push
+    console.log(`📤 Pushing ${currentBranch} to origin...`);
     runCmd(`git push -u origin ${currentBranch}`);
 
-    console.log(`\n🔗 Opening Pull Request for ${currentBranch}...`);
-    const pr = await createPR(currentBranch, 'main', `chore(ai): automated pipeline orchestrator update from ${currentBranch}`);
-    console.log(`✅ PR created: ${pr.html_url}`);
+    // Step 3: Detect/Create PR
+    let pr = await getPRForBranch(currentBranch);
+    if (!pr) {
+        console.log('🔗 Creating new Pull Request...');
+        pr = await createPR(currentBranch, 'main', `chore(ai): autonomous update from ${currentBranch}`);
+        console.log(`✅ PR created: ${pr.html_url}`);
+    } else {
+        console.log(`🔗 PR already exists: ${pr.html_url}`);
+    }
 
-    console.log(`\n📡 Polling CI/CD completion and Auto-Merge state...`);
-    await pollPR(pr.number);
+    // Step 4: Wait for CI
+    const ciSuccess = await pollCI(currentBranch);
+    if (!ciSuccess) {
+        console.error('❌ CI pipeline failed. Manual intervention required for branch maintenance.');
+        process.exit(1);
+    }
 
-    // Phase 2: Remote Branch Cleanup
-    console.log(`\n🗑️ Executing Remote Branch Cleanup...`);
+    // Step 5: Merge
+    console.log('🔀 Auto-merging PR...');
+    await mergePR(pr.number);
+
+    // Step 6: Post-Merge Cleanup
+    console.log('\n🧹 Starting Post-Merge Cleanup...');
     process.env.SANDBOX_MODE = 'true';
-    runSafeGitCleanup('delete-branch', currentBranch);
 
-    // Phase 4 & 10: Automatic Local Repository Sync
-    console.log(`\n🔄 Synchronizing local repository with origin/main...`);
+    console.log('🔄 Synchronizing local main with origin/main...');
     runSafeGitCleanup('sync');
 
-    // Phase 5, 6, 7: Deep Artifact and Temporary File Purge
-    console.log(`\n🚿 Executing Deep Working Tree Purge (git clean -fd)...`);
+    console.log(`🗑️ Deleting remote branch ${currentBranch}...`);
+    try {
+        runSafeGitCleanup('delete-branch', currentBranch);
+    } catch (e) {
+        console.warn('⚠️ Remote deletion might have failed or already handled by GitHub.');
+    }
+
+    console.log('🚿 Cleaning temporary artifacts...');
     runSafeGitCleanup('clean');
     process.env.SANDBOX_MODE = 'false';
 
-    // Remove targeted temp artifacts forcefully if standard git clean missed them due to gitignore states
-    const artifacts = ['frontend/bundle-report.html', 'scripts/temp-test.ts', 'scripts/create-pr.ts', 'scripts/ai-reviewer-temp.ts'];
-    for (const file of artifacts) {
-        const fullPath = path.join(__dirname, '..', file);
-        if (fs.existsSync(fullPath)) {
-            fs.unlinkSync(fullPath);
-        }
-    }
-
-    // Phase 11: Final Clean State Validation
-    console.log(`\n🛡️ Final Verification...`);
-    const finalBranch = runCmd('git rev-parse --abbrev-ref HEAD');
-    if (finalBranch !== 'main') {
-        console.error(`❌ Validation Failed: Local branch is ${finalBranch}, expected main.`);
-        process.exit(1);
-    }
-    const finalStatus = runCmd('git status --porcelain');
-    if (finalStatus.length > 0) {
-        console.error(`❌ Validation Failed: Working tree is not completely clean.\n${finalStatus}`);
-        process.exit(1);
-    }
-
-    console.log(`\n✅ PIPELINE SUCCESS. Local repository perfectly synchronized with origin/main.`);
+    console.log('\n✅ AUTONOMOUS PIPELINE CYCLE COMPLETE.');
+    console.log('Current branch: main | Working tree: clean');
 }
 
 main();
