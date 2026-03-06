@@ -13,3 +13,7 @@ security:
 performance:
   - changed-files:
     - any-glob-to-any-file: ['vite.config.ts', 'turbo.json', 'scripts/*.js']
+
+database:
+  - changed-files:
+    - any-glob-to-any-file: ['backend/src/models/**/*', 'backend/src/migrations/**/*']
