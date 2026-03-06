@@ -61,7 +61,7 @@ TEST_CREDENTIALS.md
 backend/uploads/
 
 # Clean Repository Policy (AI-Native)
-.ai-system/
+/ .ai-system/
 *.analysis.json
 *.ai-log
 *.ai-report.md

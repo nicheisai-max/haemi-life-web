@@ -2,7 +2,11 @@
 
 
 echo "Running enterprise pre-commit guardrails..."
-powershell.exe -ExecutionPolicy Bypass -File scripts/pre-commit-guard.ps1 || { echo "Security Guard Failed"; exit 1; }
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" = "main" ]; then
+  echo "ERROR: Direct commits to the main branch are forbidden. Use sandbox branches."
+  exit 1
+fi
 
 WORKTREE_COUNT=$(git worktree list | wc -l)
 

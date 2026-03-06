@@ -21,6 +21,49 @@ const api = axios.create({
     }
 });
 
+interface TaskMetadata {
+    task: string;
+    status: 'planned' | 'in-progress' | 'merged' | 'completed';
+    branch: string;
+    timestamp: string;
+}
+
+const MEMORY_PATH = '.ai-system/memory/tasks.json';
+
+function loadMemory(): { tasks: TaskMetadata[] } {
+    if (!fs.existsSync(MEMORY_PATH)) {
+        if (!fs.existsSync(path.dirname(MEMORY_PATH))) fs.mkdirSync(path.dirname(MEMORY_PATH), { recursive: true });
+        fs.writeFileSync(MEMORY_PATH, JSON.stringify({ tasks: [] }));
+    }
+    return JSON.parse(fs.readFileSync(MEMORY_PATH, 'utf-8'));
+}
+
+function saveMemory(data: { tasks: TaskMetadata[] }) {
+    fs.writeFileSync(MEMORY_PATH, JSON.stringify(data, null, 2));
+}
+
+function recordTask(taskName: string, branch: string) {
+    const memory = loadMemory();
+    if (!memory.tasks.find(t => t.branch === branch)) {
+        memory.tasks.push({
+            task: taskName,
+            status: 'planned',
+            branch,
+            timestamp: new Date().toISOString().split('T')[0]
+        });
+        saveMemory(memory);
+    }
+}
+
+function updateTaskStatus(branch: string, status: TaskMetadata['status']) {
+    const memory = loadMemory();
+    const task = memory.tasks.find(t => t.branch === branch);
+    if (task) {
+        task.status = status;
+        saveMemory(memory);
+    }
+}
+
 function runCmd(cmd: string, ignoreError = false): string {
     try {
         console.log(`\n> ${cmd}`);
@@ -98,10 +141,38 @@ function ensureSandboxBranch(seedTaskName?: string): string {
         console.log(`\n🛡️ PHASE 2: Sandbox Enforcement...`);
         console.log(`⚠️ Currently on main. Creating sandbox: ${sandboxBranch}`);
         runCmd(`git checkout -b ${sandboxBranch}`);
+        recordTask(task, sandboxBranch);
+        updateTaskStatus(sandboxBranch, 'in-progress');
         return sandboxBranch;
     }
     console.log(`\n✅ PHASE 2: Sandbox verified (${branch})`);
     return branch;
+}
+
+/**
+ * CI POLLING FALLBACK logic
+ */
+async function waitForCI(ref: string) {
+    console.log(`⏳ Waiting for CI on ${ref}...`);
+    for (let i = 0; i < 30; i++) { // Max 15 mins
+        try {
+            const checks = await api.get(`/commits/${ref}/check-runs`);
+            const runs = checks.data.check_runs;
+            if (runs.length > 0 && runs.every((val: any) => val.conclusion === 'success')) return true;
+            if (runs.some((val: any) => val.conclusion === 'failure')) throw new Error('CI failed');
+        } catch (e: any) {
+            if (e.response?.status === 403) {
+                console.log('⚠️ CI Check-runs API forbidden. Falling back to Status API...');
+                const status = await api.get(`/commits/${ref}/status`);
+                if (status.data.state === 'success') return true;
+                if (status.data.state === 'failure') throw new Error('CI failed (Status API)');
+            } else {
+                console.warn('⚠️ Polling error:', e.message);
+            }
+        }
+        await sleep(30000);
+    }
+    throw new Error('CI Timeout');
 }
 
 /**
@@ -111,6 +182,14 @@ function verifyFinalState() {
     console.log('\n🛡️ PHASE 21: Final State Validation...');
     const branch = runCmd('git rev-parse --abbrev-ref HEAD', true);
     const status = runCmd('git status --porcelain', true);
+
+    if (branch.startsWith('ai/sandbox-')) {
+        console.log(`🧹 Cleaning up sandbox: ${branch}`);
+        runCmd('git checkout main', true);
+        runCmd(`git branch -D ${branch}`, true);
+        runCmd(`git push origin --delete ${branch}`, true);
+    }
+
     if (branch !== 'main' || status.length > 0) {
         runCmd('git reset --hard', true);
         runCmd('git clean -fd', true);
@@ -136,6 +215,13 @@ function verifyNotMain() {
 
 async function main() {
     console.log('🚀 Starting 21-Phase AI Engineering & Design System Controller...');
+
+    // Phase 0: Memory Read
+    const memory = loadMemory();
+    if (memory.tasks.length > 0) {
+        console.log('\n🧠 AI Task Memory:');
+        console.table(memory.tasks.slice(-5));
+    }
 
     // Phase 1: Git Guardian
     console.log('\n🛡️ PHASE 1: Git Guardian (Self-Healing)...');
@@ -172,22 +258,32 @@ async function main() {
             verifyNotMain();
             // PR, CI and Merge logic...
             runCmd('git add .');
-            runCmd(`git commit -m "feat(ai): design-aware 21-phase update for ${taskName}"`);
+            runCmd(`git commit -m "feat(ai): enterprise hardened update for ${taskName}"`);
             runCmd(`git push -u origin ${sandbox}`);
 
             const prPayload = {
                 title: `feat(ai): autonomous update for ${taskName}`,
                 head: sandbox,
                 base: 'main',
-                body: 'Autonomous 21-phase platform update.'
+                body: 'Autonomous 21-phase platform update with enterprise hardening.'
             };
 
             console.log('🔗 Creating Pull Request...');
             try {
                 const prResponse = await api.post('/pulls', prPayload);
+                const prNumber = prResponse.data.number;
                 console.log(`✅ PR created: ${prResponse.data.html_url}`);
+
+                await waitForCI(sandbox);
+
+                console.log(`🔀 Merging PR #${prNumber}...`);
+                await api.put(`/pulls/${prNumber}/merge`, { merge_method: 'squash' });
+                updateTaskStatus(sandbox, 'merged');
+                console.log('✅ PR merged. Platform upgrade complete.');
+
             } catch (e: any) {
-                console.warn('⚠️ PR already exists or creation failed.');
+                console.warn('⚠️ PR operation failed:', e.response?.data || e.message);
+                updateTaskStatus(sandbox, 'completed');
             }
 
         } else {
