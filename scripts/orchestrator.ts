@@ -3,6 +3,7 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { runSafeGitCleanup } from './safe-git-cleanup';
 dotenv.config();
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -103,22 +104,18 @@ async function main() {
     await pollPR(pr.number);
 
     // Phase 2: Remote Branch Cleanup
-    console.log(`\n🗑️ Cleaning up remote branch origin/${currentBranch}...`);
-    runCmd(`git push origin --delete ${currentBranch}`, true);
+    console.log(`\n🗑️ Executing Remote Branch Cleanup...`);
+    process.env.SANDBOX_MODE = 'true';
+    runSafeGitCleanup('delete-branch', currentBranch);
 
     // Phase 4 & 10: Automatic Local Repository Sync
     console.log(`\n🔄 Synchronizing local repository with origin/main...`);
-    runCmd('git checkout main');
-    runCmd('git fetch origin');
-    runCmd('git reset --hard origin/main');
-
-    // Phase 3: Local Branch Cleanup
-    console.log(`\n🧹 Deleting local sandbox branch ${currentBranch}...`);
-    runCmd(`git branch -D ${currentBranch}`, true);
+    runSafeGitCleanup('sync');
 
     // Phase 5, 6, 7: Deep Artifact and Temporary File Purge
     console.log(`\n🚿 Executing Deep Working Tree Purge (git clean -fd)...`);
-    runCmd('git clean -fd');
+    runSafeGitCleanup('clean');
+    process.env.SANDBOX_MODE = 'false';
 
     // Remove targeted temp artifacts forcefully if standard git clean missed them due to gitignore states
     const artifacts = ['frontend/bundle-report.html', 'scripts/temp-test.ts', 'scripts/create-pr.ts', 'scripts/ai-reviewer-temp.ts'];

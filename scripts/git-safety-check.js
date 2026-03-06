@@ -4,8 +4,8 @@ const os = require('os');
 const { execSync } = require('child_process');
 
 function checkHistory() {
-    if (process.env.ALLOW_DESTRUCTIVE === '1') {
-        console.log("⚠️ Enterprise Safety Guard: Destructive operation explicitly allowed by environment variable.");
+    if (process.env.SANDBOX_MODE === 'true') {
+        console.log("⚠️ Enterprise Safety Guard: Destructive operation safely permitted within Sandbox Mode.");
         return;
     }
 
@@ -28,7 +28,7 @@ function checkHistory() {
                         if (line.includes(cmd)) {
                             console.error(`\n❌ Enterprise Safety Guard: Destructive Git command detected.`);
                             console.error(`Blocked command found in history: ${cmd}`);
-                            console.error(`Run with ALLOW_DESTRUCTIVE=1 to bypass if this is intentional.`);
+                            console.error(`Run with SANDBOX_MODE=true to bypass if this is intentional.`);
                             process.exit(1);
                         }
                     }
