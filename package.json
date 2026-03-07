@@ -36,7 +36,7 @@
     "test:frontend": "npm --prefix frontend run test:frontend",
     "test:e2e": "npm --prefix e2e run test",
     "test:auth": "npm run test:backend && npm run test:frontend && npm run test:e2e && powershell -Command \"Get-NetTCPConnection -LocalPort 5173,5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
-    "prepare": "node -e \"if(process.env.CI !== 'true') require('child_process').execSync('npx husky', {stdio: 'inherit'})\"",
+    "prepare": "node -e \"if(!process.env.CI && !process.env.GITHUB_ACTIONS) require('child_process').execSync('npx husky', {stdio: 'inherit'})\"",
     "safe-dev": "tsx scripts/safe-dev.ts",
     "demo": "tsx scripts/safe-dev.ts",
     "type-check": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
@@ -50,7 +50,8 @@
     "orchestrate": "tsx scripts/orchestrator.ts",
     "ai-review": "tsx scripts/ai-self-review.ts",
     "quality-gate": "tsx scripts/ai-self-review.ts --enforce",
-    "sync": "git checkout main && git pull origin main && git fetch origin --prune && git remote prune origin && powershell -Command \"git branch | Select-String 'ai/sandbox-' | ForEach-Object { git branch -D $_.ToString().Trim() }\" && git branch -a && git status"
+    "sync": "git checkout main && git fetch origin --prune && git reset --hard origin/main && powershell -Command \"git branch --list 'ai/sandbox-*' | ForEach-Object { git branch -D $_.Trim() }\" && git remote prune origin && git branch -a && git status",
+    "prepush-check": "tsx scripts/prepush-check.ts"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [

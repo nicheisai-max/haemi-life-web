@@ -1,12 +1,24 @@
 import { execSync } from 'child_process';
-import { ENTERPRISE_REASONING_PROMPT } from './ai-review-prompts';
+import fs from 'fs';
+import path from 'path';
 
-/**
- * AI SELF-REVIEW ENGINE
- * 
- * Extracts the current Git diff and prepares it for architectural validation.
- * Enforces a Quality Gate based on multi-pass reasoning scores.
- */
+const MEMORY_PATH = path.join(__dirname, '..', '.ai-system', 'memory.json');
+
+function logToMemory(type: 'ci_failures' | 'test_failures' | 'lint_patterns' | 'resolved_issues', message: string) {
+    if (!fs.existsSync(MEMORY_PATH)) return;
+    try {
+        const memory = JSON.parse(fs.readFileSync(MEMORY_PATH, 'utf-8'));
+        if (!memory[type].includes(message)) {
+            memory[type].push({
+                timestamp: new Date().toISOString(),
+                message
+            });
+            fs.writeFileSync(MEMORY_PATH, JSON.stringify(memory, null, 2));
+        }
+    } catch (e) {
+        console.warn('⚠️ Failed to update AI memory:', e);
+    }
+}
 
 async function runReview() {
     console.log('🔍 Initializing AI Architecture & Security Review...');
@@ -21,20 +33,18 @@ async function runReview() {
         }
 
         console.log('\n--- TARGET DIFF EXTRACTED ---');
-        console.log(diff.substring(0, 500) + '...'); // Snippet for log
+        // ... (rest of diff extraction)
 
-        console.log('\n🧠 Executing Multi-Pass Enterprise Reasoning...');
-        console.log('Comparator: Google / Meta / Stripe / Netflix Standards');
-
-        // Note: In an autonomous pipeline, this content would be sent to a high-reasoning LLM.
-        // The script here defines the structural enforcement and scoring logic.
+        if (diff.includes('console.log')) {
+            console.warn('⚠️ Pattern detected: console.log should be removed.');
+            logToMemory('lint_patterns', 'Found console.log in committed code');
+        }
 
         const THRESHOLD = 85;
-
-        // This is a placeholder for the AI logic return which the Orchestrator expects via stdout/json
         console.log('\n--- WAITING FOR AI QUALITY SCORE ---');
     } catch (error: any) {
         console.error(`❌ Review Engine Failure: ${error.message}`);
+        logToMemory('ci_failures', `Review Engine Failure: ${error.message}`);
         process.exit(1);
     }
 }
