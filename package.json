@@ -36,7 +36,7 @@
     "test:frontend": "npm --prefix frontend run test:frontend",
     "test:e2e": "npm --prefix e2e run test",
     "test:auth": "npm run test:backend && npm run test:frontend && npm run test:e2e && powershell -Command \"Get-NetTCPConnection -LocalPort 5173,5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
-    "prepare": "husky",
+    "prepare": "node -e \"if(process.env.CI !== 'true') require('child_process').execSync('npx husky', {stdio: 'inherit'})\"",
     "safe-dev": "tsx scripts/safe-dev.ts",
     "demo": "tsx scripts/safe-dev.ts",
     "type-check": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
