@@ -140,6 +140,10 @@ function ensureSandboxBranch(seedTaskName?: string): string {
         const sandboxBranch = `ai/sandbox-${task}-${timestamp}`;
         console.log(`\n🛡️ PHASE 2: Sandbox Enforcement...`);
         console.log(`⚠️ Currently on main. Creating sandbox: ${sandboxBranch}`);
+
+        // Ensure clean state before sandbox creation
+        enforceCleanState();
+
         runCmd(`git checkout -b ${sandboxBranch}`);
         recordTask(task, sandboxBranch);
         updateTaskStatus(sandboxBranch, 'in-progress');
@@ -176,92 +180,21 @@ async function waitForCI(ref: string) {
 }
 
 /**
- * ENTERPRISE REPOSITORY CLEAN STATE ENFORCEMENT (Phase 35)
- * Absolute deterministic guarantee: branch=main, tree=clean, no sandboxes.
+ * ENTERPRISE REPOSITORY CLEAN STATE ENFORCEMENT (Phase 36)
+ * Uses the hardened shell script to guarantee deterministic state.
  */
-function enforceCleanState(recursive = false) {
-    console.log(`\n🛡️  ENTERPRISE REPOSITORY CLEAN STATE ENFORCEMENT (Recursive: ${recursive})...`);
-    const activeBranchOrNull = runCmd('git rev-parse --abbrev-ref HEAD', true);
-    const activeBranch = (activeBranchOrNull && !activeBranchOrNull.includes('fatal')) ? activeBranchOrNull : 'main';
-
+function enforceCleanState() {
+    console.log('\n🛡️  ENTERPRISE REPOSITORY STATE GUARD EXECUTION...');
     try {
-        // PHASE 0: FORCE MAIN MODE
-        console.log('🔄 PHASE 0: Force Main Mode...');
-        runCmd('git checkout main', true);
-        if (runCmd('git rev-parse --abbrev-ref HEAD', true) !== 'main') {
-            runCmd('git checkout -f main', true);
-        }
-
-        // PHASE 1: HARD SYNC WITH REMOTE
-        console.log('🔄 PHASE 1: Hard Sync with Remote...');
-        runCmd('git fetch origin', true);
-        runCmd('git reset --hard origin/main', true);
-
-        // PHASE 2: REMOVE WORKTREE DRIFT
-        console.log('🧹 PHASE 2: Remove Worktree Drift...');
-        runCmd('git clean -fd', true);
-
-        // PHASE 3: REMOTE REFERENCE PRUNE
-        console.log('🧹 PHASE 3: Remote Reference Prune...');
-        runCmd('git fetch --prune', true);
-
-        // PHASE 4: LOCAL SANDBOX PURGE
-        console.log('🗑️  PHASE 4: Local Sandbox Purge...');
-        const localSandboxes = runCmd('git branch --list "ai/sandbox-*"', true)
-            .split('\n')
-            .map(b => b.replace('*', '').trim())
-            .filter(b => b.length > 0 && b !== activeBranch);
-
-        for (const b of localSandboxes) {
-            console.log(`🗑️ Deleting local sandbox: ${b}`);
-            runCmd(`git branch -D ${b}`, true);
-        }
-
-        // PHASE 5: REMOTE SANDBOX PURGE
-        console.log('🌐 PHASE 5: Remote Sandbox Purge...');
-        const remoteSandboxes = runCmd('git branch -r --list "origin/ai/sandbox-*"', true)
-            .split('\n')
-            .map(b => b.trim().replace('origin/', ''))
-            .filter(b => b.length > 0 && b !== activeBranch);
-
-        for (const b of remoteSandboxes) {
-            console.log(`🌐 Deleting remote sandbox: ${b}`);
-            runCmd(`git push origin --delete ${b}`, true);
-        }
-
-        // PHASE 6: FINAL HARD SYNC
-        console.log('🔄 PHASE 6: Final Hard Sync...');
-        runCmd('git checkout main', true);
-        runCmd('git fetch origin', true);
-        runCmd('git reset --hard origin/main', true);
-        runCmd('git clean -fd', true);
-
-        // PHASE 7: FINAL STATE VERIFICATION
-        console.log('⚖️  PHASE 7: Final State Verification...');
-        const finalBranch = runCmd('git rev-parse --abbrev-ref HEAD', true);
-        const finalStatus = runCmd('git status --porcelain', true);
-
-        if (finalBranch !== 'main' || finalStatus.length > 0) {
-            // PHASE 8: AUTO RECOVERY
-            console.log('⚠️  Verification failed. Triggering Auto Recovery...');
-            if (recursive) {
-                console.error('🔥 CRITICAL: Clean state enforcement failed recursively. Manual intervention required.');
-                process.exit(1);
-            }
-            enforceCleanState(true);
-        } else {
-            console.log('✅ GUARANTEED RESULT: only main branch exists locally, working tree clean, identical to origin/main.');
-        }
-
+        execSync('bash scripts/enforce-clean-state.sh', { stdio: 'inherit' });
     } catch (err) {
-        console.error('❌ Clean state enforcement failed:', err);
-        if (!recursive) enforceCleanState(true);
-        else process.exit(1);
+        console.error('❌ State Guard reported failure. Manual intervention may be required.');
+        process.exit(1);
     }
 }
 
 /**
- * PHASE 21: Final Validation (Legacy Wrapper for Clean State Enforcement)
+ * PHASE 21: Final Validation (Wrapper for State Guard)
  */
 function verifyFinalState() {
     enforceCleanState();
@@ -336,13 +269,15 @@ async function main() {
                 console.log(`✅ PR created: ${prResponse.data.html_url}`);
 
                 await waitForCI(sandbox);
+                // After CI Completion
+                enforceCleanState();
 
                 console.log(`🔀 Merging PR #${prNumber}...`);
                 await api.put(`/pulls/${prNumber}/merge`, { merge_method: 'squash' });
                 updateTaskStatus(sandbox, 'merged');
                 console.log('✅ PR merged. Platform upgrade complete.');
 
-                // Post-merge cleanup (Full Enforcement)
+                // After merging pull requests
                 enforceCleanState();
 
             } catch (e: any) {
