@@ -36,37 +36,33 @@ function runCmd(cmd: string, ignoreError = false): string {
 
 /**
  * PHASE 1: Workspace Integrity
- * Ensures deterministic environment before execution.
  */
 function validateWorkspaceIntegrity() {
     console.log('🔍 Validating Workspace Integrity...');
-
-    // 1. Check clean tree
     const status = runCmd('git status --porcelain', true);
     if (status.trim()) {
         console.error('❌ Workspace is dirty. Commit or stash changes before running orchestrator.');
         process.exit(1);
     }
-
-    // 2. Check node_modules
     if (!fs.existsSync('node_modules')) {
         console.error('❌ node_modules missing. Run npm install first.');
         process.exit(1);
     }
-
-    // 3. Check node version
-    const nodeVersion = process.version;
-    if (!nodeVersion.startsWith('v20') && !nodeVersion.startsWith('v22')) {
-        console.warn(`⚠️ Unexpected Node version: ${nodeVersion}. Enterprise standard is v20 or v22.`);
-    }
-
     console.log('✅ Workspace integrity verified.');
+}
+
+function getSandboxBranches(): string[] {
+    const local = runCmd('git branch --list "ai/sandbox-*"', true)
+        .split('\n')
+        .map(b => b.replace('*', '').trim())
+        .filter(b => b.length > 0);
+    return local;
 }
 
 function ensureSandboxBranch(taskNameArg?: string): string {
     const branch = runCmd('git rev-parse --abbrev-ref HEAD');
     if (branch === 'main') {
-        const task = taskNameArg || 'stabilization';
+        const task = taskNameArg || 'update';
         const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
         const sandboxBranch = `ai/sandbox-${task}-${timestamp}`;
         console.log(`🛡️ Creating sandbox: ${sandboxBranch}`);
@@ -76,7 +72,7 @@ function ensureSandboxBranch(taskNameArg?: string): string {
     return branch;
 }
 
-async function createPR(branch: string) {
+async function createPR(branch: string): Promise<number | null> {
     const taskName = branch.replace('ai/sandbox-', '');
     const prPayload = {
         title: `feat(ai): autonomous update for ${taskName}`,
@@ -89,32 +85,140 @@ async function createPR(branch: string) {
     try {
         const response = await api.post('/pulls', prPayload);
         console.log(`✅ PR created: ${response.data.html_url}`);
+        return response.data.number;
     } catch (e: any) {
-        console.warn('⚠️ PR operation failed:', e.response?.data || e.message);
+        console.warn('⚠️ PR creation failed (might already exist):', e.response?.data?.errors?.[0]?.message || e.message);
+        const pulls = await api.get('/pulls', { params: { head: `${REPO.split('/')[0]}:${branch}` } });
+        return pulls.data[0]?.number || null;
     }
+}
+
+async function waitForCI(prNumber: number): Promise<boolean> {
+    console.log(`⏳ Waiting for CI validation on PR #${prNumber}...`);
+    const startTime = Date.now();
+    const timeout = 10 * 60 * 1000; // 10 minutes
+
+    while (Date.now() - startTime < timeout) {
+        try {
+            const pr = await api.get(`/pulls/${prNumber}`);
+            const headSha = pr.data.head.sha;
+            const checks = await api.get(`/commits/${headSha}/check-runs`);
+
+            const total = checks.data.total_count;
+            const completed = checks.data.check_runs.filter((r: any) => r.status === 'completed');
+            const success = checks.data.check_runs.every((r: any) => r.conclusion === 'success' || r.conclusion === 'neutral' || r.conclusion === 'skipped');
+
+            console.log(`   - Status: ${completed.length}/${total} checks completed.`);
+
+            if (total > 0 && completed.length === total) {
+                if (success) {
+                    console.log('✅ All CI checks passed.');
+                    return true;
+                } else {
+                    console.error('❌ CI checks failed.');
+                    return false;
+                }
+            }
+        } catch (e: any) {
+            console.warn('⚠️ Error polling CI status:', e.message);
+        }
+        await new Promise(resolve => setTimeout(resolve, 30000)); // Poll every 30s
+    }
+    console.error('❌ CI timeout.');
+    return false;
+}
+
+async function mergePR(prNumber: number) {
+    console.log(`🔀 Merging PR #${prNumber} via API...`);
+    try {
+        await api.put(`/pulls/${prNumber}/merge`, { merge_method: 'merge' });
+        console.log('✅ PR merged successfully.');
+    } catch (e: any) {
+        console.error('❌ Merge failed:', e.response?.data || e.message);
+        process.exit(1);
+    }
+}
+
+async function aggressiveCleanup() {
+    console.log('\n🧹 Starting Aggressive Repository Cleanup...');
+
+    // Switch to main
+    runCmd('git checkout main', true);
+    runCmd('git fetch origin --prune', true);
+    runCmd('git pull origin main', true);
+
+    // Delete local sandboxes
+    const sandboxes = getSandboxBranches();
+    for (const branch of sandboxes) {
+        if (branch !== 'main') {
+            console.log(`   - Deleting local: ${branch}`);
+            runCmd(`git branch -D ${branch}`, true);
+        }
+    }
+
+    // Delete remote sandboxes
+    const remoteSandboxes = runCmd('git branch -r --list "origin/ai/sandbox-*"', true)
+        .split('\n')
+        .map(b => b.trim().replace('origin/', ''))
+        .filter(b => b.length > 0);
+
+    for (const branch of remoteSandboxes) {
+        console.log(`   - Deleting remote: ${branch}`);
+        runCmd(`git push origin --delete ${branch}`, true);
+    }
+
+    // Final Reset
+    runCmd('git reset --hard origin/main', true);
+    runCmd('git clean -fd', true);
+
+    console.log('✅ Cleanup complete.');
+}
+
+function validateFinalState() {
+    console.log('\n🏁 Final Repository State Validation...');
+    const branch = runCmd('git rev-parse --abbrev-ref HEAD');
+    const status = runCmd('git status --porcelain', true);
+    const sandboxes = getSandboxBranches();
+
+    if (branch !== 'main') throw new Error(`State Violation: Current branch is ${branch}, expected main.`);
+    if (status.trim()) throw new Error(`State Violation: Working tree is not clean.`);
+    if (sandboxes.length > 0) throw new Error(`State Violation: Sandbox branches still exist: ${sandboxes.join(', ')}`);
+
+    console.log('🌟 REPOSITORY STATE ENFORCED: main branch clean and synchronized.');
 }
 
 async function main() {
     const pushMode = process.argv.includes('--push');
     const taskName = process.argv[2] || 'update';
 
-    // Phase 1: Integrity Guard
     validateWorkspaceIntegrity();
-
     const branch = ensureSandboxBranch(taskName);
 
     if (pushMode) {
-        console.log('📤 Pushing changes and creating PR...');
+        console.log('📤 Pushing changes and enforcing deterministic state...');
         runCmd('git add .');
-        runCmd(`git commit -m "feat(ai): simplified platform stabilization for ${taskName}"`, true);
+        runCmd(`git commit -m "feat(ai): platform update for ${taskName}"`, true);
         runCmd(`git push -u origin ${branch}`);
-        await createPR(branch);
+
+        const prNumber = await createPR(branch);
+        if (prNumber) {
+            const ciPassed = await waitForCI(prNumber);
+            if (ciPassed) {
+                await mergePR(prNumber);
+            } else {
+                console.error('❌ State Enforcement Error: CI failed or timed out. Manual intervention required.');
+                process.exit(1);
+            }
+        }
+
+        await aggressiveCleanup();
+        validateFinalState();
     } else {
-        console.log('\n✅ Local changes ready. Run with --push to finalize.');
+        console.log('\n✅ Local changes ready. Run with --push to enforce full lifecycle.');
     }
 }
 
 main().catch(err => {
-    console.error('❌ Orchestrator failed:', err);
+    console.error(`❌ CRITICAL FAILURE: ${err.message}`);
     process.exit(1);
 });
