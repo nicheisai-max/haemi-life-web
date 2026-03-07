@@ -183,10 +183,33 @@ jobs:
           name: ai-intelligence-reports
           path: .ai-system/reports/
 
+  performance-check:
+    name: Performance & Bundle Monitor
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore Build Artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache
+            frontend/node_modules/.cache
+            frontend/dist
+          key: ${{ runner.os }}-build-cache-${{ github.sha }}
+      - name: Check Bundle Size
+        run: |
+          SIZE=$(du -sh frontend/dist | cut -f1)
+          echo "📦 Total Frontend Bundle Size: $SIZE"
+          if [[ "$SIZE" == *"M"* ]]; then
+            echo "⚠️ Warning: Bundle size exceeds 1MB threshold."
+          fi
+
   auto-merge:
     name: GitHub Auto Merge
     if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'ai/') && success()
-    needs: [lint, type-check, build, test, ui-regression, ai-intelligence]
+    needs: [lint, type-check, build, test, ui-regression, ai-intelligence, performance-check]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
