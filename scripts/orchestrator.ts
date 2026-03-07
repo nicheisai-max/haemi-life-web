@@ -218,9 +218,12 @@ async function main() {
     const branch = ensureSandboxBranch(taskName);
 
     if (pushMode) {
+        console.log('🛡️ Running mandatory prepush-check...');
+        runCmd('npm run prepush-check');
+
         console.log('📤 Pushing changes to sandbox...');
         runCmd('git add .');
-        runCmd(`git commit -m "feat(ci): husky ci stabilization for ${taskName}"`, true);
+        runCmd(`git commit -m "feat(ci): stabilization and framework improvements for ${taskName}"`, true);
         runCmd(`git push -u origin ${branch}`); // Force push removed per Governance rules
 
         const prNumber = await createPR(branch);
