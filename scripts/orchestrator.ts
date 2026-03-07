@@ -210,27 +210,59 @@ function validateFinalState() {
     console.log('🌟 REPOSITORY STATE ENFORCED: main branch clean and synchronized.');
 }
 
+// Task Planner Integration Imports
+import { getNextTask, markTaskExecuting, markTaskComplete, markTaskFailed } from './task-planner';
+
 async function main() {
     const pushMode = process.argv.includes('--push');
-    const taskName = process.argv[2] || 'update';
+    const taskNameArg = process.argv[2];
 
+    // 1. Workspace Integrity Check
     validateWorkspaceIntegrity();
-    const branch = ensureSandboxBranch(taskName);
+
+    // 2. Task Selection
+    let task = null;
+    if (taskNameArg && !taskNameArg.startsWith('--')) {
+        task = { id: 'manual', description: taskNameArg };
+    } else {
+        task = getNextTask();
+    }
+
+    if (!task) {
+        console.log('✅ No tasks in queue. System idle.');
+        return;
+    }
+
+    console.log(`🚀 Processing Task: [${task.id}] ${task.description}`);
+    if (task.id !== 'manual') markTaskExecuting(task.id);
+
+    const branch = ensureSandboxBranch(task.id === 'manual' ? task.description : task.id);
 
     if (pushMode) {
-        console.log('🛡️ Running mandatory prepush-check...');
-        runCmd('npm run prepush-check');
+        try {
+            // 3. Mandatory Quality Gates
+            console.log('🛡️  Running AI Self-Review Quality Gate...');
+            runCmd('npm run quality-gate');
 
-        console.log('📤 Pushing changes to sandbox...');
-        runCmd('git add .');
-        runCmd(`git commit -m "feat(ci): stabilization and framework improvements for ${taskName}"`, true);
-        runCmd(`git push -u origin ${branch}`); // Force push removed per Governance rules
+            console.log('🛡️  Running Mandatory Pre-push Validation...');
+            runCmd('npm run prepush-check');
 
-        const prNumber = await createPR(branch);
-        if (prNumber) {
-            console.log(`\n🚀 Pull Request #${prNumber} is live.`);
-            console.log('⏳ Automated AI flow ends here. Human review and merge required.');
-            console.log('🔍 GitHub Actions will now validate the PR.');
+            // 4. Push Lifecycle
+            console.log('📤 Pushing changes to sandbox...');
+            runCmd('git add .');
+            runCmd(`git commit -m "feat(ai): workflow execution for task ${task.id}"`, true);
+            runCmd(`git push -u origin ${branch}`);
+
+            const prNumber = await createPR(branch);
+            if (prNumber) {
+                console.log(`\n🚀 Pull Request #${prNumber} is live.`);
+                console.log('⏳ Automated AI flow ends here. Human review and merge required.');
+                if (task.id !== 'manual') markTaskComplete(task.id);
+            }
+        } catch (error: any) {
+            console.error(`❌ Task Execution Failed: ${error.message}`);
+            if (task.id !== 'manual') markTaskFailed(task.id);
+            process.exit(1);
         }
     } else {
         console.log('\n✅ Local changes ready. Run with --push to enforce full lifecycle.');
