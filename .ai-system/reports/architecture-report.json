@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-03-07T07:42:07.667Z",
+  "violations": 18,
+  "oversizedComponents": [
+    "frontend\\src\\app.tsx (422 lines)",
+    "frontend\\src\\components\\onboarding\\onboarding-carousel.tsx (372 lines)",
+    "frontend\\src\\components\\telemedicine\\video-consultation.tsx (453 lines)",
+    "frontend\\src\\components\\ui\\chat-hub.tsx (1145 lines)",
+    "frontend\\src\\components\\ui\\signature-pad.tsx (396 lines)",
+    "frontend\\src\\pages\\admin\\user-management.tsx (305 lines)",
+    "frontend\\src\\pages\\appointments\\appointments.tsx (315 lines)",
+    "frontend\\src\\pages\\appointments\\book-appointment.tsx (483 lines)",
+    "frontend\\src\\pages\\auth\\forgot-password.tsx (339 lines)",
+    "frontend\\src\\pages\\doctor\\doctor-dashboard.tsx (396 lines)",
+    "frontend\\src\\pages\\patient\\medical-records.tsx (316 lines)",
+    "frontend\\src\\pages\\patient\\patient-dashboard.tsx (312 lines)",
+    "frontend\\src\\pages\\pharmacist\\inventory.tsx (397 lines)",
+    "frontend\\src\\pages\\prescriptions\\prescriptions.tsx (361 lines)",
+    "frontend\\src\\pages\\profile\\profile.tsx (355 lines)",
+    "frontend\\src\\pages\\public\\signup.tsx (314 lines)",
+    "frontend\\src\\pages\\settings\\settings.tsx (443 lines)",
+    "frontend\\src\\services\\api.ts (367 lines)"
+  ],
+  "potentialDuplicates": [],
+  "unusedModules": []
+}

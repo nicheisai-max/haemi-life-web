@@ -15,14 +15,20 @@ echo "Cleaning working tree"
 git clean -fd
 
 echo "Removing local sandbox branches"
-for branch in $(git branch | grep "ai/sandbox-"); do
-  git branch -D $branch || true
-done
+local_branches=$(git branch --list "ai/sandbox-*")
+if [ -n "$local_branches" ]; then
+  for branch in $local_branches; do
+    git branch -D $branch || true
+  done
+fi
 
 echo "Removing remote sandbox branches"
-for branch in $(git branch -r | grep "origin/ai/sandbox-" | sed 's/origin\///'); do
-  git push origin --delete $branch || true
-done
+remote_branches=$(git branch -r --list "origin/ai/sandbox-*")
+if [ -n "$remote_branches" ]; then
+  for branch in $remote_branches; do
+    git push origin --delete ${branch#origin/} || true
+  done
+fi
 
 echo "Pruning remote references"
 git fetch --prune

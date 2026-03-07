@@ -94,6 +94,47 @@ jobs:
       - run: node scripts/build-performance.js
       - run: node scripts/bundle-guard.js
 
+  ui-baseline:
+    name: UI Visual Baseline Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - name: Upload Screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: test-results/
+
+  ai-intelligence:
+    name: AI Development Intelligence
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run Architecture Analyzer
+        run: npx tsx scripts/architecture-analyzer.ts
+      - name: Run Product Intelligence Engine
+        run: npx tsx ai/product-intelligence-engine.ts
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-intelligence-reports
+          path: .ai-system/reports/
+
   auto-rollback:
     name: Auto Rollback Protection
     if: failure() && github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -116,7 +157,7 @@ jobs:
   auto-merge:
     name: GitHub Auto Merge
     if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'ai/') && success()
-    needs: [type-safety, lint, test, security-audit, migration-safety, build]
+    needs: [type-safety, lint, test, security-audit, migration-safety, build, ui-baseline, ai-intelligence]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

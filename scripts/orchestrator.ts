@@ -102,7 +102,7 @@ function protectDesignTokens() {
  * PHASE 18: Design Safety Rules
  */
 function verifyDesignSafety(): boolean {
-    console.log('\n🛡️ PHASE 18: Design Safety Rules Enforcement...');
+    console.log('\n🛡️ Design Safety Rules Enforcement...');
     const changedFiles = runCmd('git diff --name-only origin/main...HEAD').split('\n').filter(f => f.length > 0);
     let violations = [] as string[];
     for (const file of changedFiles) {
@@ -126,6 +126,55 @@ function verifyDesignSafety(): boolean {
     }
     console.log('✅ Design safety rules satisfied.');
     return true;
+}
+
+/**
+ * SYSTEM 1: Sandbox Cleanup
+ */
+function cleanupSandboxBranches() {
+    console.log('🧹 Cleaning up sandbox branches...');
+    try {
+        const localBranches = runCmd('git branch --list "ai/sandbox-*"').split('\n').map(b => b.trim()).filter(b => b.length > 0);
+        for (const branch of localBranches) {
+            const cleanBranch = branch.replace('* ', '');
+            runCmd(`git branch -D ${cleanBranch}`, true);
+        }
+
+        const remoteBranches = runCmd('git branch -r --list "origin/ai/sandbox-*"').split('\n').map(b => b.trim()).filter(b => b.length > 0);
+        for (const branch of remoteBranches) {
+            const cleanBranch = branch.replace('origin/', '');
+            runCmd(`git push origin --delete ${cleanBranch}`, true);
+        }
+        console.log('✅ Sandbox cleanup complete.');
+    } catch (err) {
+        console.warn('⚠️ Sandbox cleanup encountered errors, continuing...');
+    }
+}
+
+/**
+ * SYSTEM 5: Summary Report Generator
+ */
+function generateSummaryReport() {
+    const reportPath = '.ai-system/reports/summary-report.md';
+    if (!fs.existsSync(path.dirname(reportPath))) fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+
+    let summary = '# Platform Intelligence Summary\n\n';
+
+    const architecturePath = '.ai-system/reports/architecture-report.json';
+    if (fs.existsSync(architecturePath)) {
+        const arch = JSON.parse(fs.readFileSync(architecturePath, 'utf-8'));
+        summary += `📑 Architecture: ${arch.violations} violations detected.\n`;
+    }
+
+    const productPath = '.ai-system/reports/product-intelligence.json';
+    if (fs.existsSync(productPath)) {
+        const prod = JSON.parse(fs.readFileSync(productPath, 'utf-8'));
+        summary += `🧠 Product Intelligence: ${prod.insights.length} insights generated.\n`;
+    }
+
+    fs.writeFileSync(reportPath, summary);
+    console.log(`📄 Summary report generated at ${reportPath}`);
+    console.log(summary);
 }
 
 /**
@@ -225,21 +274,41 @@ async function main() {
     // Phase 1: Deterministic Clean State Enforcement
     enforceCleanState();
 
-    // Phase 2: Sandbox Enforcement
     const sandbox = ensureSandboxBranch();
     const taskName = sandbox.replace('ai/sandbox-', '');
 
     try {
-        // Intelligence Layers
-        console.log('\n📊 Intelligence Engines (Phases 3-13)...');
-        protectDesignTokens();
+        // Phase 1: Sandbox Cleanup (Initial)
+        console.log('\n🧹 PHASE 1: Initial Sandbox Cleanup...');
+        cleanupSandboxBranches();
 
-        // Quality Gates
-        console.log('\n🛡️ PHASE 14: Quality Gates...');
+        // Phase 2: Build & Lint
+        console.log('\n🏗️ PHASE 2: Build & Lint...');
         runCmd('npm run lint');
         runCmd('npm run type-check');
+        runCmd('npm run build');
 
-        // Design Safety
+        // Phase 3: Run Tests
+        console.log('\n🧪 PHASE 3: Run Tests...');
+        runCmd('npm run test:ci');
+
+        // Phase 4: Run Playwright UI checks
+        console.log('\n🖼️ PHASE 4: Playwright UI Baseline Checks...');
+        runCmd('npx playwright test tests/ui-baseline', true);
+
+        // Phase 5: Run Architecture Analyzer
+        console.log('\n📐 PHASE 5: AI Architecture Analyzer...');
+        runCmd('tsx scripts/architecture-analyzer.ts', true);
+
+        // Phase 6: Run Product Intelligence Engine
+        console.log('\n🧠 PHASE 6: AI Product Intelligence Engine...');
+        runCmd('tsx ai/product-intelligence-engine.ts', true);
+
+        // Phase 7: Generate Reports
+        console.log('\n📊 PHASE 7: Generating Summary Reports...');
+        generateSummaryReport();
+
+        // Design Safety (Additional Gate)
         if (!verifyDesignSafety()) {
             console.error('❌ DESIGN SAFETY GATE FAILED. Blocking automated update.');
             process.exit(1);
@@ -278,6 +347,7 @@ async function main() {
                 console.log('✅ PR merged. Platform upgrade complete.');
 
                 // After merging pull requests
+                cleanupSandboxBranches();
                 enforceCleanState();
 
             } catch (e: any) {
