@@ -160,16 +160,7 @@ async function getFailedJobLogs(prNumber: number): Promise<string> {
     }
 }
 
-async function mergePR(prNumber: number) {
-    console.log(`🔀 Merging PR #${prNumber} via API...`);
-    try {
-        await api.put(`/pulls/${prNumber}/merge`, { merge_method: 'merge' });
-        console.log('✅ PR merged successfully.');
-    } catch (e: any) {
-        console.error('❌ Merge failed:', e.response?.data || e.message);
-        process.exit(1);
-    }
-}
+// mergePR removed in accordance with STRICT REPOSITORY GOVERNANCE
 
 async function aggressiveCleanup() {
     console.log('\n🧹 Starting Aggressive Repository Cleanup...');
@@ -227,30 +218,17 @@ async function main() {
     const branch = ensureSandboxBranch(taskName);
 
     if (pushMode) {
-        console.log('📤 Pushing changes and enforcing deterministic state...');
+        console.log('📤 Pushing changes to sandbox...');
         runCmd('git add .');
-        runCmd(`git commit -m "feat(ai): evolve to AI-First SaaS Platform Mode"`, true);
-        runCmd(`git push -u origin ${branch} --force`);
+        runCmd(`git commit -m "feat(ci): husky ci stabilization for ${taskName}"`, true);
+        runCmd(`git push -u origin ${branch}`); // Force push removed per Governance rules
 
         const prNumber = await createPR(branch);
         if (prNumber) {
-            let ciPassed = await waitForCI(prNumber);
-
-            // PHASE 4: Self-Healing CI
-            if (!ciPassed) {
-                console.log('🛠️ CI Failed. Initiating Self-Healing Analysis...');
-                const logs = await getFailedJobLogs(prNumber);
-                console.log('\n--- FAILED LOG SUMMARY ---\n', logs, '\n--------------------------\n');
-                console.warn('⚠️ Self-healing: In a production environment, AI would now analyze these logs and commit a fix.');
-                // For this task, we assume human intervention or a simulated single-retry skip if logs are transient.
-                // We proceed to cleanup to preserve the deterministic state as requested.
-            } else {
-                await mergePR(prNumber);
-            }
+            console.log(`\n🚀 Pull Request #${prNumber} is live.`);
+            console.log('⏳ Automated AI flow ends here. Human review and merge required.');
+            console.log('🔍 GitHub Actions will now validate the PR.');
         }
-
-        await aggressiveCleanup();
-        validateFinalState();
     } else {
         console.log('\n✅ Local changes ready. Run with --push to enforce full lifecycle.');
     }
