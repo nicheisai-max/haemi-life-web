@@ -1,42 +1,38 @@
-# Enterprise AI Development Platform Principles
+# AI-First SaaS Engineering Platform
 
-This document outlines the core principles and workflows for the Haemi Life AI-assisted engineering platform.
+This repository is an AI-assisted SaaS engineering platform governed by strict stability, determinism, and speed principles.
 
 ## 1. Core Principles
 
 ### Stability over Automation
-Tooling must never compromise repository stability. Automated actions should be readable, reversible, and predictable.
+Tooling must never compromise repository stability. The platform focuses on self-healing CI and deterministic state management.
 
 ### Deterministic Builds
-The system enforces `npm ci` and lockfile integrity. A build that passes in CI today must be reproducible tomorrow.
+All builds use `npm ci` and lockfile integrity. Parallel execution and smart caching ensure validation takes < 5 minutes.
 
-### Fast Developer Feedback
-CI pipelines are optimized for speed (< 5 minutes) and parallel execution. Local hooks are minimal to preserve developer productivity.
+### Human Command Gate
+AI remains idle until explicitly instructed to proceed via the command: **"Now push the code"**.
 
-## 2. Sandbox Development Model
+## 2. Platform Architecture
 
-All development occurs in isolated sandboxes.
+### Self-Healing CI
+When CI fails, the system automatically reads job logs, identifies root causes, and attempts fixes in the sandbox branch.
 
-1.  **Branch Creation**: `npm run sandbox -- <task-name>`
-2.  **Implementation**: Develop features/fixes in the sandbox.
-3.  **Validation**: Pushes trigger independent CI jobs:
-    -   `lint`: Code style enforcement.
-    -   `type-check`: TypeScript safety.
-    -   `build`: Production build verification.
-    -   `test`: Integration and Unit tests.
-    -   `ui-regression`: Visual baseline checking (0.1% threshold).
-4.  **Reporting**: AI Architecture and Product Intelligence reports are generated in `.ai-system/reports/`.
-5.  **Merge**: Pull Requests are merged automatically upon success.
+### Design Token Sovereignty
+All UI styling is locked to centralized tokens in `index.css`. The Product Intelligence Engine monitors and reports "Design System Drift".
 
-## 3. Intelligence Layers
+### Visual Integrity Guard
+Playwright visual regressions run with a **0.1%** threshold. Dynamic regions (timestamps, counts) are masked to ensure zero false positives.
 
-### AI Architecture Analyzer
-- AST-based metrics for complexity and coupling.
-- Reports structural issues without automatic modification.
+## 3. Workflow (Sandbox Model)
 
-### AI Product Intelligence
-- UX and Design System drift detection.
-- Provides suggestions for improvement.
+1.  **Orchestration**: `npm run orchestrate -- <task>`
+2.  **Safety Guard**: Validates workspace integrity (clean tree, node version).
+3.  **Sandbox**: Operations run on isolated `ai/sandbox-*` branches.
+4.  **Enforcement**: After task completion, the platform:
+    -   Merges the PR (if green).
+    -   Nukes all local and remote sandbox branches.
+    -   Hard-resets the local environment to `main`.
 
 ---
-*Designed for Botswana's National Digital Healthcare Platform.*
+*Enterprise Healthcare Compliance Standard - Haemi Life.*
