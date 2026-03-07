@@ -1,0 +1,62 @@
+name: Simplified Google-Style CI
+
+on:
+  push:
+    branches: [ main, 'ai/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    name: High-Speed Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Deterministic Install
+        run: npm ci --workspaces
+
+      - name: Dependency Drift Guard
+        run: npm ci --workspaces --dry-run
+
+      - name: Code Lint Validation
+        run: npm run lint
+
+      - name: Type Safety Validation
+        run: npm run type-check
+
+      - name: Production Build Check
+        run: npm run build
+
+      - name: Bundle Size Monitor
+        run: |
+          SIZE=$(du -sh frontend/dist | cut -f1)
+          echo "📦 Frontend Bundle Size: $SIZE"
+          if [[ "$SIZE" == *"M"* ]]; then
+            echo "⚠️ Warning: Bundle size exceeds 1MB threshold."
+          fi
+
+      - name: Unit & Integration Tests
+        run: npm run test
+
+      - name: Playwright UI Tests
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+        env:
+          CI: true
+
+      - name: Upload Test Results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-test-results
+          path: |
+            test-results/
+            playwright-report/

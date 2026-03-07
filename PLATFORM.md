@@ -1,38 +1,24 @@
-# AI-First SaaS Engineering Platform
+## 4. Strict Repository Governance (SYSTEM MODE)
 
-This repository is an AI-assisted SaaS engineering platform governed by strict stability, determinism, and speed principles.
+### Data Safety (Non-Negotiable)
+- **Forbidden**: Modifying or deleting existing UI layout, Tailwind styles, hover/active states, or React component logic without explicit instruction.
+- **Database**: Zero destructive operations (`DROP`, `TRUNCATE`, `DELETE` without `WHERE`).
 
-## 1. Core Principles
+### Git Safety & Workflow
+- **No Direct Push**: AI never pushes directly to `main`.
+- **No History Rewriting**: `git push --force`, `git reset --hard`, `git rebase -i`, and `git commit --amend` are strictly forbidden.
+- **Sandbox Only**: All work happens in `ai/sandbox-<task-name>`.
 
-### Stability over Automation
-Tooling must never compromise repository stability. The platform focuses on self-healing CI and deterministic state management.
+### Human Merge Authority
+- **No Auto-Merge**: AI never merges pull requests. 
+- **Authority**: Merge authority belongs exclusively to humans via GitHub's branch protection system.
+- **CI Dependency**: PRs are created only after passing 100% of local validation (`npm ci`, `npm run build`, `npm run lint`, `npm test`).
 
-### Deterministic Builds
-All builds use `npm ci` and lockfile integrity. Parallel execution and smart caching ensure validation takes < 5 minutes.
-
-### Human Command Gate
-AI remains idle until explicitly instructed to proceed via the command: **"Now push the code"**.
-
-## 2. Platform Architecture
-
-### Self-Healing CI
-When CI fails, the system automatically reads job logs, identifies root causes, and attempts fixes in the sandbox branch.
-
-### Design Token Sovereignty
-All UI styling is locked to centralized tokens in `index.css`. The Product Intelligence Engine monitors and reports "Design System Drift".
-
-### Visual Integrity Guard
-Playwright visual regressions run with a **0.1%** threshold. Dynamic regions (timestamps, counts) are masked to ensure zero false positives.
-
-## 3. Workflow (Sandbox Model)
-
-1.  **Orchestration**: `npm run orchestrate -- <task>`
-2.  **Safety Guard**: Validates workspace integrity (clean tree, node version).
-3.  **Sandbox**: Operations run on isolated `ai/sandbox-*` branches.
-4.  **Enforcement**: After task completion, the platform:
-    -   Merges the PR (if green).
-    -   Nukes all local and remote sandbox branches.
-    -   Hard-resets the local environment to `main`.
+### CI Failure Policy
+- If any CI job (lint, type-check, build, unit, integration, Playwright) fails:
+    - AI stops immediately.
+    - AI fixes the failure in the same sandbox branch.
+    - AI re-runs CI until 100% success.
 
 ---
 *Enterprise Healthcare Compliance Standard - Haemi Life.*
