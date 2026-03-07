@@ -240,17 +240,21 @@ async function main() {
 
     if (pushMode) {
         try {
-            // 3. Mandatory Quality Gates
+            // 3. Mandatory Deterministic Environment
+            console.log('📦 Running deterministic dependency install...');
+            runCmd('npm ci');
+
+            // 4. Mandatory Quality Gates
             console.log('🛡️  Running AI Self-Review Quality Gate...');
             runCmd('npm run quality-gate');
 
             console.log('🛡️  Running Mandatory Pre-push Validation...');
             runCmd('npm run prepush-check');
 
-            // 4. Push Lifecycle
+            // 5. Push Lifecycle
             console.log('📤 Pushing changes to sandbox...');
             runCmd('git add .');
-            runCmd(`git commit -m "feat(ai): workflow execution for task ${task.id}"`, true);
+            runCmd(`git commit -m "feat(ci): workflow execution for task ${task.id}"`, true);
             runCmd(`git push -u origin ${branch}`);
 
             const prNumber = await createPR(branch);
