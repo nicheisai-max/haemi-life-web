@@ -49,7 +49,8 @@
     "sandbox": "tsx scripts/new-sandbox.ts",
     "orchestrate": "tsx scripts/orchestrator.ts",
     "ai-review": "tsx scripts/ai-self-review.ts",
-    "quality-gate": "tsx scripts/ai-self-review.ts --enforce"
+    "quality-gate": "tsx scripts/ai-self-review.ts --enforce",
+    "sync": "git checkout main && git pull origin main && git fetch origin --prune && git remote prune origin && powershell -Command \"git branch | Select-String 'ai/sandbox-' | ForEach-Object { git branch -D $_.ToString().Trim() }\" && git branch -a && git status"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
