@@ -41,6 +41,8 @@ const PrescriptionQueue = lazy(() => import('./pages/pharmacist/prescription-que
 const VerifyDoctors = lazy(() => import('./pages/admin/verify-doctors').then(m => ({ default: m.VerifyDoctors })));
 const UserManagement = lazy(() => import('./pages/admin/user-management').then(m => ({ default: m.UserManagement })));
 const SystemLogs = lazy(() => import('./pages/admin/system-logs').then(m => ({ default: m.SystemLogs })));
+const SecurityMonitoring = lazy(() => import('./pages/admin/security-monitoring').then(m => ({ default: m.SecurityMonitoring })));
+const SessionManagement = lazy(() => import('./pages/admin/session-management').then(m => ({ default: m.SessionManagement })));
 const Inventory = lazy(() => import('./pages/pharmacist/inventory').then(m => ({ default: m.Inventory })));
 const PrivacyPolicy = lazy(() => import('./pages/legal/privacy-policy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfService = lazy(() => import('./pages/legal/terms-of-service').then(m => ({ default: m.TermsOfService })));
@@ -359,6 +361,30 @@ const AppRoutes = () => {
                   <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
                     <PageTransition>
                       <SystemLogs />
+                    </PageTransition>
+                  </LazyDashboardLayout></Suspense>
+                </RoleRoute>
+              }
+            />
+            <Route
+              path={PATHS.ADMIN.SECURITY}
+              element={
+                <RoleRoute allowedRoles={['admin']}>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
+                    <PageTransition>
+                      <SecurityMonitoring />
+                    </PageTransition>
+                  </LazyDashboardLayout></Suspense>
+                </RoleRoute>
+              }
+            />
+            <Route
+              path={PATHS.ADMIN.SESSIONS}
+              element={
+                <RoleRoute allowedRoles={['admin']}>
+                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
+                    <PageTransition>
+                      <SessionManagement />
                     </PageTransition>
                   </LazyDashboardLayout></Suspense>
                 </RoleRoute>
