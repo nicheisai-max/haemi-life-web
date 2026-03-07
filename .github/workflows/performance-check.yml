@@ -7,7 +7,6 @@ on:
 
 jobs:
   bundle-check:
-    name: Check Bundle Size
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository

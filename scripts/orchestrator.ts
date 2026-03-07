@@ -1,9 +1,14 @@
 import { execSync } from 'child_process';
-import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
+
+/**
+ * ENTERPRISE INFRASTRUCTURE ORCHESTRATOR
+ * 
+ * Optimized for Node 22. Uses native fetch for zero-dependency execution.
+ */
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO = 'nicheisai-max/haemi-life-web';
@@ -13,13 +18,12 @@ if (!GITHUB_TOKEN) {
     process.exit(1);
 }
 
-const api = axios.create({
-    baseURL: `https://api.github.com/repos/${REPO}`,
-    headers: {
-        Authorization: `Bearer ${GITHUB_TOKEN}`,
-        Accept: 'application/vnd.github.v3+json'
-    }
-});
+// Global fetch configuration with headers
+const githubHeaders = {
+    Authorization: `Bearer ${GITHUB_TOKEN}`,
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'Haemi-Life-Orchestrator'
+};
 
 function runCmd(cmd: string, ignoreError = false): string {
     try {
@@ -83,13 +87,30 @@ async function createPR(branch: string): Promise<number | null> {
 
     console.log('🔗 Creating Pull Request...');
     try {
-        const response = await api.post('/pulls', prPayload);
-        console.log(`✅ PR created: ${response.data.html_url}`);
-        return response.data.number;
+        const response = await fetch(`https://api.github.com/repos/${REPO}/pulls`, {
+            method: 'POST',
+            headers: githubHeaders,
+            body: JSON.stringify(prPayload)
+        });
+
+        const data: any = await response.json();
+
+        if (response.ok) {
+            console.log(`✅ PR created: ${data.html_url}`);
+            return data.number;
+        }
+
+        console.warn('⚠️ PR creation failed (might already exist):', data.errors?.[0]?.message || data.message);
+
+        // Fallback: search for existing PR
+        const searchResp = await fetch(`https://api.github.com/repos/${REPO}/pulls?head=${REPO.split('/')[0]}:${branch}`, {
+            headers: githubHeaders
+        });
+        const pulls: any = await searchResp.json();
+        return pulls[0]?.number || null;
     } catch (e: any) {
-        console.warn('⚠️ PR creation failed (might already exist):', e.response?.data?.errors?.[0]?.message || e.message);
-        const pulls = await api.get('/pulls', { params: { head: `${REPO.split('/')[0]}:${branch}` } });
-        return pulls.data[0]?.number || null;
+        console.error('❌ Network error during PR creation:', e.message);
+        return null;
     }
 }
 
@@ -100,35 +121,39 @@ async function waitForCI(prNumber: number): Promise<boolean> {
 
     while (Date.now() - startTime < timeout) {
         try {
-            const pr = await api.get(`/pulls/${prNumber}`);
-            const headSha = pr.data.head.sha;
+            const prResp = await fetch(`https://api.github.com/repos/${REPO}/pulls/${prNumber}`, {
+                headers: githubHeaders
+            });
+            const prData: any = await prResp.json();
+            const headSha = prData.head.sha;
 
-            // Try check-runs first
-            try {
-                const checks = await api.get(`/commits/${headSha}/check-runs`);
-                const total = checks.data.total_count;
-                const completed = checks.data.check_runs.filter((r: any) => r.status === 'completed');
-                const success = checks.data.check_runs.every((r: any) => r.conclusion === 'success' || r.conclusion === 'neutral' || r.conclusion === 'skipped');
+            // Try check-runs
+            const checksResp = await fetch(`https://api.github.com/repos/${REPO}/commits/${headSha}/check-runs`, {
+                headers: githubHeaders
+            });
+            const checksData: any = await checksResp.json();
+
+            if (checksResp.ok) {
+                const total = checksData.total_count;
+                const completed = checksData.check_runs.filter((r: any) => r.status === 'completed');
+                const success = checksData.check_runs.every((r: any) => r.conclusion === 'success' || r.conclusion === 'neutral' || r.conclusion === 'skipped');
 
                 console.log(`   - Checks Status: ${completed.length}/${total} completed.`);
                 if (total > 0 && completed.length === total && success) {
                     console.log('✅ All CI checks passed.');
                     return true;
                 }
-            } catch (e: any) {
-                console.warn('   - Check runs API restricted. Checking PR mergeability...');
             }
 
-            // Fallback: Check mergeable_state
-            // 'clean' means it's ready to merge and passes all checks.
-            const mergeableState = pr.data.mergeable_state;
+            // Fallback: mergeable_state
+            const mergeableState = prData.mergeable_state;
             console.log(`   - PR Mergeable State: ${mergeableState}`);
             if (mergeableState === 'clean') {
                 console.log('✅ PR is clean and ready for merge.');
                 return true;
             }
 
-            if (pr.data.state === 'closed') {
+            if (prData.state === 'closed') {
                 console.log('ℹ️ PR is already closed/merged.');
                 return true;
             }
@@ -136,7 +161,7 @@ async function waitForCI(prNumber: number): Promise<boolean> {
         } catch (e: any) {
             console.warn('⚠️ Error polling CI status:', e.message);
         }
-        await new Promise(resolve => setTimeout(resolve, 30000)); // Poll every 30s
+        await new Promise(resolve => setTimeout(resolve, 30000));
     }
     console.error('❌ CI timeout.');
     return false;
@@ -145,15 +170,20 @@ async function waitForCI(prNumber: number): Promise<boolean> {
 async function getFailedJobLogs(prNumber: number): Promise<string> {
     console.log(`🔍 Fetching failed logs for PR #${prNumber}...`);
     try {
-        const pr = await api.get(`/pulls/${prNumber}`);
-        const headSha = pr.data.head.sha;
-        const checks = await api.get(`/commits/${headSha}/check-runs`);
+        const prResp = await fetch(`https://api.github.com/repos/${REPO}/pulls/${prNumber}`, {
+            headers: githubHeaders
+        });
+        const prData: any = await prResp.json();
+        const headSha = prData.head.sha;
 
-        const failedRun = checks.data.check_runs.find((r: any) => r.conclusion === 'failure');
+        const checksResp = await fetch(`https://api.github.com/repos/${REPO}/commits/${headSha}/check-runs`, {
+            headers: githubHeaders
+        });
+        const checksData: any = await checksResp.json();
+
+        const failedRun = checksData.check_runs.find((r: any) => r.conclusion === 'failure');
         if (!failedRun) return 'No failed checks found.';
 
-        // In a real scenario, we'd fetch the raw logs. 
-        // For this platform demonstration, we use the check run output summary.
         return `Failed Run: ${failedRun.name}\nSummary: ${failedRun.output?.summary || 'No summary available.'}\nText: ${failedRun.output?.text || ''}`;
     } catch (e: any) {
         return `Error fetching logs: ${e.message}`;
@@ -240,19 +270,35 @@ async function main() {
 
     if (pushMode) {
         try {
-            // 3. Mandatory Deterministic Environment
+            // 1. Workspace Integrity Check (Strict)
+            console.log('🔍 Enforcing strict workspace integrity...');
+            const status = runCmd('git status --porcelain', true);
+            if (status.trim()) {
+                console.error('❌ Workspace is dirty. Commit or stash changes before pushing.');
+                process.exit(1);
+            }
+
+            // 2. Deterministic Environment
             console.log('📦 Running deterministic dependency install...');
             runCmd('npm ci');
 
-            // 4. Mandatory Quality Gates
-            console.log('🛡️  Running AI Self-Review Quality Gate...');
-            runCmd('npm run quality-gate');
+            // 3. Validation Suite
+            console.log('🛡️  Running full validation suite...');
 
-            console.log('🛡️  Running Mandatory Pre-push Validation...');
-            runCmd('npm run prepush-check');
+            console.log('   - Linting...');
+            runCmd('npm run lint');
 
-            // 5. Push Lifecycle
-            console.log('📤 Pushing changes to sandbox...');
+            console.log('   - Type Checking...');
+            runCmd('npm run type-check');
+
+            console.log('   - Building...');
+            runCmd('npm run build');
+
+            console.log('   - Backend Testing...');
+            runCmd('npm run test:backend');
+
+            // 4. Push Lifecycle
+            console.log('📤 Validation successful. Pushing changes...');
             runCmd('git add .');
             runCmd(`git commit -m "feat(ci): workflow execution for task ${task.id}"`, true);
             runCmd(`git push -u origin ${branch}`);

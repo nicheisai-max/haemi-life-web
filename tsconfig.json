@@ -10,6 +10,9 @@
         "forceConsistentCasingInFileNames": true,
         "allowSyntheticDefaultImports": true,
         "incremental": true,
+        "types": [
+            "node"
+        ],
         "tsBuildInfoFile": "./.tsbuildinfo"
     },
     "exclude": [
