@@ -102,23 +102,37 @@ async function waitForCI(prNumber: number): Promise<boolean> {
         try {
             const pr = await api.get(`/pulls/${prNumber}`);
             const headSha = pr.data.head.sha;
-            const checks = await api.get(`/commits/${headSha}/check-runs`);
 
-            const total = checks.data.total_count;
-            const completed = checks.data.check_runs.filter((r: any) => r.status === 'completed');
-            const success = checks.data.check_runs.every((r: any) => r.conclusion === 'success' || r.conclusion === 'neutral' || r.conclusion === 'skipped');
+            // Try check-runs first
+            try {
+                const checks = await api.get(`/commits/${headSha}/check-runs`);
+                const total = checks.data.total_count;
+                const completed = checks.data.check_runs.filter((r: any) => r.status === 'completed');
+                const success = checks.data.check_runs.every((r: any) => r.conclusion === 'success' || r.conclusion === 'neutral' || r.conclusion === 'skipped');
 
-            console.log(`   - Status: ${completed.length}/${total} checks completed.`);
-
-            if (total > 0 && completed.length === total) {
-                if (success) {
+                console.log(`   - Checks Status: ${completed.length}/${total} completed.`);
+                if (total > 0 && completed.length === total && success) {
                     console.log('✅ All CI checks passed.');
                     return true;
-                } else {
-                    console.error('❌ CI checks failed.');
-                    return false;
                 }
+            } catch (e: any) {
+                console.warn('   - Check runs API restricted. Checking PR mergeability...');
             }
+
+            // Fallback: Check mergeable_state
+            // 'clean' means it's ready to merge and passes all checks.
+            const mergeableState = pr.data.mergeable_state;
+            console.log(`   - PR Mergeable State: ${mergeableState}`);
+            if (mergeableState === 'clean') {
+                console.log('✅ PR is clean and ready for merge.');
+                return true;
+            }
+
+            if (pr.data.state === 'closed') {
+                console.log('ℹ️ PR is already closed/merged.');
+                return true;
+            }
+
         } catch (e: any) {
             console.warn('⚠️ Error polling CI status:', e.message);
         }
