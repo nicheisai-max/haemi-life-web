@@ -9,9 +9,9 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "typeRoots": [
-      "./node_modules/@types",
-      "./src/types"
+    "types": [
+      "jest",
+      "node"
     ],
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo"

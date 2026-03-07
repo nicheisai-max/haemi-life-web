@@ -1,4 +1,9 @@
 {
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "dependencies": {
     "axios": "^1.13.5",
     "clsx": "^2.1.1",

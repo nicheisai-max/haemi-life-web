@@ -15,21 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: ".nvmrc"
+          cache: "npm"
+          cache-dependency-path: "package-lock.json"
+      - name: Install Dependencies (Workspace Mode)
+        run: npm ci --workspaces
+      - name: Dependency Drift Protection
+        run: npm ci --workspaces --dry-run
       - name: Cache node_modules
         uses: actions/cache@v4
-        id: cache-node-modules
         with:
-          path: |
-            node_modules
-            backend/node_modules
-            frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-      - if: steps.cache-node-modules.outputs.cache-hit != 'true'
-        run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
+          path: node_modules
+          key: ${{ runner.os }}-npm-workspaces-${{ hashFiles('package-lock.json') }}
 
   lint:
     name: Code Lint Validation
@@ -37,18 +37,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: ".nvmrc"
       - name: Restore node_modules
         uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            backend/node_modules
-            frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          path: node_modules
+          key: ${{ runner.os }}-npm-workspaces-${{ hashFiles('package-lock.json') }}
       - run: npm run lint
 
   type-check:
@@ -57,18 +54,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: ".nvmrc"
       - name: Restore node_modules
         uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            backend/node_modules
-            frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          path: node_modules
+          key: ${{ runner.os }}-npm-workspaces-${{ hashFiles('package-lock.json') }}
       - run: npm run type-check
 
   build:
@@ -77,19 +71,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: ".nvmrc"
       - name: Restore node_modules
         uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            backend/node_modules
-            frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-      - name: Cache Turborepo and Vite
+          path: node_modules
+          key: ${{ runner.os }}-npm-workspaces-${{ hashFiles('package-lock.json') }}
+      - name: Cache Build Artifacts
         uses: actions/cache@v4
         with:
           path: |
@@ -108,18 +99,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: ".nvmrc"
       - name: Restore node_modules
         uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            backend/node_modules
-            frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          path: node_modules
+          key: ${{ runner.os }}-npm-workspaces-${{ hashFiles('package-lock.json') }}
       - run: npm run test:ci
 
   ui-regression:
@@ -128,18 +116,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: ".nvmrc"
       - name: Restore node_modules
         uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            backend/node_modules
-            frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          path: node_modules
+          key: ${{ runner.os }}-npm-workspaces-${{ hashFiles('package-lock.json') }}
       - name: Cache Playwright Browsers
         uses: actions/cache@v4
         id: playwright-cache
@@ -163,18 +148,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: ".nvmrc"
       - name: Restore node_modules
         uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            backend/node_modules
-            frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          path: node_modules
+          key: ${{ runner.os }}-npm-workspaces-${{ hashFiles('package-lock.json') }}
       - run: npx tsx scripts/architecture-analyzer.ts
       - run: npx tsx ai/product-intelligence-engine.ts
       - name: Upload Reports
@@ -189,6 +171,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
       - name: Restore Build Artifacts
         uses: actions/cache@v4
         with:
