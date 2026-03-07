@@ -2,6 +2,15 @@
 
 echo "----- CLEAN STATE ENFORCEMENT START -----"
 
+# Safety Check: Refuse execution if working tree is dirty unless --force is passed
+if [[ "$*" != *"--force"* ]]; then
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "❌ ERROR: Working tree is dirty. Stash or commit changes first."
+    echo "To bypass this safety check, use: npm run branch:cleanup -- --force"
+    exit 1
+  fi
+fi
+
 echo "Switching to main branch"
 git checkout main || git checkout -f main
 

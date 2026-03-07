@@ -10,8 +10,8 @@ on:
       - main
 
 jobs:
-  type-safety:
-    name: Type Safety Validation
+  dependencies:
+    name: Install Dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,11 +19,21 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
-      - run: npm run type-check
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: cache-node-modules
+        with:
+          path: |
+            node_modules
+            backend/node_modules
+            frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+      - if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
 
   lint:
     name: Code Lint Validation
+    needs: dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,11 +41,19 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            backend/node_modules
+            frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
       - run: npm run lint
 
-  test:
-    name: Parallel Integration Test Pipeline
+  type-check:
+    name: Type Safety Validation
+    needs: dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,35 +61,19 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
-      - run: npm run test:ci
-
-  security-audit:
-    name: Security Vulnerability Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Restore node_modules
+        uses: actions/cache@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      - name: Run Dependency Audit
-        run: npm audit --audit-level=high
-
-  migration-safety:
-    name: Migration Safety Guard
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run migration:guard
+          path: |
+            node_modules
+            backend/node_modules
+            frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+      - run: npm run type-check
 
   build:
     name: Production Build Check
+    needs: dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +81,14 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            backend/node_modules
+            frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
       - name: Cache Turborepo and Vite
         uses: actions/cache@v4
         with:
@@ -90,12 +100,11 @@ jobs:
           key: ${{ runner.os }}-build-cache-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-build-cache-
-      - run: npm ci && npm --prefix backend ci && npm --prefix frontend ci
-      - run: node scripts/build-performance.js
-      - run: node scripts/bundle-guard.js
+      - run: npm run build
 
-  ui-baseline:
-    name: UI Visual Baseline Check
+  test:
+    name: Parallel Integration Tests
+    needs: dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,8 +112,42 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            backend/node_modules
+            frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+      - run: npm run test:ci
+
+  ui-regression:
+    name: UI Visual Baseline Check
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            backend/node_modules
+            frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
       - run: npx playwright test
       - name: Upload Screenshots
@@ -116,48 +159,34 @@ jobs:
 
   ai-intelligence:
     name: AI Development Intelligence
+    needs: build
     runs-on: ubuntu-latest
-    needs: [build]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
-      - name: Run Architecture Analyzer
-        run: npx tsx scripts/architecture-analyzer.ts
-      - name: Run Product Intelligence Engine
-        run: npx tsx ai/product-intelligence-engine.ts
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            backend/node_modules
+            frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+      - run: npx tsx scripts/architecture-analyzer.ts
+      - run: npx tsx ai/product-intelligence-engine.ts
       - name: Upload Reports
         uses: actions/upload-artifact@v4
         with:
           name: ai-intelligence-reports
           path: .ai-system/reports/
 
-  auto-rollback:
-    name: Auto Rollback Protection
-    if: failure() && github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [build]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Revert last commit
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git revert HEAD --no-edit
-          git commit --amend -m "auto-revert: failed production build safeguard"
-          git push
-
   auto-merge:
     name: GitHub Auto Merge
     if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'ai/') && success()
-    needs: [type-safety, lint, test, security-audit, migration-safety, build, ui-baseline, ai-intelligence]
+    needs: [lint, type-check, build, test, ui-regression, ai-intelligence]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

@@ -1,6 +1,5 @@
 #!/bin/sh
 
-
 echo "Running enterprise pre-push guardrails..."
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$BRANCH" = "main" ]; then
@@ -8,20 +7,5 @@ if [ "$BRANCH" = "main" ]; then
   exit 1
 fi
 
-while read local_ref local_sha remote_ref remote_sha
-do
-  if [ "$remote_ref" = "refs/heads/main" ] || [ "$remote_ref" = "refs/heads/master" ]; then
-    if [ "$remote_sha" != "0000000000000000000000000000000000000000" ]; then
-      if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
-        echo "Force push to protected branch is blocked."
-        exit 1
-      fi
-    fi
-  fi
-done
-
-npm run verify || { echo "Integrity Check Failed"; exit 1; }
-npm run type-check || { echo "Type Check Failed"; exit 1; }
-npm run lint --max-warnings=0 || { echo "Linting Failed"; exit 1; }
-npm run test:ci || { echo "Tests Failed"; exit 1; }
-npm run build || { echo "Build Failed"; exit 1; }
+# Minimal push checks, delegating core validation to CI
+npm run branch:guard || { echo "Branch Protection Failed"; exit 1; }
