@@ -4,12 +4,12 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import {
     Users, ShieldCheck, Activity, Server, AlertTriangle,
-    Settings, UserPlus, FileText,
-    Globe
+    Settings, FileText,
+    Globe, ShieldAlert, LogOut
 } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/gradient-mesh';
-import { getSystemStats } from '../../services/admin.service';
-import type { SystemStats } from '../../services/admin.service';
+import { getSystemStats, getRevenueStats, getActiveSessions, getSecurityEvents } from '../../services/admin.service';
+import type { SystemStats, RevenueStat } from '../../services/admin.service';
 import { PremiumAreaChart } from '@/components/charts/premium-area-chart';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PredictiveInsights } from '@/components/ui/predictive-insights';
@@ -29,57 +29,70 @@ const SYSTEM_GROWTH_DATA: GrowthDataPoint[] = [
     { name: 'Jun', users: 4200 },
 ];
 
-const ADMIN_INSIGHTS_DATA = [
-    {
-        label: 'System Load',
-        value: '34%',
-        description: 'Server capacity is optimal. Peak load expected at 09:00 CAT.',
-        trend: 'neutral' as const, // Fixed: stable -> neutral
-        trendValue: 'Normal',
-        icon: Server,
-        variant: 'primary' as const
-    },
-    {
-        label: 'Security Alerts',
-        value: '0',
-        description: 'No active threats detected in the last 24 hours.',
-        trend: 'up' as const,
-        trendValue: 'Secure',
-        icon: ShieldCheck,
-        variant: 'secondary' as const
-    },
-    {
-        label: 'New Registrations',
-        value: '+128',
-        description: 'Doctor onboarding up by 15% this week.',
-        trend: 'up' as const,
-        trendValue: '+15%',
-        icon: UserPlus,
-        variant: 'accent' as const
-    }
-];
-
 export const AdminDashboard: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<SystemStats | null>(null);
+    const [revenueData, setRevenueData] = useState<RevenueStat[]>([]);
+    const [activeSessions, setActiveSessions] = useState(0);
+    const [securityAlerts, setSecurityAlerts] = useState(0);
 
-    // Fetch system statistics
+    // Fetch system statistics and new intelligence data
     useEffect(() => {
-        const fetchStats = async () => {
+        const fetchData = async () => {
             try {
-                const data = await getSystemStats();
-                setStats(data);
+                setLoading(true);
+                const [sysStats, revStats, sessions, events] = await Promise.all([
+                    getSystemStats(),
+                    getRevenueStats(),
+                    getActiveSessions(),
+                    getSecurityEvents()
+                ]);
+
+                setStats(sysStats);
+                setRevenueData(revStats);
+                setActiveSessions(sessions.length);
+                setSecurityAlerts(events.filter(e => e.is_suspicious).length);
             } catch (error) {
-                console.error('Error fetching system stats:', error);
+                console.error('Error fetching dashboard data:', error);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchStats();
+        fetchData();
     }, []);
+
+    const insightsData = [
+        {
+            label: 'System Load',
+            value: '34%',
+            description: 'Server capacity is optimal. Peak load expected at 09:00 CAT.',
+            trend: 'neutral' as const,
+            trendValue: 'Stable',
+            icon: Server,
+            variant: 'primary' as const
+        },
+        {
+            label: 'Security Shield',
+            value: securityAlerts > 0 ? securityAlerts.toString() : 'Active',
+            description: securityAlerts > 0 ? `${securityAlerts} suspicious events detected.` : 'No critical threats detected.',
+            trend: securityAlerts > 0 ? 'up' as const : 'neutral' as const,
+            trendValue: securityAlerts > 0 ? 'Alert' : 'Secure',
+            icon: ShieldCheck,
+            variant: securityAlerts > 0 ? 'accent' as const : 'secondary' as const
+        },
+        {
+            label: 'Active Sessions',
+            value: activeSessions.toString(),
+            description: 'Current authenticated institutional connections.',
+            trend: 'neutral' as const,
+            trendValue: 'Live',
+            icon: Activity,
+            variant: 'accent' as const
+        }
+    ];
 
     return (
         <div className="space-y-8">
@@ -110,15 +123,15 @@ export const AdminDashboard: React.FC = () => {
                             onClick={() => navigate(PATHS.ADMIN.USERS)}
                         >
                             <Users className="h-5 w-5" aria-hidden="true" />
-                            User Management
+                            User Registry
                         </Button>
                         <Button
                             size="lg"
                             className="bg-white/10 hover:bg-white/20 text-white border-none shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
-                            onClick={() => navigate(PATHS.SETTINGS)}
+                            onClick={() => navigate(PATHS.ADMIN.SECURITY)}
                         >
-                            <Settings className="h-5 w-5" aria-hidden="true" />
-                            System Config
+                            <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+                            Security Hub
                         </Button>
                     </div>
                 </div>
@@ -143,9 +156,9 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={Activity} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : (stats ? "99.9%" : "100%")}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : activeSessions}
                             </div>
-                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">System Uptime</div>
+                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Live Sessions</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -157,7 +170,7 @@ export const AdminDashboard: React.FC = () => {
                             <div className="text-3xl md:text-4xl font-bold text-foreground">
                                 {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.pending_verifications || "0"}
                             </div>
-                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Pending Alerts</div>
+                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Verification Queue</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
@@ -165,42 +178,66 @@ export const AdminDashboard: React.FC = () => {
 
             {/* Predictive Intelligence Section */}
             <TransitionItem>
-                <PredictiveInsights insights={ADMIN_INSIGHTS_DATA} />
+                <PredictiveInsights insights={insightsData} />
             </TransitionItem>
 
-            {/* Growth Analytics Visualization */}
-            <TransitionItem>
-                <PremiumAreaChart
-                    title="Platform Growth"
-                    description="New user registrations over the last 6 months"
-                    data={SYSTEM_GROWTH_DATA}
-                    dataKey="users"
-                    categoryKey="name"
-                    color="#6366f1" // Indigo-500
-                    valueSuffix=" users"
-                    height={350}
-                />
-            </TransitionItem>
+            {/* Growth & Revenue Analytics Visualization */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <TransitionItem>
+                    <PremiumAreaChart
+                        title="Platform Growth"
+                        description="New user registrations over the last 6 months"
+                        data={SYSTEM_GROWTH_DATA}
+                        dataKey="users"
+                        categoryKey="name"
+                        color="#148C8B" // Primary-700
+                        valueSuffix=" users"
+                        height={350}
+                    />
+                </TransitionItem>
+                <TransitionItem>
+                    <PremiumAreaChart
+                        title="Revenue Analytics"
+                        description="Monthly institutional revenue vs operating expenses"
+                        data={revenueData as unknown as Array<{ [key: string]: string | number | undefined }>}
+                        dataKey="revenue"
+                        categoryKey="name"
+                        color="#6366f1" // Indigo-500
+                        valueSuffix=" BWP"
+                        height={350}
+                    />
+                </TransitionItem>
+            </div>
 
             {/* Quick Actions Grid */}
             <TransitionItem>
-                <h2 className="text-xl font-bold mb-4 text-foreground">System Actions</h2>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                <h2 className="text-xl font-bold mb-4 text-foreground">Institutional Controls</h2>
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
                     {[
                         {
-                            icon: Settings,
-                            label: "Global Settings",
-                            sub: "Configure system",
-                            path: PATHS.SETTINGS,
-                            color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50 dark:text-slate-300",
-                            hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-400/80",
-                            hoverShadow: "hover:shadow-slate-500/10 dark:hover:shadow-slate-500/20",
-                            hoverText: "group-hover:text-slate-600 dark:group-hover:text-white"
+                            icon: ShieldAlert,
+                            label: "Security Hub",
+                            sub: "Monitor events",
+                            path: PATHS.ADMIN.SECURITY,
+                            color: "text-red-600 bg-red-50 dark:bg-red-900/40 dark:text-red-300",
+                            hoverBorder: "hover:border-red-500/50 dark:hover:border-red-400/80",
+                            hoverShadow: "hover:shadow-red-500/10 dark:hover:shadow-red-500/20",
+                            hoverText: "group-hover:text-red-600 dark:group-hover:text-red-200"
+                        },
+                        {
+                            icon: LogOut,
+                            label: "Sessions",
+                            sub: "Revoke tokens",
+                            path: PATHS.ADMIN.SESSIONS,
+                            color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40 dark:text-emerald-300",
+                            hoverBorder: "hover:border-emerald-500/50 dark:hover:border-emerald-400/80",
+                            hoverShadow: "hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20",
+                            hoverText: "group-hover:text-emerald-600 dark:group-hover:text-emerald-200"
                         },
                         {
                             icon: FileText,
                             label: "Audit Logs",
-                            sub: "View security events",
+                            sub: "Forensics",
                             path: PATHS.ADMIN.SYSTEM_LOGS,
                             color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/40 dark:text-indigo-300",
                             hoverBorder: "hover:border-indigo-500/50 dark:hover:border-indigo-400/80",
@@ -208,9 +245,19 @@ export const AdminDashboard: React.FC = () => {
                             hoverText: "group-hover:text-indigo-600 dark:group-hover:text-indigo-200"
                         },
                         {
+                            icon: Users,
+                            label: "User Registry",
+                            sub: "Manage accounts",
+                            path: PATHS.ADMIN.USERS,
+                            color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-900/40 dark:text-cyan-300",
+                            hoverBorder: "hover:border-cyan-500/50 dark:hover:border-cyan-400/80",
+                            hoverShadow: "hover:shadow-cyan-500/10 dark:hover:shadow-cyan-500/20",
+                            hoverText: "group-hover:text-cyan-600 dark:group-hover:text-cyan-200"
+                        },
+                        {
                             icon: ShieldCheck,
-                            label: "Verify Doctors",
-                            sub: "Pending Approvals",
+                            label: "Verification",
+                            sub: "Approve doctors",
                             path: PATHS.ADMIN.VERIFY_DOCTORS,
                             color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40 dark:text-emerald-300",
                             hoverBorder: "hover:border-emerald-500/50 dark:hover:border-emerald-400/80",
@@ -218,14 +265,14 @@ export const AdminDashboard: React.FC = () => {
                             hoverText: "group-hover:text-emerald-600 dark:group-hover:text-emerald-200"
                         },
                         {
-                            icon: Users,
-                            label: "User Registry",
-                            sub: "Manage all accounts",
-                            path: PATHS.ADMIN.USERS,
-                            color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-900/40 dark:text-cyan-300",
-                            hoverBorder: "hover:border-cyan-500/50 dark:hover:border-cyan-400/80",
-                            hoverShadow: "hover:shadow-cyan-500/10 dark:hover:shadow-cyan-500/20",
-                            hoverText: "group-hover:text-cyan-600 dark:group-hover:text-cyan-200"
+                            icon: Settings,
+                            label: "Config",
+                            sub: "System parameters",
+                            path: PATHS.SETTINGS,
+                            color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50 dark:text-slate-300",
+                            hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-400/80",
+                            hoverShadow: "hover:shadow-slate-500/10 dark:hover:shadow-slate-500/20",
+                            hoverText: "group-hover:text-slate-600 dark:group-hover:text-white"
                         },
                     ].map((action, idx) => (
                         <DashboardCard
@@ -235,11 +282,11 @@ export const AdminDashboard: React.FC = () => {
                             onClick={() => navigate(action.path)}
                         >
                             <div className={`p-3 rounded-full ${action.color} group-hover:scale-110 transition-transform duration-300`}>
-                                <action.icon className="h-6 w-6" />
+                                <action.icon className="h-5 w-5" />
                             </div>
                             <div className="flex flex-col items-center gap-0.5">
-                                <span className={`font-semibold text-slate-700 dark:text-slate-200 text-sm transition-colors ${action.hoverText}`}>{action.label}</span>
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wide">{action.sub}</span>
+                                <span className={`font-semibold text-slate-700 dark:text-slate-200 text-[11px] transition-colors ${action.hoverText}`}>{action.label}</span>
+                                <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-tight">{action.sub}</span>
                             </div>
                         </DashboardCard>
                     ))}
@@ -248,4 +295,3 @@ export const AdminDashboard: React.FC = () => {
         </div>
     );
 };
-

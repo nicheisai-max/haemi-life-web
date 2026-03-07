@@ -13,6 +13,39 @@ export interface AuditLog {
     user_email?: string;
 }
 
+export interface SecurityEvent {
+    id: string;
+    user_id: string | null;
+    user_name?: string;
+    user_email?: string;
+    event_type: string;
+    event_category: string | null;
+    event_severity: string | null;
+    ip_address: string | null;
+    is_suspicious: boolean;
+    created_at: string;
+}
+
+export interface UserSession {
+    id: string;
+    user_id: string;
+    user_name: string;
+    user_email: string;
+    user_role: string;
+    session_id: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    login_time: string;
+    last_activity_at: string | null;
+    is_active: boolean;
+}
+
+export interface RevenueStat {
+    name: string;
+    revenue: number;
+    expenses: number;
+}
+
 export interface UserListItem {
     id: number;
     name: string;
@@ -75,6 +108,26 @@ export const verifyDoctor = async (id: number, verified: boolean): Promise<{ mes
 
 export const getSystemStats = async (): Promise<SystemStats> => {
     const response = await api.get<SystemStats>('/admin/system-stats');
+    return response.data;
+};
+
+export const getSecurityEvents = async (limit = 50, offset = 0): Promise<SecurityEvent[]> => {
+    const response = await api.get<SecurityEvent[]>('/admin/security-events', { params: { limit, offset } });
+    return response.data;
+};
+
+export const getActiveSessions = async (limit = 50, offset = 0): Promise<UserSession[]> => {
+    const response = await api.get<UserSession[]>('/admin/active-sessions', { params: { limit, offset } });
+    return response.data;
+};
+
+export const revokeSession = async (sessionId: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.delete<{ success: boolean; message: string }>(`/admin/sessions/${sessionId}`);
+    return response.data;
+};
+
+export const getRevenueStats = async (): Promise<RevenueStat[]> => {
+    const response = await api.get<RevenueStat[]>('/admin/revenue-stats');
     return response.data;
 };
 

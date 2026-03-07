@@ -58,6 +58,8 @@ export const PATHS = {
         USERS: '/admin/users',
         VERIFY_DOCTORS: '/admin/verify-doctors',
         SYSTEM_LOGS: '/admin/logs',
+        SECURITY: '/admin/security',
+        SESSIONS: '/admin/sessions',
         // Legacy redirects
         DASHBOARD_LEGACY: '/admin/dashboard',
     },

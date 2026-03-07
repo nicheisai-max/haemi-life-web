@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { systemSettingsRepository } from '../repositories/system-settings.repository';
+import { securityRepository } from '../repositories/security.repository';
+import { analyticsRepository } from '../repositories/analytics.repository';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
 
@@ -247,5 +249,53 @@ export const updateSessionTimeout = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error updating session timeout:', error);
         sendError(res, 500, 'Error updating session timeout');
+    }
+};
+
+// Security and Observability (Admin only)
+export const getSecurityEvents = async (req: Request, res: Response) => {
+    try {
+        const { limit = 50, offset = 0 } = req.query;
+        const events = await securityRepository.getSecurityEvents(Number(limit), Number(offset));
+        res.json(events);
+    } catch (error) {
+        console.error('Error fetching security events:', error);
+        sendError(res, 500, 'Error fetching security events');
+    }
+};
+
+export const getActiveSessions = async (req: Request, res: Response) => {
+    try {
+        const { limit = 50, offset = 0 } = req.query;
+        const sessions = await securityRepository.getActiveSessions(Number(limit), Number(offset));
+        res.json(sessions);
+    } catch (error) {
+        console.error('Error fetching active sessions:', error);
+        sendError(res, 500, 'Error fetching active sessions');
+    }
+};
+
+export const revokeSession = async (req: Request, res: Response) => {
+    try {
+        const { sessionId } = req.params;
+        const success = await securityRepository.revokeSession(sessionId as string);
+        if (success) {
+            sendResponse(res, 200, true, 'Session revoked successfully');
+        } else {
+            sendError(res, 404, 'Session not found or already inactive');
+        }
+    } catch (error) {
+        console.error('Error revoking session:', error);
+        sendError(res, 500, 'Error revoking session');
+    }
+};
+
+export const getRevenueStats = async (req: Request, res: Response) => {
+    try {
+        const stats = await analyticsRepository.getRevenueStats();
+        res.json(stats);
+    } catch (error) {
+        console.error('Error fetching revenue stats:', error);
+        sendError(res, 500, 'Error fetching revenue stats');
     }
 };

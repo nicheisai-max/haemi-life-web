@@ -7,6 +7,12 @@ export interface GrowthStat {
     new_users: number;
 }
 
+export interface RevenueStat {
+    name: string;
+    revenue: number;
+    expenses: number;
+}
+
 export class AnalyticsRepository {
     private db: Pool;
 
@@ -22,6 +28,17 @@ export class AnalyticsRepository {
                 new_users
              FROM analytics_daily_visits 
              ORDER BY date ASC 
+             LIMIT $1`,
+            [limit]
+        );
+        return result.rows;
+    }
+
+    async getRevenueStats(limit: number = 6): Promise<RevenueStat[]> {
+        const result = await this.db.query(
+            `SELECT month as name, revenue, expenses
+             FROM revenue_stats 
+             ORDER BY created_at ASC 
              LIMIT $1`,
             [limit]
         );
