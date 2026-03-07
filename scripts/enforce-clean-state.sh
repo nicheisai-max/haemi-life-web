@@ -1,53 +1,44 @@
 #!/bin/bash
 
-echo "----- CLEAN STATE ENFORCEMENT START -----"
+echo "----- DETERMINISTIC STATE ENFORCEMENT START -----"
 
-echo "Switching to main branch"
-git checkout main || git checkout -f main
-
-echo "Fetching remote"
-git fetch origin
-
-echo "Hard resetting to origin/main"
-git reset --hard origin/main
-
-echo "Cleaning working tree"
-git clean -fd
-
-echo "Removing local sandbox branches"
-for branch in $(git branch | grep "ai/sandbox-"); do
-  git branch -D $branch || true
-done
-
-echo "Removing remote sandbox branches"
-for branch in $(git branch -r | grep "origin/ai/sandbox-" | sed 's/origin\///'); do
-  git push origin --delete $branch || true
-done
-
-echo "Pruning remote references"
-git fetch --prune
-
-echo "Final sync"
-git checkout main
-git fetch origin
+# Switch to main and pull latest
+git checkout -f main
+git fetch origin --prune
 git reset --hard origin/main
 git clean -fd
 
-echo "Verification"
+# List and delete all local sandbox branches
+local_sandboxes=$(git branch --list "ai/sandbox-*")
+if [ -n "$local_sandboxes" ]; then
+  for branch in $local_sandboxes; do
+    git branch -D "${branch#* }" || true
+  done
+fi
 
+# List and delete all remote sandbox branches
+remote_sandboxes=$(git branch -r --list "origin/ai/sandbox-*")
+if [ -n "$remote_sandboxes" ]; then
+  for branch in $remote_sandboxes; do
+    clean_branch=$(echo "$branch" | sed 's/origin\///')
+    git push origin --delete "$clean_branch" || true
+  done
+fi
+
+# Final deterministic reset
+git fetch origin --prune
+git reset --hard origin/main
+git clean -fd
+
+# Validation
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 STATUS=$(git status --porcelain)
+SANDBOX_COUNT=$(git branch --list "ai/sandbox-*" | wc -l)
 
-if [ "$CURRENT_BRANCH" != "main" ]; then
-  echo "ERROR: Branch is not main"
+if [ "$CURRENT_BRANCH" != "main" ] || [ -n "$STATUS" ] || [ "$SANDBOX_COUNT" -gt 0 ]; then
+  echo "❌ STATE ENFORCEMENT FAILED"
   exit 1
 fi
 
-if [ -n "$STATUS" ]; then
-  echo "ERROR: Working tree not clean"
-  exit 1
-fi
-
-echo "Repository clean and synchronized"
-
-echo "----- CLEAN STATE ENFORCEMENT COMPLETE -----"
+echo "✅ REPOSITORY STATE DETERMINISTIC: main"
+echo "----- DETERMINISTIC STATE ENFORCEMENT COMPLETE -----"
