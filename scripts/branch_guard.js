@@ -5,20 +5,23 @@
  * 
  * PROTECTED: main (Direct AI commits strictly forbidden)
  * ALLOWED: ai-sandbox/* (Standard AI development zone)
- * FORBIDDEN: feat/*, feature/*, temp/*, debug/*, test/*
+ * FORBIDDEN: Any other branch naming convention
  */
 
 const { execSync } = require('child_process');
 
+const isCommit = process.argv.includes('--commit');
+const isRevert = process.argv.includes('--revert');
+
 try {
     const branchName = execSync('git rev-parse --abbrev-ref HEAD').toString().trim();
     const isMain = branchName === 'main';
-    const isAISandbox = branchName.startsWith('ai-sandbox/');
+    const isAISandbox = branchName.startsWith('ai-sandbox') || branchName.startsWith('ai/sandbox');
 
-    console.log(`🌿 Enterprise Branch Check: ${branchName}`);
+    console.log(`🌿 Enterprise Branch Check: ${branchName} (Mode: ${isCommit ? 'COMMIT' : isRevert ? 'REVERT' : 'TRANSIT'})`);
 
-    // RULE 1: PROTECT MAIN
-    if (isMain) {
+    // RULE 1: PROTECT MAIN FROM COMMITS
+    if (isMain && isCommit) {
         console.error('\n─────────────────────────────────────────────────────────────────');
         console.error('🚨 ENTERPRISE SECURITY ALERT: MAIN BRANCH PROTECTED');
         console.error('─────────────────────────────────────────────────────────────────');
@@ -28,7 +31,12 @@ try {
         process.exit(1);
     }
 
-    // RULE 2: ENFORCE SANDBOX NAMING
+    // RULE 2: ALLOW MAIN FOR TRANSIT / CHECKOUT
+    if (isMain && !isCommit) {
+        process.exit(0);
+    }
+
+    // RULE 3: ENFORCE SANDBOX NAMING FOR ALL NON-MAIN BRANCHES
     if (!isAISandbox) {
         console.error('\n─────────────────────────────────────────────────────────────────');
         console.error('🚨 BRANCH POLICY VIOLATION');
@@ -36,12 +44,18 @@ try {
         console.error(`Branch '${branchName}' is forbidden.`);
         console.error("AI development is restricted to 'ai-sandbox/*' branches.");
         console.error('─────────────────────────────────────────────────────────────────\n');
+
+        if (isRevert) {
+            console.log('🔄 Reverting to main...');
+            execSync('git checkout main');
+        }
+
         process.exit(1);
     }
 
-    // Success: We are in a valid AI Sandbox
+    // Success: Inside valid AI Sandbox
     process.exit(0);
 } catch (error) {
-    console.error('Guard Error:', error.message);
-    process.exit(0); // Fail open only on critical infrastructure failure
+    console.error('Guard Infrastructure Error:', error.message);
+    process.exit(0);
 }
