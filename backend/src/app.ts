@@ -15,6 +15,7 @@ import { errorHandler } from './middleware/error.middleware';
 import { authLimiter, apiLimiter } from './middleware/rate-limit.middleware';
 import { logger } from './utils/logger';
 import { pool, checkConnection } from './config/db';
+import { chatReliabilityService } from './services/chat-reliability.service';
 import { env } from './config/env';
 
 // Routes
@@ -235,13 +236,34 @@ function setupSockets(io: Server) {
         socket.join(`user:${userId}`);
         logger.info(`Socket: ${socket.id} user:${userId}`);
 
-        // Chat events — canonical protocol: room = conversation:{id}, join = join_conversation
-        socket.on('join_conversation', (conversationId: string) => socket.join(`conversation:${conversationId}`));
-        socket.on('mark_read', (data: { conversationId: string; user_id: string }) => {
-            if (io) io.to(`conversation:${data.conversationId}`).emit('messages_read', data);
+        // ENTERPRISE HARDENING: Standardized Event Listeners
+        socket.on('join_conversation', (conversationId: string) => {
+            // We still join rooms for specialized low-latency events if needed, 
+            // but message flow is now O(1) via user streams.
+            socket.join(`conversation:${conversationId}`);
         });
-        socket.on('typing', (data: { conversationId: string; name: string }) => {
-            socket.to(`conversation:${data.conversationId}`).emit('user_typing', data);
+
+        socket.on('ack_read', async (data: { conversationId: string; user_id: string }) => {
+            // This is the trigger for read receipts
+            if (io) {
+                const participantIds = await chatReliabilityService.getParticipants(data.conversationId);
+
+                // Optimized: Only the original sender(s) in the conversation should receive message_read updates.
+                // For simplicity in a 1:1 or small group, we exclude the reader (data.user_id) 
+                // ensuring only the peers get the update.
+                participantIds.filter((pid: string) => pid !== data.user_id).forEach((pid: string) => {
+                    io!.to(`user:${pid}`).emit('message_read', data);
+                });
+            }
+        });
+
+        // Ephemeral Typing Stream (Lightweight)
+        socket.on('typing_started', (data: { conversationId: string; name: string }) => {
+            socket.to(`conversation:${data.conversationId}`).emit('typing_started', data);
+        });
+
+        socket.on('typing_stopped', (data: { conversationId: string; name: string }) => {
+            socket.to(`conversation:${data.conversationId}`).emit('typing_stopped', data);
         });
 
         // WebRTC hooks

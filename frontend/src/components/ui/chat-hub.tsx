@@ -967,7 +967,7 @@ export const ChatHub: React.FC = () => {
                                     </div>
 
                                     {/* Input Area - Sticky Bottom with Reply Preview */}
-                                    <div className="p-3 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 shrink-0 z-10 w-full relative">
+                                    <div className="chat-footer p-3 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 shrink-0 z-10 w-full relative">
                                         <AnimatePresence>
                                             {replyingTo && (
                                                 <motion.div
@@ -996,7 +996,7 @@ export const ChatHub: React.FC = () => {
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
-                                        <div className="flex items-end gap-2">
+                                        <div className="chat-footer-row flex items-end gap-2">
                                             <input
                                                 type="file"
                                                 id="chat-attach-input"
@@ -1012,28 +1012,26 @@ export const ChatHub: React.FC = () => {
                                             <Button
                                                 size="icon"
                                                 variant="ghost"
-                                                className="h-10 w-10 shrink-0 rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
+                                                className="chat-attachment-button h-10 w-10 shrink-0 rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
                                                 onClick={() => document.getElementById('chat-attach-input')?.click()}
                                             >
                                                 <Paperclip className="h-5 w-5 rotate-45" />
                                             </Button>
 
-                                            <div className="flex-1 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 flex items-center min-h-[44px] px-4 py-2 transition-all">
-                                                <input
-                                                    ref={inputRef}
-                                                    className="w-full bg-transparent border-none focus:ring-0 outline-none pl-4 text-slate-900 dark:text-white placeholder-slate-400 text-sm max-h-24 resize-none leading-relaxed"
-                                                    placeholder="Type a message..."
-                                                    value={newMessage}
-                                                    onChange={(e) => setNewMessage(e.target.value)}
-                                                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
-                                                />
-                                            </div>
+                                            <input
+                                                ref={inputRef}
+                                                className="chat-input flex-1 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 px-6 py-2.5 text-slate-900 dark:text-white placeholder-slate-400 text-sm outline-none transition-all focus:border-teal-600 dark:focus:border-teal-500 focus:ring-1 focus:ring-teal-600/20"
+                                                placeholder="Type a message..."
+                                                value={newMessage}
+                                                onChange={(e) => setNewMessage(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
+                                            />
 
                                             <Button
                                                 size="icon"
                                                 onClick={handleSendMessage}
                                                 disabled={!newMessage.trim()}
-                                                className={`h-10 w-10 shrink-0 rounded-full shadow-md transition-all ${newMessage.trim()
+                                                className={`chat-send-button h-10 w-10 shrink-0 rounded-full shadow-md transition-all ${newMessage.trim()
                                                     ? 'bg-teal-600 hover:bg-teal-700 text-white scale-100'
                                                     : 'bg-slate-100 dark:bg-slate-800 text-slate-300 scale-95'
                                                     }`}

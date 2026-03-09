@@ -65,8 +65,8 @@ export const PremiumBarChart: React.FC<PremiumBarChartProps> = ({
                 {description && <CardDescription>{description}</CardDescription>}
             </CardHeader>
             <CardContent>
-                <div style={{ width: '100%', height: height }}>
-                    <ResponsiveContainer>
+                <div style={{ width: '100%', height: height, minHeight: '300px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                             data={data}
                             margin={{

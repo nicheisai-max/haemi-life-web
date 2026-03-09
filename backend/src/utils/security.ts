@@ -80,9 +80,19 @@ export const decrypt = (text: string): string => {
         }
 
         return result;
-    } catch (error) {
+    } catch (err: unknown) {
+        const error = err as Error;
         console.error('[Security] Decryption failed (Mode mismatch or key error):', error);
-        return text;
+
+        // STRICT MODE: Return informative placeholder instead of silent fail
+        if (error.message && error.message.includes('auth tag')) {
+            return `[DECRYPTION_ERROR: AUTH_TAG_MISMATCH]`;
+        }
+        if (error.message && error.message.includes('bad decrypt')) {
+            return `[DECRYPTION_ERROR: BAD_DECRYPT]`;
+        }
+
+        return `[DECRYPTION_FAILED: ${error.message}]`;
     }
 };
 

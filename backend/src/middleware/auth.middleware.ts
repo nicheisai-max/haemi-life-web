@@ -57,6 +57,30 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                 return sendError(res, 401, 'Session expired due to inactivity. Please log in again.');
             }
 
+            // PHASE 1: JTI & Session Validation
+            if (payload.jti && payload.session_id) {
+                const sessionResult = await pool.query(
+                    'SELECT revoked, access_token_jti FROM user_sessions WHERE session_id = $1',
+                    [payload.session_id]
+                );
+
+                if (sessionResult.rows.length === 0 || sessionResult.rows[0].revoked) {
+                    return sendError(res, 401, 'Session revoked or invalid. Please log in again.');
+                }
+
+                if (sessionResult.rows[0].access_token_jti !== payload.jti) {
+                    // This handles cases where a new access token was issued (e.g. via refresh) 
+                    // and the old one is being reused.
+                    return sendError(res, 401, 'Token replaced by new session. Please log in again.');
+                }
+
+                // Heartbeat: Update session last_activity
+                await pool.query(
+                    'UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP WHERE session_id = $1',
+                    [payload.session_id]
+                );
+            }
+
             await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [payload.id]);
 
             req.user = {
@@ -118,6 +142,16 @@ export const relaxedAuthenticateToken = (req: Request, res: Response, next: Next
             const timeoutMinutes = 60;
             if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
                 return next();
+            }
+
+            // Relaxed JTI check
+            if (payload.jti && payload.session_id) {
+                const sessionResult = await pool.query(
+                    'SELECT revoked, access_token_jti FROM user_sessions WHERE session_id = $1',
+                    [payload.session_id]
+                );
+                if (sessionResult.rows.length === 0 || sessionResult.rows[0].revoked) return next();
+                if (sessionResult.rows[0].access_token_jti !== payload.jti) return next();
             }
 
             req.user = {

@@ -4,3 +4,11 @@ dist/
 coverage/
 *.log
 src/**/*.js
+
+# Database Backups & Safety
+database_backups/
+*.dump
+*.sql
+*.backup
+migration_helper.js
+temp_migration_*

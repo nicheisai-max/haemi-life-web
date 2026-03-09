@@ -1,12 +1,14 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { io } from '../app';
+import { chatReliabilityService } from '../services/chat-reliability.service';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { encrypt, decrypt } from '../utils/security';
 import { notificationService } from '../services/notification.service';
 import { sendError } from '../utils/response';
+import crypto from 'crypto';
 // Configure Multer Storage (Centralized Memory Storage preferred for Bytea)
 const storage = multer.memoryStorage();
 
@@ -68,12 +70,12 @@ export const getConversations = async (req: Request, res: Response) => {
                 c.updated_at,
                 c.last_message_at,
                 (
-                    SELECT content 
+                    SELECT preview_text 
                     FROM messages m 
                     WHERE m.conversation_id = c.id 
                     ORDER BY m.created_at DESC 
                     LIMIT 1
-                ) as last_message,
+                ) as last_message, -- Plaintext preview
                 (
                     SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role, 'initials', u.initials, 'profile_image', u.profile_image))
                     FROM conversation_participants cp2
@@ -97,11 +99,8 @@ export const getConversations = async (req: Request, res: Response) => {
             [userId]
         );
 
-        // Decrypt last message content if present
-        const conversations = result.rows.map(conv => ({
-            ...conv,
-            last_message: conv.last_message ? decrypt(conv.last_message) : null
-        }));
+        // Plaintext previews are now stored in DB, no decryption needed for performance
+        const conversations = result.rows;
 
         res.json(conversations);
     } catch (error) {
@@ -224,16 +223,19 @@ export const sendMessage = async (req: Request, res: Response) => {
         // E2EE: Only encrypt if not already encrypted by the client
         const encryptedContent = (content && !content.startsWith('enc:')) ? encrypt(content) : content;
 
-        // Decrypt for preview (plaintext in notifications table)
-        const previewContent = content && content.startsWith('enc:') ? decrypt(content) : content;
+        // PHASE 3: Plaintext preview for UI (Meta-style)
+        // If content is already encrypted (starts with enc:), we decrypt once to get preview
+        const decodedPreview = (content && content.startsWith('enc:')) ? decrypt(content) : content;
+
+        const sequenceNumber = await chatReliabilityService.getNextSequence(conversationId);
 
         const msgResult = await client.query(
             `
-            INSERT INTO messages (conversation_id, sender_id, content, message_type, reply_to_id, status)
-            VALUES ($1, $2, $3, $4, $5, 'sent')
+            INSERT INTO messages (conversation_id, sender_id, content, preview_text, message_type, reply_to_id, status, sequence_number)
+            VALUES ($1, $2, $3, $4, $5, $6, 'sent', $7)
             RETURNING *
             `,
-            [conversationId, senderId, encryptedContent, messageType, req.body.replyToId]
+            [conversationId, senderId, encryptedContent, decodedPreview, messageType, req.body.replyToId, sequenceNumber]
         );
 
         const newMessage = msgResult.rows[0];
@@ -318,21 +320,30 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         const senderName = user.name || 'Someone';
 
-        // Emit socket event to room (conversationId)
+        // Emit socket event to room (conversationId) for active UI sync
+        // AND emit to each participant's personal room for global widget/badge sync
+        // ENTERPRISE HARDENING: Standardized Event Emission
+        const socketPayload = {
+            ...newMessage,
+            sender_name: senderName,
+            attachments: (attachment && attachment.url) ? [
+                {
+                    url: `/api/files/message/${newMessage.id}`,
+                    type: attachment?.type || 'attachment',
+                    size: 0,
+                    name: attachment?.originalName || 'attachment'
+                }
+            ] : []
+        };
+
+        // Standardized Enterprise Event: message_received
+        // Emitted exclusively to participant user streams to prevent duplication
         if (io) {
-            const socketPayload = {
-                ...newMessage,
-                sender_name: senderName,
-                attachments: (attachment && attachment.url) ? [
-                    {
-                        url: `/api/files/message/${newMessage.id}`,
-                        type: attachment?.type || 'attachment',
-                        size: 0,
-                        name: attachment?.originalName || 'attachment'
-                    }
-                ] : []
-            };
-            io.to(`conversation:${conversationId}`).emit('receive_message', socketPayload);
+            const participantIds = await chatReliabilityService.getParticipants(conversationId);
+
+            participantIds.forEach(pid => {
+                io!.to(`user:${pid}`).emit('message_received', socketPayload);
+            });
         }
 
         // Emit real-time notification to all other participants in this conversation
@@ -344,7 +355,7 @@ export const sendMessage = async (req: Request, res: Response) => {
             // P1 FIX: Definitive decryption for notification previews
             let previewText = '📎 Attachment';
             if (content) {
-                previewText = (previewContent.length > 100) ? previewContent.substring(0, 100) + '...' : previewContent;
+                previewText = (decodedPreview.length > 100) ? decodedPreview.substring(0, 100) + '...' : decodedPreview;
             }
 
             for (const row of participantsResult.rows) {
@@ -377,29 +388,26 @@ export const startConversation = async (req: Request, res: Response) => {
     const userId = user.id;
     const { participantId } = req.body;
 
+    // PHASE 4: Deterministic Identity (participants_hash)
+    // Create hash by sorting IDs: e.g. "uuid1:uuid2"
+    const hash = [userId, participantId].sort().join(':');
+    const participantsHash = crypto.createHash('sha256').update(hash).digest('hex');
+
     try {
-        // Check if conversation already exists between these two
-        // precise logic: find a conversation where BOTH are participants and count of participants is 2 (for 1-on-1)
+        // Check if conversation already exists using participants_hash
         const existing = await pool.query(
-            `
-            SELECT c.id 
-            FROM conversations c
-            JOIN conversation_participants cp1 ON c.id = cp1.conversation_id
-            JOIN conversation_participants cp2 ON c.id = cp2.conversation_id
-            WHERE cp1.user_id = $1 AND cp2.user_id = $2
-            GROUP BY c.id
-            HAVING COUNT(DISTINCT cp1.user_id) = 2 -- simplified check
-            `,
-            [userId, participantId]
+            'SELECT id FROM conversations WHERE participants_hash = $1',
+            [participantsHash]
         );
 
         if (existing.rows.length > 0) {
             return res.json({ conversationId: existing.rows[0].id });
         }
 
-        // Create new conversation
+        // Create new conversation with hash
         const conversationResult = await pool.query(
-            'INSERT INTO conversations DEFAULT VALUES RETURNING id'
+            'INSERT INTO conversations (participants_hash) VALUES ($1) RETURNING id',
+            [participantsHash]
         );
         const conversationId = conversationResult.rows[0].id;
 
@@ -435,11 +443,17 @@ export const markAsDelivered = async (req: Request, res: Response) => {
         );
 
         if (result.rows.length > 0 && io) {
-            // Notify the sender(s) that their messages were delivered
-            io.to(`conversation:${conversationId}`).emit('messages_delivered', {
-                conversation_id: conversationId,
+            const payload = {
+                conversationId,
                 receiver_id: userId,
-                message_ids: result.rows.map(r => r.id)
+                messageIds: result.rows.map(r => r.id),
+                status: 'delivered'
+            };
+
+            // Targeted Read Receipt Optimization: Notify original senders only
+            const senderIds = [...new Set(result.rows.map(r => r.sender_id))];
+            senderIds.forEach(sid => {
+                io!.to(`user:${sid}`).emit('message_delivered', payload);
             });
         }
 
@@ -469,11 +483,17 @@ export const markAsRead = async (req: Request, res: Response) => {
         );
 
         if (result.rows.length > 0 && io) {
-            // Notify the sender(s) that their messages were read
-            io.to(`conversation:${conversationId}`).emit('messages_read', {
-                conversation_id: conversationId,
-                receiver_id: userId,
-                message_ids: result.rows.map(r => r.id)
+            const payload = {
+                conversationId,
+                user_id: userId,
+                messageIds: result.rows.map(r => r.id),
+                status: 'read'
+            };
+
+            // Targeted Read Receipt Optimization: Notify original senders only
+            const senderIds = [...new Set(result.rows.map(r => r.sender_id))];
+            senderIds.forEach(sid => {
+                io!.to(`user:${sid}`).emit('message_read', payload);
             });
         }
 
@@ -519,7 +539,11 @@ export const reactToMessage = async (req: Request, res: Response) => {
                 'DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND reaction_type = $3',
                 [messageId, userId, reactionType]
             );
-            if (io) io.to(`conversation:${conversationId}`).emit('message_reaction', { messageId, userId, reactionType, action: 'removed' });
+            if (io) {
+                const payload = { messageId, userId, reactionType, action: 'removed' };
+                const participantIds = await chatReliabilityService.getParticipants(conversationId);
+                participantIds.forEach(pid => io!.to(`user:${pid}`).emit('message_reaction', payload));
+            }
         } else {
             // TOGGLE: Add or update (one reaction per user per message - if they want to switch, we delete all then add)
             // But requirement says "Allow user to change reaction", let's clear existing and add new
@@ -528,7 +552,11 @@ export const reactToMessage = async (req: Request, res: Response) => {
                 'INSERT INTO message_reactions (message_id, user_id, reaction_type) VALUES ($1, $2, $3)',
                 [messageId, userId, reactionType]
             );
-            if (io) io.to(`conversation:${conversationId}`).emit('message_reaction', { messageId, userId, reactionType, action: 'added' });
+            if (io) {
+                const payload = { messageId, userId, reactionType, action: 'added' };
+                const participantIds = await chatReliabilityService.getParticipants(conversationId);
+                participantIds.forEach(pid => io!.to(`user:${pid}`).emit('message_reaction', payload));
+            }
         }
 
         res.sendStatus(200);
@@ -586,7 +614,11 @@ export const deleteMessage = async (req: Request, res: Response) => {
             await pool.query('DELETE FROM messages WHERE id = $1', [messageId]);
 
 
-            if (io) io.to(`conversation:${conversationId}`).emit('message_deleted', { messageId, forEveryone: true });
+            if (io) {
+                const payload = { messageId, forEveryone: true };
+                const participantIds = await chatReliabilityService.getParticipants(conversationId);
+                participantIds.forEach(pid => io!.to(`user:${pid}`).emit('message_deleted', payload));
+            }
         } else {
             // Delete for me
             await pool.query(
@@ -599,6 +631,47 @@ export const deleteMessage = async (req: Request, res: Response) => {
         res.sendStatus(200);
     } catch (error) {
         console.error('Error deleting message:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Sync Chat (Offline Recovery)
+export const syncChat = async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+    const { since } = req.query; // ISO timestamp
+
+    try {
+        if (!since) return res.status(400).json({ message: 'Since timestamp required' });
+
+        const syncQuery = `
+            SELECT m.*, 
+                   u.name as sender_name, u.role as sender_role,
+                   rm.content as reply_content, rm.sender_id as reply_sender_id
+            FROM messages m
+            JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
+            LEFT JOIN users u ON m.sender_id = u.id
+            LEFT JOIN messages rm ON m.reply_to_id = rm.id
+            WHERE cp.user_id = $1 
+              AND m.created_at > $2
+            ORDER BY m.created_at ASC
+        `;
+
+        const result = await pool.query(syncQuery, [user.id, since]);
+
+        const formatted = result.rows.map(row => ({
+            ...row,
+            content: row.content, // Client handles decryption
+            reply_to: row.reply_to_id ? {
+                id: row.reply_to_id,
+                content: row.reply_content,
+                sender_id: row.reply_sender_id
+            } : undefined
+        }));
+
+        res.json(formatted);
+    } catch (error) {
+        console.error('Error syncing chat:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

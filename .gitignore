@@ -81,6 +81,7 @@ frontend/tsc_errors.txt
 # Enterprise Governance
 /backups/
 /backend/backups/
+/database_backups/
 *.sql
 *.dump
 
