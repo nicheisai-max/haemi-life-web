@@ -8,6 +8,8 @@ function runCmd(cmd: string): string {
     }
 }
 
+const SANDBOX_REGEX = /^ai[-/]sandbox/i;
+
 console.log('🧹 Starting Sandbox Lifecycle Cleanup...');
 
 // 1. Fetch latest remote state
