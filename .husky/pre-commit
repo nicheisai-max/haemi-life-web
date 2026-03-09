@@ -1,10 +1,6 @@
 #!/bin/sh
 
 echo "Running enterprise pre-commit guardrails..."
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [ "$BRANCH" = "main" ]; then
-  echo "ERROR: Direct commits to the main branch are forbidden. Use sandbox branches."
-  exit 1
-fi
+node scripts/branch_guard.js || exit 1
 
 npx lint-staged || { echo "Lint Staged Failed"; exit 1; }

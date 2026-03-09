@@ -1,5 +1,8 @@
 #!/bin/sh
 
-echo "Running enterprise post-checkout branch cleanup..."
+echo "Running enterprise post-checkout branch governance check..."
+
+# Enforce Sandbox Policy: Revert to main if forbidden branch is checked out
+node scripts/branch_guard.js --revert || exit 1
 
 node scripts/git-prune-check.js || echo "Warning: Orphan branch check failed."
