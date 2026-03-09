@@ -282,7 +282,6 @@
     @apply border-primary ring-1 ring-primary/20;
     box-shadow: 0 0 0 1px var(--primary) !important;
   }
-
 }
 
 @layer utilities {
@@ -388,7 +387,7 @@
      - Trustworthy elevation (2px)
      - Clinical diffused shadows
      - Opaque background for stability
-  */
+     */
   .interactive-card {
     @apply relative bg-card transition-all duration-[var(--duration-hover)] ease-[var(--ease-premium)] z-0;
     border: 1px solid var(--border) !important;
@@ -658,8 +657,135 @@
     animation: badge-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
 
-  /* Chat Floating Widget Glow */
   .chat-widget-pulse {
     @apply absolute inline-flex h-full w-full rounded-full animate-ping bg-teal-400 opacity-20 duration-1000;
+  }
+
+  /* 
+     HAEMI LIFE | CHAT FOOTER VISUAL CONTRACT (REFINED)
+     Contract: [LEFT: Attach] [CENTER: Input] [RIGHT: Send]
+     Strictly follows Brand Style Guide 2.0
+  */
+  .chat-footer {
+    display: flex;
+    flex-direction: column;
+    background-color: transparent;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    position: relative;
+    z-index: 10;
+  }
+
+  /* Horizontal layout contract enforcement */
+  .chat-footer .chat-footer-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  /* --- Attachment Button (Circular High-Contrast) --- */
+  .chat-attachment-button {
+    flex: 0 0 2.5rem;
+    height: 2.5rem;
+    width: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    /* Light Theme Foundation */
+    background-color: var(--secondary);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: all var(--duration-hover) var(--ease-premium);
+    border: none;
+  }
+
+  .chat-attachment-button:hover {
+    color: var(--primary);
+    background-color: #E2E8F0;
+    /* Gray-200 */
+    transform: scale(1.05);
+  }
+
+  /* --- Message Input (Refined Single Surface) --- */
+  .chat-input {
+    flex: 1 1 auto;
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 1.5rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    color: var(--foreground);
+    line-height: 1.5;
+    outline: none;
+    transition: all var(--duration-fast) var(--ease-premium);
+  }
+
+  .chat-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary);
+  }
+
+  /* --- Send Button (Dual-State Circular) --- */
+  .chat-send-button {
+    flex: 0 0 2.5rem;
+    height: 2.5rem;
+    width: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all var(--duration-hover) var(--ease-premium);
+    border: none;
+    cursor: pointer;
+  }
+
+  /* Inactive State */
+  .chat-send-button:disabled {
+    background-color: var(--secondary);
+    color: var(--muted-foreground);
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  /* Active State */
+  .chat-send-button:not(:disabled) {
+    background: var(--primary-gradient);
+    color: #FFFFFF;
+    box-shadow: 0 4px 10px rgba(20, 140, 139, 0.2);
+  }
+
+  .chat-send-button:not(:disabled):hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 15px rgba(20, 140, 139, 0.3);
+    filter: brightness(1.05);
+  }
+
+  /* --- Dark Theme Compatibility --- */
+  .dark .chat-attachment-button {
+    background-color: #0F1C1F;
+    /* Dark-Surface */
+    color: #A7E6DB;
+    /* Primary-300 tint */
+  }
+
+  .dark .chat-attachment-button:hover {
+    background-color: #14262A;
+    /* Dark-Card */
+    color: #3FC2B5;
+    /* Primary-500 */
+  }
+
+  .dark .chat-input {
+    background-color: #0F1C1F;
+    border-color: #1F3B40;
+    /* Dark-Border */
+  }
+
+  .dark .chat-send-button:disabled {
+    background-color: #14262A;
+    color: #475569;
   }
 }

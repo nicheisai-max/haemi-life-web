@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.middleware';
-import { getConversations, getMessages, sendMessage, startConversation, markAsRead, uploadAttachment, upload, reactToMessage, deleteMessage, markAsDelivered } from '../controllers/chat.controller';
+import { getConversations, getMessages, sendMessage, startConversation, markAsRead, uploadAttachment, upload, reactToMessage, deleteMessage, markAsDelivered, syncChat } from '../controllers/chat.controller';
 
 const router = Router();
 
 // Retrieve all conversations for the user
 router.get('/conversations', authenticateToken, getConversations);
+
+// Sync Chat (Offline Recovery)
+router.get('/sync', authenticateToken, syncChat);
 
 // Retrieve messages for a conversation
 router.get('/messages/:conversationId', authenticateToken, getMessages);

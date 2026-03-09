@@ -8,6 +8,8 @@ export interface JWTPayload {
     profile_image?: string;
     profile_image_mime?: string;
     status?: string;
+    jti?: string;
+    session_id?: string;
 }
 
 import { Socket } from 'socket.io';

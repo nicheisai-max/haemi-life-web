@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import { auditService } from '../services/audit.service';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
+import crypto from 'crypto';
 
 export const signup = async (req: Request, res: Response) => {
     const { email, password, role, name, phone_number, id_number } = req.body;
@@ -42,19 +43,53 @@ export const signup = async (req: Request, res: Response) => {
 
             await client.query('COMMIT');
 
+            // PHASE 1: Persistent Session record
+            const sessionId = crypto.randomUUID();
+            const accessJti = crypto.randomBytes(16).toString('hex');
+            const refreshJti = crypto.randomBytes(16).toString('hex');
+
+            await pool.query(
+                `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, device_type)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], 'web']
+            );
+
             // Generate Access Token (15m)
             const accessToken = jwt.sign(
-                { id: newUser.id, email: newUser.email, role: newUser.role, token_version: newUser.token_version },
+                {
+                    id: newUser.id,
+                    email: newUser.email,
+                    role: newUser.role,
+                    token_version: newUser.token_version,
+                    jti: accessJti,
+                    session_id: sessionId
+                },
                 process.env.JWT_SECRET as string,
                 { expiresIn: '15m' }
             );
 
             // Generate Refresh Token (7d)
             const refreshToken = jwt.sign(
-                { id: newUser.id, token_version: newUser.token_version },
+                {
+                    id: newUser.id,
+                    token_version: newUser.token_version,
+                    jti: refreshJti,
+                    session_id: sessionId
+                },
                 process.env.JWT_SECRET as string,
                 { expiresIn: '7d' }
             );
+
+            // Audit
+            await auditService.log({
+                actor_id: newUser.id,
+                action_type: 'SIGNUP_SUCCESS',
+                ip_address: req.ip,
+                user_agent: req.headers['user-agent'] as string,
+                session_id: sessionId,
+                access_token_jti: accessJti,
+                refresh_token_jti: refreshJti
+            });
 
             /* 
                PATCH: Removing cookie-based refresh token for multi-tab isolation.
@@ -142,19 +177,34 @@ export const login = async (req: Request, res: Response) => {
             return sendError(res, 400, 'Invalid credentials', 'INVALID_CREDENTIALS');
         }
 
+        // Update last_activity directly so the middleware doesn't instantly invalidate the new session
+        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+
+        // Generate Session Identity
+        const sessionId = crypto.randomUUID();
+        const accessJti = crypto.randomBytes(16).toString('hex');
+        const refreshJti = crypto.randomBytes(16).toString('hex');
+
+        // Persistent Session record
+        await pool.query(
+            `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, device_type)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [user.id, user.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], 'web']
+        );
+
         // Audit Successful Login
         await auditService.log({
             actor_id: user.id,
             actor_role: user.role,
             action_type: 'LOGIN_SUCCESS',
             ip_address: req.ip,
-            user_agent: req.headers['user-agent']
+            user_agent: req.headers['user-agent'] as string,
+            session_id: sessionId,
+            access_token_jti: accessJti,
+            refresh_token_jti: refreshJti
         });
 
         logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
-
-        // Update last_activity directly so the middleware doesn't instantly invalidate the new session
-        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
         // Generate Access Token (15m)
         const accessToken = jwt.sign(
@@ -162,7 +212,9 @@ export const login = async (req: Request, res: Response) => {
                 id: user.id,
                 email: user.email,
                 role: user.role,
-                token_version: user.token_version
+                token_version: user.token_version,
+                jti: accessJti,
+                session_id: sessionId
             },
             process.env.JWT_SECRET as string,
             { expiresIn: '15m' }
@@ -172,7 +224,9 @@ export const login = async (req: Request, res: Response) => {
         const refreshToken = jwt.sign(
             {
                 id: user.id,
-                token_version: user.token_version
+                token_version: user.token_version,
+                jti: refreshJti,
+                session_id: sessionId
             },
             process.env.JWT_SECRET as string,
             { expiresIn: '7d' }
@@ -338,17 +392,52 @@ export const refreshToken = async (req: Request, res: Response) => {
             [user.id]
         );
 
+        // Update session last_activity and generate new Access JTI
+        const newAccessJti = crypto.randomBytes(16).toString('hex');
+        const sessionId = decoded.session_id;
+
+        if (sessionId) {
+            await pool.query(
+                `UPDATE user_sessions SET access_token_jti = $1, last_activity = CURRENT_TIMESTAMP 
+                 WHERE session_id = $2 AND revoked = FALSE`,
+                [newAccessJti, sessionId]
+            );
+        }
+
         const accessToken = jwt.sign(
-            { id: user.id, email: user.email, role: user.role, token_version: user.token_version },
+            {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                token_version: user.token_version,
+                jti: newAccessJti,
+                session_id: sessionId
+            },
             process.env.JWT_SECRET as string,
             { expiresIn: '15m' }
         );
 
         const newRefreshToken = jwt.sign(
-            { id: user.id, token_version: user.token_version },
+            {
+                id: user.id,
+                token_version: user.token_version,
+                jti: decoded.jti, // Keep the same refresh JTI or rotate? Directive says "Create session record during login", but rotate access JTI on heartbeat. Typical hybrid.
+                session_id: sessionId
+            },
             process.env.JWT_SECRET as string,
             { expiresIn: '7d' }
         );
+
+        // Audit Refresh
+        await auditService.log({
+            actor_id: user.id,
+            action_type: 'TOKEN_REFRESH',
+            ip_address: req.ip,
+            user_agent: req.headers['user-agent'] as string,
+            session_id: sessionId,
+            access_token_jti: newAccessJti,
+            refresh_token_jti: decoded.jti
+        });
 
         /* 
            PATCH: Returning refreshToken in JSON body instead of cookie.
@@ -376,10 +465,27 @@ export const logout = async (req: Request, res: Response) => {
     try {
         // CRITICAL: Increment token_version in DB to invalidate ALL outstanding refresh tokens
         if (req.user?.id) {
+            // Revoke current session in user_sessions
+            if (req.user.session_id) {
+                await pool.query(
+                    'UPDATE user_sessions SET revoked = TRUE, revoked_at = NOW() WHERE session_id = $1',
+                    [req.user.session_id]
+                );
+            }
+
+            // Fallback: Increment token_version for radical invalidation
             await pool.query(
                 'UPDATE users SET token_version = token_version + 1, last_activity = CURRENT_TIMESTAMP WHERE id = $1',
                 [req.user.id]
             );
+
+            await auditService.log({
+                actor_id: req.user.id,
+                action_type: 'LOGOUT',
+                ip_address: req.ip,
+                user_agent: req.headers['user-agent'] as string,
+                session_id: req.user.session_id
+            });
         }
     } catch (dbError: unknown) {
         // Log but do not block logout

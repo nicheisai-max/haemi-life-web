@@ -53,6 +53,15 @@ class SocketService {
             console.log('[SocketService] Connected');
         });
 
+        this.socket.on('reconnect', (attemptNumber: number) => {
+            console.log(`[SocketService] Reconnected after ${attemptNumber} attempts`);
+            // Trigger manual callbacks for recovery logic
+            const callbacks = this.listeners.get('reconnect');
+            if (callbacks) {
+                callbacks.forEach(cb => cb(attemptNumber));
+            }
+        });
+
         this.socket.on('connect_error', (err: Error) => {
             console.error('[SocketService] Connection error:', err.message);
         });
@@ -71,10 +80,15 @@ class SocketService {
     }
 
     public reconnectWithToken(token: string) {
+        if (!token) return;
         if (this.socket) {
             (this.socket as unknown as { auth: { token: string } }).auth = { token };
-            this.socket.disconnect().connect();
-            console.log('[SocketService] Re-handshake performed with new token');
+            if (this.socket.connected) {
+                this.socket.disconnect().connect();
+                console.log('[SocketService] Re-handshake performed with new token');
+            } else {
+                this.socket.connect();
+            }
         } else {
             this.connect(token);
         }

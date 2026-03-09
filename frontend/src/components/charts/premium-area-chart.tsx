@@ -65,8 +65,8 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
                 {description && <CardDescription>{description}</CardDescription>}
             </CardHeader>
             <CardContent>
-                <div style={{ width: '100%', height: height }}>
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <div style={{ width: '100%', height: height, minHeight: '300px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
 
                         <AreaChart
                             data={data}

@@ -159,7 +159,16 @@ api.interceptors.request.use(
             }) as unknown as Promise<InternalAxiosRequestConfig>;
         }
 
-        if (accessToken && config.headers) config.headers.Authorization = `Bearer ${accessToken}`;
+        if (accessToken && config.headers) {
+            config.headers.Authorization = `Bearer ${accessToken}`;
+        } else {
+            // Institutional Hardening: If memory token is null, check sessionStorage before failing
+            const sessionToken = sessionStorage.getItem('token');
+            if (sessionToken && config.headers) {
+                config.headers.Authorization = `Bearer ${sessionToken}`;
+                accessToken = sessionToken; // Restore to memory
+            }
+        }
         return config;
     },
     (error) => Promise.reject(error)

@@ -9,13 +9,16 @@ export interface AuditLogEntry {
     metadata?: Record<string, unknown>;
     ip_address?: string;
     user_agent?: string;
+    session_id?: string;
+    access_token_jti?: string;
+    refresh_token_jti?: string;
+    device_type?: string;
 }
 
 export const auditService = {
     log: async (entry: Partial<AuditLogEntry> & Record<string, unknown>) => {
         try {
             // SCHEMA GUARDS & LEGACY COMPATIBILITY
-            // Map common legacy property names to the new enterprise schema
             const actor_user_id = entry.actor_user_id || entry.actor_id || entry.user_id;
             const action_type = entry.action_type || entry.action || 'UNKNOWN_ACTION';
             const target_id = entry.target_entity_id || entry.target_id || entry.entity_id;
@@ -23,22 +26,35 @@ export const auditService = {
                 (entry.metadata ? JSON.stringify(entry.metadata) : null) ||
                 (entry.details ? JSON.stringify(entry.details) : '{}');
             const request_ip = entry.request_ip || entry.ip_address || null;
+            const user_agent = entry.user_agent || null;
+            const session_id = entry.session_id || null;
+            const access_jti = entry.access_token_jti || null;
+            const refresh_jti = entry.refresh_token_jti || null;
+            const device_type = entry.device_type || null;
 
-            if (!action_type) return; // Silent discard if no action type provided
+            if (!action_type) return;
 
             await pool.query(
-                `INSERT INTO audit_logs (actor_user_id, action_type, target_entity_id, change_summary, request_ip, created_at)
-                 VALUES ($1, $2, $3, $4, $5, NOW())`,
+                `INSERT INTO audit_logs (
+                    actor_user_id, action_type, target_entity_id, change_summary, 
+                    request_ip, user_agent, session_id, access_token_jti, 
+                    refresh_token_jti, device_type, created_at
+                )
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
                 [
                     actor_user_id || null,
                     action_type,
                     target_id || null,
                     change_summary,
-                    request_ip
+                    request_ip,
+                    user_agent,
+                    session_id,
+                    access_jti,
+                    refresh_jti,
+                    device_type
                 ]
             );
         } catch (error) {
-            // Fallback to file logger if DB fails - do not crash request
             logger.error('Failed to write audit log', { error, entry });
         }
     }

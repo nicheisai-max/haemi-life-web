@@ -9,6 +9,7 @@ import { NetworkStatusProvider } from './context/network-status';
 import { SessionManagerProvider } from './context/session-manager';
 import { AlertDialogProvider } from './context/alert-dialog-context';
 import { NotificationProvider } from './context/notification-provider';
+import { ChatProvider } from './context/chat-provider';
 import { ErrorBoundary } from './components/ui/error-boundary';
 import { DelayedFallback } from './components/layout/delayed-fallback';
 const LazyDashboardLayout = lazy(() => import('./components/layout/dashboard-layout').then(m => ({ default: m.DashboardLayout })));
@@ -63,7 +64,13 @@ const LoadingFallback = () => <MedicalLoader fullPage message="Securing clinical
  * The NotificationProvider internally guards its socket connection via user?.id.
  */
 const AuthGatedNotifications: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <NotificationProvider>{children}</NotificationProvider>;
+  return (
+    <NotificationProvider>
+      <ChatProvider>
+        {children}
+      </ChatProvider>
+    </NotificationProvider>
+  );
 };
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
