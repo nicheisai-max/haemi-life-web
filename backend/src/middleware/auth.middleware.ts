@@ -42,6 +42,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
 
             const userData = userResult.rows[0];
 
+            // 1. Token Version Check (Emergency Revocation)
             if (payload.token_version !== undefined && userData.token_version !== undefined) {
                 if (payload.token_version !== userData.token_version) {
                     return sendError(res, 401, 'Session revoked. Please log in again.');
@@ -57,10 +58,10 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                 return sendError(res, 401, 'Session expired due to inactivity. Please log in again.');
             }
 
-            // PHASE 1: JTI & Session Validation
-            if (payload.jti && payload.session_id) {
+            // 2. Phase 9: Detailed Session & Fingerprint Validation
+            if (payload.session_id) {
                 const sessionResult = await pool.query(
-                    'SELECT revoked, access_token_jti FROM user_sessions WHERE session_id = $1',
+                    'SELECT revoked, access_token_jti, ip_address, user_agent FROM user_sessions WHERE session_id = $1',
                     [payload.session_id]
                 );
 
@@ -68,10 +69,37 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                     return sendError(res, 401, 'Session revoked or invalid. Please log in again.');
                 }
 
-                if (sessionResult.rows[0].access_token_jti !== payload.jti) {
-                    // This handles cases where a new access token was issued (e.g. via refresh) 
-                    // and the old one is being reused.
+                const sessionData = sessionResult.rows[0];
+
+                // JTI Validation (Token Replay Protection)
+                if (payload.jti && sessionData.access_token_jti !== payload.jti) {
+                    logger.warn('Token replay attempt detected (JTI mismatch)', {
+                        userId: payload.id,
+                        expected: sessionData.access_token_jti,
+                        received: payload.jti
+                    });
                     return sendError(res, 401, 'Token replaced by new session. Please log in again.');
+                }
+
+                // Fingerprint Validation (Session Hijacking Protection)
+                // Note: We allow minor IP changes in dynamic environments, but log suspicious ones
+                const currentIp = req.ip;
+                const currentUserAgent = req.headers['user-agent'];
+
+                if (sessionData.user_agent !== currentUserAgent) {
+                    logger.warn('Session fingerprint mismatch (User Agent)', {
+                        userId: payload.id,
+                        expected: sessionData.user_agent,
+                        received: currentUserAgent
+                    });
+                    // For local development, we might be lenient, but for P0 hardening we reject
+                    return sendError(res, 401, 'Security fingerprint mismatch. Session invalidated.');
+                }
+
+                // IP binding - stricter for P0 but often problematic with VPNs/Proxies. 
+                // We'll log it if it changes significantly but only reject if configured.
+                if (sessionData.ip_address !== currentIp && process.env.STRICT_IP_CHECK === 'true') {
+                    return sendError(res, 401, 'IP mismatch. Session revoked.');
                 }
 
                 // Heartbeat: Update session last_activity

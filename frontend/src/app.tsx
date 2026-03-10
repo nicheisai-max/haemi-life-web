@@ -74,14 +74,14 @@ const AuthGatedNotifications: React.FC<{ children: React.ReactNode }> = ({ child
 };
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { authStatus } = useAuth();
+  const { isLoading, isAuthenticated } = useAuth();
   const location = useLocation();
 
-  if (authStatus === 'initializing') {
+  if (isLoading) {
     return <LoadingFallback />;
   }
 
-  if (authStatus !== 'authenticated') {
+  if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
   }
 
@@ -89,13 +89,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 };
 
 const IdentityGate = () => {
-  const { authStatus, user } = useAuth();
+  const { isLoading, isAuthenticated, user } = useAuth();
 
-  if (authStatus === 'initializing') {
+  if (isLoading) {
     return <LoadingFallback />;
   }
 
-  if (authStatus === 'authenticated' && user) {
+  if (isAuthenticated && user) {
     // Redirect to the role-specific canonical dashboard URL.
     // This ensures the browser URL always reflects the correct path, enabling
     // sidebar NavLink active-state detection and proper deep linking.
@@ -109,12 +109,12 @@ const IdentityGate = () => {
 
 const AppRoutes = () => {
   const location = useLocation();
-  const { authStatus } = useAuth();
+  const { isLoading } = useAuth();
 
   // UNIVERSAL PRODUCTION GUARD:
   // Do not render ANY routes until the initial session check is complete.
   // This prevents the "Flicker" of protected layouts to unauthorized users.
-  if (authStatus === 'initializing') {
+  if (isLoading) {
     return <LoadingFallback />;
   }
 

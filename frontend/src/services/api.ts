@@ -153,6 +153,9 @@ api.interceptors.request.use(
         const isDiscoveryRoute = config.url?.includes('/auth/') ||
             config.url?.includes('/health/') ||
             config.url?.includes('/profiles/me');
+
+        // Phase 6 Hardening: /profiles/me is allowed to bypass initialization queue 
+        // specifically to permit AuthProvider to resolve the boot state.
         if (!appInitialized && !isDiscoveryRoute) {
             return new Promise((resolve, reject) => {
                 initializationQueue.push({ config, resolve, reject });
@@ -174,25 +177,45 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// ─── FIX 3 & 5: Single-Flight Refresh & Race Condition Handling ──────────────
+// ─── Phase 2: Single-Flight Refresh Pattern ──────────────────────────────────
 let lastSystemErrorTime = 0;
-let isRefreshing = false;
-let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
-
-const processQueue = (error: unknown, token: string | null = null) => {
-    failedQueue.forEach(prom => {
-        if (error) prom.reject(error);
-        else if (token) prom.resolve(token);
-    });
-    failedQueue = [];
-};
+let refreshPromise: Promise<string | null> | null = null;
 
 const clearAuthSession = () => {
     if (!appInitialized) return;
-    isRefreshing = false;
+    refreshPromise = null;
     setAccessToken(null);
     sessionStorage.removeItem('user');
     window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+};
+
+const performRefresh = async (): Promise<string | null> => {
+    try {
+        const currentRefreshToken = sessionStorage.getItem('refreshToken');
+        if (!currentRefreshToken) throw new Error('No refresh token');
+
+        const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
+            `${API_URL}/auth/refresh-token`,
+            { refreshToken: currentRefreshToken },
+            { timeout: 7000 }
+        );
+
+        if (!response.data.success || !response.data.data?.token) throw new Error('Refresh failed');
+
+        const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
+        setAccessToken(newToken);
+
+        if (newRefreshToken) {
+            sessionStorage.setItem('refreshToken', newRefreshToken);
+        }
+
+        return newToken;
+    } catch (err) {
+        clearAuthSession();
+        throw err;
+    } finally {
+        refreshPromise = null;
+    }
 };
 
 api.interceptors.response.use(
@@ -209,35 +232,24 @@ api.interceptors.response.use(
 
         if (!originalRequest) return Promise.reject(error);
 
-        // --- HARDENED NETWORK & STATUS HANDLING ---
+        // 1. Network/Expected Auth failures (400/401 on /auth/ urls)
+        if (!error.response) return Promise.reject(error);
 
-        // 1. Network Error (Backend unreachable, CORS failure, etc.)
-        if (!error.response) {
-            // Do NOT trigger refresh. Just reject immediately. No console spam.
-            return Promise.reject(error);
-        }
-
-        // Institutional Hardening: Identify "Expected" Failures
         const isExpectedAuthFailure =
             (error.response.status === 400 || error.response.status === 401 || error.response.status === 403) &&
             originalRequest.url?.includes('/auth/');
 
         if (isExpectedAuthFailure) {
-            // SILENT REJECTION: Return pre-normalized data to prevent Axios stack traces in console
-            const normalizedError = {
+            return Promise.reject({
                 ...(error.response.data as object),
                 status: error.response.status,
                 _isSilent: true
-            };
-            return Promise.reject(normalizedError);
+            });
         }
 
-        // 2. 500 Internal Server Error -> Do not loop, just reject
+        // 2. Critical System Errors (500s)
         if (error.response.status >= 500) {
-            const isRetryable = error.response.status === 502 || error.response.status === 503 || error.response.status === 429;
-
-
-            // Institutional Hardening: Notify user of catastrophic failure via global toast
+            const isRetryable = [502, 503, 429].includes(error.response.status);
             if (!isRetryable && typeof window !== 'undefined') {
                 const now = Date.now();
                 if (now - lastSystemErrorTime > 500) {
@@ -250,41 +262,23 @@ api.interceptors.response.use(
                     }));
                 }
             }
-
-            if (!isRetryable) {
-                return Promise.reject(error);
-            }
+            if (!isRetryable) return Promise.reject(error);
         }
 
-        // 3. 403 Forbidden -> Force logout immediately
+        // 3. 403 Forbidden -> Session Invalid
         if (error.response.status === 403) {
             clearAuthSession();
             return Promise.reject(error);
         }
 
-        // 4. 401 Unauthorized Handling with Single-Flight Refresh
+        // 4. Phase 2 & 5: Single-Flight Refresh Logic for 401s
         if (error.response.status === 401 && !originalRequest._retry) {
-            // If the refresh-token endpoint itself fails with 401, session is dead.
             if (originalRequest.url?.includes('/auth/refresh-token')) {
                 clearAuthSession();
                 return Promise.reject(error);
             }
 
-            // FIX 3: Multi-tab stampede protection - Queue requests if refresh is in progress
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
-                }).then(token => {
-                    if (originalRequest.headers) {
-                        originalRequest.headers.Authorization = `Bearer ${token}`;
-                    }
-                    return api(originalRequest);
-                }).catch(err => Promise.reject(err));
-            }
-
-            // Institutional Hardening: Session Recovery Window
-            // If the app is still initializing (discovering session), we wait up to 5s
-            // before giving up on a 401. This prevents race-based logouts on refresh.
+            // Stabilization Guard: If initializing, wait for auth:ready
             if (!appInitialized) {
                 return new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
@@ -304,56 +298,24 @@ api.interceptors.response.use(
                         }
                     };
                     window.addEventListener('auth:ready', onAuthReady, { once: true });
-                }) as unknown as Promise<unknown>;
+                });
             }
 
             originalRequest._retry = true;
-            isRefreshing = true;
+
+            // SINGLE-FLIGHT PATTERN: Check if a refresh is already in progress
+            if (!refreshPromise) {
+                refreshPromise = performRefresh();
+            }
 
             try {
-                // PATCH: Send refreshToken in body for multi-tab isolation
-                const currentRefreshToken = sessionStorage.getItem('refreshToken');
-
-                // Perform the single refresh flight
-                const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
-                    `${API_URL}/auth/refresh-token`,
-                    { refreshToken: currentRefreshToken },
-                    { timeout: 5000 } // No withCredentials needed anymore
-                );
-
-                if (!response.data.success || !response.data.data?.token) throw new Error('Refresh failed');
-
-                const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
-                setAccessToken(newToken);
-
-                if (newRefreshToken) {
-                    sessionStorage.setItem('refreshToken', newRefreshToken);
-                }
-
-                isRefreshing = false;
-                processQueue(null, newToken);
-
-                if (originalRequest.headers) {
+                const newToken = await refreshPromise;
+                if (originalRequest.headers && newToken) {
                     originalRequest.headers.Authorization = `Bearer ${newToken}`;
                 }
                 return api(originalRequest);
-            } catch (rawErr: unknown) {
-                isRefreshing = false;
-                processQueue(rawErr, null);
-
-                if (!appInitialized) return Promise.reject(rawErr);
-
-                // Handle refresh failure (could be 401, 403, or Network Error)
-                const error = rawErr as AxiosError;
-                const isNetworkErr = !error.response;
-                const isAuthRejection = error.response && (error.response.status === 401 || error.response.status === 403);
-
-                // If it's a network error during refresh, or explicit rejection, we mark session invalid
-                if (isNetworkErr || isAuthRejection) {
-                    clearAuthSession();
-                }
-
-                return Promise.reject(rawErr);
+            } catch (refreshErr) {
+                return Promise.reject(refreshErr);
             }
         }
 

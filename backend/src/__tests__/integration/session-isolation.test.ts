@@ -4,10 +4,15 @@ import { pool } from '../../config/db';
 import * as jwt from 'jsonwebtoken';
 
 // Mock DB to prevent real schema mutations during test
+const mockClient = {
+    query: jest.fn(),
+    release: jest.fn(),
+};
+
 jest.mock('../../config/db', () => ({
     pool: {
         query: jest.fn(),
-        connect: jest.fn(),
+        connect: jest.fn(() => Promise.resolve(mockClient)),
         end: jest.fn(),
     }
 }));
@@ -30,16 +35,17 @@ describe('Session Isolation (Phase 2)', () => {
 
     describe('Cookie Security & Revocation', () => {
         it('should reject refresh token with mismatched token_version', async () => {
-            const mockQuery = pool.query as jest.Mock;
+            const mockQuery = mockClient.query as jest.Mock;
 
             // 1. Create a "stale" refresh token (version 0)
             const staleToken = jwt.sign(
-                { id: userId, token_version: 0 },
+                { id: userId, token_version: 0, session_id: 's1', jti: 'j1' },
                 jwtSecret,
                 { expiresIn: '7d' }
             );
 
             // 2. Mock DB to return user with version 1 (revoked version 0)
+            mockQuery.mockResolvedValueOnce({ rows: [] }); // BEGIN
             mockQuery.mockResolvedValueOnce({
                 rows: [{
                     id: userId,
@@ -61,23 +67,24 @@ describe('Session Isolation (Phase 2)', () => {
             // 4. Verify rejection
             expect(res.status).toBe(401);
             expect(res.body.success).toBe(false);
-            expect(res.body.message).toMatch(/Session revoked/i);
+            expect(res.body.message).toMatch(/Session revoked due to security violation/i);
 
             // Verify that the cookie is NOT set anymore (no need to check clearing since we don't use it)
             expect(res.headers['set-cookie']).toBeUndefined();
         });
 
         it('should accept refresh token with matching token_version', async () => {
-            const mockQuery = pool.query as jest.Mock;
+            const mockQuery = mockClient.query as jest.Mock;
 
             // 1. Create a "valid" refresh token (version 1)
             const validToken = jwt.sign(
-                { id: userId, token_version: 1 },
+                { id: userId, token_version: 1, session_id: 's2', jti: 'j2' },
                 jwtSecret,
                 { expiresIn: '7d' }
             );
 
             // 2. Mock DB to return user with matching version 1
+            mockQuery.mockResolvedValueOnce({ rows: [] }); // BEGIN
             mockQuery.mockResolvedValueOnce({
                 rows: [{
                     id: userId,
@@ -88,7 +95,19 @@ describe('Session Isolation (Phase 2)', () => {
                 }]
             });
 
-            // 3. Mock the activity update query
+            // 3. Mock the session check
+            mockQuery.mockResolvedValueOnce({
+                rows: [{
+                    refresh_token_jti: 'j2',
+                    revoked: false
+                }]
+            });
+
+            // 4. Mock the rotation update
+            mockQuery.mockResolvedValueOnce({ rows: [] });
+            // 5. Mock the user activity update
+            mockQuery.mockResolvedValueOnce({ rows: [] });
+            // 6. Mock COMMIT
             mockQuery.mockResolvedValueOnce({ rows: [] });
 
             // 4. Attempt to refresh

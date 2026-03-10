@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AxiosError } from 'axios';
+
 import { logger } from '../utils/logger';
 import { authService } from '../services/auth.service';
 import { setAccessToken, setAppInitialized } from '../services/api';
@@ -9,17 +9,18 @@ import type { User, LoginCredentials, SignupCredentials } from '../types/auth.ty
 interface AuthState {
     user: User | null;
     token: string | null;
-    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing' | 'offline';
+    authStatus: 'booting' | 'auth_check' | 'onboarding_check' | 'authenticated' | 'unauthenticated' | 'offline' | 'app_ready';
     profileImageVersion: number;
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // ─── Deterministic Initialization Phase ──────────────────────────────────
     const initialUser = sessionStorage.getItem('user');
+
     const [authState, setAuthState] = useState<AuthState>({
         user: initialUser ? JSON.parse(initialUser) : null,
         token: null,
-        authStatus: initialUser ? 'stabilizing' : 'initializing',
+        authStatus: 'booting',
         profileImageVersion: Date.now()
     });
 
@@ -44,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (type === 'LOGOUT') {
                     // SECURE SYNC: Only logout if the message targets our current user identity
                     if (payload?.userId && latestState.user?.id === payload.userId) {
+                        logger.info('[AuthSync] Logout received from other tab');
                         setAccessToken(null);
                         sessionStorage.removeItem('user');
                         sessionStorage.removeItem('refreshToken');
@@ -51,14 +53,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }
                 }
 
+                if (type === 'LOGIN_SYNC') {
+                    logger.info('[AuthSync] Login received from other tab');
+                    setAccessToken(payload.token);
+                    sessionStorage.setItem('refreshToken', payload.refreshToken);
+                    sessionStorage.setItem('user', JSON.stringify(payload.user));
+                    setAuthState({
+                        user: payload.user,
+                        token: payload.token,
+                        authStatus: 'authenticated',
+                        profileImageVersion: Date.now()
+                    });
+                }
             };
             authChannel.onmessage = handleMessage;
         }
 
         const handleUnauthorized = () => {
             const currentUserId = authStateRef.current.user?.id;
+            logger.warn('[Auth] Unauthorized event detected');
             setAccessToken(null);
             sessionStorage.removeItem('user');
+            sessionStorage.removeItem('refreshToken'); // Added this line for consistency with logout
             setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
             if (authChannel && currentUserId) authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
         };
@@ -71,41 +87,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, []); // Empty deps is now safe because we use authStateRef
 
-    // ─── Initial Boot (Authentication Discovery) ────────────────────────────
+    // ─── Initial Boot (Authentication Discovery State Machine) ──────────────────
     useEffect(() => {
-        let mounted = true;
+
+        const BOOT_TIMEOUT = 15000; // 15s absolute guard
 
         const initAuth = async () => {
-            try {
-                // Determine if we have a stale session to "recover"
-                const hasStaleSession = !!sessionStorage.getItem('user');
-                if (hasStaleSession && mounted) {
-                    setAuthState(prev => ({ ...prev, authStatus: 'initializing' }));
+            const timeoutGuard = setTimeout(() => {
+                if (authStateRef.current.authStatus !== 'app_ready') {
+                    logger.error('[Boot] Deadlock detected: Boot timeout reached');
+                    setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
+                    setAppInitialized();
                 }
+            }, BOOT_TIMEOUT);
 
-                // PHASE 5: Wait for backend readiness before attempting token discovery
-                // waitForBackend is already used, but we'll add 'discovering' state here
-                if (mounted) setAuthState(prev => ({ ...prev, authStatus: 'initializing' }));
+            try {
+                logger.info('[Boot] BOOT_STARTED');
+                // STATE: BOOTING -> AUTH_CHECK
+                setAuthState(prev => ({ ...prev, authStatus: 'auth_check' }));
 
-                const isBackendReady = await authService.waitForBackend();
-
-                if (mounted) setAuthState(prev => ({ ...prev, authStatus: 'initializing' }));
-
+                const isBackendReady = await authService.waitForBackend(5, 1000); // Reduce retries for boot speed
                 if (!isBackendReady) {
-                    if (mounted) {
-                        setAuthState({
-                            user: null,
-                            token: null,
-                            authStatus: 'offline',
-                            profileImageVersion: Date.now()
-                        });
-                    }
+                    logger.warn('[Boot] Backend unreachable');
+                    setAuthState(prev => ({ ...prev, user: null, token: null, authStatus: 'offline' }));
                     return;
                 }
 
-                // Discovery Stage
-                if (mounted) setAuthState(prev => ({ ...prev, authStatus: 'initializing' }));
-
+                // Discovery Stage: Attempt Session Recovery
+                logger.info('[Boot] AUTH_CHECK_STARTED');
                 const refreshResult = await authService.refreshToken();
 
                 if (refreshResult.authenticated && refreshResult.token) {
@@ -113,48 +122,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (refreshResult.refreshToken) {
                         sessionStorage.setItem('refreshToken', refreshResult.refreshToken);
                     }
+
                     const { user } = await authService.verifySession();
 
-                    if (mounted) {
-                        setAuthState({
-                            user,
-                            token: refreshResult.token,
-                            authStatus: 'authenticated',
-                            profileImageVersion: Date.now()
-                        });
-                        sessionStorage.setItem('user', JSON.stringify(user));
-                    }
+                    setAuthState({
+                        user,
+                        token: refreshResult.token,
+                        authStatus: 'authenticated',
+                        profileImageVersion: Date.now()
+                    });
+                    sessionStorage.setItem('user', JSON.stringify(user));
+                    logger.info('[Boot] AUTH_CHECK_COMPLETED: Authenticated');
                 } else {
-                    if (mounted) {
-                        setAuthState({
-                            user: null,
-                            token: null,
-                            authStatus: 'unauthenticated',
-                            profileImageVersion: Date.now()
-                        });
-                    }
+                    logger.info('[Boot] AUTH_CHECK_COMPLETED: Unauthenticated');
+                    setAuthState(prev => ({
+                        ...prev,
+                        user: null,
+                        token: null,
+                        authStatus: 'unauthenticated'
+                    }));
                 }
-            } catch (error: unknown) {
-                if (mounted) {
-                    const err = error as AxiosError;
-                    const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.message?.includes('Network Error');
 
-                    if (isNetworkError) {
-                        setAuthState(prev => ({ ...prev, authStatus: 'offline' }));
-                    } else if (err.response?.status === 401 || err.response?.status === 403) {
-                        setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
-                    } else {
-                        setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
-                    }
-                }
+                // STATE: AUTH_CHECK -> ONBOARDING_CHECK
+                // Note: Transitioning to app_ready as onboarding is handled by FirstVisitGuard 
+                // but we honor the design by ensuring a terminal settlement.
+                setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
+                logger.info('[Boot] APP_READY');
+
+            } catch (error: unknown) {
+                logger.error('[Boot] Initialization failure', error);
+                // const err = error as AxiosError;
+                // const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.message?.includes('Network Error');
+
+                setAuthState(prev => ({
+                    ...prev,
+                    user: null,
+                    token: null,
+                    authStatus: 'unauthenticated' // isNetworkError ? 'offline' : 'unauthenticated'
+                }));
+
+                // Even on error, we must reach app_ready to clear loader
+                setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
             } finally {
+                clearTimeout(timeoutGuard);
                 setAppInitialized();
                 window.dispatchEvent(new CustomEvent('auth:ready'));
             }
         };
 
         initAuth();
-        return () => { mounted = false; };
     }, []);
 
     const login = useCallback(async (credentials: LoginCredentials) => {
@@ -164,8 +180,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionStorage.setItem('user', JSON.stringify(newUser));
         setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated', profileImageVersion: Date.now() });
 
-        // Multi-tab isolation: We no longer broadcast LOGIN events.
-        // Each tab maintains its own unique session to support multi-role testing.
+        // CROSS-TAB SYNC: Broadcast login
+        const authChannel = new BroadcastChannel('haemi_auth_sync');
+        authChannel.postMessage({
+            type: 'LOGIN_SYNC',
+            payload: { user: newUser, token: newToken, refreshToken: newRefreshToken }
+        });
+        authChannel.close();
 
     }, []);
 
@@ -222,8 +243,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             signup,
             logout,
             refreshUser,
-            isLoading: authState.authStatus === 'initializing' || authState.authStatus === 'stabilizing',
-            isAuthenticated: authState.authStatus === 'authenticated',
+            isLoading: authState.authStatus === 'booting' ||
+                authState.authStatus === 'auth_check' ||
+                authState.authStatus === 'onboarding_check',
+            isAuthenticated: authState.authStatus === 'authenticated' ||
+                (authState.authStatus === 'app_ready' && !!authState.user),
         }}>
             {children}
         </AuthContext.Provider>

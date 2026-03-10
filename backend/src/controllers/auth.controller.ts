@@ -359,51 +359,73 @@ export const changePassword = async (req: Request, res: Response) => {
 };
 
 export const refreshToken = async (req: Request, res: Response) => {
-    /* 
-       PATCH: Reading refreshToken from body for multi-tab isolation.
-    */
     const refreshTokenHeader = req.body.refreshToken;
 
     if (!refreshTokenHeader) {
         return sendResponse(res, 200, false, 'No active session');
     }
 
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN');
+
+        // 1. Verify token signature and basic expiration
         const decoded = jwt.verify(refreshTokenHeader, process.env.JWT_SECRET as string) as JWTPayload;
 
-        const user = await userRepository.findById(decoded.id);
+        // 2. Fetch User and Session state with row-level locking
+        const userRes = await client.query(
+            'SELECT id, status, token_version, email, role FROM users WHERE id = $1 FOR UPDATE',
+            [decoded.id]
+        );
+        const user = userRes.rows[0];
 
         if (!user || user.status !== 'ACTIVE') {
-            // res.clearCookie('refreshToken');
+            await client.query('ROLLBACK');
             return sendResponse(res, 200, false, 'Invalid session');
         }
 
-        // Session Replay Protection
-        if (decoded.token_version !== user.token_version) {
-            logger.warn('Token reuse detected - potential session hijacking', { userId: user.id });
-            await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [user.id]);
-            // res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/' });
+        const sessionId = decoded.session_id;
+        const sessionRes = await client.query(
+            'SELECT refresh_token_jti, revoked FROM user_sessions WHERE session_id = $1 FOR UPDATE',
+            [sessionId]
+        );
+        const session = sessionRes.rows[0];
+
+        // 3. Security Check: Token Rotation & Versioning
+        // We check BOTH the jti (rotation) and token_version (emergency revocation)
+        const isVersionMismatch = decoded.token_version !== undefined && decoded.token_version !== user.token_version;
+        const isJtiMismatch = decoded.jti && session && decoded.jti !== session.refresh_token_jti;
+
+        if (isVersionMismatch || isJtiMismatch || !session || session.revoked) {
+            logger.warn('Token rotation violation detected', {
+                userId: user.id,
+                sessionId,
+                reason: isVersionMismatch ? 'version_mismatch' : isJtiMismatch ? 'jti_mismatch' : 'revoked_session'
+            });
+
+            // On violation: Force revoke all sessions by incrementing version
+            await client.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [user.id]);
+            await client.query('UPDATE user_sessions SET revoked = TRUE WHERE session_id = $1', [sessionId]);
+            await client.query('COMMIT');
             return sendResponse(res, 401, false, 'Session revoked due to security violation');
         }
 
-        // Token Renewal: Update last_activity only.
-        await pool.query(
-            'UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
-            [user.id]
+        // 4. Perform Rotation & Heartbeat
+        const newAccessJti = crypto.randomBytes(16).toString('hex');
+        const newRefreshJti = crypto.randomBytes(16).toString('hex');
+
+        await client.query(
+            `UPDATE user_sessions 
+             SET access_token_jti = $1, refresh_token_jti = $2, last_activity = CURRENT_TIMESTAMP 
+             WHERE session_id = $3`,
+            [newAccessJti, newRefreshJti, sessionId]
         );
 
-        // Update session last_activity and generate new Access JTI
-        const newAccessJti = crypto.randomBytes(16).toString('hex');
-        const sessionId = decoded.session_id;
+        await client.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
-        if (sessionId) {
-            await pool.query(
-                `UPDATE user_sessions SET access_token_jti = $1, last_activity = CURRENT_TIMESTAMP 
-                 WHERE session_id = $2 AND revoked = FALSE`,
-                [newAccessJti, sessionId]
-            );
-        }
+        await client.query('COMMIT');
 
+        // 5. Generate New Token Pair
         const accessToken = jwt.sign(
             {
                 id: user.id,
@@ -421,7 +443,7 @@ export const refreshToken = async (req: Request, res: Response) => {
             {
                 id: user.id,
                 token_version: user.token_version,
-                jti: decoded.jti, // Keep the same refresh JTI or rotate? Directive says "Create session record during login", but rotate access JTI on heartbeat. Typical hybrid.
+                jti: newRefreshJti,
                 session_id: sessionId
             },
             process.env.JWT_SECRET as string,
@@ -436,28 +458,24 @@ export const refreshToken = async (req: Request, res: Response) => {
             user_agent: req.headers['user-agent'] as string,
             session_id: sessionId,
             access_token_jti: newAccessJti,
-            refresh_token_jti: decoded.jti
+            refresh_token_jti: newRefreshJti
         });
 
-        /* 
-           PATCH: Returning refreshToken in JSON body instead of cookie.
-        */
-        // res.cookie('refreshToken', newRefreshToken, {
-        //     httpOnly: true,
-        //     secure: process.env.NODE_ENV === 'production',
-        //     sameSite: 'strict',
-        //     path: '/',
-        //     maxAge: 7 * 24 * 60 * 60 * 1000
-        // });
-
-        return sendResponse(res, 200, true, 'Token refreshed', {
+        return sendResponse(res, 200, true, 'Token refreshed successfully', {
             token: accessToken,
             refreshToken: newRefreshToken
         });
+
     } catch (err: unknown) {
-        logger.error('Token refresh failed', err);
-        // res.clearCookie('refreshToken');
-        return sendResponse(res, 200, false, 'Invalid refresh token');
+        await client.query('ROLLBACK');
+        const error = err as Error;
+        if (error.name === 'TokenExpiredError') {
+            return sendResponse(res, 401, false, 'Session expired. Please log in again.');
+        }
+        logger.error('Refresh operation failed', err);
+        return sendResponse(res, 401, false, 'Invalid session');
+    } finally {
+        client.release();
     }
 };
 
