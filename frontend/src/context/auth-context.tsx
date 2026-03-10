@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AxiosError } from 'axios';
+
 import { logger } from '../utils/logger';
 import { authService } from '../services/auth.service';
 import { setAccessToken, setAppInitialized } from '../services/api';
@@ -16,8 +16,6 @@ interface AuthState {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // ─── Deterministic Initialization Phase ──────────────────────────────────
     const initialUser = sessionStorage.getItem('user');
-    // Phase 4: Frontend Initialization Stabilization
-    const booted = useRef(false);
 
     const [authState, setAuthState] = useState<AuthState>({
         user: initialUser ? JSON.parse(initialUser) : null,
@@ -91,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // ─── Initial Boot (Authentication Discovery State Machine) ──────────────────
     useEffect(() => {
-        let mounted = true;
+
         const BOOT_TIMEOUT = 15000; // 15s absolute guard
 
         const initAuth = async () => {
@@ -173,7 +171,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         initAuth();
-        return () => { mounted = false; };
     }, []);
 
     const login = useCallback(async (credentials: LoginCredentials) => {

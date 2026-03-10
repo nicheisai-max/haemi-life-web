@@ -466,9 +466,10 @@ export const refreshToken = async (req: Request, res: Response) => {
             refreshToken: newRefreshToken
         });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
         await client.query('ROLLBACK');
-        if (err.name === 'TokenExpiredError') {
+        const error = err as Error;
+        if (error.name === 'TokenExpiredError') {
             return sendResponse(res, 401, false, 'Session expired. Please log in again.');
         }
         logger.error('Refresh operation failed', err);
