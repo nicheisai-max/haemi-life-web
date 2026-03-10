@@ -112,6 +112,10 @@ Thumbs.db
 !backend/scripts/
 
 # AI Pipeline Artifacts
+.ci-stats-bundle.json
+backend_lint.txt
+test_output.txt
+test_detailed.txt
 bundle-report.html
 .cache/
 tmp/

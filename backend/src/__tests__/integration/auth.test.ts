@@ -5,9 +5,15 @@ import { app } from '../../app';
 import { pool } from '../../config/db';
 
 // Mock DB to prevent real schema mutations during test
+const mockClient = {
+    query: jest.fn(),
+    release: jest.fn(),
+};
+
 jest.mock('../../config/db', () => ({
     pool: {
         query: jest.fn(),
+        connect: jest.fn(() => Promise.resolve(mockClient)),
         end: jest.fn(),
     }
 }));
@@ -95,14 +101,14 @@ describe('Authentication API Lifecycle (Integration)', () => {
             expect(res.body.message).toMatch(/No active session/i);
         });
 
-        it('should return 200 with success false on tampered refresh token', async () => {
+        it('should return 401 with success false on tampered refresh token', async () => {
             const res = await request(app)
                 .post('/api/auth/refresh-token')
                 .send({ refreshToken: 'eyJhbGc...fake' });
 
-            expect(res.status).toBe(200);
+            expect(res.status).toBe(401);
             expect(res.body.success).toBe(false);
-            expect(res.body.message).toMatch(/Invalid refresh token/i);
+            expect(res.body.message).toMatch(/Invalid session/i);
         });
     });
 });
