@@ -24,7 +24,7 @@ interface FirstVisitGuardProps {
  * This guarantees: refresh = onboarding, always, for unauthenticated users.
  */
 export const FirstVisitGuard: React.FC<FirstVisitGuardProps> = ({ children }) => {
-    const { authStatus } = useAuth();
+    const { isLoading, isAuthenticated } = useAuth();
 
     // In-memory only — resets to false on every page refresh by design.
     const [showLogin, setShowLogin] = useState(false);
@@ -38,12 +38,12 @@ export const FirstVisitGuard: React.FC<FirstVisitGuardProps> = ({ children }) =>
 
 
     // Auth still resolving — show loader to prevent flicker.
-    if (authStatus === 'initializing') {
+    if (isLoading) {
         return <MedicalLoader fullPage message="Initializing Haemi Life..." />;
     }
 
     // Authenticated users never see onboarding.
-    if (authStatus === 'authenticated') {
+    if (isAuthenticated) {
         return <>{children}</>;
     }
 

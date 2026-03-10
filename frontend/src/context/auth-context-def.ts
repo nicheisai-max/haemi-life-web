@@ -4,7 +4,7 @@ import type { User, LoginCredentials, SignupCredentials } from '../types/auth.ty
 export interface AuthContextType {
     user: User | null;
     token: string | null;
-    authStatus: 'initializing' | 'authenticated' | 'unauthenticated' | 'stabilizing' | 'offline';
+    authStatus: 'booting' | 'auth_check' | 'onboarding_check' | 'authenticated' | 'unauthenticated' | 'offline' | 'app_ready';
     profileImageVersion: number;
     login: (credentials: LoginCredentials) => Promise<void>;
     signup: (credentials: SignupCredentials) => Promise<void>;
