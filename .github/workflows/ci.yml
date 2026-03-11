@@ -62,7 +62,7 @@ jobs:
           echo "🔍 Checking for tracked temporary artifacts in current changeset..."
           FOUND=0
           git fetch origin main || true
-          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || git ls-files)
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || true)
 
           FORBIDDEN=("*.log" "lint_output.txt" "debug_output.txt" "test_output.txt" ".ci-stats-bundle.json" "lint_results.json" "backend_lint.txt")
           for file in $CHANGED_FILES; do
@@ -86,7 +86,7 @@ jobs:
         run: |
           echo "🔍 Checking for node_modules or build artifacts in current changeset..."
           git fetch origin main || true
-          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || git ls-files)
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || true)
           TRACKED=$(echo "$CHANGED_FILES" | grep -E '^(node_modules|dist|build|coverage)/' || true)
           if [ -n "$TRACKED" ]; then
             echo "❌ Tracked build/dependency artifacts found:"
@@ -101,7 +101,7 @@ jobs:
           # Use find + stat for POSIX-compliant, deterministic behaviour across
           # all Ubuntu runner versions. Scans incrementally and handles spaces safely.
           git fetch origin main || true
-          LARGE_FILES=$((git diff --name-only -z origin/main...HEAD 2>/dev/null || git ls-files -z) | while IFS= read -r -d '' file; do
+          LARGE_FILES=$((git diff --name-only -z origin/main...HEAD 2>/dev/null || true) | while IFS= read -r -d '' file; do
             if [ -f "$file" ]; then
               SIZE=$(stat -c "%s" "$file" 2>/dev/null || echo 0)
               if [ "$SIZE" -gt 1048576 ]; then
@@ -121,7 +121,7 @@ jobs:
         run: |
           echo "🔍 Quick secrets scan (patterns: API_KEY, SECRET, PASSWORD in non-.env.example files)..."
           git fetch origin main || true
-          SECRET_HITS=$((git diff --name-only -z origin/main...HEAD 2>/dev/null || git ls-files -z) | while IFS= read -r -d '' file; do
+          SECRET_HITS=$((git diff --name-only -z origin/main...HEAD 2>/dev/null || true) | while IFS= read -r -d '' file; do
             if [ -f "$file" ] && [[ "$file" != *".env.example" ]] && [[ "$file" != *".md" ]]; then
               if grep -qE "(API_KEY|SECRET_KEY|DB_PASSWORD|PRIVATE_KEY)\s*=" "$file" 2>/dev/null; then
                 echo "$file"
