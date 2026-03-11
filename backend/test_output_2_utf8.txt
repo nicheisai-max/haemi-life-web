@@ -1,0 +1,116 @@
+﻿
+> backend@1.0.0 test:backend
+> jest --runInBand --detectOpenHandles
+
+node.exe : FAIL src/__tests__/integration/ses
+sion-isolation.test.ts
+At C:\Program Files\nodejs\npm.ps1:29 char:3
++   & $NODE_EXE $NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified:  
+   (FAIL src/__test...olation.test.ts:Strin  
+  g) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandE 
+   rror
+ 
+  ΓùÅ Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (9) from 
+.env -- tip: ≡ƒ¢á∩╕Å  run anywhere with 
+`dotenvx run -- yourcommand`
+
+      at _log 
+(../node_modules/dotenv/lib/main.js:139:11)
+
+  ΓùÅ Session Isolation (Phase 2) ΓÇ║ Cookie 
+Security & Revocation ΓÇ║ should reject 
+refresh token with mismatched token_version
+
+    expect(received).toMatch(expected)
+
+    Expected pattern: /Session revoked due 
+to security violation/i
+    Received string:  "Security violation: 
+Session revoked"
+
+    [0m [90m 77 |[39m             expect(r
+es[33m.[39mstatus)[33m.[39mtoBe([35m401
+[39m)[33m;[39m
+     [90m 78 |[39m             expect(res[
+33m.[39mbody[33m.[39msuccess)[33m.[39mto
+Be([36mfalse[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 79 |[39m      
+       expect(res[33m.[39mbody[33m.[39mme
+ssage)[33m.[39mtoMatch([35m/Session 
+revoked due to security 
+violation/i[39m)[33m;[39m
+     [90m    |[39m                         
+             [31m[1m^[22m[39m
+     [90m 80 |[39m
+     [90m 81 |[39m             [90m// 
+Verify that the cookie is NOT set anymore 
+(no need to check clearing since we don't 
+use it)[39m
+     [90m 82 |[39m             expect(res[
+33m.[39mheaders[[32m'set-cookie'[39m])[33
+m.[39mtoBeUndefined()[33m;[39m[0m
+
+      at src/__tests__/integration/session-is
+olation.test.ts:79:38
+      at fulfilled (src/__tests__/integration
+/session-isolation.test.ts:38:58)
+
+PASS src/__tests__/integration/auth.test.ts
+  ΓùÅ Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (9) from 
+.env -- tip: ≡ƒöÉ prevent committing .env to 
+code: https://dotenvx.com/precommit
+
+      at _log 
+(../node_modules/dotenv/lib/main.js:139:11)
+
+PASS 
+src/__tests__/integration/profile.test.ts
+  ΓùÅ Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (9) from 
+.env -- tip: ≡ƒñû agentic secret storage: 
+https://dotenvx.com/as2
+
+      at _log 
+(../node_modules/dotenv/lib/main.js:139:11)
+
+PASS src/__tests__/integration/health.test.ts
+  ΓùÅ Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (9) from 
+.env -- tip: ΓÜÖ∩╕Å  load multiple .env 
+files with { path: ['.env.local', '.env'] }
+
+      at _log 
+(../node_modules/dotenv/lib/main.js:139:11)
+
+PASS src/__tests__/simple.test.ts
+
+Test Suites: 1 failed, 4 passed, 5 total
+Tests:       1 failed, 13 passed, 14 total
+Snapshots:   0 total
+Time:        4.563 s, estimated 7 s
+Ran all test suites.
+npm error Lifecycle script `test:backend` 
+failed with error:
+npm error code 1
+npm error path C:\Users\91989\Desktop\Deepak\
+haemi-life-web\backend
+npm error workspace backend@1.0.0
+npm error location C:\Users\91989\Desktop\Dee
+pak\haemi-life-web\backend
+npm error command failed
+npm error command 
+C:\WINDOWS\system32\cmd.exe /d /s /c jest 
+--runInBand --detectOpenHandles

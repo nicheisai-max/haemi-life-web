@@ -788,4 +788,207 @@
     background-color: #14262A;
     color: #475569;
   }
+
+  /* ====================================================
+     HAEMI LIFE | ENTERPRISE TABLE UX SYSTEM v1.0
+     - Premium product-grade table styling
+     - Smart pagination (auto-hides at ≤ 10 rows)
+     - Full light + dark theme compatibility
+     - Uses existing CSS variables only, rem units only
+  ==================================================== */
+
+  /* --- Table Container --- */
+  .hl-table-container {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: var(--card-radius);
+  }
+
+  /* --- Base Table --- */
+  .hl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Roboto', system-ui, sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--foreground);
+  }
+
+  /* --- Table Header --- */
+  .hl-table thead tr {
+    background-color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hl-table thead th {
+    padding: 0.875rem 1.5rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  .hl-table thead th:first-child {
+    border-radius: var(--card-radius) 0 0 0;
+  }
+
+  .hl-table thead th:last-child {
+    border-radius: 0 var(--card-radius) 0 0;
+  }
+
+  /* --- Table Body Rows --- */
+  .hl-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background-color var(--duration-fast) var(--ease-standard);
+    background-color: var(--card);
+  }
+
+  .hl-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .hl-table tbody tr:hover {
+    background-color: var(--accent);
+  }
+
+  /* --- Table Body Cells --- */
+  .hl-table tbody td {
+    padding: 0.875rem 1.5rem;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    vertical-align: middle;
+  }
+
+  /* --- Dark Theme Overrides for hl-table --- */
+  .dark .hl-table thead tr {
+    background-color: rgba(31, 59, 64, 0.4);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dark .hl-table tbody tr {
+    background-color: transparent;
+    border-bottom-color: var(--border);
+  }
+
+  .dark .hl-table tbody tr:hover {
+    background-color: var(--accent);
+  }
+
+  /* ====================================================
+     SMART PAGINATION COMPONENT
+  ==================================================== */
+
+  /* --- Pagination Wrapper --- */
+  .hl-pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background-color: var(--card);
+    flex-wrap: wrap;
+    border-radius: 0 0 var(--card-radius) var(--card-radius);
+  }
+
+  /* --- Pagination Row Info --- */
+  .hl-pagination-info {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    font-weight: 500;
+    margin-right: auto;
+    white-space: nowrap;
+  }
+
+  /* --- Pagination Ellipsis --- */
+  .hl-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* --- Pagination Button Base --- */
+  .hl-pagination-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.375rem;
+    border-radius: 0.35rem;
+    border: 1px solid var(--border);
+    background-color: transparent;
+    color: var(--muted-foreground);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: 'Roboto', system-ui, sans-serif;
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-standard);
+    line-height: 1;
+    outline: none;
+  }
+
+  /* --- Pagination Button Hover (not disabled) --- */
+  .hl-pagination-btn:hover:not(:disabled) {
+    background-color: var(--accent);
+    color: var(--foreground);
+    border-color: var(--border);
+  }
+
+  /* --- Active Page Highlight --- */
+  .hl-pagination-btn.active {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+    font-weight: 600;
+  }
+
+  .hl-pagination-btn.active:hover {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  /* --- Disabled State --- */
+  .hl-pagination-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* --- Pagination Icon (Chevron) --- */
+  .hl-pagination-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex-shrink: 0;
+  }
+
+  /* --- Dark Pagination Overrides --- */
+  .dark .hl-pagination {
+    background-color: var(--card);
+    border-top-color: var(--border);
+  }
+
+  .dark .hl-pagination-btn {
+    border-color: var(--border);
+    color: var(--muted-foreground);
+  }
+
+  .dark .hl-pagination-btn:hover:not(:disabled) {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .dark .hl-pagination-btn.active {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+  }
 }

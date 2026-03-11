@@ -8,6 +8,8 @@ import { getAuditLogs } from '../../services/admin.service';
 import type { AuditLog } from '../../services/admin.service';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { getErrorMessage } from '../../lib/error';
+import { usePagination } from '@/hooks/use-pagination';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 export const SystemLogs: React.FC = () => {
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -43,6 +45,25 @@ export const SystemLogs: React.FC = () => {
         (log.user_name && log.user_name.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
+    // Must be called unconditionally before any early returns — React Rules of Hooks.
+    const {
+        currentPage,
+        setCurrentPage,
+        resetPage,
+        totalPages,
+        paginatedData: paginatedLogs,
+        showPagination,
+        totalItems,
+        startIndex,
+        endIndex,
+    } = usePagination(filteredLogs);
+
+    // resetPage is stable (useCallback with no deps) — safe in event handlers.
+    const handleSearch = (value: string) => {
+        setSearchTerm(value);
+        resetPage();
+    };
+
     const getActionColor = (action: string) => {
         if (action.includes('LOGIN')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
         if (action.includes('UPDATE')) return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
@@ -54,9 +75,7 @@ export const SystemLogs: React.FC = () => {
     if (loading) {
         return (
             <div className="pt-20">
-                <MedicalLoader
-                    message="Syncing System Logs..."
-                />
+                <MedicalLoader message="Syncing System Logs..." />
             </div>
         );
     }
@@ -91,40 +110,40 @@ export const SystemLogs: React.FC = () => {
                 <Input
                     placeholder="Search by action, user, or details..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => handleSearch(e.target.value)}
                     className="pl-10"
                 />
             </div>
         </Card>
 
         <Card className="overflow-hidden border shadow-sm">
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
+            <div className="hl-table-container">
+                <table className="hl-table">
+                    <thead>
                         <tr>
-                            <th className="px-6 py-4 font-semibold">Event</th>
-                            <th className="px-6 py-4 font-semibold">User</th>
-                            <th className="px-6 py-4 font-semibold">Details</th>
-                            <th className="px-6 py-4 font-semibold">Technical</th>
-                            <th className="px-6 py-4 font-semibold text-right">Timestamp</th>
+                            <th>Event</th>
+                            <th>User</th>
+                            <th>Details</th>
+                            <th>Technical</th>
+                            <th className="text-right">Timestamp</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/50">
-                        {filteredLogs.length === 0 ? (
+                    <tbody>
+                        {paginatedLogs.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                                <td colSpan={5} className="text-center text-muted-foreground" style={{ padding: '3rem 1.5rem' }}>
                                     No logs found matching your criteria
                                 </td>
                             </tr>
                         ) : (
-                            filteredLogs.map((log) => (
-                                <tr key={log.id} className="bg-background hover:bg-muted/30 transition-colors">
-                                    <td className="px-6 py-4">
+                            paginatedLogs.map((log) => (
+                                <tr key={log.id}>
+                                    <td>
                                         <Badge variant="secondary" className={`font-mono text-[10px] uppercase ${getActionColor(log.action)}`}>
                                             {log.action}
                                         </Badge>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td>
                                         <div className="flex items-center gap-2">
                                             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
                                                 {(log.user_name || 'Sys').charAt(0).toUpperCase()}
@@ -135,21 +154,21 @@ export const SystemLogs: React.FC = () => {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 max-w-xs truncate text-muted-foreground" title={JSON.stringify(log.details)}>
+                                    <td className="max-w-xs truncate text-muted-foreground" title={JSON.stringify(log.details)}>
                                         {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
                                     </td>
-                                    <td className="px-6 py-4 text-muted-foreground font-mono text-xs">
+                                    <td className="text-muted-foreground font-mono text-xs">
                                         <div className="flex items-center gap-2">
                                             <Monitor className="h-3 w-3" />
                                             {log.ip_address || '127.0.0.1'}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-right whitespace-nowrap text-muted-foreground">
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                                    <td className="text-right whitespace-nowrap">
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-sm font-medium text-foreground">
                                                 {new Date(log.created_at).toLocaleDateString()}
                                             </span>
-                                            <span className="text-xs text-slate-500">
+                                            <span className="text-xs text-muted-foreground">
                                                 {new Date(log.created_at).toLocaleTimeString()}
                                             </span>
                                         </div>
@@ -160,6 +179,16 @@ export const SystemLogs: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+            <TablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                showPagination={showPagination}
+                onPageChange={setCurrentPage}
+                itemLabel="events"
+            />
         </Card>
     </div>);
 };

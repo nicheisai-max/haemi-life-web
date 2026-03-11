@@ -1,4 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { logger } from '../utils/logger';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 if (!API_BASE) {
@@ -14,7 +15,14 @@ let accessToken: string | null = null;
 
 export const setAccessToken = (token: string | null) => {
     accessToken = token;
-    // FIX 4: Notify system of token update for socket revalidation
+    
+    // Phase 7: Atomic Network Layer Sync
+    if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+        delete api.defaults.headers.common['Authorization'];
+    }
+
     if (typeof window !== 'undefined' && token) {
         window.dispatchEvent(new CustomEvent('auth:token-refreshed', { detail: { token } }));
     }
@@ -51,7 +59,11 @@ if (typeof window !== 'undefined') {
     const flushQueue = () => {
         appInitialized = true;
         initializationQueue.forEach(({ config, resolve, reject }) => {
-            if (accessToken && config.headers) config.headers.Authorization = `Bearer ${accessToken}`;
+            // Priority: Access the latest atomic token
+            const token = accessToken || sessionStorage.getItem('token');
+            if (token && config.headers) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
             api(config).then(resolve).catch(reject);
         });
         initializationQueue = [];
@@ -177,45 +189,104 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// ─── Phase 2: Single-Flight Refresh Pattern ──────────────────────────────────
+// ─── Phase 2, 5 & 6: Refresh Engine & Safety Guards ──────────────────────────
 let lastSystemErrorTime = 0;
 let refreshPromise: Promise<string | null> | null = null;
+let failedQueue: { resolve: (token: string | null) => void; reject: (err: unknown) => void }[] = [];
+let sessionVersion = 0; // Guard against "Token Resurrection" race conditions
+
+const processQueue = (error: unknown, token: string | null = null) => {
+    const queueToProcess = [...failedQueue];
+    failedQueue = [];
+    queueToProcess.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+};
 
 const clearAuthSession = () => {
-    if (!appInitialized) return;
+    sessionVersion++; // Invalidate any pending refresh results
     refreshPromise = null;
+    
+    // Phase 7: Atomic state clearing (Memory + Network + Storage)
     setAccessToken(null);
     sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('refreshToken');
+    
+    // Deterministic Queue Cleanout
+    processQueue(new Error('Session terminated'));
+    
     window.dispatchEvent(new CustomEvent('auth:unauthorized'));
 };
 
-const performRefresh = async (): Promise<string | null> => {
-    try {
-        const currentRefreshToken = sessionStorage.getItem('refreshToken');
-        if (!currentRefreshToken) throw new Error('No refresh token');
+export const performRefresh = async (retryCount = 0): Promise<string | null> => {
+    if (refreshPromise) return refreshPromise;
 
-        const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
-            `${API_URL}/auth/refresh-token`,
-            { refreshToken: currentRefreshToken },
-            { timeout: 7000 }
-        );
+    const currentVersion = sessionVersion;
 
-        if (!response.data.success || !response.data.data?.token) throw new Error('Refresh failed');
+    refreshPromise = (async () => {
+        try {
+            const currentRefreshToken = sessionStorage.getItem('refreshToken');
+            if (!currentRefreshToken) throw new Error('No refresh token available');
 
-        const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
-        setAccessToken(newToken);
+            logger.info(`[API] Initiating synchronized token refresh (Attempt ${retryCount + 1})`);
+            const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
+                `${API_URL}/auth/refresh-token`,
+                { refreshToken: currentRefreshToken },
+                { timeout: 8000 }
+            );
 
-        if (newRefreshToken) {
-            sessionStorage.setItem('refreshToken', newRefreshToken);
+            // Phase 6 Safety: If logout occurred while pending, discard result
+            if (sessionVersion !== currentVersion) {
+                logger.warn('[API] Refresh discarded: logout occurred during request');
+                return null;
+            }
+
+            if (!response.data.success || !response.data.data?.token) {
+                throw new Error('Refresh response invalid or failed');
+            }
+
+            const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
+            
+            // Atomic state update
+            setAccessToken(newToken);
+            sessionStorage.setItem('token', newToken);
+            if (newRefreshToken) sessionStorage.setItem('refreshToken', newRefreshToken);
+
+            logger.info('[API] Token refresh successful');
+            processQueue(null, newToken);
+            return newToken;
+        } catch (err: unknown) {
+            const isNetworkError = axios.isAxiosError(err) && (!err.response || err.code === 'ECONNABORTED');
+            
+            // Network Failure Resilience (Exponential Backoff)
+            if (isNetworkError && retryCount < 2 && sessionVersion === currentVersion) {
+                const backoff = 1000 * Math.pow(2, retryCount);
+                logger.warn(`[API] Refresh network error. Retrying in ${backoff}ms...`);
+                refreshPromise = null; 
+                await new Promise(r => setTimeout(r, backoff));
+                return performRefresh(retryCount + 1);
+            }
+
+            // Phase 6: Only clear session if we are still on the same session version
+            if (sessionVersion === currentVersion) {
+                logger.error('[API] Sync refresh failed permanently', err);
+                processQueue(err, null);
+                clearAuthSession();
+            }
+            return null;
+        } finally {
+            if (sessionVersion === currentVersion) {
+                refreshPromise = null;
+            }
         }
+    })();
 
-        return newToken;
-    } catch (err) {
-        clearAuthSession();
-        throw err;
-    } finally {
-        refreshPromise = null;
-    }
+    return refreshPromise;
 };
 
 api.interceptors.response.use(
@@ -231,10 +302,17 @@ api.interceptors.response.use(
         recordFailure(error);
 
         if (!originalRequest) return Promise.reject(error);
-
-        // 1. Network/Expected Auth failures (400/401 on /auth/ urls)
         if (!error.response) return Promise.reject(error);
 
+        // 1. Interceptor Loop Protection
+        if (originalRequest.url?.includes('/auth/refresh-token')) {
+            if (error.response.status === 401) {
+                clearAuthSession();
+            }
+            return Promise.reject(error);
+        }
+
+        // 2. Expected Auth Failures (Silent)
         const isExpectedAuthFailure =
             (error.response.status === 400 || error.response.status === 401 || error.response.status === 403) &&
             originalRequest.url?.includes('/auth/');
@@ -247,7 +325,34 @@ api.interceptors.response.use(
             });
         }
 
-        // 2. Critical System Errors (500s)
+        // 3. 401 Handling with Request Queuing
+        if (error.response.status === 401 && !originalRequest._retry) {
+            originalRequest._retry = true;
+
+            // Buffer this request in the failed queue
+            return new Promise((resolve, reject) => {
+                failedQueue.push({
+                    resolve: (token: string | null) => {
+                        if (token) {
+                            if (originalRequest.headers) {
+                                originalRequest.headers.Authorization = `Bearer ${token}`;
+                            }
+                            resolve(api(originalRequest));
+                        } else {
+                            reject(error);
+                        }
+                    },
+                    reject: (err) => reject(err)
+                });
+
+                // Start refresh if not already in progress
+                if (!refreshPromise) {
+                    performRefresh();
+                }
+            });
+        }
+
+        // 4. Critical System Errors (500s)
         if (error.response.status >= 500) {
             const isRetryable = [502, 503, 429].includes(error.response.status);
             if (!isRetryable && typeof window !== 'undefined') {
@@ -256,7 +361,7 @@ api.interceptors.response.use(
                     lastSystemErrorTime = now;
                     window.dispatchEvent(new CustomEvent('system:error', {
                         detail: {
-                            message: 'A critical system error occurred. Our technical team has been notified.',
+                            message: 'A critical system error occurred.',
                             statusCode: error.response.status
                         }
                     }));
@@ -265,69 +370,19 @@ api.interceptors.response.use(
             if (!isRetryable) return Promise.reject(error);
         }
 
-        // 3. 403 Forbidden -> Session Invalid
-        if (error.response.status === 403) {
-            clearAuthSession();
-            return Promise.reject(error);
-        }
-
-        // 4. Phase 2 & 5: Single-Flight Refresh Logic for 401s
-        if (error.response.status === 401 && !originalRequest._retry) {
-            if (originalRequest.url?.includes('/auth/refresh-token')) {
-                clearAuthSession();
-                return Promise.reject(error);
-            }
-
-            // Stabilization Guard: If initializing, wait for auth:ready
-            if (!appInitialized) {
-                return new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                        window.removeEventListener('auth:ready', onAuthReady);
-                        reject(error);
-                    }, 5000);
-
-                    const onAuthReady = () => {
-                        clearTimeout(timeout);
-                        if (accessToken) {
-                            if (originalRequest.headers) {
-                                originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-                            }
-                            resolve(api(originalRequest));
-                        } else {
-                            reject(error);
-                        }
-                    };
-                    window.addEventListener('auth:ready', onAuthReady, { once: true });
-                });
-            }
-
-            originalRequest._retry = true;
-
-            // SINGLE-FLIGHT PATTERN: Check if a refresh is already in progress
-            if (!refreshPromise) {
-                refreshPromise = performRefresh();
-            }
-
-            try {
-                const newToken = await refreshPromise;
-                if (originalRequest.headers && newToken) {
-                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
-                }
-                return api(originalRequest);
-            } catch (refreshErr) {
-                return Promise.reject(refreshErr);
-            }
-        }
-
-        // Retry logic for 502/503/429
+        // 5. 502/503/429 Retry Logic
         if (originalRequest.__retryCount === undefined) originalRequest.__retryCount = 0;
-        const isRetryable = error.response && (error.response.status === 502 || error.response.status === 503 || error.response.status === 429);
+        const is500Retryable = error.response && (error.response.status === 502 || error.response.status === 503 || error.response.status === 429);
 
-        if (originalRequest.__retryCount < MAX_RETRIES && isRetryable) {
+        if (originalRequest.__retryCount < MAX_RETRIES && is500Retryable) {
             originalRequest.__retryCount += 1;
             const delay = INITIAL_RETRY_DELAY * Math.pow(2, originalRequest.__retryCount);
             await new Promise(resolve => setTimeout(resolve, delay));
             return api(originalRequest);
+        }
+
+        if (error.response.status === 403 && !originalRequest.url?.includes('/auth/')) {
+            clearAuthSession();
         }
 
         return Promise.reject(error);

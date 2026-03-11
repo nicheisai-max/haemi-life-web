@@ -56,8 +56,17 @@ describe('Session Isolation (Phase 2)', () => {
                 }]
             });
 
-            // Mock the version increment on reuse detection
-            mockQuery.mockResolvedValueOnce({ rows: [] });
+            // Mock the sessionRes check
+            mockQuery.mockResolvedValueOnce({
+                rows: [{
+                    refresh_token_jti: 'j1',
+                    revoked: false
+                }]
+            });
+
+            // Mock the session revocation and commit
+            mockQuery.mockResolvedValueOnce({ rows: [] }); // UPDATE
+            mockQuery.mockResolvedValueOnce({ rows: [] }); // COMMIT
 
             // 3. Attempt to refresh
             const res = await request(app)
