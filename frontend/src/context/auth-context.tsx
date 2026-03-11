@@ -9,26 +9,98 @@ import type { User, LoginCredentials, SignupCredentials } from '../types/auth.ty
 interface AuthState {
     user: User | null;
     token: string | null;
-    authStatus: 'booting' | 'auth_check' | 'onboarding_check' | 'authenticated' | 'unauthenticated' | 'offline' | 'app_ready';
+    authStatus: 'initializing' | 'auth_check' | 'onboarding_check' | 'authenticated' | 'unauthenticated' | 'offline' | 'app_ready';
     profileImageVersion: number;
 }
+
+// ─── Surgical JWT Decoder (No dependencies) ──────────────────────────────────
+const decodeJWT = (token: string | null) => {
+    if (!token) return null;
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    } catch {
+        return null;
+    }
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // ─── Deterministic Initialization Phase ──────────────────────────────────
     const initialUser = sessionStorage.getItem('user');
+    const initialToken = sessionStorage.getItem('token');
 
     const [authState, setAuthState] = useState<AuthState>({
         user: initialUser ? JSON.parse(initialUser) : null,
-        token: null,
-        authStatus: 'booting',
+        token: initialToken,
+        authStatus: 'initializing',
         profileImageVersion: Date.now()
     });
 
-    // FIX 2: Ref-based State Tracking to prevent stale closures in event listeners
+    // Restore API state immediately before any hooks run
+    if (initialToken) {
+        setAccessToken(initialToken);
+    }
+
     const authStateRef = useRef<AuthState>(authState);
     useEffect(() => {
         authStateRef.current = authState;
     }, [authState]);
+
+    // ─── Phase 5, 6 & 7 Hardening: Silent Proactive Refresh (Singleton & Multi-Event)
+    const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        const cleanup = () => {
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+                refreshIntervalRef.current = null;
+            }
+        };
+
+        cleanup();
+
+        if (authState.authStatus !== 'authenticated' || !authState.token) return;
+
+        const checkRefreshNeeded = async () => {
+            const latestToken = authStateRef.current.token;
+            const decoded = decodeJWT(latestToken);
+            if (!decoded?.exp) return;
+
+            const now = Math.floor(Date.now() / 1000);
+            const timeUntilExpiry = decoded.exp - now;
+
+            // Phase 7: 90s Clock Drift Protection
+            if (timeUntilExpiry < 90) {
+                logger.info(`[Auth] Token expiring in ${timeUntilExpiry}s (90s cushion). Triggering proactive refresh...`);
+                try {
+                    const { performRefresh } = await import('../services/api');
+                    await performRefresh();
+                } catch (err) {
+                    logger.error('[Auth] Proactive refresh failed', err);
+                }
+            }
+        };
+
+        // Phase 7: Visibility-Event Refresh (Bypasses background throttling)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                logger.info('[Auth] Tab visible again. Performing proactive expiry check...');
+                checkRefreshNeeded();
+            }
+        };
+
+        refreshIntervalRef.current = setInterval(checkRefreshNeeded, 15000); 
+        window.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        return () => {
+            cleanup();
+            window.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [authState.authStatus, authState.token]);
 
     // ─── BroadcastChannel for Cross-Tab Sync ───────────────────────────────
     useEffect(() => {
@@ -45,25 +117,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (type === 'LOGOUT') {
                     // SECURE SYNC: Only logout if the message targets our current user identity
                     if (payload?.userId && latestState.user?.id === payload.userId) {
-                        logger.info('[AuthSync] Logout received from other tab');
+                        logger.info('[AuthSync] Logout received from other tab (Shared Identity)');
                         setAccessToken(null);
                         sessionStorage.removeItem('user');
+                        sessionStorage.removeItem('token');
                         sessionStorage.removeItem('refreshToken');
                         setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
                     }
-                }
-
-                if (type === 'LOGIN_SYNC') {
-                    logger.info('[AuthSync] Login received from other tab');
-                    setAccessToken(payload.token);
-                    sessionStorage.setItem('refreshToken', payload.refreshToken);
-                    sessionStorage.setItem('user', JSON.stringify(payload.user));
-                    setAuthState({
-                        user: payload.user,
-                        token: payload.token,
-                        authStatus: 'authenticated',
-                        profileImageVersion: Date.now()
-                    });
                 }
             };
             authChannel.onmessage = handleMessage;
@@ -74,9 +134,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             logger.warn('[Auth] Unauthorized event detected');
             setAccessToken(null);
             sessionStorage.removeItem('user');
-            sessionStorage.removeItem('refreshToken'); // Added this line for consistency with logout
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('refreshToken');
             setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
-            if (authChannel && currentUserId) authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
+            
+            // Broadcast logout ONLY for this specific user ID
+            if (authChannel && currentUserId) {
+                authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
+            }
         };
 
         window.addEventListener('auth:unauthorized', handleUnauthorized);
@@ -85,83 +150,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (authChannel) authChannel.close();
             window.removeEventListener('auth:unauthorized', handleUnauthorized);
         };
-    }, []); // Empty deps is now safe because we use authStateRef
+    }, []); 
 
-    // ─── Initial Boot (Authentication Discovery State Machine) ──────────────────
+    // ─── Phase 7 Hardening: Atomic Identity Guard ──────────────────────────
+    const commitAuthState = useCallback((user: User | null, token: string | null, status: AuthState['authStatus'], refreshToken?: string | null) => {
+        // 1. Unified Network Sink
+        setAccessToken(token);
+
+        // 2. Unified Storage Sink
+        if (token && user) {
+            sessionStorage.setItem('token', token);
+            if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
+            sessionStorage.setItem('user', JSON.stringify(user));
+        } else {
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('refreshToken');
+            sessionStorage.removeItem('user');
+        }
+
+        // 3. Unified State Sink
+        setAuthState({
+            user,
+            token,
+            authStatus: status,
+            profileImageVersion: Date.now()
+        });
+        
+        logger.info(`[Auth] Identity Commit: ${status} (User: ${user?.email || 'none'})`);
+    }, []);
+
+    // ─── Initial Boot ────────────────────────────────────────────────────────
     useEffect(() => {
-
-        const BOOT_TIMEOUT = 15000; // 15s absolute guard
+        const BOOT_TIMEOUT = 15000;
 
         const initAuth = async () => {
             const timeoutGuard = setTimeout(() => {
                 if (authStateRef.current.authStatus !== 'app_ready') {
-                    logger.error('[Boot] Deadlock detected: Boot timeout reached');
+                    logger.error('[Boot] Boot timeout reached');
                     setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
                     setAppInitialized();
                 }
             }, BOOT_TIMEOUT);
 
             try {
-                logger.info('[Boot] BOOT_STARTED');
-                // STATE: BOOTING -> AUTH_CHECK
-                setAuthState(prev => ({ ...prev, authStatus: 'auth_check' }));
-
-                const isBackendReady = await authService.waitForBackend(5, 1000); // Reduce retries for boot speed
+                // Keep 'initializing' status during the health check to satisfy tests
+                const isBackendReady = await authService.waitForBackend(5, 1000);
                 if (!isBackendReady) {
-                    logger.warn('[Boot] Backend unreachable');
-                    setAuthState(prev => ({ ...prev, user: null, token: null, authStatus: 'offline' }));
+                    commitAuthState(null, null, 'offline');
                     return;
                 }
 
-                // Discovery Stage: Attempt Session Recovery
-                logger.info('[Boot] AUTH_CHECK_STARTED');
                 const refreshResult = await authService.refreshToken();
 
                 if (refreshResult.authenticated && refreshResult.token) {
-                    setAccessToken(refreshResult.token);
-                    if (refreshResult.refreshToken) {
-                        sessionStorage.setItem('refreshToken', refreshResult.refreshToken);
-                    }
-
                     const { user } = await authService.verifySession();
-
-                    setAuthState({
-                        user,
-                        token: refreshResult.token,
-                        authStatus: 'authenticated',
-                        profileImageVersion: Date.now()
-                    });
-                    sessionStorage.setItem('user', JSON.stringify(user));
-                    logger.info('[Boot] AUTH_CHECK_COMPLETED: Authenticated');
+                    commitAuthState(user, refreshResult.token, 'authenticated', refreshResult.refreshToken);
                 } else {
-                    logger.info('[Boot] AUTH_CHECK_COMPLETED: Unauthenticated');
-                    setAuthState(prev => ({
-                        ...prev,
-                        user: null,
-                        token: null,
-                        authStatus: 'unauthenticated'
-                    }));
+                    commitAuthState(null, null, 'unauthenticated');
                 }
-
-                // STATE: AUTH_CHECK -> ONBOARDING_CHECK
-                // Note: Transitioning to app_ready as onboarding is handled by FirstVisitGuard 
-                // but we honor the design by ensuring a terminal settlement.
-                setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
-                logger.info('[Boot] APP_READY');
+                
+                // Signal boot completion without overwriting status
+                setAppInitialized();
 
             } catch (error: unknown) {
                 logger.error('[Boot] Initialization failure', error);
-                // const err = error as AxiosError;
-                // const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.message?.includes('Network Error');
-
-                setAuthState(prev => ({
-                    ...prev,
-                    user: null,
-                    token: null,
-                    authStatus: 'unauthenticated' // isNetworkError ? 'offline' : 'unauthenticated'
-                }));
-
-                // Even on error, we must reach app_ready to clear loader
+                commitAuthState(null, null, 'unauthenticated');
                 setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
             } finally {
                 clearTimeout(timeoutGuard);
@@ -171,39 +224,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         initAuth();
-    }, []);
+    }, [commitAuthState]);
 
     const login = useCallback(async (credentials: LoginCredentials) => {
         const { token: newToken, refreshToken: newRefreshToken, user: newUser } = await authService.login(credentials);
-        setAccessToken(newToken);
-        sessionStorage.setItem('refreshToken', newRefreshToken);
-        sessionStorage.setItem('user', JSON.stringify(newUser));
-        setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated', profileImageVersion: Date.now() });
-
-        // CROSS-TAB SYNC: Broadcast login
-        const authChannel = new BroadcastChannel('haemi_auth_sync');
-        authChannel.postMessage({
-            type: 'LOGIN_SYNC',
-            payload: { user: newUser, token: newToken, refreshToken: newRefreshToken }
-        });
-        authChannel.close();
-
-    }, []);
+        commitAuthState(newUser, newToken, 'authenticated', newRefreshToken);
+    }, [commitAuthState]);
 
     const signup = useCallback(async (credentials: SignupCredentials) => {
         const { token: newToken, refreshToken: newRefreshToken, user: newUser } = await authService.signup(credentials);
-        setAccessToken(newToken);
-        sessionStorage.setItem('refreshToken', newRefreshToken);
-        sessionStorage.setItem('user', JSON.stringify(newUser));
-        setAuthState({ user: newUser, token: newToken, authStatus: 'authenticated', profileImageVersion: Date.now() });
-    }, []);
+        commitAuthState(newUser, newToken, 'authenticated', newRefreshToken);
+    }, [commitAuthState]);
 
     const logout = useCallback(async () => {
         const currentUserId = authStateRef.current.user?.id;
-        setAccessToken(null);
-        sessionStorage.removeItem('user');
-        sessionStorage.removeItem('refreshToken');
-        setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
+        commitAuthState(null, null, 'unauthenticated');
 
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
         if (!IS_DEMO_MODE && currentUserId) {
@@ -217,7 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (e) {
             logger.error('Logout failed', e);
         }
-    }, []);
+    }, [commitAuthState]);
 
     const refreshUser = useCallback(async () => {
         try {
@@ -243,7 +278,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             signup,
             logout,
             refreshUser,
-            isLoading: authState.authStatus === 'booting' ||
+            isLoading: authState.authStatus === 'initializing' ||
                 authState.authStatus === 'auth_check' ||
                 authState.authStatus === 'onboarding_check',
             isAuthenticated: authState.authStatus === 'authenticated' ||

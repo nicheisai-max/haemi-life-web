@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,12 +13,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle, Activity, Microscope, Zap, Heart, Wind, Filter } from 'lucide-react';
 import { inventorySchema } from '../../lib/validation/inventory.schema';
-
-
-
 import { PremiumNumberInput } from '@/components/ui/premium-number-input';
-
 import { TransitionItem } from '../../components/layout/page-transition';
+import { usePagination } from '@/hooks/use-pagination';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 interface InventoryItem {
     id: string;
@@ -76,6 +74,23 @@ export const Inventory: React.FC = () => {
         const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
         return matchesSearch && matchesCategory;
     });
+
+    const {
+        currentPage,
+        setCurrentPage,
+        resetPage,
+        totalPages,
+        paginatedData: paginatedInventory,
+        showPagination,
+        totalItems,
+        startIndex,
+        endIndex,
+    } = usePagination(filteredInventory);
+
+    // resetPage is stable (useCallback with no external deps) — no infinite loop risk.
+    useEffect(() => {
+        resetPage();
+    }, [searchTerm, categoryFilter, resetPage]);
 
     const lowStockItems = inventory.filter(item => item.stock < item.minStock);
     const uniqueCategoriesInStock = Array.from(new Set(inventory.map(item => item.category)));
@@ -328,14 +343,14 @@ export const Inventory: React.FC = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredInventory.length === 0 ? (
+                                {paginatedInventory.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                             No items found.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    filteredInventory.map((item) => {
+                                    paginatedInventory.map((item) => {
                                         const status = getStockStatus(item);
                                         return (
                                             <TableRow key={item.id} className="hover:bg-muted/50">
@@ -388,6 +403,16 @@ export const Inventory: React.FC = () => {
                                 )}
                             </TableBody>
                         </Table>
+                        <TablePagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={totalItems}
+                            startIndex={startIndex}
+                            endIndex={endIndex}
+                            showPagination={showPagination}
+                            onPageChange={setCurrentPage}
+                            itemLabel="items"
+                        />
                     </div>
                 </Card>
             </TransitionItem>

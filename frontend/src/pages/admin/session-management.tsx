@@ -8,6 +8,8 @@ import { MedicalLoader } from '@/components/ui/medical-loader';
 import { Badge } from '@/components/ui/badge';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { toast } from 'sonner';
+import { usePagination } from '@/hooks/use-pagination';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 export const SessionManagement: React.FC = () => {
     const [sessions, setSessions] = useState<UserSession[]>([]);
@@ -52,6 +54,18 @@ export const SessionManagement: React.FC = () => {
         return <Monitor className="h-4 w-4" />;
     };
 
+    // Must be called unconditionally before any early returns — React Rules of Hooks.
+    const {
+        currentPage,
+        setCurrentPage,
+        totalPages,
+        paginatedData: paginatedSessions,
+        showPagination,
+        totalItems,
+        startIndex,
+        endIndex,
+    } = usePagination(sessions);
+
     if (loading) return <div className="pt-20"><MedicalLoader message="Enumerating Live Sessions..." /></div>;
 
     return (
@@ -88,26 +102,26 @@ export const SessionManagement: React.FC = () => {
                         </Badge>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-[11px] text-muted-foreground uppercase bg-muted/30 border-b">
+                        <table className="hl-table">
+                            <thead>
                                 <tr>
-                                    <th className="px-6 py-4 font-bold tracking-wider">User Identity</th>
-                                    <th className="px-6 py-4 font-bold tracking-wider">Role</th>
-                                    <th className="px-6 py-4 font-bold tracking-wider">Device / IP</th>
-                                    <th className="px-6 py-4 font-bold tracking-wider">Last Activity</th>
-                                    <th className="px-6 py-4 font-bold tracking-wider text-right">Actions</th>
+                                    <th>User Identity</th>
+                                    <th>Role</th>
+                                    <th>Device / IP</th>
+                                    <th>Last Activity</th>
+                                    <th className="text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-border/50">
-                                {sessions.length === 0 ? (
+                            <tbody>
+                                {paginatedSessions.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground italic">
+                                        <td colSpan={5} className="text-center italic text-muted-foreground py-12">
                                             No active sessions found.
                                         </td>
                                     </tr>
                                 ) : (
-                                    sessions.map((session) => (
-                                        <tr key={session.id} className="bg-background hover:bg-muted/30 transition-colors group">
+                                    paginatedSessions.map((session) => (
+                                        <tr key={session.id} className="group">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold ring-2 ring-background ring-offset-2">
@@ -158,6 +172,16 @@ export const SessionManagement: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                    <TablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={totalItems}
+                        startIndex={startIndex}
+                        endIndex={endIndex}
+                        showPagination={showPagination}
+                        onPageChange={setCurrentPage}
+                        itemLabel="sessions"
+                    />
                 </Card>
             </TransitionItem>
         </div>

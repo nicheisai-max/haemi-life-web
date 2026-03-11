@@ -12,6 +12,8 @@ import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope,
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { getErrorMessage } from '../../lib/error';
+import { usePagination } from '@/hooks/use-pagination';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<UserListItem[]>([]);
@@ -24,10 +26,22 @@ export const UserManagement: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
     const { confirm } = useConfirm();
 
+    // Must be called unconditionally before any early returns — React Rules of Hooks.
+    const {
+        currentPage,
+        setCurrentPage,
+        resetPage,
+        totalPages,
+        paginatedData: paginatedUsers,
+        showPagination,
+        totalItems,
+        startIndex,
+        endIndex,
+    } = usePagination(filteredUsers);
+
     const applyFilters = useCallback(() => {
         let filtered = users;
 
-        // Search filter
         if (searchTerm) {
             filtered = filtered.filter(user =>
                 user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -36,12 +50,10 @@ export const UserManagement: React.FC = () => {
             );
         }
 
-        // Role filter
         if (roleFilter !== 'all') {
             filtered = filtered.filter(user => user.role === roleFilter);
         }
 
-        // Status filter
         if (statusFilter !== 'all') {
             const isActive = statusFilter === 'active';
             filtered = filtered.filter(user => (user.status === 'ACTIVE') === isActive);
@@ -49,6 +61,11 @@ export const UserManagement: React.FC = () => {
 
         setFilteredUsers(filtered);
     }, [users, searchTerm, roleFilter, statusFilter]);
+
+    // Reset to page 1 whenever any filter changes. resetPage is stable (see usePagination).
+    useEffect(() => {
+        resetPage();
+    }, [searchTerm, roleFilter, statusFilter, resetPage]);
 
     useEffect(() => {
         fetchUsers();
@@ -226,14 +243,14 @@ export const UserManagement: React.FC = () => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredUsers.length === 0 ? (
+                        {paginatedUsers.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                                     No users found matching your filters
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredUsers.map(user => (
+                            paginatedUsers.map(user => (
                                 <TableRow key={user.id} className="hover:bg-muted/50">
                                     <TableCell>
                                         <div className="flex items-center gap-3">
@@ -298,6 +315,16 @@ export const UserManagement: React.FC = () => {
                         )}
                     </TableBody>
                 </Table>
+                <TablePagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={totalItems}
+                    startIndex={startIndex}
+                    endIndex={endIndex}
+                    showPagination={showPagination}
+                    onPageChange={setCurrentPage}
+                    itemLabel="users"
+                />
             </div>
         </Card>
     </div>);

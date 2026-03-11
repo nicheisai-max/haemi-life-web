@@ -71,14 +71,26 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
 
                 const sessionData = sessionResult.rows[0];
 
-                // JTI Validation (Token Replay Protection)
-                if (payload.jti && sessionData.access_token_jti !== payload.jti) {
-                    logger.warn('Token replay attempt detected (JTI mismatch)', {
+                // 5. Access Token JTI Enforcement (Dispacement Tolerance)
+                // Check if this token's JTI matches the current session or the recently rotated one (grace window)
+                const currentAccessJti = sessionData.access_token_jti;
+                const previousAccessJti = sessionData.previous_access_token_jti;
+                const rotatedAt = sessionData.jti_rotated_at ? new Date(sessionData.jti_rotated_at).getTime() : 0;
+                const now = Date.now();
+                const GRACE_PERIOD_MS = 60 * 1000;
+
+                const isCurrentJti = currentAccessJti && payload.jti === currentAccessJti;
+                const isGracefulJti = previousAccessJti && payload.jti === previousAccessJti && (now - rotatedAt) < GRACE_PERIOD_MS;
+
+                if (!isCurrentJti && !isGracefulJti) {
+                    logger.warn('Access token JTI violation (displaced)', {
                         userId: payload.id,
-                        expected: sessionData.access_token_jti,
-                        received: payload.jti
+                        jti: payload.jti,
+                        currentJti: currentAccessJti,
+                        previousJti: previousAccessJti,
+                        rotatedAt: sessionData.jti_rotated_at
                     });
-                    return sendError(res, 401, 'Token replaced by new session. Please log in again.');
+                    return sendError(res, 401, 'Session token displaced. Please log in again.');
                 }
 
                 // Fingerprint Validation (Session Hijacking Protection)

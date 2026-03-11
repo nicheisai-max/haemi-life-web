@@ -9,6 +9,37 @@ import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
 import crypto from 'crypto';
 
+// Phase 7: Backend Refresh Rate Limiting (In-Memory Sliding Window)
+const refreshRateLimitMap = new Map<string, { counts: number[]; lastCleanup: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MAX_REFRESH_ATTEMPTS = 5;
+
+const checkRefreshRateLimit = (sessionId: string): boolean => {
+    const now = Date.now();
+    const sessionData = refreshRateLimitMap.get(sessionId) || { counts: [], lastCleanup: now };
+    
+    // Cleanup old timestamps
+    sessionData.counts = sessionData.counts.filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
+    
+    if (sessionData.counts.length >= MAX_REFRESH_ATTEMPTS) {
+        return false;
+    }
+    
+    sessionData.counts.push(now);
+    refreshRateLimitMap.set(sessionId, sessionData);
+    
+    // Periodic global cleanup (every 100 calls) to prevent memory leaks
+    if (Math.random() < 0.01) {
+        for (const [sid, data] of refreshRateLimitMap.entries()) {
+            const filtered = data.counts.filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
+            if (filtered.length === 0) refreshRateLimitMap.delete(sid);
+            else refreshRateLimitMap.set(sid, { counts: filtered, lastCleanup: now });
+        }
+    }
+    
+    return true;
+};
+
 export const signup = async (req: Request, res: Response) => {
     const { email, password, role, name, phone_number, id_number } = req.body;
 
@@ -385,81 +416,159 @@ export const refreshToken = async (req: Request, res: Response) => {
         }
 
         const sessionId = decoded.session_id;
+
+        if (!sessionId) {
+            logger.error('[Security] Refresh token missing session_id', { userId: decoded.id });
+            await client.query('ROLLBACK');
+            return sendResponse(res, 401, false, 'Invalid token structure');
+        }
+
+        // Phase 7: Apply Rate Limiting
+        if (!checkRefreshRateLimit(sessionId)) {
+            logger.warn('[Security] Refresh rate limit exceeded', { sessionId, userId: decoded.id });
+            await client.query('ROLLBACK');
+            return sendResponse(res, 429, false, 'Too many refresh attempts. Please try again in a minute.');
+        }
+
         const sessionRes = await client.query(
-            'SELECT refresh_token_jti, revoked FROM user_sessions WHERE session_id = $1 FOR UPDATE',
+            `SELECT refresh_token_jti, previous_refresh_token_jti, jti_rotated_at, 
+             access_token_jti, revoked FROM user_sessions WHERE session_id = $1 FOR UPDATE`,
             [sessionId]
         );
         const session = sessionRes.rows[0];
 
         // 3. Security Check: Token Rotation & Versioning
-        // We check BOTH the jti (rotation) and token_version (emergency revocation)
         const isVersionMismatch = decoded.token_version !== undefined && decoded.token_version !== user.token_version;
-        const isJtiMismatch = decoded.jti && session && decoded.jti !== session.refresh_token_jti;
+        
+        // GRACE WINDOW LOGIC (Google/Meta Grade)
+        const currentJti = session?.refresh_token_jti;
+        const previousJti = session?.previous_refresh_token_jti;
+        const rotatedAt = session?.jti_rotated_at ? new Date(session.jti_rotated_at).getTime() : 0;
+        const now = Date.now();
+        const GRACE_PERIOD_MS = 60 * 1000; // 60 seconds
 
-        if (isVersionMismatch || isJtiMismatch || !session || session.revoked) {
-            logger.warn('Token rotation violation detected', {
-                userId: user.id,
-                sessionId,
-                reason: isVersionMismatch ? 'version_mismatch' : isJtiMismatch ? 'jti_mismatch' : 'revoked_session'
-            });
+        const isCurrentJti = decoded.jti && currentJti && decoded.jti === currentJti;
+        const isGracefulJti = decoded.jti && previousJti && decoded.jti === previousJti && (now - rotatedAt) < GRACE_PERIOD_MS;
 
-            // On violation: Force revoke all sessions by incrementing version
-            await client.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [user.id]);
-            await client.query('UPDATE user_sessions SET revoked = TRUE WHERE session_id = $1', [sessionId]);
-            await client.query('COMMIT');
-            return sendResponse(res, 401, false, 'Session revoked due to security violation');
+        if (isVersionMismatch || !session || session.revoked || (!isCurrentJti && !isGracefulJti)) {
+            // 3b. Forensic Violation Detection (Version Mismatch or JTI Replay)
+            if (session && (isVersionMismatch || (!isCurrentJti && !isGracefulJti))) {
+                const isExpiredGraceJti = !isVersionMismatch && decoded.jti === previousJti;
+                
+                logger.warn(isVersionMismatch 
+                    ? '[Security] TOKEN VERSION MISMATCH (User identity stale)'
+                    : (isExpiredGraceJti 
+                        ? '[Security] REPLAY ATTACK OR STALE TOKEN DETECTED (Grace window exceeded)' 
+                        : '[Security] Token rotation violation detected (Unknown JTI)'), 
+                {
+                    userId: user.id,
+                    sessionId,
+                    isVersionMismatch,
+                    receivedJti: decoded.jti,
+                    currentJti,
+                    previousJti,
+                    rotatedAt: session.jti_rotated_at,
+                    timeSinceRotation: now - rotatedAt
+                });
+                
+                // On violation: Kill the entire session immediately (Enterprise Guard)
+                await client.query('UPDATE user_sessions SET revoked = TRUE WHERE session_id = $1', [sessionId]);
+                await client.query('COMMIT');
+                return sendResponse(res, 401, false, 'Session revoked due to security violation');
+            }
+            
+            await client.query('ROLLBACK');
+            return sendResponse(res, 401, false, 'Invalid or expired session');
         }
 
         // 4. Perform Rotation & Heartbeat
-        const newAccessJti = crypto.randomBytes(16).toString('hex');
-        const newRefreshJti = crypto.randomBytes(16).toString('hex');
+        // If we matched the current JTI, we perform a full rotation.
+        // If we matched a grace-period JTI, we return the existing current tokens to synchronize the tab.
+        let accessToken = '';
+        let newRefreshToken = '';
 
-        await client.query(
-            `UPDATE user_sessions 
-             SET access_token_jti = $1, refresh_token_jti = $2, last_activity = CURRENT_TIMESTAMP 
-             WHERE session_id = $3`,
-            [newAccessJti, newRefreshJti, sessionId]
-        );
+        if (isCurrentJti) {
+            const newAccessJti = crypto.randomBytes(16).toString('hex');
+            const newRefreshJti = crypto.randomBytes(16).toString('hex');
+
+            await client.query(
+                `UPDATE user_sessions 
+                 SET previous_refresh_token_jti = refresh_token_jti,
+                     previous_access_token_jti = access_token_jti,
+                     refresh_token_jti = $1, 
+                     access_token_jti = $2,
+                     jti_rotated_at = CURRENT_TIMESTAMP,
+                     last_activity = CURRENT_TIMESTAMP 
+                 WHERE session_id = $3`,
+                [newRefreshJti, newAccessJti, sessionId]
+            );
+
+            accessToken = jwt.sign(
+                {
+                    id: user.id,
+                    email: user.email,
+                    role: user.role,
+                    token_version: user.token_version,
+                    jti: newAccessJti,
+                    session_id: sessionId
+                },
+                process.env.JWT_SECRET as string,
+                { expiresIn: '15m' }
+            );
+
+            newRefreshToken = jwt.sign(
+                {
+                    id: user.id,
+                    token_version: user.token_version,
+                    jti: newRefreshJti,
+                    session_id: sessionId
+                },
+                process.env.JWT_SECRET as string,
+                { expiresIn: '7d' }
+            );
+
+            await auditService.log({
+                actor_id: user.id,
+                action_type: 'TOKEN_REFRESH',
+                ip_address: req.ip,
+                user_agent: req.headers['user-agent'] as string,
+                session_id: sessionId,
+                access_token_jti: newAccessJti,
+                refresh_token_jti: newRefreshJti
+            });
+        } else {
+            // Grace Period Match: Return current tokens to re-sync the tab
+            logger.info('Grace window hit, synchronizing tab with current session', { userId: user.id, sessionId });
+            
+            // Note: In this case, we don't have the current JTIs in the JWT payload of the OLD token.
+            // We must generate new tokens for this tab that match the CURRENT JTIs in the database.
+            accessToken = jwt.sign(
+                {
+                    id: user.id,
+                    email: user.email,
+                    role: user.role,
+                    token_version: user.token_version,
+                    jti: session.access_token_jti,
+                    session_id: sessionId
+                },
+                process.env.JWT_SECRET as string,
+                { expiresIn: '15m' }
+            );
+
+            newRefreshToken = jwt.sign(
+                {
+                    id: user.id,
+                    token_version: user.token_version,
+                    jti: session.refresh_token_jti,
+                    session_id: sessionId
+                },
+                process.env.JWT_SECRET as string,
+                { expiresIn: '7d' }
+            );
+        }
 
         await client.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
-
         await client.query('COMMIT');
-
-        // 5. Generate New Token Pair
-        const accessToken = jwt.sign(
-            {
-                id: user.id,
-                email: user.email,
-                role: user.role,
-                token_version: user.token_version,
-                jti: newAccessJti,
-                session_id: sessionId
-            },
-            process.env.JWT_SECRET as string,
-            { expiresIn: '15m' }
-        );
-
-        const newRefreshToken = jwt.sign(
-            {
-                id: user.id,
-                token_version: user.token_version,
-                jti: newRefreshJti,
-                session_id: sessionId
-            },
-            process.env.JWT_SECRET as string,
-            { expiresIn: '7d' }
-        );
-
-        // Audit Refresh
-        await auditService.log({
-            actor_id: user.id,
-            action_type: 'TOKEN_REFRESH',
-            ip_address: req.ip,
-            user_agent: req.headers['user-agent'] as string,
-            session_id: sessionId,
-            access_token_jti: newAccessJti,
-            refresh_token_jti: newRefreshJti
-        });
 
         return sendResponse(res, 200, true, 'Token refreshed successfully', {
             token: accessToken,
