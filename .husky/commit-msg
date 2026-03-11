@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HAEMI LIFE — HUSKY COMMIT-MSG HOOK
+# Enforces Conventional Commit standard on every commit message.
+# Rule 4: Conventional Commit format required.
+# ─────────────────────────────────────────────────────────────────────────────
+
+node scripts/commit-msg-guard.js "$1" || exit 1

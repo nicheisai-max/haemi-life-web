@@ -9,6 +9,112 @@ on:
       - main
 
 jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 1: Commit Lint — Enforce Conventional Commit format on PRs
+  # Rule 4: Conventional Commit standard
+  # ─────────────────────────────────────────────────────────────────────────
+  commit-lint:
+    name: Commit Lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Validate PR Title (Conventional Commit)
+        run: |
+          echo "${{ github.event.pull_request.title }}" > /tmp/pr-title.txt
+          node scripts/commit-msg-guard.js /tmp/pr-title.txt
+
+      - name: Validate All Commits in PR (Conventional Commit)
+        run: |
+          git log origin/main..HEAD --format="%s" | while IFS= read -r msg; do
+            echo "$msg" > /tmp/commit-msg.txt
+            node scripts/commit-msg-guard.js /tmp/commit-msg.txt || exit 1
+          done
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 2: Repository Health Audit — No secrets, no artifacts, no large files
+  # Rule 10: Repository health audit
+  # ─────────────────────────────────────────────────────────────────────────
+  repo-health:
+    name: Repository Health Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Check for tracked temporary/debug artifacts
+        run: |
+          echo "🔍 Checking for tracked temporary artifacts..."
+          FOUND=0
+
+          FORBIDDEN=("*.log" "lint_output.txt" "debug_output.txt" "test_output.txt" ".ci-stats-bundle.json" "lint_results.json" "backend_lint.txt")
+          for pattern in "${FORBIDDEN[@]}"; do
+            MATCHES=$(git ls-files "$pattern" 2>/dev/null || true)
+            if [ -n "$MATCHES" ]; then
+              echo "❌ Forbidden tracked file: $MATCHES"
+              FOUND=1
+            fi
+          done
+
+          if [ $FOUND -ne 0 ]; then
+            echo "🚨 Repository health check FAILED — temporary files are tracked in Git."
+            echo "   Run: git rm --cached <file> and commit the change."
+            exit 1
+          fi
+          echo "✅ No temporary artifacts found in Git index."
+
+      - name: Check for tracked node_modules or build artifacts
+        run: |
+          echo "🔍 Checking for node_modules or build artifacts..."
+          TRACKED=$(git ls-files | grep -E '^(node_modules|dist|build|coverage)/' || true)
+          if [ -n "$TRACKED" ]; then
+            echo "❌ Tracked build/dependency artifacts found:"
+            echo "$TRACKED"
+            exit 1
+          fi
+          echo "✅ No build artifacts or node_modules tracked."
+
+      - name: Check for large files (>1MB)
+        run: |
+          echo "🔍 Scanning repository for files larger than 1MB..."
+          LARGE_FILES=$(git ls-files | xargs -I{} sh -c 'test -f "{}" && du -b "{}"' 2>/dev/null | awk '$1 > 1048576 {print $2 " (" $1 " bytes)"}' || true)
+          if [ -n "$LARGE_FILES" ]; then
+            echo "❌ Large files detected (>1MB):"
+            echo "$LARGE_FILES"
+            echo "   Consider using Git LFS for large assets."
+            exit 1
+          fi
+          echo "✅ No files exceeding 1MB found in repository."
+
+      - name: Check for potential secrets in tracked files
+        run: |
+          echo "🔍 Quick secrets scan (patterns: API_KEY, SECRET, PASSWORD in non-.env.example files)..."
+          SECRET_HITS=$(git ls-files | grep -v '\.env\.example' | grep -v '\.md' | xargs grep -lE '(API_KEY|SECRET_KEY|DB_PASSWORD|PRIVATE_KEY)\s*=' 2>/dev/null || true)
+          if [ -n "$SECRET_HITS" ]; then
+            echo "⚠  Potential secret patterns found in these tracked files:"
+            echo "$SECRET_HITS"
+            echo "   Review carefully — ensure no real secrets are committed."
+            # Warning only, not blocking (may be config templates with placeholder values)
+          else
+            echo "✅ No obvious secret patterns detected."
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 3: Validate Monorepo — Lint, Type Check, Build, Tests
+  # ─────────────────────────────────────────────────────────────────────────
   validate:
     name: Validate Monorepo
     runs-on: ubuntu-latest

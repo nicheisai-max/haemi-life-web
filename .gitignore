@@ -1,125 +1,139 @@
-# Dependencies
+# =============================================================================
+# HAEMI LIFE — ENTERPRISE .GITIGNORE
+# Policy: Zero-tolerance for secrets, build artifacts, temp files, and logs.
+# Last updated: 2026-03-11
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPENDENCIES
+# ─────────────────────────────────────────────────────────────────────────────
 node_modules/
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Root package-lock.json is the single source of truth for the monorepo.
+# Workspace-level lockfiles must never be committed.
+backend/package-lock.json
+frontend/package-lock.json
 
-# Build outputs
+# ─────────────────────────────────────────────────────────────────────────────
+# ENVIRONMENT & SECRETS (NEVER COMMIT)
+# ─────────────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+TEST_CREDENTIALS.md
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BUILD OUTPUTS
+# ─────────────────────────────────────────────────────────────────────────────
 dist/
 build/
 out/
 *.tsbuildinfo
 
-
-# IDEs
-.vscode/
-.idea/
-
-# System
-.DS_Store
-Thumbs.db
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Temporary files
-*.tmp
-*.temp
-check-db.ts
-
-# VS Code
-.vscode/
-
-# Environment Variables
-.env
-.env.local
-.env.production
-
-# OS Files
-.DS_Store
-Thumbs.db
-
-# Logs
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGS — No log files in the repository
+# ─────────────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+logs/
 
-# Temporary/Trash folders
-frontend_trash/
-frontend_backup/
+# ─────────────────────────────────────────────────────────────────────────────
+# TEMPORARY & DEBUG FILES — Critical for cleanliness (Rule 5 & 10)
+# ─────────────────────────────────────────────────────────────────────────────
+*.tmp
+*.temp
+tmp/
+dist/tmp/
 
-# Test credentials (sensitive)
-TEST_CREDENTIALS.md
-
-# Package lock files (use npm ci in CI/CD)
-# NOTE: root package-lock.json is intentionally committed for CI determinism
-backend/uploads/
-
-# Clean Repository Policy (AI-Native)
-/ .ai-system/
-*.analysis.json
-*.ai-log
-*.ai-report.md
-*.ai-report.md
-.vscode/settings.json
-.vscode/tasks.json
-.vscode/launch.json
-*.bundle
-*.zip
-eslint_out.json
+# CI / AI pipeline temporary artifacts
+.ci-stats-bundle.json
 lint_output.txt
 lint_results.json
+backend_lint.txt
+test_output.txt
+test_detailed.txt
+debug_output.txt
+eslint_out.json
+
+# Frontend debug artifacts
 frontend/build_verify.txt
 frontend/lint_errors.txt
 frontend/tsc_errors.txt
 
-# Enterprise Governance
-/backups/
-/backend/backups/
-/database_backups/
-*.sql
-*.dump
-
-# Environment Files
-.env
-.env.*
-!.env.example
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Node
-node_modules/
-dist/
-build/
-out/
-*.tsbuildinfo
-
-# OS Files
-.DS_Store
-Thumbs.db
-
-# Protected Directories (Negative ignores to ensure they are tracked)
-!backend/db/
-!backend/scripts/
-
-# AI Pipeline Artifacts
-.ci-stats-bundle.json
-backend_lint.txt
-test_output.txt
-test_detailed.txt
+# Bundle analysis
 bundle-report.html
-.cache/
-tmp/
-dist/tmp/
+*.bundle
+
+# Scripts temp
 scripts/tmp-*
 scripts/temp-*
 scripts/devops-runner*.ts
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COVERAGE & TEST OUTPUTS
+# ─────────────────────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CACHE DIRECTORIES
+# ─────────────────────────────────────────────────────────────────────────────
+.cache/
+.turbo/
+.next/
+.nuxt/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DATABASE ARTIFACTS (Rule 5 — no backups committed)
+# ─────────────────────────────────────────────────────────────────────────────
+*.sql
+*.dump
+/backups/
+/backend/backups/
+/database_backups/
+backend/uploads/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LARGE / BINARY FILES (Rule 9)
+# ─────────────────────────────────────────────────────────────────────────────
+*.zip
+*.tar.gz
+*.tar.bz2
+*.rar
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI / ANALYSIS ARTIFACTS
+# ─────────────────────────────────────────────────────────────────────────────
+.ai-system/
+*.analysis.json
+*.ai-log
+*.ai-report.md
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EDITOR & IDE
+# ─────────────────────────────────────────────────────────────────────────────
+.vscode/
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.idea/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS FILES
+# ─────────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TEMPORARY FRONTEND DIRECTORIES
+# ─────────────────────────────────────────────────────────────────────────────
+frontend_trash/
+frontend_backup/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PROTECTED — Ensure these directories are always tracked
+# ─────────────────────────────────────────────────────────────────────────────
+!backend/db/
+!backend/scripts/
