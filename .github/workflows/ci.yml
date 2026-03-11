@@ -11,7 +11,14 @@ on:
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
   # JOB 1: Commit Lint — Enforce Conventional Commit format on PRs
-  # Rule 4: Conventional Commit standard
+  #
+  # ARCHITECTURE NOTE (Bootstrap Paradox Prevention):
+  # This job performs stateless text validation using Node.js built-ins only.
+  # scripts/commit-msg-guard.js imports ONLY `fs` (Node built-in) — zero npm
+  # dependencies. Installing node_modules here would create a circular
+  # dependency: the governance CI would block itself if the lockfile changes.
+  # Pattern: Google/Meta CI principle — stateless jobs never install the full
+  # dependency tree. Only jobs that BUILD or TEST install dependencies.
   # ─────────────────────────────────────────────────────────────────────────
   commit-lint:
     name: Commit Lint
@@ -22,15 +29,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install Dependencies
-        run: npm ci
 
       - name: Validate PR Title (Conventional Commit)
         run: |
@@ -46,7 +44,11 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────
   # JOB 2: Repository Health Audit — No secrets, no artifacts, no large files
-  # Rule 10: Repository health audit
+  #
+  # ARCHITECTURE NOTE:
+  # This job performs stateless git index inspection. It uses only shell
+  # builtins, git, grep, awk, find, and stat — zero npm dependencies.
+  # Does NOT install node_modules. Deterministic on all Ubuntu runner versions.
   # ─────────────────────────────────────────────────────────────────────────
   repo-health:
     name: Repository Health Audit
@@ -90,7 +92,12 @@ jobs:
       - name: Check for large files (>1MB)
         run: |
           echo "🔍 Scanning repository for files larger than 1MB..."
-          LARGE_FILES=$(git ls-files | xargs -I{} sh -c 'test -f "{}" && du -b "{}"' 2>/dev/null | awk '$1 > 1048576 {print $2 " (" $1 " bytes)"}' || true)
+          # Use find + stat for POSIX-compliant, deterministic behaviour across
+          # all Ubuntu runner versions. Replaces xargs -I{} which is unstable
+          # with filenames containing spaces or special characters.
+          LARGE_FILES=$(git ls-files -z | xargs -0 -I'{}' \
+            sh -c 'test -f "{}" && stat -c "%s %n" "{}" 2>/dev/null || true' | \
+            awk '$1 > 1048576 { printf "%s (%d bytes)\n", $2, $1 }' || true)
           if [ -n "$LARGE_FILES" ]; then
             echo "❌ Large files detected (>1MB):"
             echo "$LARGE_FILES"
