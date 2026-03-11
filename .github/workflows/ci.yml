@@ -36,6 +36,7 @@ jobs:
 
       - name: Validate All Commits in PR (Conventional Commit)
         run: |
+          git fetch origin main
           git log origin/main..HEAD --format="%s" | while IFS= read -r msg; do
             echo "$msg" > /tmp/commit-msg.txt
             node scripts/commit-msg-guard.js /tmp/commit-msg.txt || exit 1
@@ -60,13 +61,14 @@ jobs:
         run: |
           echo "🔍 Checking for tracked temporary artifacts in current changeset..."
           FOUND=0
+          git fetch origin main || true
           CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || git ls-files)
 
           FORBIDDEN=("*.log" "lint_output.txt" "debug_output.txt" "test_output.txt" ".ci-stats-bundle.json" "lint_results.json" "backend_lint.txt")
           for file in $CHANGED_FILES; do
             for pattern in "${FORBIDDEN[@]}"; do
               # Ensure cross-platform glob match logic
-              if [[ $file == ${pattern//\*/.*} ]]; then
+              if [[ "$file" == $pattern ]]; then
                 echo "❌ Forbidden tracked file in PR/Merge: $file"
                 FOUND=1
               fi
@@ -83,6 +85,7 @@ jobs:
       - name: Check for tracked node_modules or build artifacts
         run: |
           echo "🔍 Checking for node_modules or build artifacts in current changeset..."
+          git fetch origin main || true
           CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || git ls-files)
           TRACKED=$(echo "$CHANGED_FILES" | grep -E '^(node_modules|dist|build|coverage)/' || true)
           if [ -n "$TRACKED" ]; then
@@ -96,11 +99,16 @@ jobs:
         run: |
           echo "🔍 Scanning current changeset for files larger than 1MB..."
           # Use find + stat for POSIX-compliant, deterministic behaviour across
-          # all Ubuntu runner versions. Scans incrementally.
-          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || git ls-files)
-          LARGE_FILES=$(echo "$CHANGED_FILES" | tr '\n' '\0' | xargs -0 -I'{}' \
-            sh -c 'test -f "{}" && stat -c "%s %n" "{}" 2>/dev/null || true' | \
-            awk '$1 > 1048576 { printf "%s (%d bytes)\n", $2, $1 }' || true)
+          # all Ubuntu runner versions. Scans incrementally and handles spaces safely.
+          git fetch origin main || true
+          LARGE_FILES=$((git diff --name-only -z origin/main...HEAD 2>/dev/null || git ls-files -z) | while IFS= read -r -d '' file; do
+            if [ -f "$file" ]; then
+              SIZE=$(stat -c "%s" "$file" 2>/dev/null || echo 0)
+              if [ "$SIZE" -gt 1048576 ]; then
+                echo "$file ($SIZE bytes)"
+              fi
+            fi
+          done)
           if [ -n "$LARGE_FILES" ]; then
             echo "❌ Large files detected (>1MB):"
             echo "$LARGE_FILES"
@@ -112,8 +120,14 @@ jobs:
       - name: Check for potential secrets in tracked files
         run: |
           echo "🔍 Quick secrets scan (patterns: API_KEY, SECRET, PASSWORD in non-.env.example files)..."
-          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || git ls-files)
-          SECRET_HITS=$(echo "$CHANGED_FILES" | grep -v '\.env\.example' | grep -v '\.md' | xargs -I'{}' sh -c 'test -f "{}" && grep -lE "(API_KEY|SECRET_KEY|DB_PASSWORD|PRIVATE_KEY)\s*=" "{}" 2>/dev/null' || true)
+          git fetch origin main || true
+          SECRET_HITS=$((git diff --name-only -z origin/main...HEAD 2>/dev/null || git ls-files -z) | while IFS= read -r -d '' file; do
+            if [ -f "$file" ] && [[ "$file" != *".env.example" ]] && [[ "$file" != *".md" ]]; then
+              if grep -qE "(API_KEY|SECRET_KEY|DB_PASSWORD|PRIVATE_KEY)\s*=" "$file" 2>/dev/null; then
+                echo "$file"
+              fi
+            fi
+          done)
           if [ -n "$SECRET_HITS" ]; then
             echo "⚠  Potential secret patterns found in these tracked files:"
             echo "$SECRET_HITS"
