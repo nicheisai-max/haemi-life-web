@@ -9,6 +9,137 @@ on:
       - main
 
 jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 1: Commit Lint — Enforce Conventional Commit format on PRs
+  #
+  # ARCHITECTURE NOTE (Bootstrap Paradox Prevention):
+  # This job performs stateless text validation using Node.js built-ins only.
+  # scripts/commit-msg-guard.js imports ONLY `fs` (Node built-in) — zero npm
+  # dependencies. Installing node_modules here would create a circular
+  # dependency: the governance CI would block itself if the lockfile changes.
+  # Pattern: Google/Meta CI principle — stateless jobs never install the full
+  # dependency tree. Only jobs that BUILD or TEST install dependencies.
+  # ─────────────────────────────────────────────────────────────────────────
+  commit-lint:
+    name: Commit Lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PR Title (Conventional Commit)
+        run: |
+          echo "PR titles are ignored in favor of strict Git commit validation."
+
+      - name: Validate All Commits in PR (Conventional Commit)
+        run: |
+          git fetch origin main
+          git log origin/main..HEAD --format="%s" | while IFS= read -r msg; do
+            echo "$msg" > /tmp/commit-msg.txt
+            node scripts/commit-msg-guard.js /tmp/commit-msg.txt || exit 1
+          done
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 2: Repository Health Audit — No secrets, no artifacts, no large files
+  #
+  # ARCHITECTURE NOTE:
+  # This job performs stateless git index inspection. It uses only shell
+  # builtins, git, grep, awk, find, and stat — zero npm dependencies.
+  # Does NOT install node_modules. Deterministic on all Ubuntu runner versions.
+  # ─────────────────────────────────────────────────────────────────────────
+  repo-health:
+    name: Repository Health Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Check for tracked temporary/debug artifacts
+        run: |
+          echo "🔍 Checking for tracked temporary artifacts in current changeset..."
+          FOUND=0
+          git fetch origin main || true
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || true)
+
+          FORBIDDEN=("*.log" "lint_output.txt" "debug_output.txt" "test_output.txt" ".ci-stats-bundle.json" "lint_results.json" "backend_lint.txt")
+          for file in $CHANGED_FILES; do
+            for pattern in "${FORBIDDEN[@]}"; do
+              # Ensure cross-platform glob match logic
+              if [[ "$file" == $pattern ]]; then
+                echo "❌ Forbidden tracked file in PR/Merge: $file"
+                FOUND=1
+              fi
+            done
+          done
+
+          if [ $FOUND -ne 0 ]; then
+            echo "🚨 Repository health check FAILED — temporary files are tracked in Git."
+            echo "   Run: git rm --cached <file> and commit the change."
+            exit 1
+          fi
+          echo "✅ No temporary artifacts found in Git index."
+
+      - name: Check for tracked node_modules or build artifacts
+        run: |
+          echo "🔍 Checking for node_modules or build artifacts in current changeset..."
+          git fetch origin main || true
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || true)
+          TRACKED=$(echo "$CHANGED_FILES" | grep -E '^(node_modules|dist|build|coverage)/' || true)
+          if [ -n "$TRACKED" ]; then
+            echo "❌ Tracked build/dependency artifacts found:"
+            echo "$TRACKED"
+            exit 1
+          fi
+          echo "✅ No build artifacts or node_modules tracked."
+
+      - name: Check for large files (>1MB)
+        run: |
+          echo "🔍 Scanning current changeset for files larger than 1MB..."
+          # Use find + stat for POSIX-compliant, deterministic behaviour across
+          # all Ubuntu runner versions. Scans incrementally and handles spaces safely.
+          git fetch origin main || true
+          LARGE_FILES=$((git diff --name-only -z origin/main...HEAD 2>/dev/null || true) | while IFS= read -r -d '' file; do
+            if [ -f "$file" ]; then
+              SIZE=$(stat -c "%s" "$file" 2>/dev/null || echo 0)
+              if [ "$SIZE" -gt 1048576 ]; then
+                echo "$file ($SIZE bytes)"
+              fi
+            fi
+          done)
+          if [ -n "$LARGE_FILES" ]; then
+            echo "❌ Large files detected (>1MB):"
+            echo "$LARGE_FILES"
+            echo "   Consider using Git LFS for large assets."
+            exit 1
+          fi
+          echo "✅ No files exceeding 1MB found in repository."
+
+      - name: Check for potential secrets in tracked files
+        run: |
+          echo "🔍 Quick secrets scan (patterns: API_KEY, SECRET, PASSWORD in non-.env.example files)..."
+          git fetch origin main || true
+          SECRET_HITS=$((git diff --name-only -z origin/main...HEAD 2>/dev/null || true) | while IFS= read -r -d '' file; do
+            if [ -f "$file" ] && [[ "$file" != *".env.example" ]] && [[ "$file" != *".md" ]]; then
+              if grep -qE "(API_KEY|SECRET_KEY|DB_PASSWORD|PRIVATE_KEY)\s*=" "$file" 2>/dev/null; then
+                echo "$file"
+              fi
+            fi
+          done)
+          if [ -n "$SECRET_HITS" ]; then
+            echo "⚠  Potential secret patterns found in these tracked files:"
+            echo "$SECRET_HITS"
+            echo "   Review carefully — ensure no real secrets are committed."
+            # Warning only, not blocking (may be config templates with placeholder values)
+          else
+            echo "✅ No obvious secret patterns detected."
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 3: Validate Monorepo — Lint, Type Check, Build, Tests
+  # ─────────────────────────────────────────────────────────────────────────
   validate:
     name: Validate Monorepo
     runs-on: ubuntu-latest

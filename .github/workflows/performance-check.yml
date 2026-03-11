@@ -26,5 +26,9 @@ jobs:
 
       - name: Check Bundle Size
         run: |
+          if [ ! -d "frontend/dist" ]; then
+            echo "❌ frontend/dist not found — build did not produce output."
+            exit 1
+          fi
           SIZE=$(du -sh frontend/dist | cut -f1)
-          echo "Bundle size: $SIZE"
+          echo "✅ Bundle size: $SIZE"
