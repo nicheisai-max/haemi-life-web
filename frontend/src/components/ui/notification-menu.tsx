@@ -10,9 +10,36 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { type Notification } from '../../services/notification.service';
 import { useNotifications } from '../../hooks/use-notifications';
-import React from 'react';
+import { decrypt } from '@/utils/security';
+import React, { useState, useEffect } from 'react';
 
-import { DecryptedText } from './decrypted-text';
+const DecryptedDescription: React.FC<{ text: string }> = ({ text }) => {
+    const [decrypted, setDecrypted] = useState(text);
+
+    const [prevText, setPrevText] = useState(text);
+
+    if (text !== prevText) {
+        setPrevText(text);
+        setDecrypted(text);
+    }
+
+    useEffect(() => {
+        if (text && text.startsWith('enc:')) {
+            decrypt(text)
+                .then(res => {
+                    if (res.startsWith('enc:')) return decrypt(res);
+                    return res;
+                })
+                .then(res => {
+                    setDecrypted(res);
+                })
+                .catch(() => setDecrypted('Message encrypted. Check key.'));
+        }
+    }, [text]);
+
+    // Handle string overflow with break-all to prevent panel break
+    return <span className="break-all">{decrypted}</span>;
+};
 
 const getTimeAgo = (dateString: string) => {
     try {
@@ -127,7 +154,7 @@ export const NotificationMenu: React.FC = () => {
                                             </div>
                                             <div className="w-full">
                                                 <p className={`text-[13px] leading-[1.6] whitespace-normal break-all overflow-visible block text-pretty ${notif.is_read ? 'text-slate-500/90' : 'text-slate-600 dark:text-slate-300 font-normal'}`}>
-                                                    <DecryptedText text={notif.description} className="break-all" />
+                                                    <DecryptedDescription text={notif.description} />
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-2 mt-2">

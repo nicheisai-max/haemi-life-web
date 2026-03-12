@@ -83,7 +83,6 @@ const ReactionIcon: React.FC<{ type: string; className?: string }> = ({ type, cl
 
 import { ChatContextMenu } from './chat-context-menu';
 import { AuthenticatedImage } from './authenticated-image';
-import { DecryptedText } from './decrypted-text';
 
 // --- Main Chat Hub ---
 export const ChatHub: React.FC = () => {
@@ -667,7 +666,7 @@ export const ChatHub: React.FC = () => {
                                                             </div>
                                                             <div className="flex justify-between items-center gap-2">
                                                                 <p className="text-xs text-slate-500 truncate dark:text-slate-400">
-                                                                    <DecryptedText text={conv.last_message || ''} fallback="Start a conversation" />
+                                                                    {conv.last_message || 'Start a conversation'}
                                                                 </p>
                                                                 {parseInt(conv.unread_count) > 0 && (
                                                                     <span className="conv-unread-pill animate-badge-pop">
