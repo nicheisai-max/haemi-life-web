@@ -46,13 +46,14 @@
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "test:ci": "npm run test:backend",
     "verify": "node scripts/verifyCommitIntegrity.js",
+    "verify:crypto": "tsx scripts/verify_crypto_alignment.ts",
     "sandbox": "tsx scripts/new-sandbox.ts",
     "orchestrate": "tsx scripts/orchestrator.ts",
     "ai-review": "tsx scripts/ai-self-review.ts",
-    "quality-gate": "tsx scripts/ai-self-review.ts --enforce",
+    "quality-gate": "npm run verify:crypto && tsx scripts/ai-self-review.ts --enforce",
     "cleanup:sandboxes": "tsx scripts/cleanup-sandboxes.ts",
     "tasks:run": "tsx scripts/task-planner.ts",
-    "prepush-check": "tsx scripts/prepush-check.ts",
+    "prepush-check": "npm run verify:crypto && tsx scripts/prepush-check.ts",
     "sync": "npm run cleanup:sandboxes && git checkout main && git fetch origin --prune && git reset --hard origin/main && git remote prune origin && powershell -Command \"git branch --list 'ai/sandbox*' 'ai-sandbox*' | ForEach-Object { git branch -D $_.Trim() }\" && git branch -a && git status"
   },
   "lint-staged": {

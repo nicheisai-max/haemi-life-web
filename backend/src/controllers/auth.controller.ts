@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
+import { systemSettingsRepository } from '../repositories/system-settings.repository';
 import { logger } from '../utils/logger';
 import { auditService } from '../services/audit.service';
 import { sendResponse, sendError } from '../utils/response';
@@ -79,10 +80,15 @@ export const signup = async (req: Request, res: Response) => {
             const accessJti = crypto.randomBytes(16).toString('hex');
             const refreshJti = crypto.randomBytes(16).toString('hex');
 
+            // Calculate expiration based on system settings
+            const timeoutMinutesStr = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
+            const timeoutMinutes = parseInt(timeoutMinutesStr || '60');
+            const expiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
+
             await pool.query(
-                `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, device_type)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], 'web']
+                `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, device_type, expires_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], 'web', expiresAt]
             );
 
             // Generate Access Token (15m)
@@ -216,11 +222,16 @@ export const login = async (req: Request, res: Response) => {
         const accessJti = crypto.randomBytes(16).toString('hex');
         const refreshJti = crypto.randomBytes(16).toString('hex');
 
+        // Calculate expiration based on system settings
+        const timeoutMinutesStr = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
+        const timeoutMinutes = parseInt(timeoutMinutesStr || '60');
+        const expiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
+
         // Persistent Session record
         await pool.query(
-            `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, device_type)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [user.id, user.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], 'web']
+            `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, device_type, expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [user.id, user.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], 'web', expiresAt]
         );
 
         // Audit Successful Login
@@ -288,8 +299,10 @@ export const login = async (req: Request, res: Response) => {
                 name: user.name,
                 status: user.status,
                 initials: user.initials,
-                profile_image: user.profile_image
+                profile_image: user.profile_image,
+                session_id: sessionId
             }
+
         });
     } catch (error: unknown) {
         logger.error('Login server error', { error, identifier });
@@ -440,46 +453,55 @@ export const refreshToken = async (req: Request, res: Response) => {
         // 3. Security Check: Token Rotation & Versioning
         const isVersionMismatch = decoded.token_version !== undefined && decoded.token_version !== user.token_version;
         
-        // GRACE WINDOW LOGIC (Google/Meta Grade)
+        // ENTERPRISE GRACE WINDOW LOGIC (Sliding Rotation)
         const currentJti = session?.refresh_token_jti;
         const previousJti = session?.previous_refresh_token_jti;
         const rotatedAt = session?.jti_rotated_at ? new Date(session.jti_rotated_at).getTime() : 0;
         const now = Date.now();
-        const GRACE_PERIOD_MS = 60 * 1000; // 60 seconds
+        
+        // Increased grace period to 1 hour to handle background tabs and sleep cycles reliably
+        const GRACE_PERIOD_MS = 60 * 60 * 1000; 
 
         const isCurrentJti = decoded.jti && currentJti && decoded.jti === currentJti;
         const isGracefulJti = decoded.jti && previousJti && decoded.jti === previousJti && (now - rotatedAt) < GRACE_PERIOD_MS;
 
-        if (isVersionMismatch || !session || session.revoked || (!isCurrentJti && !isGracefulJti)) {
-            // 3b. Forensic Violation Detection (Version Mismatch or JTI Replay)
-            if (session && (isVersionMismatch || (!isCurrentJti && !isGracefulJti))) {
-                const isExpiredGraceJti = !isVersionMismatch && decoded.jti === previousJti;
-                
-                logger.warn(isVersionMismatch 
-                    ? '[Security] TOKEN VERSION MISMATCH (User identity stale)'
-                    : (isExpiredGraceJti 
-                        ? '[Security] REPLAY ATTACK OR STALE TOKEN DETECTED (Grace window exceeded)' 
-                        : '[Security] Token rotation violation detected (Unknown JTI)'), 
-                {
+        // Security check: Fingerprint matching for reuse detection
+        const currentIp = req.ip;
+        const currentUserAgent = req.headers['user-agent'];
+        const fingerprintMatches = session && session.ip_address === currentIp && session.user_agent === currentUserAgent;
+
+        if (isVersionMismatch || !session || session.revoked) {
+            await client.query('ROLLBACK');
+            return sendResponse(res, 401, false, 'Session invalid or revoked');
+        }
+
+        // Rotation Violation Check
+        if (!isCurrentJti && !isGracefulJti) {
+            // Enterprise Resilience: If fingerprint matches, treat as a very delayed tab wakeup rather than an attack
+            if (fingerprintMatches && decoded.jti === previousJti) {
+                logger.warn('[Auth] Stale token reuse detected but fingerprint matches (Delayed tab wakeup). Allowing sync.', {
                     userId: user.id,
                     sessionId,
-                    isVersionMismatch,
+                    receivedJti: decoded.jti,
+                    rotatedAt: session.jti_rotated_at
+                });
+                // Proceed as if it were a graceful JTI match
+            } else {
+                // CLEAR ATTACK OR UNKNOWN TOKEN: Nuke session
+                logger.error('[Security] ROTATION VIOLATION: Revoking session. Potential replay attack.', {
+                    userId: user.id,
+                    sessionId,
                     receivedJti: decoded.jti,
                     currentJti,
                     previousJti,
-                    rotatedAt: session.jti_rotated_at,
-                    timeSinceRotation: now - rotatedAt
+                    fingerprintMatches
                 });
-                
-                // On violation: Kill the entire session immediately (Enterprise Guard)
-                await client.query('UPDATE user_sessions SET revoked = TRUE WHERE session_id = $1', [sessionId]);
+                await client.query('UPDATE user_sessions SET revoked = TRUE, revoked_at = NOW() WHERE session_id = $1', [sessionId]);
                 await client.query('COMMIT');
-                return sendResponse(res, 401, false, 'Session revoked due to security violation');
+                return sendResponse(res, 401, false, 'Security violation detected. Session revoked.');
             }
-            
-            await client.query('ROLLBACK');
-            return sendResponse(res, 401, false, 'Invalid or expired session');
         }
+
 
         // 4. Perform Rotation & Heartbeat
         // If we matched the current JTI, we perform a full rotation.
@@ -488,8 +510,14 @@ export const refreshToken = async (req: Request, res: Response) => {
         let newRefreshToken = '';
 
         if (isCurrentJti) {
+
             const newAccessJti = crypto.randomBytes(16).toString('hex');
             const newRefreshJti = crypto.randomBytes(16).toString('hex');
+
+            // Calculate expiration based on system settings
+            const timeoutMinutesStr = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
+            const timeoutMinutes = parseInt(timeoutMinutesStr || '60');
+            const expiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
 
             await client.query(
                 `UPDATE user_sessions 
@@ -498,9 +526,10 @@ export const refreshToken = async (req: Request, res: Response) => {
                      refresh_token_jti = $1, 
                      access_token_jti = $2,
                      jti_rotated_at = CURRENT_TIMESTAMP,
-                     last_activity = CURRENT_TIMESTAMP 
-                 WHERE session_id = $3`,
-                [newRefreshJti, newAccessJti, sessionId]
+                     last_activity = CURRENT_TIMESTAMP,
+                     expires_at = $3
+                 WHERE session_id = $4`,
+                [newRefreshJti, newAccessJti, expiresAt, sessionId]
             );
 
             accessToken = jwt.sign(
@@ -581,8 +610,9 @@ export const refreshToken = async (req: Request, res: Response) => {
         if (error.name === 'TokenExpiredError') {
             return sendResponse(res, 401, false, 'Session expired. Please log in again.');
         }
-        logger.error('Refresh operation failed', err);
-        return sendResponse(res, 401, false, 'Invalid session');
+        logger.error('Refresh operation failed', { message: error.message, stack: error.stack });
+        return sendResponse(res, 401, false, `Invalid session: ${error.message}`);
+
     } finally {
         client.release();
     }
@@ -629,6 +659,14 @@ export const logout = async (req: Request, res: Response) => {
     //     path: '/'
     // });
     return sendResponse(res, 200, true, 'Logged out successfully');
+};
+
+export const heartbeat = async (req: Request, res: Response) => {
+    // Accessing this endpoint triggers the authenticateToken middleware, 
+    // which in turn updates the session heartbeat (last_activity and expires_at).
+    return sendResponse(res, 200, true, 'Heartbeat successful', {
+        timestamp: new Date().toISOString()
+    });
 };
 
 export const verifySession = async (req: Request, res: Response) => {

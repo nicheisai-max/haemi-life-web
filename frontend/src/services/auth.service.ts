@@ -19,6 +19,10 @@ export const authService = {
         return response.data;
     },
 
+    heartbeat: async (): Promise<void> => {
+        await api.get('/auth/heartbeat');
+    },
+
     verifySession: async (): Promise<{ user: User }> => {
         const response = await api.get<User & { profile: { fullName: string; avatar: string } }>('/profiles/me');
         const data = response.data;
@@ -82,7 +86,7 @@ export const authService = {
         if (token) {
             return {
                 token,
-                refreshToken: sessionStorage.getItem('refreshToken') || undefined,
+                refreshToken: localStorage.getItem('refreshToken') || undefined,
                 authenticated: true
             };
         }

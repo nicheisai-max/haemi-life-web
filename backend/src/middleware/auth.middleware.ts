@@ -5,6 +5,28 @@ import { auditService } from '../services/audit.service';
 import { JWTPayload } from '../types/express';
 import { logger } from '../utils/logger';
 import { sendError } from '../utils/response';
+import { systemSettingsRepository } from '../repositories/system-settings.repository';
+
+let cachedTimeout: number | null = null;
+let lastCacheUpdate = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getSessionTimeoutMinutes() {
+    const now = Date.now();
+    if (cachedTimeout !== null && (now - lastCacheUpdate) < CACHE_TTL) {
+        return cachedTimeout;
+    }
+    try {
+        const timeout = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
+        cachedTimeout = parseInt(timeout || '60');
+        lastCacheUpdate = now;
+        return cachedTimeout;
+    } catch (err) {
+        logger.error('Failed to fetch session timeout setting, falling back to 60m', err);
+        return 60;
+    }
+}
+
 
 /**
  * Standard Authentication Middleware
@@ -53,15 +75,11 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                 return sendError(res, 403, 'Access denied. Account restricted.');
             }
 
-            const timeoutMinutes = 60;
-            if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
-                return sendError(res, 401, 'Session expired due to inactivity. Please log in again.');
-            }
 
             // 2. Phase 9: Detailed Session & Fingerprint Validation
             if (payload.session_id) {
                 const sessionResult = await pool.query(
-                    'SELECT revoked, access_token_jti, ip_address, user_agent FROM user_sessions WHERE session_id = $1',
+                    'SELECT revoked, access_token_jti, ip_address, user_agent, expires_at FROM user_sessions WHERE session_id = $1',
                     [payload.session_id]
                 );
 
@@ -71,12 +89,17 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
 
                 const sessionData = sessionResult.rows[0];
 
+                // Institutional Hardening: Session Inactivity Check (Authority: Session Table)
+                const now = Date.now();
+                if (sessionData.expires_at && new Date(sessionData.expires_at).getTime() < now) {
+                    return sendError(res, 401, 'Session expired due to inactivity. Please log in again.');
+                }
+
                 // 5. Access Token JTI Enforcement (Dispacement Tolerance)
                 // Check if this token's JTI matches the current session or the recently rotated one (grace window)
                 const currentAccessJti = sessionData.access_token_jti;
                 const previousAccessJti = sessionData.previous_access_token_jti;
                 const rotatedAt = sessionData.jti_rotated_at ? new Date(sessionData.jti_rotated_at).getTime() : 0;
-                const now = Date.now();
                 const GRACE_PERIOD_MS = 60 * 1000;
 
                 const isCurrentJti = currentAccessJti && payload.jti === currentAccessJti;
@@ -94,7 +117,6 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                 }
 
                 // Fingerprint Validation (Session Hijacking Protection)
-                // Note: We allow minor IP changes in dynamic environments, but log suspicious ones
                 const currentIp = req.ip;
                 const currentUserAgent = req.headers['user-agent'];
 
@@ -104,20 +126,20 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                         expected: sessionData.user_agent,
                         received: currentUserAgent
                     });
-                    // For local development, we might be lenient, but for P0 hardening we reject
                     return sendError(res, 401, 'Security fingerprint mismatch. Session invalidated.');
                 }
 
-                // IP binding - stricter for P0 but often problematic with VPNs/Proxies. 
-                // We'll log it if it changes significantly but only reject if configured.
                 if (sessionData.ip_address !== currentIp && process.env.STRICT_IP_CHECK === 'true') {
                     return sendError(res, 401, 'IP mismatch. Session revoked.');
                 }
 
-                // Heartbeat: Update session last_activity
+                // Heartbeat: Update session last_activity and sliding expires_at
+                const timeoutMinutes = await getSessionTimeoutMinutes();
+                const newExpiresAt = new Date(now + timeoutMinutes * 60 * 1000);
+
                 await pool.query(
-                    'UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP WHERE session_id = $1',
-                    [payload.session_id]
+                    'UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP, expires_at = $1 WHERE session_id = $2',
+                    [newExpiresAt, payload.session_id]
                 );
             }
 
@@ -179,10 +201,11 @@ export const relaxedAuthenticateToken = (req: Request, res: Response, next: Next
 
             if (userData.status !== 'ACTIVE') return next();
 
-            const timeoutMinutes = 60;
+            const timeoutMinutes = await getSessionTimeoutMinutes();
             if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
                 return next();
             }
+
 
             // Relaxed JTI check
             if (payload.jti && payload.session_id) {

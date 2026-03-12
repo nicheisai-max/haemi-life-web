@@ -27,5 +27,11 @@ export const env = {
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
     allowedOrigins: process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-        : ['http://localhost:5173', 'http://127.0.0.1:5173']
+        : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    encryption: {
+        key: process.env.ENCRYPTION_KEY!,
+        salt: process.env.SECURITY_SALT || 'haemi_salt',
+        iterations: parseInt(process.env.PBKDF2_ITERATIONS || '100000'),
+        keyLength: parseInt(process.env.KEY_LENGTH || '32')
+    }
 };

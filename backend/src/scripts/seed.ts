@@ -117,7 +117,7 @@ const seed = async () => {
         console.log('🌱 Starting SAFE SEEDING (Botswana Data)...');
         await client.query('BEGIN');
 
-        const passwordHash = await bcrypt.hash('123456', 10); // Uniform password for ease of demo
+        const passwordHash = await bcrypt.hash('HaemiLifeDemo@2026', 10); // Uniform password for ease of demo
 
         // --- 1. ADMINS (10 Records) ---
         console.log('\n--- 1. SEEDING ADMINS ---');

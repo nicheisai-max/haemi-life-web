@@ -1,6 +1,13 @@
 const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY;
+const SECURITY_SALT = import.meta.env.VITE_SECURITY_SALT;
+const PBKDF2_ITERATIONS = parseInt(import.meta.env.VITE_PBKDF2_ITERATIONS || '100000');
+const KEY_LENGTH = parseInt(import.meta.env.VITE_KEY_LENGTH || '32');
+
 if (!ENCRYPTION_KEY) {
-    console.error('[Security] CRITICAL: VITE_ENCRYPTION_KEY is missing. Decryption will fail. Please restart the frontend dev server.');
+    console.error('[Security] CRITICAL: VITE_ENCRYPTION_KEY is missing. Decryption will fail.');
+}
+if (!SECURITY_SALT) {
+    console.warn('[Security] WARNING: VITE_SECURITY_SALT is missing. Falling back to insecure default.');
 }
 
 const ALGORITHM_GCM = 'AES-GCM';
@@ -8,7 +15,6 @@ const ALGORITHM_CBC = 'AES-CBC';
 const IV_LENGTH_GCM = 12; // WebCrypto GCM Standard
 const ENCRYPTED_PREFIX = 'enc:';
 const GCM_PREFIX = 'gcm:';
-const SALT = 'haemi_salt';
 
 /**
  * Derives a cryptographic key from the password using PBKDF2.
@@ -16,26 +22,23 @@ const SALT = 'haemi_salt';
 async function deriveKey(algorithm: string): Promise<CryptoKey> {
     const encoder = new TextEncoder();
 
-    // CRITICAL: Handle the hex key from .env correctly.
-    let keyData: Uint8Array;
-    const rawKey = ENCRYPTION_KEY;
-    if (!rawKey) {
-        throw new Error('🔥 SECURITY ARCHITECTURE BLOCK: VITE_ENCRYPTION_KEY is mandatory for secure operations.');
+    if (!ENCRYPTION_KEY) {
+        throw new Error('🔥 SECURITY ARCHITECTURE BLOCK: VITE_ENCRYPTION_KEY is mandatory.');
     }
 
-    if (/^[0-9a-fA-F]+$/.test(rawKey)) {
-        const matches = rawKey.match(/.{1,2}/g);
+    let keyData: Uint8Array;
+    if (/^[0-9a-fA-F]+$/.test(ENCRYPTION_KEY)) {
+        const matches = ENCRYPTION_KEY.match(/.{1,2}/g);
         keyData = new Uint8Array(matches!.map((byte: string) => parseInt(byte, 16)));
     } else {
-        keyData = encoder.encode(rawKey);
+        keyData = encoder.encode(ENCRYPTION_KEY);
     }
 
-    const saltData = encoder.encode(SALT);
+    const saltData = encoder.encode(SECURITY_SALT || 'haemi_salt');
 
-    // Filter out potential non-ArrayBuffer errors
     const baseKey = await window.crypto.subtle.importKey(
         'raw',
-        keyData as unknown as BufferSource,
+        keyData as unknown as ArrayBuffer,
         'PBKDF2',
         false,
         ['deriveKey']
@@ -45,11 +48,11 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
         {
             name: 'PBKDF2',
             salt: saltData,
-            iterations: 100000,
+            iterations: PBKDF2_ITERATIONS,
             hash: 'SHA-256'
         },
         baseKey,
-        { name: algorithm, length: 256 },
+        { name: algorithm, length: KEY_LENGTH * 8 },
         false,
         ['encrypt', 'decrypt']
     );
@@ -68,11 +71,11 @@ export const decrypt = async (text: string): Promise<string> => {
         if (data.startsWith(GCM_PREFIX)) {
             const key = await deriveKey(ALGORITHM_GCM);
             const parts = data.slice(GCM_PREFIX.length).split(':');
+            if (parts.length < 3) throw new Error('Malformed GCM envelope');
+
             const iv = new Uint8Array(parts[0].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
 
-            // CRITICAL: Format mismatch fix
-            // Web Crypto expects: [ciphertext][tag]
-            // Backend sends: [tag][ciphertext] (hex)
+            // Extract tag and ciphertext
             const tagHex = parts[1];
             const ciphertextHex = parts[2];
             const combinedHex = ciphertextHex + tagHex;
@@ -94,9 +97,9 @@ export const decrypt = async (text: string): Promise<string> => {
         const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_CBC, iv }, key, encryptedData);
         return new TextDecoder().decode(buffer);
 
-    } catch {
-        // Silently return original text if decryption fails (likely legacy/corrupted data)
-        return text;
+    } catch (error) {
+        console.error('[Security] Decryption failed:', error);
+        return `[DECRYPTION_FAILED: Authentication failure or key mismatch]`;
     }
 };
 
@@ -113,7 +116,6 @@ export const encrypt = async (text: string): Promise<string> => {
 
         const encryptedBuffer = await window.crypto.subtle.encrypt({ name: ALGORITHM_GCM, iv }, key, encodedText);
 
-        // Web Crypto output is [ciphertext][tag]
         const encryptedArray = new Uint8Array(encryptedBuffer);
         const hex = Array.from(encryptedArray).map(b => b.toString(16).padStart(2, '0')).join('');
 

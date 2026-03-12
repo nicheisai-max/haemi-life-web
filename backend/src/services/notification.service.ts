@@ -15,6 +15,12 @@ export const notificationService = {
         description: string,
         type: NotificationType
     ) => {
+        // P1 FORENSIC: Final check before SQL insertion
+        if (description === 'Encrypted Message') {
+            console.warn(`[P1-FOR-WARN] notificationService.create received placeholder literal!`);
+            // console.trace(); // Optional, let's keep log clean first
+        }
+
         const result = await pool.query(
             `INSERT INTO notifications (user_id, title, description, type)
              VALUES ($1, $2, $3, $4) RETURNING *`,

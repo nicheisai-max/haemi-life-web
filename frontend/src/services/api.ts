@@ -220,18 +220,25 @@ const clearAuthSession = () => {
     // Deterministic Queue Cleanout
     processQueue(new Error('Session terminated'));
     
+    logger.warn('[API] Local session cleared. Dispatching auth:unauthorized event.');
     window.dispatchEvent(new CustomEvent('auth:unauthorized'));
 };
 
 export const performRefresh = async (retryCount = 0): Promise<string | null> => {
-    if (refreshPromise) return refreshPromise;
+    if (refreshPromise) {
+        logger.info('[API] Token refresh already in progress, attaching to existing promise.');
+        return refreshPromise;
+    }
 
     const currentVersion = sessionVersion;
 
     refreshPromise = (async () => {
         try {
             const currentRefreshToken = sessionStorage.getItem('refreshToken');
-            if (!currentRefreshToken) throw new Error('No refresh token available');
+            if (!currentRefreshToken) {
+                logger.warn('[API] Proactive refresh aborted: no refresh token found in storage');
+                throw new Error('No refresh token available');
+            }
 
             logger.info(`[API] Initiating synchronized token refresh (Attempt ${retryCount + 1})`);
             const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
@@ -242,43 +249,53 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
 
             // Phase 6 Safety: If logout occurred while pending, discard result
             if (sessionVersion !== currentVersion) {
-                logger.warn('[API] Refresh discarded: logout occurred during request');
+                logger.warn('[API] Refresh discarded: global session version changed during request');
                 return null;
             }
 
             if (!response.data.success || !response.data.data?.token) {
+                logger.error('[API] Refresh failed: server returned success=false');
                 throw new Error('Refresh response invalid or failed');
             }
 
             const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
             
-            // Atomic state update
+            // Phase 7: Atomic state update (Network + Memory + LocalStorage sync)
             setAccessToken(newToken);
             sessionStorage.setItem('token', newToken);
             if (newRefreshToken) sessionStorage.setItem('refreshToken', newRefreshToken);
 
-            logger.info('[API] Token refresh successful');
+            logger.info('[API] Token refresh successful. Informing subscribers.');
             processQueue(null, newToken);
             return newToken;
         } catch (err: unknown) {
             const isNetworkError = axios.isAxiosError(err) && (!err.response || err.code === 'ECONNABORTED');
             
-            // Network Failure Resilience (Exponential Backoff)
-            if (isNetworkError && retryCount < 2 && sessionVersion === currentVersion) {
+            // Phase 10: Network Failure Resilience (Wait and Retry)
+            if (isNetworkError && retryCount < 5 && sessionVersion === currentVersion) {
                 const backoff = 1000 * Math.pow(2, retryCount);
-                logger.warn(`[API] Refresh network error. Retrying in ${backoff}ms...`);
+                logger.warn(`[API] Refresh network error. Retrying (${retryCount + 1}/5) in ${backoff}ms...`);
                 refreshPromise = null; 
                 await new Promise(r => setTimeout(r, backoff));
                 return performRefresh(retryCount + 1);
             }
 
-            // Phase 6: Only clear session if we are still on the same session version
+            // Phase 6: Only clear session if we are still on same version AND it's a real Auth failure
             if (sessionVersion === currentVersion) {
-                logger.error('[API] Sync refresh failed permanently', err);
-                processQueue(err, null);
-                clearAuthSession();
+                const isAuthError = axios.isAxiosError(err) && err.response && (err.response.status === 401 || err.response.status === 403);
+                
+                if (isAuthError) {
+                    logger.error('[API] Sync refresh failed (Authentication Invalid). Terminating session.', err);
+                    processQueue(err, null);
+                    clearAuthSession();
+                } else {
+                    logger.warn('[API] Refresh network failure. Keeping local session but marking downstream as offline.', err);
+                    processQueue(err, null);
+                    // Do NOT clearAuthSession() here. The next heartbeat or visibility change will retry.
+                }
             }
             return null;
+
         } finally {
             if (sessionVersion === currentVersion) {
                 refreshPromise = null;
