@@ -86,7 +86,7 @@ export class PrescriptionRepository {
         return result.rows;
     }
 
-    async findByIdWithDetails(id: string, userId: string, role: string): Promise<PrescriptionWithDetails | null> {
+    async findByIdWithDetails(id: number, userId: string, role: string): Promise<PrescriptionWithDetails | null> {
         const result = await this.db.query(`
             SELECT 
                 p.*,
@@ -105,7 +105,7 @@ export class PrescriptionRepository {
         return result.rows[0];
     }
 
-    async findItemsByPrescriptionId(id: string): Promise<PrescriptionItem[]> {
+    async findItemsByPrescriptionId(id: number): Promise<PrescriptionItem[]> {
         const result = await this.db.query(`
             SELECT 
                 pi.*,
@@ -119,7 +119,7 @@ export class PrescriptionRepository {
         return result.rows;
     }
 
-    async updateStatus(id: string, status: string): Promise<Prescription | null> {
+    async updateStatus(id: number, status: string): Promise<Prescription | null> {
         const result = await this.db.query(`
             UPDATE prescriptions
             SET status = $1, updated_at = CURRENT_TIMESTAMP
@@ -148,7 +148,7 @@ export class PrescriptionRepository {
         return result.rows;
     }
 
-    async checkAppointmentAccess(appointmentId: string, doctorId: string): Promise<boolean> {
+    async checkAppointmentAccess(appointmentId: number, doctorId: string): Promise<boolean> {
         const result = await this.db.query(
             'SELECT id FROM appointments WHERE id = $1 AND doctor_id = $2 AND deleted_at IS NULL',
             [appointmentId, doctorId]
@@ -156,7 +156,7 @@ export class PrescriptionRepository {
         return result.rows.length > 0;
     }
 
-    async softDelete(id: string, userId: string): Promise<boolean> {
+    async softDelete(id: number, userId: string): Promise<boolean> {
         const result = await this.db.query(`
             UPDATE prescriptions
             SET deleted_at = CURRENT_TIMESTAMP

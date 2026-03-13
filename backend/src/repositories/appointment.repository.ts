@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import { pool } from '../config/db';
 
 export interface Appointment {
-    id: string;
+    id: number;
     patient_id: string;
     doctor_id: string;
     appointment_date: string;
@@ -93,7 +93,7 @@ export class AppointmentRepository {
         return result.rows;
     }
 
-    async findByIdWithDetails(id: string, userId: string): Promise<AppointmentWithDetails | null> {
+    async findByIdWithDetails(id: number, userId: string): Promise<AppointmentWithDetails | null> {
         const result = await this.db.query(`
             SELECT 
                 a.*,
@@ -111,7 +111,7 @@ export class AppointmentRepository {
         return result.rows[0] || null;
     }
 
-    async updateStatus(id: string, doctorId: string, status: string, notes?: string): Promise<Appointment | null> {
+    async updateStatus(id: number, doctorId: string, status: string, notes?: string): Promise<Appointment | null> {
         const result = await this.db.query(`
             UPDATE appointments
             SET status = $1, notes = COALESCE($2, notes), updated_at = CURRENT_TIMESTAMP
@@ -121,7 +121,7 @@ export class AppointmentRepository {
         return result.rows[0] || null;
     }
 
-    async cancel(id: string, userId: string): Promise<Appointment | null> {
+    async cancel(id: number, userId: string): Promise<Appointment | null> {
         const result = await this.db.query(`
             UPDATE appointments
             SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
@@ -151,7 +151,7 @@ export class AppointmentRepository {
         });
     }
 
-    async checkOwnership(id: string, userId: string): Promise<boolean> {
+    async checkOwnership(id: number, userId: string): Promise<boolean> {
         const result = await this.db.query(
             'SELECT id FROM appointments WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2)',
             [id, userId]
@@ -161,7 +161,7 @@ export class AppointmentRepository {
 
     // Permanently remove a past/completed/cancelled appointment (patient only)
     // Institutional Soft delete (only for past/completed/cancelled)
-    async softDelete(id: string, patientId: string): Promise<boolean> {
+    async softDelete(id: number, patientId: string): Promise<boolean> {
         const result = await this.db.query(`
             UPDATE appointments
             SET deleted_at = CURRENT_TIMESTAMP

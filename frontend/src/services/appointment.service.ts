@@ -5,7 +5,7 @@ import api from './api';
 // =====================================================
 
 export interface Appointment {
-    id: number;
+    id: number; // Institutional Realignment: integer
     patient_id: string;
     doctor_id: string;
     appointment_date: string;

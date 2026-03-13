@@ -29,12 +29,12 @@ export const securityRepository = {
     async getSecurityEvents(limit: number = 50, offset: number = 0): Promise<SecurityEvent[]> {
         // Fallback to audit_logs for security analysis
         const result = await pool.query(
-            `SELECT al.id, al.actor_user_id as user_id, u.role as user_role, 
-             al.action_type as event_type, al.request_ip as ip_address, 
+            `SELECT al.id, al.user_id, u.role as user_role, 
+             al.action as event_type, al.ip_address, 
              al.user_agent, al.created_at, u.name as user_name, u.email as user_email 
              FROM audit_logs al
-             LEFT JOIN users u ON al.actor_user_id = u.id
-             WHERE al.action_type LIKE '%SECURITY%' OR al.action_type LIKE '%LOGIN%' OR al.action_type LIKE '%REVOKE%'
+             LEFT JOIN users u ON al.user_id = u.id
+             WHERE al.action LIKE '%SECURITY%' OR al.action LIKE '%LOGIN%' OR al.action LIKE '%REVOKE%'
              ORDER BY al.created_at DESC 
              LIMIT $1 OFFSET $2`,
             [limit, offset]
@@ -63,7 +63,7 @@ export const securityRepository = {
     async revokeSession(sessionId: string): Promise<boolean> {
         const result = await pool.query(
             `UPDATE user_sessions 
-             SET revoked = TRUE, revoked_at = NOW() 
+             SET revoked = TRUE, logout_time = NOW() 
              WHERE session_id = $1 OR id::text = $1
              RETURNING id`,
             [sessionId]

@@ -52,7 +52,7 @@ export const verifyDoctor = async (req: Request, res: Response) => {
 
             // Log the action
             await client.query(`
-                INSERT INTO audit_logs (actor_user_id, action_type, target_entity_type, target_entity_id, change_summary)
+                INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details)
                 VALUES ($1, $2, $3, $4, $5)
             `, [
                 user.id,
@@ -137,7 +137,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
 
             // Log the action
             await client.query(`
-                INSERT INTO audit_logs (actor_user_id, action_type, target_entity_type, target_entity_id, change_summary)
+                INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details)
                 VALUES ($1, $2, $3, $4, $5)
             `, [
                 user.id,
@@ -200,17 +200,17 @@ export const getAuditLogs = async (req: Request, res: Response) => {
         const result = await pool.query(`
             SELECT 
                 al.id,
-                al.action_type as action,
-                al.change_summary as details,
-                al.target_entity_type,
-                al.target_entity_id,
-                al.request_ip as ip_address,
+                al.action,
+                al.details,
+                al.entity_type,
+                al.entity_id,
+                al.ip_address,
                 al.created_at,
                 u.name as user_name,
                 u.email as user_email,
                 u.role as user_role
             FROM audit_logs al
-            LEFT JOIN users u ON al.actor_user_id = u.id
+            LEFT JOIN users u ON al.user_id = u.id
             ORDER BY al.created_at DESC
             LIMIT $1 OFFSET $2
         `, [limit, offset]);

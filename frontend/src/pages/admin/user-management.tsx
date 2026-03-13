@@ -20,7 +20,7 @@ export const UserManagement: React.FC = () => {
     const [filteredUsers, setFilteredUsers] = useState<UserListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [processing, setProcessing] = useState<number | null>(null);
+    const [processing, setProcessing] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -87,7 +87,7 @@ export const UserManagement: React.FC = () => {
         }
     };
 
-    const handleToggleStatus = async (userId: number, currentActive: boolean, userName: string) => {
+    const handleToggleStatus = async (userId: string, currentActive: boolean, userName: string) => {
         const action = currentActive ? 'deactivate' : 'activate';
         const newStatus = currentActive ? 'INACTIVE' : 'ACTIVE';
 
@@ -130,7 +130,7 @@ export const UserManagement: React.FC = () => {
         }
     };
 
-    const getUserImageUrl = (userId: number) => {
+    const getUserImageUrl = (userId: string) => {
         const baseUrl = (import.meta.env.VITE_API_URL || '');
         return `${baseUrl}/api/files/profile/${userId}`;
     };

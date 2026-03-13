@@ -7,7 +7,7 @@ import api from './api';
 export interface PrescriptionItem {
     id: number; // Institutional Realignment: integer
     prescription_id: number; // Institutional Realignment: integer
-    medicine_id: string;
+    medicine_id: number; // Institutional Realignment: integer
     medicine_name?: string;
     category?: string;
     strength?: string;
@@ -42,7 +42,7 @@ export const createPrescription = async (data: {
     appointment_id?: string;
     notes?: string;
     medications: Array<{
-        medicine_id: string;
+        medicine_id: number;
         dosage: string;
         frequency: string;
         duration_days?: number;
@@ -61,13 +61,13 @@ export const getMyPrescriptions = async () => {
 };
 
 // Get prescription by ID with items
-export const getPrescriptionById = async (id: string | number) => {
+export const getPrescriptionById = async (id: number) => {
     const response = await api.get(`/prescriptions/${id}`);
     return response.data as Prescription;
 };
 
 // Update prescription status (Pharmacist)
-export const updatePrescriptionStatus = async (id: string | number, status: string) => {
+export const updatePrescriptionStatus = async (id: number, status: string) => {
     const response = await api.put(`/prescriptions/${id}/status`, { status });
     return response.data;
 };

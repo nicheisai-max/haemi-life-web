@@ -18,8 +18,8 @@ export interface DoctorProfile {
 }
 
 export interface DoctorSchedule {
-    id: number;
-    doctor_id: number;
+    id: number; // Institutional Note: Database uses SERIAL for schedule entry IDs
+    doctor_id: string; // Institutional Realignment: uuid
     day_of_week: number; // 0-6
     start_time: string;
     end_time: string;
@@ -27,7 +27,7 @@ export interface DoctorSchedule {
 }
 
 export interface Patient {
-    id: string;
+    id: string; // Institutional Realignment: uuid (matches users.id)
     name: string;
     phone_number: string;
     email?: string;
