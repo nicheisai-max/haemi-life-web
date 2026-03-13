@@ -261,10 +261,21 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
 
             // 📢 Broadcast to other tabs for multi-tab sync (Google/Meta Grade)
             if (typeof window !== 'undefined') {
+                // Decode userId from token for gated sync
+                const base64Url = newToken.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const decoded = JSON.parse(atob(base64));
+                const userId = decoded?.id;
+
                 const syncChannel = new BroadcastChannel('haemi_auth_sync');
                 syncChannel.postMessage({ 
                     type: 'TOKEN_REFRESHED', 
-                    payload: { token: newToken, refreshToken: newRefreshToken, version: sessionVersion } 
+                    payload: { 
+                        token: newToken, 
+                        refreshToken: newRefreshToken, 
+                        version: sessionVersion,
+                        userId: userId 
+                    } 
                 });
                 syncChannel.close();
             }
