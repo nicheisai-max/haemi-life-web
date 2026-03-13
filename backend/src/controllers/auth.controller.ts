@@ -5,6 +5,7 @@ import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
 import { logger } from '../utils/logger';
 import { auditService } from '../services/audit.service';
+import { getSessionTimeoutMinutes } from '../utils/config.util';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
 import crypto from 'crypto';
@@ -432,7 +433,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         const sessionRes = await client.query(
             `SELECT refresh_token_jti, previous_refresh_token_jti, jti_rotated_at, 
-             access_token_jti, revoked FROM user_sessions WHERE session_id = $1 FOR UPDATE`,
+             access_token_jti, revoked, expires_at FROM user_sessions WHERE session_id = $1 FOR UPDATE`,
             [sessionId]
         );
         const session = sessionRes.rows[0];
@@ -491,6 +492,10 @@ export const refreshToken = async (req: Request, res: Response) => {
             const newAccessJti = crypto.randomBytes(16).toString('hex');
             const newRefreshJti = crypto.randomBytes(16).toString('hex');
 
+            // Calculate new expiration (Sliding Window)
+            const timeoutMinutes = await getSessionTimeoutMinutes();
+            const expiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
+
             await client.query(
                 `UPDATE user_sessions 
                  SET previous_refresh_token_jti = refresh_token_jti,
@@ -498,9 +503,10 @@ export const refreshToken = async (req: Request, res: Response) => {
                      refresh_token_jti = $1, 
                      access_token_jti = $2,
                      jti_rotated_at = CURRENT_TIMESTAMP,
-                     last_activity = CURRENT_TIMESTAMP 
-                 WHERE session_id = $3`,
-                [newRefreshJti, newAccessJti, sessionId]
+                     last_activity = CURRENT_TIMESTAMP,
+                     expires_at = $3
+                 WHERE session_id = $4`,
+                [newRefreshJti, newAccessJti, expiresAt, sessionId]
             );
 
             accessToken = jwt.sign(
@@ -629,6 +635,14 @@ export const logout = async (req: Request, res: Response) => {
     //     path: '/'
     // });
     return sendResponse(res, 200, true, 'Logged out successfully');
+};
+
+export const heartbeat = async (req: Request, res: Response) => {
+    // Accessing this endpoint triggers the authenticateToken middleware, 
+    // which updates the session heartbeat (last_activity and expires_at).
+    return sendResponse(res, 200, true, 'Heartbeat successful', {
+        timestamp: new Date().toISOString()
+    });
 };
 
 export const verifySession = async (req: Request, res: Response) => {

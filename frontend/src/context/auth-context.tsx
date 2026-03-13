@@ -124,6 +124,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         sessionStorage.removeItem('refreshToken');
                         setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
                     }
+                } else if (type === 'TOKEN_REFRESHED') {
+                    // MULTI-TAB SYNC: Update credentials if another tab performed a successful refresh
+                    if (payload?.token && payload?.refreshToken) {
+                        logger.info('[AuthSync] Token refresh received from other tab. Synchronizing state...');
+                        setAccessToken(payload.token);
+                        sessionStorage.setItem('token', payload.token);
+                        sessionStorage.setItem('refreshToken', payload.refreshToken);
+                        setAuthState(prev => ({ 
+                            ...prev, 
+                            token: payload.token,
+                            authStatus: prev.authStatus === 'unauthenticated' ? 'authenticated' : prev.authStatus
+                        }));
+                    }
                 }
             };
             authChannel.onmessage = handleMessage;

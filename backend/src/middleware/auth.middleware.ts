@@ -5,6 +5,7 @@ import { auditService } from '../services/audit.service';
 import { JWTPayload } from '../types/express';
 import { logger } from '../utils/logger';
 import { sendError } from '../utils/response';
+import { getSessionTimeoutMinutes } from '../utils/config.util';
 
 /**
  * Standard Authentication Middleware
@@ -53,15 +54,12 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                 return sendError(res, 403, 'Access denied. Account restricted.');
             }
 
-            const timeoutMinutes = 60;
-            if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
-                return sendError(res, 401, 'Session expired due to inactivity. Please log in again.');
-            }
+            // (Legacy user-level inactivity check removed in favor of per-session sliding window)
 
             // 2. Phase 9: Detailed Session & Fingerprint Validation
             if (payload.session_id) {
                 const sessionResult = await pool.query(
-                    'SELECT revoked, access_token_jti, ip_address, user_agent FROM user_sessions WHERE session_id = $1',
+                    'SELECT revoked, access_token_jti, previous_access_token_jti, jti_rotated_at, ip_address, user_agent, expires_at FROM user_sessions WHERE session_id = $1',
                     [payload.session_id]
                 );
 
@@ -70,17 +68,23 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                 }
 
                 const sessionData = sessionResult.rows[0];
+                const now = new Date();
+
+                // 4. Sliding Window Expiry Check
+                if (sessionData.expires_at && new Date(sessionData.expires_at).getTime() < now.getTime()) {
+                    return sendError(res, 401, 'Session expired. Please log in again.');
+                }
 
                 // 5. Access Token JTI Enforcement (Dispacement Tolerance)
                 // Check if this token's JTI matches the current session or the recently rotated one (grace window)
                 const currentAccessJti = sessionData.access_token_jti;
                 const previousAccessJti = sessionData.previous_access_token_jti;
                 const rotatedAt = sessionData.jti_rotated_at ? new Date(sessionData.jti_rotated_at).getTime() : 0;
-                const now = Date.now();
+                const nowMs = Date.now();
                 const GRACE_PERIOD_MS = 60 * 1000;
 
                 const isCurrentJti = currentAccessJti && payload.jti === currentAccessJti;
-                const isGracefulJti = previousAccessJti && payload.jti === previousAccessJti && (now - rotatedAt) < GRACE_PERIOD_MS;
+                const isGracefulJti = previousAccessJti && payload.jti === previousAccessJti && (nowMs - rotatedAt) < GRACE_PERIOD_MS;
 
                 if (!isCurrentJti && !isGracefulJti) {
                     logger.warn('Access token JTI violation (displaced)', {
@@ -108,16 +112,18 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                     return sendError(res, 401, 'Security fingerprint mismatch. Session invalidated.');
                 }
 
-                // IP binding - stricter for P0 but often problematic with VPNs/Proxies. 
-                // We'll log it if it changes significantly but only reject if configured.
+                // IP binding check (log only or reject if process.env.STRICT_IP_CHECK is true)
                 if (sessionData.ip_address !== currentIp && process.env.STRICT_IP_CHECK === 'true') {
-                    return sendError(res, 401, 'IP mismatch. Session revoked.');
+                    return sendError(res, 401, 'Security fingerprint mismatch. Session invalidated.');
                 }
 
-                // Heartbeat: Update session last_activity
+                // Heartbeat: Update session last_activity and sliding expires_at
+                const timeoutMinutes = await getSessionTimeoutMinutes();
+                const newExpiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
+
                 await pool.query(
-                    'UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP WHERE session_id = $1',
-                    [payload.session_id]
+                    'UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP, expires_at = $1 WHERE session_id = $2',
+                    [newExpiresAt, payload.session_id]
                 );
             }
 

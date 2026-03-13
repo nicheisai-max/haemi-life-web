@@ -258,6 +258,17 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
             if (newRefreshToken) sessionStorage.setItem('refreshToken', newRefreshToken);
 
             logger.info('[API] Token refresh successful');
+
+            // 📢 Broadcast to other tabs for multi-tab sync (Google/Meta Grade)
+            if (typeof window !== 'undefined') {
+                const syncChannel = new BroadcastChannel('haemi_auth_sync');
+                syncChannel.postMessage({ 
+                    type: 'TOKEN_REFRESHED', 
+                    payload: { token: newToken, refreshToken: newRefreshToken, version: sessionVersion } 
+                });
+                syncChannel.close();
+            }
+
             processQueue(null, newToken);
             return newToken;
         } catch (err: unknown) {
