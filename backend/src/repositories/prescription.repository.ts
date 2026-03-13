@@ -2,10 +2,10 @@ import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/db';
 
 export interface Prescription {
-    id: string;
+    id: number;
     patient_id: string;
     doctor_id: string;
-    appointment_id: string | null;
+    appointment_id: number | null;
     notes: string | null;
     prescription_date: Date;
     status: string;
@@ -14,9 +14,9 @@ export interface Prescription {
 }
 
 export interface PrescriptionItem {
-    id: string;
-    prescription_id: string;
-    medicine_id: string;
+    id: number;
+    prescription_id: number;
+    medicine_id: number;
     dosage: string;
     frequency: string;
     duration_days: number | null;
@@ -46,7 +46,7 @@ export class PrescriptionRepository {
             INSERT INTO prescriptions (patient_id, doctor_id, appointment_id, notes, prescription_date, status)
             VALUES ($1, $2, $3, $4, CURRENT_DATE, 'pending')
             RETURNING *
-        `, [data.patient_id, data.doctor_id, data.appointment_id || null, data.notes]);
+        `, [data.patient_id, data.doctor_id, data.appointment_id ? Number(data.appointment_id) : null, data.notes]);
         return result.rows[0];
     }
 

@@ -797,7 +797,44 @@
      - Uses existing CSS variables only, rem units only
   ==================================================== */
 
-  /* --- Table Container --- */
+    /* --- Clinical Action Buttons (Pharmacist Queue) --- */
+  .clinical-action-primary {
+    @apply premium-cta flex items-center justify-center gap-2;
+    height: 2.75rem !important; /* matches h-11 default */
+    font-weight: 600 !important;
+    letter-spacing: 0.015em;
+  }
+
+  .clinical-action-reject {
+    @apply flex items-center justify-center gap-2 transition-all duration-200;
+    border: 1.5px solid var(--border) !important;
+    background-color: transparent !important;
+    height: 2.75rem !important; /* matches h-11 default */
+    color: var(--muted-foreground) !important;
+    font-weight: 500 !important;
+  }
+
+  .clinical-action-reject:hover {
+    @apply border-destructive shadow-sm scale-[1.02];
+    color: var(--destructive) !important;
+    background-color: rgba(220, 38, 38, 0.05) !important;
+  }
+
+  .dark .clinical-action-reject:hover {
+    background-color: rgba(220, 38, 38, 0.15) !important;
+    border-color: var(--destructive) !important;
+  }
+
+  .clinical-action-reject:active {
+    @apply scale-[0.98];
+  }
+
+  .clinical-action-reject:focus-visible {
+    @apply outline-none ring-2 ring-destructive/30 ring-offset-2 ring-offset-background;
+  }
+}
+
+/* --- Table Container --- */
   .hl-table-container {
     width: 100%;
     overflow-x: auto;

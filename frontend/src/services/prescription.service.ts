@@ -5,8 +5,8 @@ import api from './api';
 // =====================================================
 
 export interface PrescriptionItem {
-    id: number;
-    prescription_id: number;
+    id: number; // Institutional Realignment: integer
+    prescription_id: number; // Institutional Realignment: integer
     medicine_id: string;
     medicine_name?: string;
     category?: string;
@@ -19,10 +19,10 @@ export interface PrescriptionItem {
 }
 
 export interface Prescription {
-    id: number;
-    patient_id: number;
-    doctor_id: number;
-    appointment_id?: number;
+    id: number; // Institutional Realignment: integer
+    patient_id: string; // Institutional Realignment: uuid
+    doctor_id: string; // Institutional Realignment: uuid
+    appointment_id?: number; // Institutional Realignment: integer
     prescription_date: string;
     status: 'pending' | 'filled' | 'cancelled';
     notes?: string;
@@ -37,10 +37,9 @@ export interface Prescription {
     items?: PrescriptionItem[];
 }
 
-// Create a new prescription (Doctor only)
 export const createPrescription = async (data: {
-    patient_id: number;
-    appointment_id?: number;
+    patient_id: string;
+    appointment_id?: string;
     notes?: string;
     medications: Array<{
         medicine_id: string;
@@ -62,13 +61,13 @@ export const getMyPrescriptions = async () => {
 };
 
 // Get prescription by ID with items
-export const getPrescriptionById = async (id: number) => {
+export const getPrescriptionById = async (id: string | number) => {
     const response = await api.get(`/prescriptions/${id}`);
     return response.data as Prescription;
 };
 
 // Update prescription status (Pharmacist)
-export const updatePrescriptionStatus = async (id: number, status: string) => {
+export const updatePrescriptionStatus = async (id: string | number, status: string) => {
     const response = await api.put(`/prescriptions/${id}/status`, { status });
     return response.data;
 };
