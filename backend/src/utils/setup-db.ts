@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcrypt';
 
-const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'HaemiLifeDemo@2026';
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '123456';
 
 async function setupDatabase() {
     let client;
@@ -16,7 +16,7 @@ async function setupDatabase() {
         const sql = fs.readFileSync(sqlPath, 'utf8');
 
         // Hash the demo password
-        console.log(`🔐 Hashing demo password (${DEMO_PASSWORD})...`);
+        console.log('🔐 Hashing demo password (123456)...');
         const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
         // Prepare specific SQL execution

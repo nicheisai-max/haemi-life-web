@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // Use a known demo/admin account if exists, or mock if we want pure E2E isolation
 const TEST_EMAIL = 'admin@haemilife.com';
-const TEST_PASSWORD = 'HaemiLifeDemo@2026';
+const TEST_PASSWORD = '123456';
 
 test.describe('Authentication E2E Lifecycle', () => {
 
@@ -14,20 +14,6 @@ test.describe('Authentication E2E Lifecycle', () => {
             sessionStorage.clear();
         });
         await page.reload();
-        
-        // Wait for the page to load and check for onboarding
-        // The FirstVisitGuard renders Onboarding by default for unauthenticated users
-        try {
-            const skipButton = page.getByRole('button', { name: /skip/i });
-            await skipButton.waitFor({ state: 'visible', timeout: 5000 });
-            await skipButton.click();
-        } catch (e) {
-            // If skip button not found, maybe we are already at login or it failed to load
-            console.log('Skip button not found or already bypassed');
-        }
-
-        // Wait for login input to confirm we are ready
-        await page.locator('input[placeholder*="example"], input[type="text"], input[type="email"]').first().waitFor({ state: 'visible', timeout: 10000 });
     });
 
     // TEST CASE 1

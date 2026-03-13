@@ -70,12 +70,12 @@ export const getConversations = async (req: Request, res: Response) => {
                 c.updated_at,
                 c.last_message_at,
                 (
-                    SELECT content 
+                    SELECT preview_text 
                     FROM messages m 
                     WHERE m.conversation_id = c.id 
                     ORDER BY m.created_at DESC 
                     LIMIT 1
-                ) as last_message,
+                ) as last_message, -- Plaintext preview
                 (
                     SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role, 'initials', u.initials, 'profile_image', u.profile_image))
                     FROM conversation_participants cp2
@@ -93,11 +93,6 @@ export const getConversations = async (req: Request, res: Response) => {
             FROM conversations c
             JOIN conversation_participants cp ON c.id = cp.conversation_id
             WHERE cp.user_id = $1
-              AND EXISTS (
-                  SELECT 1 FROM messages m 
-                  WHERE m.conversation_id = c.id 
-                  AND m.content LIKE 'enc:gcm:%'
-              )
             GROUP BY c.id
             ORDER BY c.last_message_at DESC NULLS LAST
             `,
@@ -229,15 +224,8 @@ export const sendMessage = async (req: Request, res: Response) => {
         const encryptedContent = (content && !content.startsWith('enc:')) ? encrypt(content) : content;
 
         // PHASE 3: Plaintext preview for UI (Meta-style)
-        // If content is already encrypted (starts with enc:), we attempt to decrypt once to get a preview.
-        // P1 HARDENING: Handle decryption failure (e.g. key mismatch or malformed packet)
-        let decodedPreview = (content && content.startsWith('enc:')) ? decrypt(content) : content;
-        
-        // If the resulting preview still looks like an encrypted blob or is an error string (though handled by utility now), 
-        // we set it to null to avoid leaking ciphertext in the preview_text column.
-        if (decodedPreview && decodedPreview.startsWith('enc:')) {
-            decodedPreview = null;
-        }
+        // If content is already encrypted (starts with enc:), we decrypt once to get preview
+        const decodedPreview = (content && content.startsWith('enc:')) ? decrypt(content) : content;
 
         const sequenceNumber = await chatReliabilityService.getNextSequence(conversationId);
 
@@ -364,12 +352,10 @@ export const sendMessage = async (req: Request, res: Response) => {
                 'SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2',
                 [conversationId, senderId]
             );
-            // P1 DETERMINISTIC FIX: Always send raw ciphertext if preview is unavailable.
-            // This allows the frontend to decrypt the notification description correctly.
+            // P1 FIX: Definitive decryption for notification previews
             let previewText = '📎 Attachment';
             if (content) {
-                // If decodedPreview is null OR it's a technical placeholder, use raw content (enc:...)
-                previewText = (decodedPreview && decodedPreview !== 'Encrypted Message') ? decodedPreview : content; 
+                previewText = (decodedPreview.length > 100) ? decodedPreview.substring(0, 100) + '...' : decodedPreview;
             }
 
             for (const row of participantsResult.rows) {

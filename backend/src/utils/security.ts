@@ -1,45 +1,23 @@
 import crypto from 'crypto';
-import { env } from '../config/env';
 
-// P1 ALIGNMENT: Single Source of Truth for Crypto Config
-const { encryption } = env;
 const ALGORITHM_GCM = 'aes-256-gcm';
 const ALGORITHM_CBC = 'aes-256-cbc';
-const ENCRYPTION_KEY = encryption.key;
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!;
 const IV_LENGTH = 12; // Standard GCM IV length for WebCrypto compatibility
 const AUTH_TAG_LENGTH = 16;
 const ENCRYPTED_PREFIX = 'enc:';
 const GCM_PREFIX = 'gcm:';
 const LEGACY_IV_LENGTH = 16; // For CBC fallback
 
-// CRITICAL VALIDATION: Fail fast if crypto config is insecure or missing
-if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
-    throw new Error('🔥 CRYPTO_INIT_ERROR: ENCRYPTION_KEY is missing or too short. Total failure expected.');
-}
-
-if (!encryption.salt) {
-    throw new Error('🔥 CRYPTO_INIT_ERROR: SECURITY_SALT is mandatory for deterministic key derivation.');
-}
-
-/**
- * Derives a cryptographic key using PBKDF2.
- * This MUST match the frontend implementation exactly.
- */
+// Helper to ensure key is 32 bytes
+// Standardized to PBKDF2 for production-grade compatibility with Web Crypto API (Frontend)
 function getKey() {
-    let keyData: Buffer;
+    let keyData: Buffer | string = ENCRYPTION_KEY;
     if (/^[0-9a-fA-F]+$/.test(ENCRYPTION_KEY)) {
         keyData = Buffer.from(ENCRYPTION_KEY, 'hex');
-    } else {
-        keyData = Buffer.from(ENCRYPTION_KEY, 'utf8');
     }
-
-    return crypto.pbkdf2Sync(
-        keyData,
-        encryption.salt,
-        encryption.iterations,
-        encryption.keyLength,
-        'sha256'
-    );
+    const salt = process.env.SECURITY_SALT || 'haemi_salt_legacy_fallback';
+    return crypto.pbkdf2Sync(keyData, salt, 100000, 32, 'sha256');
 }
 
 /**
@@ -76,8 +54,6 @@ export const decrypt = (text: string): string => {
         // Mode A: AES-256-GCM
         if (data.startsWith(GCM_PREFIX)) {
             const parts = data.slice(GCM_PREFIX.length).split(':');
-            if (parts.length < 3) throw new Error('Malformed GCM envelope');
-
             const iv = Buffer.from(parts[0], 'hex');
             const tag = Buffer.from(parts[1], 'hex');
             const encryptedText = parts[2];
@@ -106,16 +82,21 @@ export const decrypt = (text: string): string => {
         return result;
     } catch (err: unknown) {
         const error = err as Error;
-        // P1 HARDENING: Never return technical error strings to the caller.
-        // Return the original text so that the UI can decide how to handle the failure (e.g. show "Encrypted Message").
-        console.error('[Security] Decryption failed (Mode mismatch or key error):', error.message);
-        return text;
+        console.error('[Security] Decryption failed (Mode mismatch or key error):', error);
+
+        // STRICT MODE: Return informative placeholder instead of silent fail
+        if (error.message && error.message.includes('auth tag')) {
+            return `[DECRYPTION_ERROR: AUTH_TAG_MISMATCH]`;
+        }
+        if (error.message && error.message.includes('bad decrypt')) {
+            return `[DECRYPTION_ERROR: BAD_DECRYPT]`;
+        }
+
+        return `[DECRYPTION_FAILED: ${error.message}]`;
     }
 };
 
-/**
- * Blind Index helper (Deterministic HMAC for searchable PII)
- */
+// Blind Index helper (Deterministic HMAC for searchable PII)
 export const getBlindIndex = (text: string): string => {
     if (!text) return '';
     return crypto.createHmac('sha256', getKey())

@@ -102,39 +102,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [authState.authStatus, authState.token]);
 
-    // ─── Task 4 Hardening: 5-Minute Sliding Session Heartbeat ───────────────
+    // ─── BroadcastChannel for Cross-Tab Sync ───────────────────────────────
     useEffect(() => {
-        if (authState.authStatus !== 'authenticated') return;
+        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+        let authChannel: BroadcastChannel | null = null;
 
-        const HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 Minutes
-        
-        const runHeartbeat = async () => {
-            try {
-                logger.info('[Auth] Executing 5-minute session heartbeat...');
-                await authService.heartbeat();
-                logger.info('[Auth] Session heartbeat successful. Sliding window extended.');
-            } catch (err) {
-                logger.error('[Auth] Periodic heartbeat failed', err);
-            }
-        };
+        if (!IS_DEMO_MODE) {
+            authChannel = new BroadcastChannel('haemi_auth_sync');
 
-        const heartbeatId = setInterval(runHeartbeat, HEARTBEAT_INTERVAL);
+            const handleMessage = (event: MessageEvent) => {
+                const { type, payload } = event.data;
+                const latestState = authStateRef.current;
 
-        return () => clearInterval(heartbeatId);
-    }, [authState.authStatus]);
-    useEffect(() => {
+                if (type === 'LOGOUT') {
+                    // SECURE SYNC: Only logout if the message targets our current user identity
+                    if (payload?.userId && latestState.user?.id === payload.userId) {
+                        logger.info('[AuthSync] Logout received from other tab (Shared Identity)');
+                        setAccessToken(null);
+                        sessionStorage.removeItem('user');
+                        sessionStorage.removeItem('token');
+                        sessionStorage.removeItem('refreshToken');
+                        setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
+                    }
+                }
+            };
+            authChannel.onmessage = handleMessage;
+        }
+
         const handleUnauthorized = () => {
+            const currentUserId = authStateRef.current.user?.id;
             logger.warn('[Auth] Unauthorized event detected');
             setAccessToken(null);
             sessionStorage.removeItem('user');
             sessionStorage.removeItem('token');
             sessionStorage.removeItem('refreshToken');
             setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
+            
+            // Broadcast logout ONLY for this specific user ID
+            if (authChannel && currentUserId) {
+                authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
+            }
         };
 
         window.addEventListener('auth:unauthorized', handleUnauthorized);
 
         return () => {
+            if (authChannel) authChannel.close();
             window.removeEventListener('auth:unauthorized', handleUnauthorized);
         };
     }, []); 
@@ -149,14 +162,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             sessionStorage.setItem('token', token);
             if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
             sessionStorage.setItem('user', JSON.stringify(user));
-        } else if (status === 'unauthenticated') {
-            // ONLY clear storage if we are explicitly unauthenticated.
-            // If we are 'offline', we keep the tokens in storage and retry later.
+        } else {
             sessionStorage.removeItem('token');
             sessionStorage.removeItem('refreshToken');
             sessionStorage.removeItem('user');
         }
-
 
         // 3. Unified State Sink
         setAuthState({
@@ -227,7 +237,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [commitAuthState]);
 
     const logout = useCallback(async () => {
+        const currentUserId = authStateRef.current.user?.id;
         commitAuthState(null, null, 'unauthenticated');
+
+        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+        if (!IS_DEMO_MODE && currentUserId) {
+            const authChannel = new BroadcastChannel('haemi_auth_sync');
+            authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
+            authChannel.close();
+        }
 
         try {
             await authService.logout();
@@ -238,7 +256,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const refreshUser = useCallback(async () => {
         try {
-            logger.info('[Auth] RefreshUser triggered. Performing session heartbeat...');
             const { user: verifiedUser } = await authService.verifySession();
             setAuthState(prev => ({
                 ...prev,
@@ -246,7 +263,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 profileImageVersion: Date.now()
             }));
             sessionStorage.setItem('user', JSON.stringify(verifiedUser));
-            logger.info('[Auth] Heartbeat successful. Session validity synchronized.');
         } catch (error) {
             logger.error('[Auth] Failed to refresh user:', error);
         }
