@@ -53,7 +53,7 @@
     "cleanup:sandboxes": "tsx scripts/cleanup-sandboxes.ts",
     "tasks:run": "tsx scripts/task-planner.ts",
     "prepush-check": "tsx scripts/prepush-check.ts",
-    "sync": "npm run cleanup:sandboxes && git checkout main && git fetch origin --prune && git reset --hard origin/main && git remote prune origin && powershell -Command \"git branch --list 'ai/sandbox*' 'ai-sandbox*' | ForEach-Object { git branch -D $_.Trim() }\" && git branch -a && git status"
+    "sync": "tsx scripts/repo-hygiene.ts && git reset --hard origin/main && git branch -a && git status"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [
