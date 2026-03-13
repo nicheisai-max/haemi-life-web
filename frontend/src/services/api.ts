@@ -233,7 +233,8 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
             const currentRefreshToken = sessionStorage.getItem('refreshToken');
             if (!currentRefreshToken) {
                 // Institutional Hardening: Silent skip if no token exists (Expected unauthenticated state)
-                logger.info('[API] No refresh token found. Proceeding as unauthenticated.');
+                logger.info('[API] No refresh token found. Draining queue for unauthenticated state.');
+                processQueue(new Error('No active session'), null); 
                 return null;
             }
 

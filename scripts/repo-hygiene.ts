@@ -26,6 +26,8 @@ const FILE_BLACKLIST = [
     'e2e/test-results.txt',               // Test residues
     'e2e/playwright-report',              // Playwright reports
     'e2e/test-results',                   // Playwright screenshots/videos
+    'frontend/dist',                      // Stale build artifacts (Institutional Hardening)
+    'frontend/node_modules/.vite',        // Stale dev cache (Institutional Hardening)
 ];
 
 const BRANCH_PATTERNS = [
