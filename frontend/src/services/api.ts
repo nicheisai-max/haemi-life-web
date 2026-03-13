@@ -231,7 +231,11 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
     refreshPromise = (async () => {
         try {
             const currentRefreshToken = sessionStorage.getItem('refreshToken');
-            if (!currentRefreshToken) throw new Error('No refresh token available');
+            if (!currentRefreshToken) {
+                // Institutional Hardening: Silent skip if no token exists (Expected unauthenticated state)
+                logger.info('[API] No refresh token found. Proceeding as unauthenticated.');
+                return null;
+            }
 
             logger.info(`[API] Initiating synchronized token refresh (Attempt ${retryCount + 1})`);
             const response = await axios.post<{ success?: boolean; data?: { token?: string, refreshToken?: string } }>(
@@ -296,7 +300,15 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
 
             // Phase 6: Only clear session if we are still on the same session version
             if (sessionVersion === currentVersion) {
-                logger.error('[API] Sync refresh failed permanently', err);
+                const isSilentFailure = (err instanceof Error && err.message === 'No refresh token available') || 
+                                       axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403);
+                
+                if (isSilentFailure) {
+                    logger.info('[API] Session refresh skipped or unauthorized (Silent Failure Handling)');
+                } else {
+                    logger.error('[API] Sync refresh failed permanently', err);
+                }
+                
                 processQueue(err, null);
                 clearAuthSession();
             }
