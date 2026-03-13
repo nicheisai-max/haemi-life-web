@@ -377,6 +377,12 @@
   }
 }
 
+@utility premium-cta {
+  @apply transition-all duration-300 relative overflow-hidden;
+  background: linear-gradient(135deg, #148C8B 0%, #1BA7A6 100%);
+  box-shadow: 0 4px 15px -1px rgba(20, 140, 139, 0.3);
+}
+
 @layer components {
 
   /* DEFINTIVE UI HARDENING - Moved to brand.css for atomic priority */
@@ -499,11 +505,6 @@
   }
 
   /* Premium CTA Style (Apple/Google Dashboard Standard) */
-  .premium-cta {
-    @apply transition-all duration-300 relative overflow-hidden;
-    background: linear-gradient(135deg, #148C8B 0%, #1BA7A6 100%);
-    box-shadow: 0 4px 15px -1px rgba(20, 140, 139, 0.3);
-  }
 
   .premium-cta:hover:not(:disabled) {
     @apply -translate-y-[1px];
@@ -832,7 +833,6 @@
   .clinical-action-reject:focus-visible {
     @apply outline-none ring-2 ring-destructive/30 ring-offset-2 ring-offset-background;
   }
-}
 
 /* --- Table Container --- */
   .hl-table-container {
