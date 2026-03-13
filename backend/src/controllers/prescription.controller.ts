@@ -13,7 +13,7 @@ export const createPrescription = async (req: Request, res: Response) => {
 
         // Validate that appointment exists and belongs to this doctor
         if (appointment_id) {
-            const hasAccess = await prescriptionRepository.checkAppointmentAccess(appointment_id, userId);
+            const hasAccess = await prescriptionRepository.checkAppointmentAccess(Number(appointment_id), userId);
             if (!hasAccess) {
                 return sendError(res, 403, 'Invalid appointment or access denied');
             }
@@ -86,14 +86,14 @@ export const getPrescriptionById = async (req: Request, res: Response) => {
         if (!userId) return sendError(res, 401, 'Unauthorized');
 
         // Get prescription
-        const prescription = await prescriptionRepository.findByIdWithDetails(id as string, userId, role as string);
+        const prescription = await prescriptionRepository.findByIdWithDetails(Number(id), userId, role as string);
 
         if (!prescription) {
             return sendError(res, 404, 'Prescription not found');
         }
 
         // Get prescription items
-        const items = await prescriptionRepository.findItemsByPrescriptionId(id as string);
+        const items = await prescriptionRepository.findItemsByPrescriptionId(Number(id));
 
         return sendResponse(res, 200, true, 'Prescription fetched successfully', {
             ...prescription,
@@ -111,7 +111,7 @@ export const updatePrescriptionStatus = async (req: Request, res: Response) => {
         const { id } = req.params;
         const { status } = req.body;
 
-        const prescription = await prescriptionRepository.updateStatus(id as string, status as string);
+        const prescription = await prescriptionRepository.updateStatus(Number(id), status as string);
 
         if (!prescription) {
             return sendError(res, 404, 'Prescription not found');
@@ -142,7 +142,7 @@ export const deletePrescription = async (req: Request, res: Response) => {
         const userId = req.user?.id;
         if (!userId) return sendError(res, 401, 'Unauthorized');
 
-        const deleted = await prescriptionRepository.softDelete(id as string, userId);
+        const deleted = await prescriptionRepository.softDelete(Number(id), userId);
 
         if (!deleted) {
             return sendError(res, 404, 'Prescription not found or access denied');

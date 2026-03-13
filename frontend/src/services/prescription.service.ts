@@ -5,9 +5,9 @@ import api from './api';
 // =====================================================
 
 export interface PrescriptionItem {
-    id: number;
-    prescription_id: number;
-    medicine_id: string;
+    id: number; // Institutional Realignment: integer
+    prescription_id: number; // Institutional Realignment: integer
+    medicine_id: number; // Institutional Realignment: integer
     medicine_name?: string;
     category?: string;
     strength?: string;
@@ -19,10 +19,10 @@ export interface PrescriptionItem {
 }
 
 export interface Prescription {
-    id: number;
-    patient_id: number;
-    doctor_id: number;
-    appointment_id?: number;
+    id: number; // Institutional Realignment: integer
+    patient_id: string; // Institutional Realignment: uuid
+    doctor_id: string; // Institutional Realignment: uuid
+    appointment_id?: number; // Institutional Realignment: integer
     prescription_date: string;
     status: 'pending' | 'filled' | 'cancelled';
     notes?: string;
@@ -37,13 +37,12 @@ export interface Prescription {
     items?: PrescriptionItem[];
 }
 
-// Create a new prescription (Doctor only)
 export const createPrescription = async (data: {
-    patient_id: number;
-    appointment_id?: number;
+    patient_id: string;
+    appointment_id?: string;
     notes?: string;
     medications: Array<{
-        medicine_id: string;
+        medicine_id: number;
         dosage: string;
         frequency: string;
         duration_days?: number;

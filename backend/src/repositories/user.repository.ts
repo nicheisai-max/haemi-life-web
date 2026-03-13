@@ -15,6 +15,8 @@ export interface User {
     is_active: boolean;
     token_version: number;
     profile_image: string | null;
+    profile_image_data?: Buffer | null;
+    profile_image_mime?: string | null;
     created_at: Date;
     updated_at: Date;
 }

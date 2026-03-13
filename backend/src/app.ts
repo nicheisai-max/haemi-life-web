@@ -17,6 +17,7 @@ import { logger } from './utils/logger';
 import { pool, checkConnection } from './config/db';
 import { chatReliabilityService } from './services/chat-reliability.service';
 import { env } from './config/env';
+import { schemaIntegrityService } from './services/schema-integrity.service';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -156,7 +157,8 @@ const startServer = async () => {
 
         // Phase 3: Strict DB Verification
         await checkConnection();
-        logger.info('✅ Database verified.');
+        await schemaIntegrityService.validate();
+        logger.info('✅ Database and Schema Integrity verified.');
 
         const server = createServer(app);
         io = new Server(server, {

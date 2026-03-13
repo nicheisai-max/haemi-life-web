@@ -94,6 +94,7 @@ export const getConversations = async (req: Request, res: Response) => {
             JOIN conversation_participants cp ON c.id = cp.conversation_id
             WHERE cp.user_id = $1
             GROUP BY c.id
+            HAVING (SELECT COUNT(*) FROM messages m_check WHERE m_check.conversation_id = c.id) > 0
             ORDER BY c.last_message_at DESC NULLS LAST
             `,
             [userId]

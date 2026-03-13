@@ -110,7 +110,7 @@ export const getAppointmentById = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        const appointment = await appointmentRepository.findByIdWithDetails(id as string, user.id as string);
+        const appointment = await appointmentRepository.findByIdWithDetails(Number(id), user.id as string);
 
         if (!appointment) {
             return sendError(res, 404, 'Appointment not found');
@@ -131,7 +131,7 @@ export const updateAppointmentStatus = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        const appointment = await appointmentRepository.updateStatus(id as string, user.id as string, status as string, notes as string);
+        const appointment = await appointmentRepository.updateStatus(Number(id), user.id as string, status as string, notes as string);
 
         if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found or access denied' });
@@ -151,7 +151,7 @@ export const cancelAppointment = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        const appointment = await appointmentRepository.cancel(id as string, user.id as string);
+        const appointment = await appointmentRepository.cancel(Number(id), user.id as string);
 
         if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found or access denied' });
@@ -175,7 +175,7 @@ export const deleteAppointment = async (req: Request, res: Response) => {
             return res.status(403).json({ message: 'Only patients can permanently delete appointments' });
         }
 
-        const deleted = await appointmentRepository.softDelete(id as string, user.id as string);
+        const deleted = await appointmentRepository.softDelete(Number(id), user.id as string);
 
         if (!deleted) {
             return res.status(404).json({

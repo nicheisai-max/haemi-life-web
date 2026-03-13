@@ -32,7 +32,7 @@ export const VerifyDoctors: React.FC = () => {
     const handleVerify = async (doctorId: string, approved: boolean) => {
         try {
             setProcessing(doctorId);
-            await verifyDoctor(parseInt(doctorId, 10), approved);
+            await verifyDoctor(doctorId, approved);
             await fetchVerifications();
         } catch (err: unknown) {
             setError(getErrorMessage(err, 'Failed to process verification'));

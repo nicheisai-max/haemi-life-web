@@ -1,11 +1,11 @@
 import api from './api';
 
 export interface AuditLog {
-    id: number;
-    user_id: number;
+    id: number; // Institutional Realignment: serial/integer
+    user_id: string; // Institutional Realignment: uuid
     action: string;
     entity_type: string;
-    entity_id: number;
+    entity_id: string; // Institutional Realignment: uuid or text
     details: Record<string, unknown> | string | null;
     ip_address: string;
     created_at: string;
@@ -47,7 +47,7 @@ export interface RevenueStat {
 }
 
 export interface UserListItem {
-    id: number;
+    id: string; // Institutional Realignment: uuid
     name: string;
     email: string;
     role: string;
@@ -59,7 +59,7 @@ export interface UserListItem {
 }
 
 export interface PendingVerification {
-    id: number;
+    id: string; // Institutional Realignment: uuid
     name: string;
     email: string;
     phone_number: string;
@@ -91,7 +91,7 @@ export const getAllUsers = async (params?: { role?: string; status?: string; sea
     return response.data;
 };
 
-export const updateUserStatus = async (userId: number, status: string): Promise<{ message: string; user: UserListItem }> => {
+export const updateUserStatus = async (userId: string, status: string): Promise<{ message: string; user: UserListItem }> => {
     const response = await api.put<{ message: string; user: UserListItem }>(`/admin/users/${userId}/status`, { status });
     return response.data;
 };
@@ -101,7 +101,7 @@ export const getPendingVerifications = async (): Promise<PendingVerification[]> 
     return response.data;
 };
 
-export const verifyDoctor = async (id: number, verified: boolean): Promise<{ message: string; profile: PendingVerification }> => {
+export const verifyDoctor = async (id: string, verified: boolean): Promise<{ message: string; profile: PendingVerification }> => {
     const response = await api.put<{ message: string; profile: PendingVerification }>(`/admin/verify-doctor/${id}`, { verified });
     return response.data;
 };

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import * as fs from 'fs';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
@@ -195,6 +196,13 @@ export const login = async (req: Request, res: Response) => {
         }
 
         const validPassword = await bcrypt.compare(password, user.password!);
+        fs.appendFileSync('login_debug.log', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            identifier,
+            passwordLength: password.length,
+            hashStart: user.password?.substring(0, 10),
+            validPassword
+        }) + '\n');
 
         if (!validPassword) {
             await auditService.log({
@@ -237,6 +245,15 @@ export const login = async (req: Request, res: Response) => {
         });
 
         logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
+
+        fs.appendFileSync('login_debug.log', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            identifier,
+            status: 'SUCCESS',
+            id: user.id,
+            role: user.role,
+            token_version: user.token_version
+        }) + '\n');
 
         // Generate Access Token (15m)
         const accessToken = jwt.sign(
@@ -601,7 +618,7 @@ export const logout = async (req: Request, res: Response) => {
             // Revoke current session in user_sessions
             if (req.user.session_id) {
                 await pool.query(
-                    'UPDATE user_sessions SET revoked = TRUE, revoked_at = NOW() WHERE session_id = $1',
+                    'UPDATE user_sessions SET revoked = TRUE, logout_time = NOW() WHERE session_id = $1',
                     [req.user.session_id]
                 );
             }

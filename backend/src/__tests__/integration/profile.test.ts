@@ -68,7 +68,7 @@ describe('Profile API (Integration)', () => {
             rows: [{
                 id: patientId,
                 email: 'patient@test.com',
-                phone_number: '1234567890',
+                phone_number: '555-010-999',
                 role: 'patient',
                 fullName: 'Test Patient',
                 initials: 'TP',

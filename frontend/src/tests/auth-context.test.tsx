@@ -55,7 +55,7 @@ describe('AuthContext Lifecycle', () => {
         vi.mocked(authService.waitForBackend).mockResolvedValueOnce(true);
         vi.mocked(authService.refreshToken).mockResolvedValueOnce({ authenticated: true, token: 'mock-token' });
         vi.mocked(authService.verifySession).mockResolvedValueOnce({
-            user: { id: '1', email: 'test@example.com', role: 'doctor', name: 'Dr. Test', phone_number: '12345678' }
+            user: { id: '1', email: 'test@example.com', role: 'doctor', name: 'Dr. Test', phone_number: '555-010-999' }
         });
 
         render(

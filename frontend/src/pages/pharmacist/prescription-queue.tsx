@@ -160,31 +160,29 @@ export const PrescriptionQueue: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex md:flex-col gap-3 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-0 border-border/50">
+                                    <div className="flex md:flex-col gap-3 w-full md:w-[10rem] mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-0 border-border/50">
                                         <Button
-                                            size="sm"
                                             onClick={() => handleFill(prescription.id)}
                                             disabled={processing === prescription.id.toString()}
-                                            className="flex-1 md:w-full justify-center shadow-sm"
+                                            className="clinical-action-primary flex-1 shadow-md"
                                         >
                                             {processing === prescription.id.toString() ? (
                                                 <PremiumLoader size="xs" />
                                             ) : (
                                                 <>
-                                                    <Check className="h-4 w-4 mr-2" />
-                                                    Fill
+                                                    <Check className="size-[1.125rem]" />
+                                                    <span>Fill</span>
                                                 </>
                                             )}
                                         </Button>
                                         <Button
                                             variant="outline"
-                                            size="sm"
                                             onClick={() => handleReject(prescription.id)}
                                             disabled={processing === prescription.id.toString()}
-                                            className="flex-1 md:w-full justify-center hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                                            className="clinical-action-reject flex-1"
                                         >
-                                            <X className="h-4 w-4 mr-2" />
-                                            Reject
+                                            <X className="size-[1.125rem]" />
+                                            <span>Reject</span>
                                         </Button>
                                     </div>
                                 </div>

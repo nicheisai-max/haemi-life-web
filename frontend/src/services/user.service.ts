@@ -5,7 +5,7 @@ import api from './api';
 // =====================================================
 
 export interface UserProfile {
-    id: number;
+    id: string; // Institutional Realignment: uuid
     name: string;
     email?: string;
     phone_number: string;
