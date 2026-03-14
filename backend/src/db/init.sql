@@ -824,16 +824,20 @@ BEGIN
             (v_demo_conv_id, v_patient_id, 'Ke a leboga, Doctor. I have the appointment on my schedule. See you then.', false, NOW() - INTERVAL '22 hours 50 minutes');
         END IF;
 
-        -- 11. INSTITUTIONAL BASELINE AUDIT SEEDS (Google-Level Continuity)
-        SELECT id INTO v_admin_id FROM users WHERE email = 'admin@haemilife.com';
+    -- 11. INSTITUTIONAL BASELINE AUDIT SEEDS (Google-Level Continuity)
+    DECLARE
+        v_final_admin_id UUID;
+    BEGIN
+        SELECT id INTO v_final_admin_id FROM users WHERE email = 'admin@haemilife.com';
         IF NOT EXISTS (SELECT 1 FROM audit_logs WHERE action = 'SYSTEM_INIT') THEN
             INSERT INTO audit_logs (user_id, action, details, created_at) VALUES
-            (v_admin_id, 'SYSTEM_INIT', '{"version": "2.0.0", "status": "Institutional Baseline Established"}', NOW() - INTERVAL '30 days'),
-            (v_admin_id, 'SCHEMA_HARDENING', '{"type": "UUID_MIGRATION", "scope": "Complete Architecture"}', NOW() - INTERVAL '25 days'),
-            (v_admin_id, 'SECURITY_HUB_ACTIVATION', '{"feature": "Forensic Observability", "status": "Active"}', NOW() - INTERVAL '20 days'),
-            (v_admin_id, 'CLINICAL_NETWORK_ESTABLISHED', '{"region": "Botswana", "hospitals": ["Princess Marina", "Bokamoso"]}', NOW() - INTERVAL '15 days'),
-            (v_admin_id, 'VERIFICATION_AUDIT', '{"verified": true, "audit_id": "BW-MD-AUDIT-2026"}', NOW() - INTERVAL '1 day');
+            (v_final_admin_id, 'SYSTEM_INIT', '{"version": "2.0.0", "status": "Institutional Baseline Established"}', NOW() - INTERVAL '30 days'),
+            (v_final_admin_id, 'SCHEMA_HARDENING', '{"type": "UUID_MIGRATION", "scope": "Complete Architecture"}', NOW() - INTERVAL '25 days'),
+            (v_final_admin_id, 'SECURITY_HUB_ACTIVATION', '{"feature": "Forensic Observability", "status": "Active"}', NOW() - INTERVAL '20 days'),
+            (v_final_admin_id, 'CLINICAL_NETWORK_ESTABLISHED', '{"region": "Botswana", "hospitals": ["Princess Marina", "Bokamoso"]}', NOW() - INTERVAL '15 days'),
+            (v_final_admin_id, 'VERIFICATION_AUDIT', '{"verified": true, "audit_id": "BW-MD-AUDIT-2026"}', NOW() - INTERVAL '1 day');
         END IF;
+    END;
 
     EXCEPTION
         WHEN undefined_column THEN

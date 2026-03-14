@@ -1,7 +1,7 @@
 import api from './api';
 
 export interface AuditLog {
-    id: string; // Institutional Realignment: UUID
+    id: string; // Institutional Realignment: UUID (Canonical)
     user_id: string; // Institutional Realignment: uuid
     action: string;
     entity_type: string;

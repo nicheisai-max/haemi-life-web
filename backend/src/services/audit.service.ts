@@ -18,10 +18,10 @@ export interface AuditLogEntry {
 export const auditService = {
     log: async (entry: Partial<AuditLogEntry> & Record<string, unknown>) => {
         try {
-            // SCHEMA ALIGNMENT: user_id is the canonical identifier
-            const user_id = entry.user_id || null;
+            // SCHEMA ALIGNMENT & ROBUST MAPPING
+            const user_id = entry.user_id || entry.actor_id || entry.actor_user_id || null;
             const action = entry.action || entry.action_type || 'UNKNOWN_ACTION';
-            const entity_id = entry.entity_id || entry.target_id || null;
+            const entity_id = entry.entity_id || entry.target_id || entry.target_entity_id || null;
             const details = entry.details || 
                 (entry.metadata ? JSON.stringify(entry.metadata) : null) || 
                 '{}';

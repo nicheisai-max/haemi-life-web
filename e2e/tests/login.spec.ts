@@ -2,13 +2,23 @@ import { test, expect } from '@playwright/test';
 
 // Use a known demo/admin account if exists, or mock if we want pure E2E isolation
 const TEST_EMAIL = 'admin@haemilife.com';
-const TEST_PASSWORD = '123456';
+const TEST_PASSWORD = 'HaemiLifeDemo@2026'; // Institutional Hardened Credential
 
 test.describe('Authentication E2E Lifecycle', () => {
 
     test.beforeEach(async ({ page }) => {
+        page.on('console', msg => console.log(`BROWSER [${msg.type()}]: ${msg.text()}`));
         // Clear storage to ensure isolated tests
         await page.goto('/login', { waitUntil: 'networkidle', timeout: 30000 });
+        await page.evaluate(() => {
+            localStorage.clear();
+            sessionStorage.clear();
+            // Clear cookies if possible in browser context
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+        });
+        await page.reload({ waitUntil: 'networkidle' });
         
         // Handle onboarding if it appears (Skip if visible)
         const skipButton = page.getByRole('button', { name: /skip/i });
@@ -24,8 +34,11 @@ test.describe('Authentication E2E Lifecycle', () => {
 
     // TEST CASE 1
     test('Valid Login, Redirect & Reload Persistence', async ({ page }) => {
+        // Explicitly wait for the login form to be visible to avoid race conditions
+        await expect(page.getByText(/sign in to access your dashboard/i)).toBeVisible();
+
         // Find email and password fields generically
-        await page.getByLabel(/email|phone/i).fill(TEST_EMAIL);
+        await page.getByPlaceholder(/user@example\.com/i).fill(TEST_EMAIL);
         await page.locator('input[type="password"]').fill(TEST_PASSWORD);
         await page.getByRole('button', { name: /sign in/i }).click();
 
