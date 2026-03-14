@@ -57,15 +57,25 @@ async function purgeFiles() {
     
     for (const pattern of FILE_BLACKLIST) {
         const fullPath = path.join(PROJECT_ROOT, pattern);
+        
         try {
-            // Use shell for wildcard support (robustness)
-            if (process.platform === 'win32') {
-                run(`powershell -Command "Remove-Item -Path '${fullPath}' -Recurse -Force -ErrorAction SilentlyContinue"`);
+            if (pattern.endsWith('/*')) {
+                // Wildcard cleanup: remove contents but preserve the container
+                const dirPath = fullPath.slice(0, -2);
+                if (fs.existsSync(dirPath)) {
+                    const files = fs.readdirSync(dirPath);
+                    for (const file of files) {
+                        fs.rmSync(path.join(dirPath, file), { recursive: true, force: true });
+                    }
+                }
             } else {
-                run(`rm -rf ${fullPath}`);
+                // Direct cleanup
+                if (fs.existsSync(fullPath)) {
+                    fs.rmSync(fullPath, { recursive: true, force: true });
+                }
             }
-        } catch (err) {
-            // Silently skip if file doesn't exist
+        } catch (err: any) {
+            log(`Failed to purge ${pattern}: ${err.message}`, 'warn');
         }
     }
     log('File system hygiene achieved.', 'success');
