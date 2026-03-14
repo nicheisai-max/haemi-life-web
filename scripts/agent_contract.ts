@@ -18,6 +18,7 @@ export const ALLOWED_COMMANDS = [
     /^git\s+checkout\s+-b\s+[a-zA-Z0-9\/-]+$/i,
     /^git\s+rev-parse\s+--abbrev-ref\s+HEAD$/i,
     /^git\s+rev-parse\s+[a-zA-Z0-9]+$/i,
+    /^git\s+log\s+-1\s+--oneline$/i,
     /^git\s+diff(\s+--staged|\s+--name-only|\s+--cached|\s+--diff-filter=[A-Z]+|\s+--cached\s+--name-only\s+--diff-filter=ACM)?$/i,
     /^git\s+fetch(\s+origin)?(\s+--prune)?$/i,
     /^git\s+pull(\s+origin\s+[a-z]+)?$/i,

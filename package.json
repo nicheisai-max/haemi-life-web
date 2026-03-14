@@ -53,6 +53,7 @@
     "cleanup:sandboxes": "tsx scripts/cleanup-sandboxes.ts",
     "safe-push": "powershell -ExecutionPolicy Bypass -File scripts/safe_push.ps1",
     "watchdog": "tsx scripts/agent_watchdog.ts",
+    "context": "tsx scripts/agent_context.ts",
     "sync": "tsx scripts/repo-hygiene.ts && git branch -a && git status"
   },
   "lint-staged": {

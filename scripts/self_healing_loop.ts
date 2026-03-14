@@ -24,6 +24,10 @@ async function run() {
     console.log('\n🚀 INITIATING SELF-HEALING LOOP');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
+    // 0. SNAPSHOT STAGE
+    console.log('\n📸 [SNAPSHOT STAGE]');
+    run_safe_command('npm run context');
+
     // 1. PLAN STAGE
     console.log('\n📝 [PLAN STAGE]');
     steps.forEach((step, i) => console.log(`  ${i + 1}. ${step.task}`));
