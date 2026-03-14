@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { run_safe_command } from './agent_watchdog';
 
 const FORBIDDEN_COMMANDS = [
     'rm -rf .git',
@@ -34,7 +34,7 @@ export function checkGitPermission(command: string) {
 
 export function enforceSandboxBranch() {
     try {
-        const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim();
+        const currentBranch = run_safe_command('git rev-parse --abbrev-ref HEAD')?.trim() || '';
         if (currentBranch === 'main') {
             if (process.env.SANDBOX_MODE === 'true') {
                 return 'main'; // Authorized synchronization 

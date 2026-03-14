@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { run_safe_command } from './agent_watchdog';
 import fs from 'fs';
 import path from 'path';
 
@@ -25,7 +25,7 @@ async function runReview() {
 
     try {
         // 1. Extract staged changes
-        const diff = execSync('git diff --cached', { encoding: 'utf-8' });
+        const diff = run_safe_command('git diff --cached') || '';
 
         if (!diff) {
             console.log('✅ No changes staged for review.');

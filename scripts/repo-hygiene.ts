@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { run_safe_command } from './agent_watchdog';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -44,7 +44,7 @@ function log(message: string, type: 'info' | 'success' | 'warn' | 'error' = 'inf
 
 function run(command: string): string {
     try {
-        return execSync(command, { encoding: 'utf8', stdio: 'pipe' }).trim();
+        return run_safe_command(command) || '';
     } catch (err) {
         return '';
     }
@@ -81,21 +81,38 @@ async function purgeBranches() {
     }
 
     // 2. Fetch and prune remote tracking
+    log('Pruning remote tracking and fetching origin...', 'info');
     run('git fetch origin --prune');
+    run('git remote prune origin');
 
-    // 3. Delete local branches matching patterns
+    // 3. Reset to canonical main (Hard Reset)
+    log('Force resetting to origin/main (Hermetic State)...', 'info');
+    run('git reset --hard origin/main');
+
+    // 4. Delete local merged branches
+    const output = run('git branch --merged main');
+    const mergedBranches = output ? output.split('\n')
+        .map(b => b.replace('*', '').trim())
+        .filter(b => b !== 'main' && b !== '') : [];
+    
+    for (const branch of mergedBranches) {
+        run(`git branch -d ${branch}`);
+        log(`Pruned merged branch: ${branch}`, 'info');
+    }
+
+    // 5. Delete specific sandbox patterns (Force)
     for (const pattern of BRANCH_PATTERNS) {
-        const branches = run(`git branch --list "${pattern}"`).split('\n').map(b => b.trim()).filter(Boolean);
+        const listOutput = run(`git branch --list "${pattern}"`);
+        const branches = listOutput ? listOutput.split('\n').map(b => b.trim()).filter(Boolean) : [];
         for (const branch of branches) {
-            // Remove the '*' if it's the current branch (though we checked)
             const branchName = branch.replace('*', '').trim();
             if (branchName) {
                 run(`git branch -D ${branchName}`);
-                log(`Deleted local branch: ${branchName}`, 'info');
+                log(`Force deleted sandbox branch: ${branchName}`, 'info');
             }
         }
     }
-    log('Branch hygiene achieved.', 'success');
+    log('Branch hygiene and canonical reset achieved.', 'success');
 }
 
 // --- 🚀 MAIN ---

@@ -8,20 +8,24 @@
 echo "🛡  Haemi Life — Enterprise Pre-commit Guardrails"
 echo "─────────────────────────────────────────────────"
 
-# Guard 1: Branch policy enforcement (Rule 1 — sandbox development model)
-echo "  [1/3] Branch policy check..."
-node scripts/branch_guard.js --commit || exit 1
+# Guard 1: Branch policy enforcement
+echo "  [1/4] Branch policy check..."
+tsx scripts/branch_guard.ts --commit || exit 1
 
-# Guard 2: Large file scan (Rule 9 — prevent large file commits)
-echo "  [2/3] Large file & forbidden pattern check..."
-node scripts/large-file-guard.js || exit 1
+# Guard 2: Schema integrity check (SHA256 Lock)
+echo "  [2/4] Schema integrity check..."
+tsx scripts/schema_guard.ts || exit 1
 
 # Guard 3: Identity policy enforcement (Canonical user_id)
 echo "  [3/4] Identity policy check..."
-node scripts/identity_guard.js || exit 1
+tsx scripts/identity_guard.ts --staged || exit 1
 
-# Guard 4: Lint staged files (code quality)
-echo "  [4/4] Lint staged files..."
+# Guard 4: Large file & forbidden pattern check
+echo "  [4/4] Large file check..."
+tsx scripts/large-file-guard.ts || exit 1
+
+# Guard 5: Lint staged files (code quality)
+echo "  [5/5] Lint staged files..."
 npx lint-staged || { echo "❌ Lint Staged Failed"; exit 1; }
 
 echo "✅ All pre-commit guardrails passed."

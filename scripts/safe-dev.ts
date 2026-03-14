@@ -1,3 +1,4 @@
+import { run_safe_command } from './agent_watchdog';
 import { spawn, execSync, ChildProcess } from 'child_process';
 import path from 'path';
 import * as net from 'net';
@@ -15,7 +16,7 @@ function nukePort(port: number) {
     if (process.platform !== 'win32') return;
 
     try {
-        const output = execSync(`netstat -ano | findstr :${port}`).toString();
+        const output = run_safe_command(`netstat -ano | findstr :${port}`) || '';
         const lines = output.split('\n').filter(line => line.includes('LISTENING'));
 
         const pids = new Set<string>();
@@ -29,7 +30,7 @@ function nukePort(port: number) {
             console.log(`[NUKE] Port ${port} is occupied by PID(s): ${Array.from(pids).join(', ')}. Terminating...`);
             pids.forEach(pid => {
                 try {
-                    execSync(`taskkill /F /PID ${pid} /T`);
+                    run_safe_command(`taskkill /F /PID ${pid} /T`);
                 } catch {
                     // Ignore errors if process already exited
                 }
@@ -46,7 +47,7 @@ function cleanup() {
         if (!child.killed) {
             if (process.platform === 'win32' && child.pid) {
                 try {
-                    execSync(`taskkill /pid ${child.pid} /f /t`);
+                    run_safe_command(`taskkill /pid ${child.pid} /f /t`);
                 } catch { }
             } else {
                 child.kill('SIGINT');
@@ -114,7 +115,7 @@ async function start() {
     // Step 0.5: Database Health Check
     console.log('[STEP 0.5] Generating Database Observability Health Report...');
     try {
-        execSync('npm run db:health', { cwd: BACKEND_DIR, stdio: 'inherit' });
+        run_safe_command('npm run db:health');
     } catch (err) {
         console.warn('[WARNING] Database Health Check reported issues (non-blocking).');
     }
@@ -122,10 +123,9 @@ async function start() {
 
     // Step 1: Preflight
     console.log('[STEP 1] Running Preflight Integrity Gate...');
-    const preflight = spawn('npm', ['run', 'preflight'], { cwd: BACKEND_DIR, stdio: 'inherit', shell: true });
-    const preflightExitCode = await new Promise((resolve) => preflight.on('exit', resolve));
-
-    if (preflightExitCode !== 0) {
+    try {
+        run_safe_command('npm run preflight --prefix backend');
+    } catch (err) {
         console.error('\n[FATAL] Preflight failed. Please check your .env and Database connection.');
         process.exit(1);
     }
@@ -142,10 +142,9 @@ async function start() {
 
     // Step 3: Wait for Health
     console.log('[STEP 3] Waiting for Backend to stabilize (Health Check)...');
-    const waiter = spawn('npm', ['run', 'wait-for-backend'], { cwd: BACKEND_DIR, stdio: 'inherit', shell: true });
-    const waiterExitCode = await new Promise((resolve) => waiter.on('exit', resolve));
-
-    if (waiterExitCode !== 0) {
+    try {
+        run_safe_command('npm run wait-for-backend --prefix backend');
+    } catch (err) {
         console.error('\n[FATAL] Backend failed to stabilize.');
         cleanup();
     }
@@ -157,7 +156,7 @@ async function start() {
     const exitPromise = new Promise(resolve => backendProcess.on('exit', resolve));
     backendProcess.kill();
     if (process.platform === 'win32' && backendProcess.pid) {
-        try { execSync(`taskkill /pid ${backendProcess.pid} /f /t`); } catch { }
+        try { run_safe_command(`taskkill /pid ${backendProcess.pid} /f /t`); } catch { }
     }
     await exitPromise;
 

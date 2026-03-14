@@ -1,21 +1,16 @@
-#!/usr/bin/env node
+import { run_safe_command } from './agent_watchdog';
+import * as fs from 'fs';
+import * as path from 'path';
+
 /**
- * LARGE FILE GUARD — HAEMI LIFE ENTERPRISE GIT GOVERNANCE
+ * LARGE FILE GUARD — HAEMI LIFE ENTERPRISE GIT GOVERNANCE (TS)
  *
  * Blocks staged files larger than the configured thresholds from being committed.
  * Also blocks known forbidden file patterns (binaries, backups, archives).
  *
  * Rule 9: Prevent large file commits.
  * Policy: No single file >1MB. Warning at >500KB.
- *
- * Usage: node scripts/large-file-guard.js (run by pre-commit hook)
  */
-
-'use strict';
-
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
 
 // ─── Configuration ─────────────────────────────────────────────────────────
 const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024;   // 1 MB — hard block
@@ -26,7 +21,7 @@ const FORBIDDEN_PATTERNS = [
   {
     pattern: /\.sql$/i,
     // Exception: Allow init.sql and migrations which are canonical schema sources
-    isAllowed: (file) => file.includes('init.sql') || file.includes('migrations/')
+    isAllowed: (file: string) => file.includes('init.sql') || file.includes('migrations/')
   },
   /\.dump$/i,
   /\.zip$/i,
@@ -38,15 +33,12 @@ const FORBIDDEN_PATTERNS = [
   /coverage\//,
 ];
 
-// ─── Main ──────────────────────────────────────────────────────────────────
 function main() {
-  let stagedFiles;
+  let stagedFiles: string[] = [];
 
   try {
-    const output = execSync('git diff --cached --name-only --diff-filter=ACM', {
-      encoding: 'utf8',
-    });
-    stagedFiles = output.trim().split('\n').filter(Boolean);
+    const output = run_safe_command('git diff --cached --name-only --diff-filter=ACM');
+    stagedFiles = (output || '').trim().split('\n').filter(Boolean);
   } catch {
     // Not inside a git repo or no staged files — safe to pass
     process.exit(0);
@@ -60,18 +52,18 @@ function main() {
   console.log(`   Scanning ${stagedFiles.length} staged file(s)...`);
   console.log(`─────────────────────────────────────────────────────────`);
 
-  const violations = [];
-  const warnings = [];
+  const violations: { file: string; reason: string }[] = [];
+  const warnings: string[] = [];
 
   for (const file of stagedFiles) {
     // Check forbidden patterns
     for (const p of FORBIDDEN_PATTERNS) {
       const isRegex = p instanceof RegExp;
-      const pattern = isRegex ? p : p.pattern;
+      const pattern = isRegex ? p : (p as any).pattern;
       
       if (pattern.test(file)) {
         // If it's a whitelisting object, check the exception
-        if (!isRegex && p.isAllowed && p.isAllowed(file)) {
+        if (!isRegex && (p as any).isAllowed && (p as any).isAllowed(file)) {
           continue; 
         }
 

@@ -8,7 +8,7 @@
  * All work must occur in isolated sandbox branches, never on main.
  */
 
-import { execSync } from "child_process";
+import { run_safe_command } from "./agent_watchdog";
 
 const taskArg = process.argv[2];
 
@@ -35,18 +35,18 @@ console.log(`\n🚀 Creating sandbox branch: ${branchName}\n`);
 
 try {
     // Ensure we're not on a dirty tree
-    const status = execSync("git status --porcelain", { encoding: "utf-8" });
+    const status = run_safe_command("git status --porcelain") || '';
     if (status.trim()) {
         console.warn("⚠️  Working tree has uncommitted changes. Sandbox branch will include them.");
     }
 
     // Enterprise safe start: always branch from latest origin/main
-    execSync("git fetch origin", { stdio: "inherit" });
-    execSync("git checkout main", { stdio: "inherit" });
-    execSync("git reset --hard origin/main", { stdio: "inherit" });
+    run_safe_command("git fetch origin");
+    run_safe_command("git checkout main");
+    run_safe_command("git reset --hard origin/main");
 
     // Create and checkout the branch
-    execSync(`git checkout -b ${branchName}`, { stdio: "inherit" });
+    run_safe_command(`git checkout -b ${branchName}`);
 
     console.log(`\n✅ Sandbox branch ready: ${branchName}`);
     console.log("─────────────────────────────────────────");
