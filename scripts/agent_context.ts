@@ -3,49 +3,58 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * 📸 AGENT CONTEXT SNAPSHOT
+ * 📦 AI CONTEXT SNAPSHOT SYSTEM
  * 
- * Captures critical environment metadata to ensure deterministic AI execution.
+ * Provides a deterministic, machine-readable snapshot of the repository state.
+ * Eliminates AI hallucinations by providing a ground truth before execution.
  */
 
-function captureContext() {
-    console.log('📸 Capturing Agent Context Snapshot...');
+interface Snapshot {
+    branch: string;
+    workingTreeClean: boolean;
+    modifiedFiles: string[];
+    stagedFiles: string[];
+    lastCommit: string;
+    availableScripts: string[];
+}
+
+function getSnapshot(): Snapshot {
+    console.log('📦 Generating AI Context Snapshot...');
+
+    const branch = run_safe_command('git rev-parse --abbrev-ref HEAD')?.trim() || 'unknown';
+    const statusRaw = run_safe_command('git status --porcelain')?.trim() || '';
+    const lastCommit = run_safe_command('git log -1 --oneline')?.trim() || 'unknown';
     
-    try {
-        const context = {
-            timestamp: new Date().toISOString(),
-            branch: run_safe_command('git rev-parse --abbrev-ref HEAD')?.trim(),
-            status: run_safe_command('git status -sb')?.trim(),
-            staged: run_safe_command('git diff --staged --name-only')?.trim().split('\n').filter(Boolean),
-            scripts: getPackageScripts(),
-            env: {
-                SANDBOX_MODE: process.env.SANDBOX_MODE || 'false',
-                CI: process.env.CI || 'false'
-            }
-        };
+    const pkgPath = path.resolve(__dirname, '../package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const availableScripts = Object.keys(pkg.scripts || {});
 
-        const snapshotPath = path.join(__dirname, '..', '.agent_context.json');
-        fs.writeFileSync(snapshotPath, JSON.stringify(context, null, 2));
-        
-        console.log(`✅ Context snapshot saved to: ${snapshotPath}`);
-        console.log('--- CONTEXT SUMMARY ---');
-        console.log(`Branch: ${context.branch}`);
-        console.log(`Staged Files: ${context.staged?.length || 0}`);
-        console.log('-----------------------');
-    } catch (error: any) {
-        console.error(`❌ Failed to capture context: ${error.message}`);
-        process.exit(1);
-    }
+    const lines = statusRaw.split('\n').filter(Boolean);
+    const modifiedFiles: string[] = [];
+    const stagedFiles: string[] = [];
+
+    lines.forEach(line => {
+        const x = line[0];
+        const y = line[1];
+        const file = line.slice(3).trim();
+
+        if (x !== ' ' && x !== '?') stagedFiles.push(file);
+        if (y !== ' ' && y !== '?') modifiedFiles.push(file);
+        if (x === '?' && y === '?') modifiedFiles.push(file); // Untracked
+    });
+
+    return {
+        branch,
+        workingTreeClean: lines.length === 0,
+        modifiedFiles,
+        stagedFiles,
+        lastCommit,
+        availableScripts
+    };
 }
 
-function getPackageScripts(): string[] {
-    try {
-        const pkgPath = path.join(__dirname, '..', 'package.json');
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-        return Object.keys(pkg.scripts || {});
-    } catch {
-        return [];
-    }
-}
+const snapshot = getSnapshot();
+const snapshotPath = path.resolve(__dirname, '../.agent_context.json');
 
-captureContext();
+fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2));
+console.log(`✅ Snapshot created: ${snapshotPath}`);
