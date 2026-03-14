@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { run_safe_command } from './agent_watchdog';
 import { checkGitPermission, enforceSandboxBranch } from './ai-permission-firewall';
 import fs from 'fs';
 import path from 'path';
@@ -29,28 +29,28 @@ export function runSafeGitCleanup(action: 'reset' | 'clean' | 'force-push' | 'sy
             const cmd = 'git reset --hard origin/main';
             checkGitPermission(cmd);
             console.log('🔄 Executing Safe Reset...');
-            execSync(cmd, { stdio: 'inherit' });
+            run_safe_command(cmd);
         } else if (action === 'clean') {
             const cmd = 'git clean -fd';
             checkGitPermission(cmd);
             console.log('🧹 Executing Safe Clean...');
-            execSync(cmd, { stdio: 'inherit' });
+            run_safe_command(cmd);
         } else if (action === 'force-push') {
             const cmd = `git push --force origin ${currentBranch}`;
             checkGitPermission(cmd);
             console.log('🚀 Executing Safe Force Push...');
-            execSync(cmd, { stdio: 'inherit' });
+            run_safe_command(cmd);
         } else if (action === 'sync') {
             console.log('🔄 Executing Safe Local Sync...');
-            execSync('git checkout main', { stdio: 'inherit' });
-            execSync('git fetch origin', { stdio: 'inherit' });
-            execSync('git reset --hard origin/main', { stdio: 'inherit' });
+            run_safe_command('git checkout main');
+            run_safe_command('git fetch origin');
+            run_safe_command('git reset --hard origin/main');
         } else if (action === 'delete-branch') {
             console.log(`🗑️ Executing Safe Branch Deletion for ${targetBranch}...`);
             const cmdRemote = `git push origin --delete ${targetBranch}`;
             checkGitPermission(cmdRemote);
-            try { execSync(cmdRemote, { stdio: 'inherit' }); } catch (e) { console.log('Remote deletion skipped.'); }
-            try { execSync(`git branch -D ${targetBranch}`, { stdio: 'inherit' }); } catch (e) { console.log('Local deletion skipped.'); }
+            try { run_safe_command(cmdRemote); } catch (e) { console.log('Remote deletion skipped.'); }
+            try { run_safe_command(`git branch -D ${targetBranch}`); } catch (e) { console.log('Local deletion skipped.'); }
         }
     } catch (error: unknown) {
         const err = error as Error;

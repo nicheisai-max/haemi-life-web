@@ -40,21 +40,21 @@
     "safe-dev": "tsx scripts/safe-dev.ts",
     "demo": "tsx scripts/safe-dev.ts",
     "type-check": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
-    "migration:guard": "node scripts/migration_guard.js",
-    "identity:guard": "node scripts/identity_guard.js",
-    "branch:guard": "node scripts/branch_guard.js",
+    "migration:guard": "tsx scripts/migration_guard.ts",
+    "schema:guard": "tsx scripts/schema_guard.ts",
+    "identity:guard": "tsx scripts/identity_guard.ts",
+    "branch:guard": "tsx scripts/branch_guard.ts",
     "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "test:ci": "npm run test:backend",
-    "verify": "node scripts/verifyCommitIntegrity.js",
     "sandbox": "tsx scripts/new-sandbox.ts",
-    "orchestrate": "tsx scripts/orchestrator.ts",
     "ai-review": "tsx scripts/ai-self-review.ts",
     "quality-gate": "tsx scripts/ai-self-review.ts --enforce",
     "cleanup:sandboxes": "tsx scripts/cleanup-sandboxes.ts",
     "tasks:run": "tsx scripts/task-planner.ts",
-    "prepush-check": "tsx scripts/prepush-check.ts",
-    "sync": "tsx scripts/repo-hygiene.ts && git reset --hard origin/main && git branch -a && git status"
+    "safe-push": "powershell -ExecutionPolicy Bypass -File scripts/safe_push.ps1",
+    "watchdog": "tsx scripts/agent_watchdog.ts",
+    "sync": "tsx scripts/repo-hygiene.ts && git branch -a && git status"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [

@@ -1,12 +1,8 @@
-import { execSync } from 'child_process';
+import { run_safe_command } from './agent_watchdog';
 import * as fs from 'fs';
 
 function runCmd(cmd: string): string {
-    try {
-        return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-    } catch (e: any) {
-        return '';
-    }
+    return run_safe_command(cmd) || '';
 }
 
 async function main() {
@@ -61,7 +57,7 @@ async function main() {
                 console.log(`🗑️  Pruning merged/closed remote sandbox: ${branchName}`);
                 try {
                     // Bypass the pre-push guard since this is a systemic infrastructure teardown
-                    execSync(`git push origin --delete ${branchName} --no-verify`, { stdio: 'inherit' });
+                    run_safe_command(`git push origin --delete ${branchName} --no-verify`);
                     console.log(`✅ Deleted: ${branchName}`);
                     deletedCount++;
                 } catch (e: any) {
@@ -86,7 +82,7 @@ async function main() {
         for (const branchName of mergedBranches) {
             console.log(`🗑️  Pruning merged remote sandbox: ${branchName}`);
             try {
-                execSync(`git push origin --delete ${branchName} --no-verify`, { stdio: 'inherit' });
+                run_safe_command(`git push origin --delete ${branchName} --no-verify`);
                 console.log(`✅ Deleted: ${branchName}`);
             } catch (e: any) {
                 console.warn(`⚠️  Failed to delete ${branchName}: ${e.message}`);
