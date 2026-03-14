@@ -137,7 +137,7 @@ CREATE INDEX IF NOT EXISTS idx_users_last_activity ON users(last_activity);
 -- 3. Audit Logs (Aligned with Admin & Audit Services)
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID, -- Previously actor_id
+    user_id UUID,
     actor_role VARCHAR(50),
     action VARCHAR(100) NOT NULL, -- Previously action_type
     entity_type VARCHAR(50), -- Previously target_type or part of metadata
@@ -148,54 +148,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Schema Migration for Audit Logs (Idempotent alignment)
-DO $$
-BEGIN
-    -- user_id (actor_user_id or actor_id)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='user_id') THEN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='actor_user_id') THEN
-            ALTER TABLE audit_logs RENAME COLUMN actor_user_id TO user_id;
-        ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='actor_id') THEN
-            ALTER TABLE audit_logs RENAME COLUMN actor_id TO user_id;
-        END IF;
-    END IF;
-
-    -- action (action_type)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='action') THEN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='action_type') THEN
-            ALTER TABLE audit_logs RENAME COLUMN action_type TO action;
-        END IF;
-    END IF;
-
-    -- entity_type (target_entity_type)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='entity_type') THEN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='target_entity_type') THEN
-            ALTER TABLE audit_logs RENAME COLUMN target_entity_type TO entity_type;
-        END IF;
-    END IF;
-
-    -- entity_id (target_entity_id)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='entity_id') THEN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='target_entity_id') THEN
-            ALTER TABLE audit_logs RENAME COLUMN target_entity_id TO entity_id;
-        END IF;
-    END IF;
-
-    -- details (change_summary or metadata)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='details') THEN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='change_summary') THEN
-            ALTER TABLE audit_logs RENAME COLUMN change_summary TO details;
-        ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='metadata') THEN
-            ALTER TABLE audit_logs RENAME COLUMN metadata TO details;
-        END IF;
-    END IF;
-
-    -- ip_address (request_ip)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='ip_address') THEN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='request_ip') THEN
-            ALTER TABLE audit_logs RENAME COLUMN request_ip TO ip_address;
-        END IF;
-    END IF;
+    -- Identity Model: user_id is the canonical identifier.
+    -- Legacy identifiers (actor_id, actor_user_id) are permanently deprecated.
 END $$;
 
 -- Audit Performance Indices

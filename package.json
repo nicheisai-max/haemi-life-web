@@ -41,6 +41,7 @@
     "demo": "tsx scripts/safe-dev.ts",
     "type-check": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
     "migration:guard": "node scripts/migration_guard.js",
+    "identity:guard": "node scripts/identity_guard.js",
     "branch:guard": "node scripts/branch_guard.js",
     "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
     "build": "npm --prefix backend run build && npm --prefix frontend run build",

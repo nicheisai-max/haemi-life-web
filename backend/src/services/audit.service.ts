@@ -1,11 +1,17 @@
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
 
+// CANONICAL ANONYMOUS IDENTITY (Zero-Trust Compliant)
+export const SYSTEM_ANONYMOUS_ID = '00000000-0000-0000-0000-000000000000';
+
 export interface AuditLogEntry {
-    user_id?: string;
+    user_id: string; // Mandatory per Zero-Trust Identity Policy
     actor_role?: string;
     action_type: string;
     target_id?: string;
+    entity_id?: string;
+    action?: string;
+    details?: string;
     metadata?: Record<string, unknown>;
     ip_address?: string;
     user_agent?: string;
@@ -18,17 +24,21 @@ export interface AuditLogEntry {
 export const auditService = {
     log: async (entry: Partial<AuditLogEntry> & Record<string, unknown>) => {
         try {
-            // SCHEMA ALIGNMENT & ROBUST MAPPING
-            const user_id = entry.user_id || entry.actor_id || entry.actor_user_id || null;
+            // ZERO-TRUST CANONICAL IDENTITY ENFORCEMENT
+            if (!entry.user_id) {
+                throw new Error("Identity policy violation: user_id required");
+            }
+
+            const user_id = entry.user_id;
             const action = entry.action || entry.action_type || 'UNKNOWN_ACTION';
-            const entity_id = entry.entity_id || entry.target_id || entry.target_entity_id || null;
+            const entity_id = entry.entity_id || entry.target_id || null;
             const details = entry.details || 
                 (entry.metadata ? JSON.stringify(entry.metadata) : null) || 
                 '{}';
-            const ip_address = entry.ip_address || entry.request_ip || null;
+            const ip_address = entry.ip_address || null;
             const user_agent = entry.user_agent || null;
             
-            if (!action) return;
+            if (!action || action === 'UNKNOWN_ACTION') return;
 
             await pool.query(
                 `INSERT INTO audit_logs (

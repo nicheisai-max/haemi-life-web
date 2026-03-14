@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
-import { auditService } from '../services/audit.service';
+import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 import { JWTPayload } from '../types/express';
 import { logger } from '../utils/logger';
 import { sendError } from '../utils/response';
@@ -224,7 +224,7 @@ export const requireRole = (allowedRole: string) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || req.user.role !== allowedRole) {
             await auditService.log({
-                user_id: req.user?.id,
+                user_id: req.user?.id || SYSTEM_ANONYMOUS_ID,
                 actor_role: req.user?.role,
                 action_type: 'ACCESS_DENIED_RBAC',
                 metadata: {
@@ -249,7 +249,7 @@ export const authorizeRole = (roles: string[]) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || !roles.includes(req.user.role)) {
             await auditService.log({
-                user_id: req.user?.id,
+                user_id: req.user?.id || SYSTEM_ANONYMOUS_ID,
                 actor_role: req.user?.role,
                 action_type: 'ACCESS_DENIED_RBAC_MULTI',
                 metadata: {

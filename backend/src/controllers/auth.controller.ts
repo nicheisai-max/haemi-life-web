@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
 import { logger } from '../utils/logger';
-import { auditService } from '../services/audit.service';
+import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 import { getSessionTimeoutMinutes } from '../utils/config.util';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
@@ -174,6 +174,7 @@ export const login = async (req: Request, res: Response) => {
         if (!user) {
             // Audit failed attempt (unknown user)
             await auditService.log({
+                user_id: SYSTEM_ANONYMOUS_ID,
                 action_type: 'LOGIN_FAILED',
                 metadata: { reason: 'User not found', identifier },
                 ip_address: req.ip,
