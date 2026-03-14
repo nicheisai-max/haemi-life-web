@@ -49,9 +49,44 @@ CREATE TABLE IF NOT EXISTS users (
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
     phone_blind_index VARCHAR(64),                     -- Searchable hash for encrypted phone
     id_blind_index VARCHAR(64),                        -- Searchable hash for encrypted ID
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- User Presence & Session Management (Sliding Window Infrastructure)
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_role VARCHAR NOT NULL CHECK (user_role IN ('patient', 'doctor', 'admin', 'pharmacist')),
+    session_id VARCHAR UNIQUE NOT NULL,
+    access_token_jti VARCHAR,
+    refresh_token_jti VARCHAR,
+    previous_refresh_token_jti VARCHAR,
+    previous_access_token_jti VARCHAR,
+    jti_rotated_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    ip_address INET,
+    user_agent TEXT,
+    device_type VARCHAR,
+    browser_name VARCHAR,
+    os_name VARCHAR,
+    login_method VARCHAR,
+    login_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    logout_time TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE,
+    revoked BOOLEAN DEFAULT FALSE,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    logout_reason VARCHAR,
+    tab_identifier VARCHAR,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS index_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS index_user_sessions_session_id ON user_sessions(session_id);
+CREATE INDEX IF NOT EXISTS index_user_sessions_is_active ON user_sessions(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at) WHERE revoked = FALSE;
 
 -- Idempotent Migration: User Table Enhancements
 DO $$
@@ -113,24 +148,60 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Schema Migration for Audit Logs (Idempotent alignment)
+DO $$
+BEGIN
+    -- user_id (actor_user_id or actor_id)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='user_id') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='actor_user_id') THEN
+            ALTER TABLE audit_logs RENAME COLUMN actor_user_id TO user_id;
+        ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='actor_id') THEN
+            ALTER TABLE audit_logs RENAME COLUMN actor_id TO user_id;
+        END IF;
+    END IF;
+
+    -- action (action_type)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='action') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='action_type') THEN
+            ALTER TABLE audit_logs RENAME COLUMN action_type TO action;
+        END IF;
+    END IF;
+
+    -- entity_type (target_entity_type)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='entity_type') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='target_entity_type') THEN
+            ALTER TABLE audit_logs RENAME COLUMN target_entity_type TO entity_type;
+        END IF;
+    END IF;
+
+    -- entity_id (target_entity_id)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='entity_id') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='target_entity_id') THEN
+            ALTER TABLE audit_logs RENAME COLUMN target_entity_id TO entity_id;
+        END IF;
+    END IF;
+
+    -- details (change_summary or metadata)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='details') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='change_summary') THEN
+            ALTER TABLE audit_logs RENAME COLUMN change_summary TO details;
+        ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='metadata') THEN
+            ALTER TABLE audit_logs RENAME COLUMN metadata TO details;
+        END IF;
+    END IF;
+
+    -- ip_address (request_ip)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='ip_address') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='request_ip') THEN
+            ALTER TABLE audit_logs RENAME COLUMN request_ip TO ip_address;
+        END IF;
+    END IF;
+END $$;
+
 -- Audit Performance Indices
 CREATE INDEX IF NOT EXISTS idx_audit_user_action ON audit_logs(user_id, action);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
-
--- Schema Migration for Audit Logs (Idempotent alignment)
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='user_id') THEN
-        ALTER TABLE audit_logs RENAME COLUMN actor_id TO user_id;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='action') THEN
-        ALTER TABLE audit_logs RENAME COLUMN action_type TO action;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='details') THEN
-        ALTER TABLE audit_logs RENAME COLUMN metadata TO details;
-    END IF;
-END $$;
 
 -- Doctor Profiles
 CREATE TABLE IF NOT EXISTS doctor_profiles (
@@ -193,6 +264,8 @@ CREATE TABLE IF NOT EXISTS medicines (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     generic_name VARCHAR(255),
+    strength VARCHAR(100),
+    category VARCHAR(100),
     common_uses TEXT,
     price_per_unit DECIMAL(10,2) CHECK (price_per_unit >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -544,10 +617,10 @@ BEGIN
 
     -- 2. Create Medicines (if empty)
     IF NOT EXISTS (SELECT 1 FROM medicines LIMIT 1) THEN
-        INSERT INTO medicines (name, generic_name, common_uses, price_per_unit) VALUES
-        ('Panado Extra', 'Paracetamol 500mg', 'Pain relief', 35.00),
-        ('Amoxil 500', 'Amoxicillin 500mg', 'Infection', 120.00),
-        ('Lipitor 20mg', 'Atorvastatin', 'Cholesterol', 280.00);
+        INSERT INTO medicines (name, generic_name, strength, category, common_uses, price_per_unit) VALUES
+        ('Panado Extra', 'Paracetamol 500mg', '500mg', 'Analgesic', 'Pain relief', 35.00),
+        ('Amoxil 500', 'Amoxicillin 500mg', '500mg', 'Antibiotic', 'Infection', 120.00),
+        ('Lipitor 20mg', 'Atorvastatin', '20mg', 'Statin', 'Cholesterol', 280.00);
     END IF;
 
     -- 3. Create Admin User
@@ -751,6 +824,17 @@ BEGIN
             (v_demo_conv_id, v_patient_id, 'Ke a leboga, Doctor. I have the appointment on my schedule. See you then.', false, NOW() - INTERVAL '22 hours 50 minutes');
         END IF;
 
+        -- 11. INSTITUTIONAL BASELINE AUDIT SEEDS (Google-Level Continuity)
+        SELECT id INTO v_admin_id FROM users WHERE email = 'admin@haemilife.com';
+        IF NOT EXISTS (SELECT 1 FROM audit_logs WHERE action = 'SYSTEM_INIT') THEN
+            INSERT INTO audit_logs (user_id, action, details, created_at) VALUES
+            (v_admin_id, 'SYSTEM_INIT', '{"version": "2.0.0", "status": "Institutional Baseline Established"}', NOW() - INTERVAL '30 days'),
+            (v_admin_id, 'SCHEMA_HARDENING', '{"type": "UUID_MIGRATION", "scope": "Complete Architecture"}', NOW() - INTERVAL '25 days'),
+            (v_admin_id, 'SECURITY_HUB_ACTIVATION', '{"feature": "Forensic Observability", "status": "Active"}', NOW() - INTERVAL '20 days'),
+            (v_admin_id, 'CLINICAL_NETWORK_ESTABLISHED', '{"region": "Botswana", "hospitals": ["Princess Marina", "Bokamoso"]}', NOW() - INTERVAL '15 days'),
+            (v_admin_id, 'VERIFICATION_AUDIT', '{"verified": true, "audit_id": "BW-MD-AUDIT-2026"}', NOW() - INTERVAL '1 day');
+        END IF;
+
     EXCEPTION
         WHEN undefined_column THEN
             -- Fallback in case the GROUP BY HAVING COUNT logic hits a schema snag, 
@@ -818,6 +902,15 @@ BEGIN
 END $$;
 
 -- Final Seed Execution
-CALL sp_seed_demo_data('$2b$10$dgePzZclKF6j5XBh7/gaq.OgbcSlFuqFbE7qoXpDg4oH6Jx4Ist.e');
+-- Seeding is now managed by setup-db.ts to ensure dynamic hashing of DEMO_PASSWORD
+-- CALL sp_seed_demo_data(...);
+
+-- PRODUCTION HARDENING: DATABASE INDEXING REMEDIATION
+-- Target: Clinical Scalability
+CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_doctor_id ON appointments(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_doctor_id ON prescriptions(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_patient_id ON prescriptions(patient_id);
+CREATE INDEX IF NOT EXISTS idx_medical_records_patient_id ON medical_records(patient_id);
 
 COMMIT;

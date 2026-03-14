@@ -6,8 +6,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { encrypt, decrypt } from '../utils/security';
+import { sendResponse, sendError } from '../utils/response';
 import { notificationService } from '../services/notification.service';
-import { sendError } from '../utils/response';
 import crypto from 'crypto';
 // Configure Multer Storage (Centralized Memory Storage preferred for Bytea)
 const storage = multer.memoryStorage();
@@ -31,13 +31,40 @@ export const upload = multer({
 // Upload Attachment Endpoint
 export const uploadAttachment = async (req: Request, res: Response) => {
     if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
+        return sendError(res, 400, 'No file uploaded');
     }
 
     try {
+        const { originalname, mimetype, buffer } = req.file;
+        const fileExt = path.extname(originalname);
+        const uniqueFileName = `${crypto.randomUUID()}${fileExt}`;
+        const relativePath = `uploads/chat/temp/${uniqueFileName}`;
+        const fullPath = path.join(process.cwd(), relativePath);
+
+        // Ensure directory exists
+        if (!fs.existsSync(path.dirname(fullPath))) {
+            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+        }
+
+        // Write to filesystem
+        fs.writeFileSync(fullPath, buffer);
+
+        // We store the path in a way that sendMessage can retrieve it.
+        // Since we can't easily change the schema of temp_attachments (data BYTEA NOT NULL),
+        // we will store the path as a string in the 'data' column by encoding it,
+        // OR better, we use an empty buffer if we can, but 'data' is NOT NULL.
+        // Actually, the most production-grade way without a schema change is to store the path in a metadata field if available.
+        // temp_attachments only has id, data, mime, name.
+        // We will store the relative path in the 'name' field prefixed with 'PATH:' or similar,
+        // or just store the binary for now if we absolutely must, but the user says NO.
+        // Let's use the 'data' column to store the Buffer of the path string as a temporary "metadata-only" payload
+        // to comply with the 'Binary payload must NOT be stored' but 'data NOT NULL' constraint.
+        // No, that's confusing. 
+        // Let's assume the user wants us to EXCLUDE the binary from the database insertion.
+        // If 'data' is NOT NULL, we'll use a 1-byte placeholder.
         const result = await pool.query(
             'INSERT INTO temp_attachments (data, mime, name) VALUES ($1, $2, $3) RETURNING id',
-            [req.file.buffer, req.file.mimetype, req.file.originalname]
+            [Buffer.from([0]), mimetype, relativePath] // Storing path in 'name' column for retrieval
         );
 
         const tempId = result.rows[0].id;
@@ -47,11 +74,11 @@ export const uploadAttachment = async (req: Request, res: Response) => {
             url: virtualUrl,
             tempId: tempId,
             type: req.file.mimetype.startsWith('image/') ? 'image' : 'document',
-            originalName: req.file.originalname
+            originalName: originalname
         });
     } catch (error) {
         console.error('Error in uploadAttachment:', error);
-        res.status(500).json({ message: 'Error staging attachment' });
+        return sendError(res, 500, 'Error staging attachment');
     }
 };
 
@@ -103,10 +130,10 @@ export const getConversations = async (req: Request, res: Response) => {
         // Plaintext previews are now stored in DB, no decryption needed for performance
         const conversations = result.rows;
 
-        res.json(conversations);
+        return sendResponse(res, 200, true, 'Conversations fetched', conversations);
     } catch (error) {
         console.error('Error fetching conversations:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -125,7 +152,7 @@ export const getMessages = async (req: Request, res: Response) => {
         );
 
         if (membershipCheck.rows.length === 0) {
-            return res.status(403).json({ message: 'Not authorized to view this conversation' });
+            return sendError(res, 403, 'Not authorized to view this conversation');
         }
 
         const result = await pool.query(
@@ -191,10 +218,10 @@ export const getMessages = async (req: Request, res: Response) => {
             } : null
         }));
 
-        res.json(messages);
+        return sendResponse(res, 200, true, 'Messages fetched', messages);
     } catch (error) {
         console.error('Error fetching messages:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -218,7 +245,7 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         if (membershipCheck.rows.length === 0) {
             await client.query('ROLLBACK');
-            return res.status(403).json({ message: 'Not authorized to send to this conversation' });
+            return sendError(res, 403, 'Not authorized to send to this conversation');
         }
 
         // E2EE: Only encrypt if not already encrypted by the client
@@ -263,7 +290,6 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         // Handle attachment if any
         if (attachment && attachment.url) {
-            let attachmentData = null;
             let attachmentMime = attachment.type;
             let attachmentName = attachment.originalName || 'attachment';
 
@@ -275,11 +301,24 @@ export const sendMessage = async (req: Request, res: Response) => {
                     [tempId]
                 );
                 if (tempResult.rows.length > 0) {
-                    attachmentData = tempResult.rows[0].data;
+                    const tempFilePath = tempResult.rows[0].name; // Path stored in name
                     attachmentMime = tempResult.rows[0].mime;
-                    attachmentName = tempResult.rows[0].name;
+                    attachmentName = path.basename(tempFilePath);
 
-                    // Clean up temp storage
+                    // Move from temp to permanent chat storage
+                    const permanentPath = tempFilePath.replace('/temp/', '/');
+                    const fullTempPath = path.join(process.cwd(), tempFilePath);
+                    const fullPermanentPath = path.join(process.cwd(), permanentPath);
+
+                    if (fs.existsSync(fullTempPath)) {
+                        if (!fs.existsSync(path.dirname(fullPermanentPath))) {
+                            fs.mkdirSync(path.dirname(fullPermanentPath), { recursive: true });
+                        }
+                        fs.renameSync(fullTempPath, fullPermanentPath);
+                        attachment.url = permanentPath;
+                    }
+
+                    // Clean up temp record
                     await client.query('DELETE FROM temp_attachments WHERE id = $1', [tempId]);
                 }
             }
@@ -289,18 +328,15 @@ export const sendMessage = async (req: Request, res: Response) => {
                 UPDATE messages 
                 SET attachment_url = $1, 
                     attachment_type = $2, 
-                    attachment_data = $3, 
-                    attachment_mime = $4, 
-                    attachment_name = $5
-                WHERE id = $6
+                    attachment_mime = $3, 
+                    attachment_name = $4
+                WHERE id = $5
                 `,
-                [attachment.url, attachment.type, attachmentData, attachmentMime, attachmentName, newMessage.id]
+                [attachment.url, attachment.type, attachmentMime, attachmentName, newMessage.id]
             );
 
             newMessage.attachment_url = `/api/files/message/${newMessage.id}`;
             newMessage.attachment_type = attachment.type;
-
-            newMessage.attachment_data = attachmentData;
             newMessage.attachment_mime = attachmentMime;
             newMessage.attachment_name = attachmentName;
         }
@@ -372,11 +408,11 @@ export const sendMessage = async (req: Request, res: Response) => {
             console.error('Non-fatal: failed to emit chat notification:', notifErr);
         }
 
-        res.status(201).json(newMessage);
+        return sendResponse(res, 201, true, 'Message sent', newMessage);
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Error sending message:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     } finally {
         client.release();
     }
@@ -418,10 +454,10 @@ export const startConversation = async (req: Request, res: Response) => {
             [conversationId, userId, participantId]
         );
 
-        res.status(201).json({ conversationId });
+        return sendResponse(res, 201, true, 'Conversation started', { conversationId });
     } catch (error) {
         console.error('Error starting conversation:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -461,7 +497,7 @@ export const markAsDelivered = async (req: Request, res: Response) => {
         res.sendStatus(200);
     } catch (error) {
         console.error('Error marking delivered:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -501,7 +537,7 @@ export const markAsRead = async (req: Request, res: Response) => {
         res.sendStatus(200);
     } catch (error) {
         console.error('Error marking read:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -523,7 +559,7 @@ export const reactToMessage = async (req: Request, res: Response) => {
         );
 
         if (msgResult.rows.length === 0) {
-            return res.status(403).json({ message: 'Not authorized or message not found' });
+            return sendError(res, 403, 'Not authorized or message not found');
         }
 
         const conversationId = msgResult.rows[0].conversation_id;
@@ -563,7 +599,7 @@ export const reactToMessage = async (req: Request, res: Response) => {
         res.sendStatus(200);
     } catch (error) {
         console.error('Error reacting to message:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -585,7 +621,7 @@ export const deleteMessage = async (req: Request, res: Response) => {
         );
 
         if (msgCheck.rows.length === 0) {
-            return res.status(403).json({ message: 'Not authorized or message not found' });
+            return sendError(res, 403, 'Not authorized or message not found');
         }
 
         const message = msgCheck.rows[0];
@@ -593,7 +629,7 @@ export const deleteMessage = async (req: Request, res: Response) => {
 
         if (forEveryone) {
             if (message.sender_id !== userId) {
-                return res.status(403).json({ message: 'Only sender can delete for everyone' });
+                return sendError(res, 403, 'Only sender can delete for everyone');
             }
 
             // Hard delete attachments first (Legacy logic - only if table exists)
@@ -632,7 +668,7 @@ export const deleteMessage = async (req: Request, res: Response) => {
         res.sendStatus(200);
     } catch (error) {
         console.error('Error deleting message:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };
 
@@ -643,7 +679,7 @@ export const syncChat = async (req: Request, res: Response) => {
     const { since } = req.query; // ISO timestamp
 
     try {
-        if (!since) return res.status(400).json({ message: 'Since timestamp required' });
+        if (!since) return sendError(res, 400, 'Since timestamp required');
 
         const syncQuery = `
             SELECT m.*, 
@@ -670,9 +706,9 @@ export const syncChat = async (req: Request, res: Response) => {
             } : undefined
         }));
 
-        res.json(formatted);
+        return sendResponse(res, 200, true, 'Chat synced', formatted);
     } catch (error) {
         console.error('Error syncing chat:', error);
-        res.status(500).json({ message: 'Server error' });
+        return sendError(res, 500, 'Server error');
     }
 };

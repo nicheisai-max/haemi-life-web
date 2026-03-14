@@ -1,25 +1,42 @@
 # Page snapshot
 
 ```yaml
-- generic [ref=e8]:
-  - generic [ref=e13]:
-    - img [ref=e16]
-    - img [ref=e19]
-    - img [ref=e26]
-    - img [ref=e33]
-  - generic [ref=e37]:
-    - generic [ref=e38]:
-      - generic [ref=e39]: Haemi Life
-      - button "Skip" [ref=e40] [cursor=pointer]:
-        - generic [ref=e41]: Skip
-    - generic [ref=e43]:
-      - generic [ref=e44]:
-        - generic [ref=e45]: Step
-        - generic [ref=e46]: "01"
-      - heading "Your Health, Simplified" [level=2] [ref=e47]
-      - paragraph [ref=e48]: Access your medical records, prescriptions, and appointments in one secure location. Haemi Life brings the hospital to your fingertips.
-    - button "Continue" [ref=e53] [cursor=pointer]:
-      - generic [ref=e54]:
-        - text: Continue
-        - img
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img "Authentication Background" [ref=e5]
+    - generic [ref=e7]:
+      - heading "Your Health, Reimagined." [level=2] [ref=e8]
+      - paragraph [ref=e9]: Experience the future of healthcare management with Haemi Life. Secure, efficient, and centered around you.
+  - main [ref=e10]:
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - link "Haemi Life" [ref=e13] [cursor=pointer]:
+          - /url: /login
+          - generic [ref=e14]:
+            - img "Haemi Life"
+        - heading "Welcome Back" [level=1] [ref=e15]
+        - paragraph [ref=e16]: Sign in to access your dashboard
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e19]: Email or Phone
+          - generic [ref=e20]:
+            - img [ref=e21]
+            - textbox "user@example.com" [ref=e24]
+        - generic [ref=e25]:
+          - generic [ref=e26]:
+            - generic [ref=e27]: Password
+            - link "Forgot password?" [ref=e28] [cursor=pointer]:
+              - /url: /forgot-password
+          - generic [ref=e29]:
+            - img [ref=e31]
+            - textbox "Password" [ref=e34]:
+              - /placeholder: Enter your password
+            - button "Show password" [ref=e35] [cursor=pointer]:
+              - img
+              - generic [ref=e36]: Show password
+        - button "Sign In" [ref=e37] [cursor=pointer]
+      - generic [ref=e42]: Or
+      - generic [ref=e43]:
+        - text: Don't have an account?
+        - button "Create Account" [ref=e44] [cursor=pointer]
 ```

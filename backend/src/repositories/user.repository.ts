@@ -1,6 +1,9 @@
 import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/db';
 import { encrypt, decrypt, getBlindIndex } from '../utils/security';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 export interface User {
     id: string;
@@ -99,9 +102,23 @@ export class UserRepository {
     }
 
     async updateProfileImage(userId: string, imageBuffer: Buffer, mimeType: string): Promise<User> {
+        // PRODUCTION HARDENING: Filesystem Offloading
+        const fileExt = mimeType.split('/')[1] || 'jpg';
+        const uniqueFileName = `${crypto.randomUUID()}.${fileExt}`;
+        const relativePath = `uploads/profiles/${uniqueFileName}`;
+        const fullPath = path.join(process.cwd(), relativePath);
+
+        // Ensure directory exists
+        if (!fs.existsSync(path.dirname(fullPath))) {
+            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+        }
+
+        // Write to filesystem
+        fs.writeFileSync(fullPath, imageBuffer);
+
         const result = await this.db.query(
-            'UPDATE users SET profile_image_data = $1, profile_image_mime = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
-            [imageBuffer, mimeType, userId]
+            'UPDATE users SET profile_image = $1, profile_image_mime = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+            [relativePath, mimeType, userId]
         );
         return this.decryptUser(result.rows[0]);
     }

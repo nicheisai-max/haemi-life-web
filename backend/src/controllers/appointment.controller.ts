@@ -16,7 +16,7 @@ export const bookAppointment = async (req: Request, res: Response) => {
         // Validate that doctor exists and is verified
         const isVerified = await appointmentRepository.checkDoctorVerified(doctor_id);
         if (!isVerified) {
-            return res.status(404).json({ message: 'Doctor not found or not verified' });
+            return sendError(res, 404, 'Doctor not found or not verified');
         }
 
         // --- Medical-Grade Safety Guard: Telemedicine Consent ---
@@ -25,9 +25,7 @@ export const bookAppointment = async (req: Request, res: Response) => {
             const { consentRepository } = await import('../repositories/consent.repository');
             const hasConsent = await consentRepository.hasConsent(patientId);
             if (!hasConsent) {
-                return res.status(403).json({
-                    message: 'Telemedicine consent required. Please review and sign the digital consent form before booking a video consultation.'
-                });
+                return sendError(res, 403, 'Telemedicine consent required. Please review and sign the digital consent form before booking a video consultation.');
             }
         }
         // --------------------------------------------------------
@@ -35,7 +33,7 @@ export const bookAppointment = async (req: Request, res: Response) => {
         // Check for conflicts
         const hasConflict = await appointmentRepository.checkConflict(doctor_id, appointment_date, appointment_time);
         if (hasConflict) {
-            return res.status(409).json({ message: 'This time slot is already booked' });
+            return sendError(res, 409, 'This time slot is already booked');
         }
 
         const appointment = await appointmentRepository.create({
@@ -78,7 +76,7 @@ export const bookAppointment = async (req: Request, res: Response) => {
         res.status(201).json({ message: 'Appointment booked successfully', appointment });
     } catch (error) {
         console.error('Error booking appointment:', error);
-        res.status(500).json({ message: 'Error booking appointment' });
+        return sendError(res, 500, 'Error booking appointment');
     }
 };
 
@@ -134,13 +132,13 @@ export const updateAppointmentStatus = async (req: Request, res: Response) => {
         const appointment = await appointmentRepository.updateStatus(Number(id), user.id as string, status as string, notes as string);
 
         if (!appointment) {
-            return res.status(404).json({ message: 'Appointment not found or access denied' });
+            return sendError(res, 404, 'Appointment not found or access denied');
         }
 
-        res.json({ message: 'Appointment updated successfully', appointment });
+        return sendResponse(res, 200, true, 'Appointment updated successfully', appointment);
     } catch (error) {
         console.error('Error updating appointment:', error);
-        res.status(500).json({ message: 'Error updating appointment' });
+        return sendError(res, 500, 'Error updating appointment');
     }
 };
 
@@ -154,13 +152,13 @@ export const cancelAppointment = async (req: Request, res: Response) => {
         const appointment = await appointmentRepository.cancel(Number(id), user.id as string);
 
         if (!appointment) {
-            return res.status(404).json({ message: 'Appointment not found or access denied' });
+            return sendError(res, 404, 'Appointment not found or access denied');
         }
 
-        res.json({ message: 'Appointment cancelled successfully', appointment });
+        return sendResponse(res, 200, true, 'Appointment cancelled successfully', appointment);
     } catch (error) {
         console.error('Error cancelling appointment:', error);
-        res.status(500).json({ message: 'Error cancelling appointment' });
+        return sendError(res, 500, 'Error cancelling appointment');
     }
 };
 
@@ -178,15 +176,13 @@ export const deleteAppointment = async (req: Request, res: Response) => {
         const deleted = await appointmentRepository.softDelete(Number(id), user.id as string);
 
         if (!deleted) {
-            return res.status(404).json({
-                message: 'Appointment not found, already deleted, or cannot be deleted (only past/completed/cancelled appointments can be deleted)'
-            });
+            return sendError(res, 404, 'Appointment not found, already deleted, or cannot be deleted (only past/completed/cancelled appointments can be deleted)');
         }
 
-        res.json({ message: 'Appointment deleted successfully' });
+        return sendResponse(res, 200, true, 'Appointment deleted successfully');
     } catch (error) {
         console.error('Error deleting appointment:', error);
-        res.status(500).json({ message: 'Error deleting appointment' });
+        return sendError(res, 500, 'Error deleting appointment');
     }
 };
 
@@ -228,9 +224,9 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
             }
         }
 
-        res.json({ date, slots });
+        return sendResponse(res, 200, true, 'Available slots fetched', { date, slots });
     } catch (error) {
         console.error('Error fetching available slots:', error);
-        res.status(500).json({ message: 'Error fetching available slots' });
+        return sendError(res, 500, 'Error fetching available slots');
     }
 };

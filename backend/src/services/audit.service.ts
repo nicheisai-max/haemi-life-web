@@ -18,16 +18,17 @@ export interface AuditLogEntry {
 export const auditService = {
     log: async (entry: Partial<AuditLogEntry> & Record<string, unknown>) => {
         try {
-            // SCHEMA GUARDS & LEGACY COMPATIBILITY
-            const actor_user_id = entry.user_id || entry.actor_id || entry.actor_user_id;
-            const action_type = entry.action_type || entry.action || 'UNKNOWN_ACTION';
-            const target_id = entry.target_entity_id || entry.target_id || entry.entity_id;
-            const change_summary = entry.change_summary ||
-                (entry.metadata ? JSON.stringify(entry.metadata) : null) ||
-                (entry.details ? JSON.stringify(entry.details) : '{}');
-            const request_ip = entry.request_ip || entry.ip_address || null;
+            // SCHEMA ALIGNMENT: user_id is the canonical identifier
+            const user_id = entry.user_id || null;
+            const action = entry.action || entry.action_type || 'UNKNOWN_ACTION';
+            const entity_id = entry.entity_id || entry.target_id || null;
+            const details = entry.details || 
+                (entry.metadata ? JSON.stringify(entry.metadata) : null) || 
+                '{}';
+            const ip_address = entry.ip_address || entry.request_ip || null;
             const user_agent = entry.user_agent || null;
-            if (!action_type) return;
+            
+            if (!action) return;
 
             await pool.query(
                 `INSERT INTO audit_logs (
@@ -36,11 +37,11 @@ export const auditService = {
                 )
                  VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
                 [
-                    actor_user_id || null,
-                    action_type,
-                    target_id || null,
-                    change_summary,
-                    request_ip,
+                    user_id,
+                    action,
+                    entity_id,
+                    details,
+                    ip_address,
                     user_agent
                 ]
             );

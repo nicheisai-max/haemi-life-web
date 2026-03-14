@@ -224,7 +224,7 @@ export const requireRole = (allowedRole: string) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || req.user.role !== allowedRole) {
             await auditService.log({
-                actor_id: req.user?.id,
+                user_id: req.user?.id,
                 actor_role: req.user?.role,
                 action_type: 'ACCESS_DENIED_RBAC',
                 metadata: {
@@ -249,7 +249,7 @@ export const authorizeRole = (roles: string[]) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || !roles.includes(req.user.role)) {
             await auditService.log({
-                actor_id: req.user?.id,
+                user_id: req.user?.id,
                 actor_role: req.user?.role,
                 action_type: 'ACCESS_DENIED_RBAC_MULTI',
                 metadata: {

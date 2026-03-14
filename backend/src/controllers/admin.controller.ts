@@ -19,7 +19,7 @@ export const getPendingVerifications = async (req: Request, res: Response) => {
             ORDER BY u.created_at DESC
         `);
 
-        res.json(result.rows);
+        sendResponse(res, 200, true, 'Pending verifications fetched', result.rows);
     } catch (error) {
         console.error('Error fetching pending verifications:', error);
         sendError(res, 500, 'Error fetching pending verifications');
@@ -105,7 +105,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
         query += ' ORDER BY created_at DESC';
 
         const result = await pool.query(query, params);
-        res.json(result.rows);
+        sendResponse(res, 200, true, 'Users fetched', result.rows);
     } catch (error) {
         console.error('Error fetching users:', error);
         sendError(res, 500, 'Error fetching users');
@@ -177,7 +177,7 @@ export const getSystemStats = async (req: Request, res: Response) => {
             pool.query('SELECT COUNT(*) FROM users')
         ]);
 
-        res.json({
+        sendResponse(res, 200, true, 'System statistics fetched', {
             total_patients: parseInt(stats[0].rows[0].count),
             active_doctors: parseInt(stats[1].rows[0].count),
             pending_verifications: parseInt(stats[2].rows[0].count),
@@ -215,7 +215,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
             LIMIT $1 OFFSET $2
         `, [limit, offset]);
 
-        res.json(result.rows);
+        sendResponse(res, 200, true, 'Audit logs fetched', result.rows);
     } catch (error) {
         console.error('Error fetching audit logs:', error);
         sendError(res, 500, 'Error fetching audit logs');
@@ -226,7 +226,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
 export const getSessionTimeout = async (req: Request, res: Response) => {
     try {
         const timeout = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
-        res.json({ timeout: parseInt(timeout || '60') });
+        sendResponse(res, 200, true, 'Session timeout fetched', { timeout: parseInt(timeout || '60') });
     } catch (error) {
         console.error('Error fetching session timeout:', error);
         sendError(res, 500, 'Error fetching session timeout');
@@ -257,7 +257,7 @@ export const getSecurityEvents = async (req: Request, res: Response) => {
     try {
         const { limit = 50, offset = 0 } = req.query;
         const events = await securityRepository.getSecurityEvents(Number(limit), Number(offset));
-        res.json(events);
+        sendResponse(res, 200, true, 'Security events fetched', events);
     } catch (error) {
         console.error('Error fetching security events:', error);
         sendError(res, 500, 'Error fetching security events');
@@ -268,7 +268,7 @@ export const getActiveSessions = async (req: Request, res: Response) => {
     try {
         const { limit = 50, offset = 0 } = req.query;
         const sessions = await securityRepository.getActiveSessions(Number(limit), Number(offset));
-        res.json(sessions);
+        sendResponse(res, 200, true, 'Active sessions fetched', sessions);
     } catch (error) {
         console.error('Error fetching active sessions:', error);
         sendError(res, 500, 'Error fetching active sessions');
@@ -293,7 +293,7 @@ export const revokeSession = async (req: Request, res: Response) => {
 export const getRevenueStats = async (req: Request, res: Response) => {
     try {
         const stats = await analyticsRepository.getRevenueStats();
-        res.json(stats);
+        sendResponse(res, 200, true, 'Revenue stats fetched', stats);
     } catch (error) {
         console.error('Error fetching revenue stats:', error);
         sendError(res, 500, 'Error fetching revenue stats');
