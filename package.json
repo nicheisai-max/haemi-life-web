@@ -51,7 +51,6 @@
     "ai-review": "tsx scripts/ai-self-review.ts",
     "quality-gate": "tsx scripts/ai-self-review.ts --enforce",
     "cleanup:sandboxes": "tsx scripts/cleanup-sandboxes.ts",
-    "tasks:run": "tsx scripts/task-planner.ts",
     "safe-push": "powershell -ExecutionPolicy Bypass -File scripts/safe_push.ps1",
     "watchdog": "tsx scripts/agent_watchdog.ts",
     "sync": "tsx scripts/repo-hygiene.ts && git branch -a && git status"
