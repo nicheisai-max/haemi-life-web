@@ -3,6 +3,8 @@ import { pool } from '../config/db';
 import { JWTPayload } from '../types/express';
 import { sendError } from '../utils/response';
 import { logger } from '../utils/logger';
+import path from 'path';
+import fs from 'fs';
 
 export const getProfileImage = async (req: Request, res: Response) => {
     try {
@@ -18,15 +20,19 @@ export const getProfileImage = async (req: Request, res: Response) => {
 
         const user = result.rows[0];
 
-        // 1. Try to serve from DB (BYTEA)
-        if (user.profile_image_data && user.profile_image_mime) {
-            res.setHeader('Content-Type', user.profile_image_mime);
-            res.setHeader('Cache-Control', 'no-cache');
-            return res.send(user.profile_image_data);
+        // 1. Serve from Filesystem (Production Hardened)
+        if (user.profile_image && !user.profile_image.startsWith('/api/')) {
+            const fullPath = path.join(process.cwd(), user.profile_image);
+            if (fs.existsSync(fullPath)) {
+                res.setHeader('Content-Type', user.profile_image_mime || 'image/jpeg');
+                res.setHeader('Content-Disposition', `inline; filename="profile-${userId}${path.extname(user.profile_image)}"`);
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                return res.sendFile(fullPath);
+            }
         }
 
-        // 2. Fallback to existing path if available (Legacy Support)
-        if (user.profile_image) {
+        // 2. Fallback to Redirect if it's a legacy external URL
+        if (user.profile_image && user.profile_image.startsWith('http')) {
             return res.redirect(user.profile_image);
         }
 
@@ -56,15 +62,14 @@ export const getChatAttachment = async (req: Request, res: Response) => {
 
         const message = accessCheck.rows[0];
 
-        if (message.attachment_data && message.attachment_mime) {
-            res.setHeader('Content-Type', message.attachment_mime);
-            const safeFileName = (message.attachment_name || `attachment-${messageId}`).replace(/[^a-z0-9\-.]/gi, '_');
-            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-            return res.send(message.attachment_data);
-        }
-
-        if (message.attachment_url) {
-            return res.redirect(message.attachment_url);
+        if (message.attachment_url && !message.attachment_url.startsWith('/api/')) {
+            const fullPath = path.join(process.cwd(), message.attachment_url);
+            if (fs.existsSync(fullPath)) {
+                res.setHeader('Content-Type', message.attachment_mime || 'application/octet-stream');
+                const safeFileName = (message.attachment_name || `attachment-${messageId}`).replace(/[^a-z0-9\-.]/gi, '_');
+                res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+                return res.sendFile(fullPath);
+            }
         }
 
         return sendError(res, 404, 'Attachment not found');
@@ -100,13 +105,14 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
 
         const record = result.rows[0];
 
-        if (record.file_data && record.file_mime) {
-            res.setHeader('Content-Type', record.file_mime);
-            return res.send(record.file_data);
-        }
-
-        if (record.file_path) {
-            return res.redirect(`/${record.file_path}`);
+        if (record.file_path && record.file_path !== 'DB_ONLY') {
+            const fullPath = path.join(process.cwd(), record.file_path);
+            if (fs.existsSync(fullPath)) {
+                res.setHeader('Content-Type', record.file_mime || 'application/octet-stream');
+                const safeFileName = (record.name || `record-${recordId}`).replace(/[^a-z0-9\-.]/gi, '_');
+                res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+                return res.sendFile(fullPath);
+            }
         }
 
         return sendError(res, 404, 'Record file not found');

@@ -48,7 +48,6 @@ export const recordRepository = {
         patientId: string;
         name: string;
         filePath: string;
-        fileData?: Buffer;
         fileMime?: string;
         fileSize?: string;
         recordType?: string;
@@ -56,10 +55,10 @@ export const recordRepository = {
         notes?: string;
     }): Promise<MedicalRecord> {
         const result = await pool.query(
-            `INSERT INTO medical_records (patient_id, name, file_path, file_data, file_mime, file_size, record_type, status, notes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `INSERT INTO medical_records (patient_id, name, file_path, file_mime, file_size, record_type, status, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
-            [data.patientId, data.name, data.filePath, data.fileData, data.fileMime, data.fileSize, data.recordType, data.status, data.notes]
+            [data.patientId, data.name, data.filePath, data.fileMime, data.fileSize, data.recordType, data.status, data.notes]
         );
         return result.rows[0];
     },

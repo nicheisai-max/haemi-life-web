@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
 import { logger } from '../utils/logger';
-import { auditService } from '../services/audit.service';
+import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 import { getSessionTimeoutMinutes } from '../utils/config.util';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
@@ -115,7 +115,7 @@ export const signup = async (req: Request, res: Response) => {
 
             // Audit
             await auditService.log({
-                actor_id: newUser.id,
+                user_id: newUser.id,
                 action_type: 'SIGNUP_SUCCESS',
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent'] as string,
@@ -174,6 +174,7 @@ export const login = async (req: Request, res: Response) => {
         if (!user) {
             // Audit failed attempt (unknown user)
             await auditService.log({
+                user_id: SYSTEM_ANONYMOUS_ID,
                 action_type: 'LOGIN_FAILED',
                 metadata: { reason: 'User not found', identifier },
                 ip_address: req.ip,
@@ -185,7 +186,7 @@ export const login = async (req: Request, res: Response) => {
         // STRICT STATUS CHECK
         if (user.status !== 'ACTIVE') {
             await auditService.log({
-                actor_id: user.id,
+                user_id: user.id,
                 actor_role: user.role,
                 action_type: 'LOGIN_DENIED',
                 metadata: { reason: `User status is ${user.status}` },
@@ -206,7 +207,7 @@ export const login = async (req: Request, res: Response) => {
 
         if (!validPassword) {
             await auditService.log({
-                actor_id: user.id,
+                user_id: user.id,
                 actor_role: user.role,
                 action_type: 'LOGIN_FAILED',
                 metadata: { reason: 'Invalid password' },
@@ -234,7 +235,7 @@ export const login = async (req: Request, res: Response) => {
 
         // Audit Successful Login
         await auditService.log({
-            actor_id: user.id,
+            user_id: user.id,
             actor_role: user.role,
             action_type: 'LOGIN_SUCCESS',
             ip_address: req.ip,
@@ -370,7 +371,10 @@ export const uploadProfileImage = async (req: Request, res: Response) => {
         }
 
         return sendResponse(res, 200, true, 'Profile image updated successfully', {
-            user: updatedUser
+            user: {
+                ...updatedUser,
+                profile_image: updatedUser.profile_image
+            }
         });
     } catch (error: unknown) {
         logger.error('Error uploading profile image', { userId: req.user?.id, error });
@@ -551,7 +555,7 @@ export const refreshToken = async (req: Request, res: Response) => {
             );
 
             await auditService.log({
-                actor_id: user.id,
+                user_id: user.id,
                 action_type: 'TOKEN_REFRESH',
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent'] as string,
@@ -630,7 +634,7 @@ export const logout = async (req: Request, res: Response) => {
             );
 
             await auditService.log({
-                actor_id: req.user.id,
+                user_id: req.user.id,
                 action_type: 'LOGOUT',
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent'] as string,

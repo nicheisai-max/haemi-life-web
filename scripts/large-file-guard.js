@@ -23,7 +23,11 @@ const WARN_FILE_SIZE_BYTES = 500 * 1024;        // 500 KB — warning
 
 const FORBIDDEN_PATTERNS = [
   /node_modules\//,
-  /\.sql$/i,
+  {
+    pattern: /\.sql$/i,
+    // Exception: Allow init.sql and migrations which are canonical schema sources
+    isAllowed: (file) => file.includes('init.sql') || file.includes('migrations/')
+  },
   /\.dump$/i,
   /\.zip$/i,
   /\.tar\.gz$/i,
@@ -61,8 +65,16 @@ function main() {
 
   for (const file of stagedFiles) {
     // Check forbidden patterns
-    for (const pattern of FORBIDDEN_PATTERNS) {
+    for (const p of FORBIDDEN_PATTERNS) {
+      const isRegex = p instanceof RegExp;
+      const pattern = isRegex ? p : p.pattern;
+      
       if (pattern.test(file)) {
+        // If it's a whitelisting object, check the exception
+        if (!isRegex && p.isAllowed && p.isAllowed(file)) {
+          continue; 
+        }
+
         violations.push({
           file,
           reason: `Forbidden path pattern matched: ${pattern}`,

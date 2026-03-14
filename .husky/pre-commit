@@ -16,8 +16,12 @@ node scripts/branch_guard.js --commit || exit 1
 echo "  [2/3] Large file & forbidden pattern check..."
 node scripts/large-file-guard.js || exit 1
 
-# Guard 3: Lint staged files (code quality)
-echo "  [3/3] Lint staged files..."
+# Guard 3: Identity policy enforcement (Canonical user_id)
+echo "  [3/4] Identity policy check..."
+node scripts/identity_guard.js || exit 1
+
+# Guard 4: Lint staged files (code quality)
+echo "  [4/4] Lint staged files..."
 npx lint-staged || { echo "❌ Lint Staged Failed"; exit 1; }
 
 echo "✅ All pre-commit guardrails passed."

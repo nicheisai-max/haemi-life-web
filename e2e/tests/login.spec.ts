@@ -2,24 +2,43 @@ import { test, expect } from '@playwright/test';
 
 // Use a known demo/admin account if exists, or mock if we want pure E2E isolation
 const TEST_EMAIL = 'admin@haemilife.com';
-const TEST_PASSWORD = '123456';
+const TEST_PASSWORD = 'HaemiLifeDemo@2026'; // Institutional Hardened Credential
 
 test.describe('Authentication E2E Lifecycle', () => {
 
     test.beforeEach(async ({ page }) => {
+        page.on('console', msg => console.log(`BROWSER [${msg.type()}]: ${msg.text()}`));
         // Clear storage to ensure isolated tests
-        await page.goto('/login');
+        await page.goto('/login', { waitUntil: 'networkidle', timeout: 30000 });
+        await page.evaluate(() => {
+            localStorage.clear();
+            sessionStorage.clear();
+            // Clear cookies if possible in browser context
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+        });
+        await page.reload({ waitUntil: 'networkidle' });
+        
+        // Handle onboarding if it appears (Skip if visible)
+        const skipButton = page.getByRole('button', { name: /skip/i });
+        if (await skipButton.isVisible()) {
+            await skipButton.click();
+        }
+
         await page.evaluate(() => {
             localStorage.clear();
             sessionStorage.clear();
         });
-        await page.reload();
     });
 
     // TEST CASE 1
     test('Valid Login, Redirect & Reload Persistence', async ({ page }) => {
+        // Explicitly wait for the login form to be visible to avoid race conditions
+        await expect(page.getByText(/sign in to access your dashboard/i)).toBeVisible();
+
         // Find email and password fields generically
-        await page.locator('input[placeholder*="example"], input[type="text"], input[type="email"]').first().fill(TEST_EMAIL);
+        await page.getByPlaceholder(/user@example\.com/i).fill(TEST_EMAIL);
         await page.locator('input[type="password"]').fill(TEST_PASSWORD);
         await page.getByRole('button', { name: /sign in/i }).click();
 
@@ -37,7 +56,7 @@ test.describe('Authentication E2E Lifecycle', () => {
 
     // TEST CASE 2
     test('Invalid credentials display error & block redirect', async ({ page }) => {
-        await page.locator('input[placeholder*="example"], input[type="text"], input[type="email"]').first().fill('wrong@user.com');
+        await page.getByLabel(/email|phone/i).fill('wrong@user.com');
         await page.locator('input[type="password"]').fill('badpass');
         await page.getByRole('button', { name: /sign in/i }).click();
 
@@ -53,7 +72,7 @@ test.describe('Authentication E2E Lifecycle', () => {
     // TEST CASE 3 & 6: Expired access token auto-refresh
     test('Simulate Expired Access Token (Auto-Refresh)', async ({ page }) => {
         // Login first
-        await page.locator('input[placeholder*="example"], input[type="text"], input[type="email"]').first().fill(TEST_EMAIL);
+        await page.getByLabel(/email|phone/i).fill(TEST_EMAIL);
         await page.locator('input[type="password"]').fill(TEST_PASSWORD);
         await page.getByRole('button', { name: /sign in/i }).click();
         await expect(page).toHaveURL(/.*admin|.*dashboard/, { timeout: 25000 });
@@ -77,7 +96,7 @@ test.describe('Authentication E2E Lifecycle', () => {
     // TEST CASE 4: Expired refresh token forces logout
     test('Simulate Expired Refresh Token (Forced Logout)', async ({ page }) => {
         // Login first
-        await page.locator('input[placeholder*="example"], input[type="text"], input[type="email"]').first().fill(TEST_EMAIL);
+        await page.getByLabel(/email|phone/i).fill(TEST_EMAIL);
         await page.locator('input[type="password"]').fill(TEST_PASSWORD);
         await page.getByRole('button', { name: /sign in/i }).click();
         await expect(page).toHaveURL(/.*admin|.*dashboard/, { timeout: 25000 });

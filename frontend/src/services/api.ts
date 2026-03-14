@@ -47,7 +47,7 @@ if (typeof window !== 'undefined') {
     const checkBackendReady = async () => {
         try {
             const res = await axios.get(`${API_URL}/health/ready`, { timeout: 2000 });
-            if (res.data?.status === 'ready') {
+            if (res.data?.status === 'ready' || res.data?.status === 'ok') {
                 return true;
             }
         } catch {

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
-import { sendError } from '../utils/response';
+import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 
 // Get all verified doctors (Public/Patient access)
@@ -32,10 +32,10 @@ export const listDoctors = async (req: Request, res: Response) => {
         query += ' ORDER BY u.name ASC';
 
         const result = await pool.query(query, params);
-        res.json(result.rows);
+        sendResponse(res, 200, true, 'Doctors fetched', result.rows);
     } catch (error) {
         console.error('Error fetching doctors:', error);
-        res.status(500).json({ message: 'Error fetching doctors' });
+        sendError(res, 500, 'Error fetching doctors');
     }
 };
 
@@ -55,13 +55,13 @@ export const getDoctorProfile = async (req: Request, res: Response) => {
         `, [id]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Doctor not found' });
+            return sendError(res, 404, 'Doctor not found');
         }
 
-        res.json(result.rows[0]);
+        sendResponse(res, 200, true, 'Doctor profile fetched', result.rows[0]);
     } catch (error) {
         console.error('Error fetching doctor profile:', error);
-        res.status(500).json({ message: 'Error fetching doctor profile' });
+        sendError(res, 500, 'Error fetching doctor profile');
     }
 };
 
@@ -75,10 +75,10 @@ export const getSpecializations = async (req: Request, res: Response) => {
             ORDER BY specialization ASC
         `);
 
-        res.json(result.rows.map(row => row.specialization));
+        sendResponse(res, 200, true, 'Specializations fetched', result.rows.map(row => row.specialization));
     } catch (error) {
         console.error('Error fetching specializations:', error);
-        res.status(500).json({ message: 'Error fetching specializations' });
+        sendError(res, 500, 'Error fetching specializations');
     }
 };
 
@@ -103,10 +103,10 @@ export const updateDoctorProfile = async (req: Request, res: Response) => {
         `, [specialization, years_of_experience, bio, consultation_fee, doctorId]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Doctor profile not found' });
+            return sendError(res, 404, 'Doctor profile not found');
         }
 
-        res.json({ message: 'Profile updated successfully', profile: result.rows[0] });
+        sendResponse(res, 200, true, 'Profile updated successfully', result.rows[0]);
     } catch (error) {
         logger.error('Error updating doctor profile:', error);
         return sendError(res, 500, 'Error updating profile');
@@ -126,10 +126,10 @@ export const getDoctorSchedule = async (req: Request, res: Response) => {
             ORDER BY day_of_week, start_time
         `, [doctorId]);
 
-        res.json(result.rows);
+        sendResponse(res, 200, true, 'Schedule fetched', result.rows);
     } catch (error) {
         console.error('Error fetching schedule:', error);
-        res.status(500).json({ message: 'Error fetching schedule' });
+        sendError(res, 500, 'Error fetching schedule');
     }
 };
 
@@ -157,7 +157,7 @@ export const updateDoctorSchedule = async (req: Request, res: Response) => {
             }
 
             await client.query('COMMIT');
-            res.json({ message: 'Schedule updated successfully' });
+            sendResponse(res, 200, true, 'Schedule updated successfully');
         } catch (error) {
             await client.query('ROLLBACK');
             throw error;
@@ -166,7 +166,7 @@ export const updateDoctorSchedule = async (req: Request, res: Response) => {
         }
     } catch (error) {
         console.error('Error updating schedule:', error);
-        res.status(500).json({ message: 'Error updating schedule' });
+        sendError(res, 500, 'Error updating schedule');
     }
 };
 
@@ -189,9 +189,9 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
             ORDER BY MAX(a.appointment_date) DESC
         `, [doctorId]);
 
-        res.json(result.rows);
+        sendResponse(res, 200, true, 'Patients fetched', result.rows);
     } catch (error) {
         console.error('Error fetching patients:', error);
-        res.status(500).json({ message: 'Error fetching patients' });
+        sendError(res, 500, 'Error fetching patients');
     }
 };

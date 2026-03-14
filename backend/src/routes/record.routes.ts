@@ -1,25 +1,16 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
 import { authenticateToken, requireRole } from '../middleware/auth.middleware';
 import { getMyRecords, uploadRecord, deleteRecord, getRecordById, getPatientRecords } from '../controllers/record.controller';
 
 const router = Router();
 
-// Configure Multer for file storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/medical_records/');
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
+// Configure Multer for file storage (Memory favored for controller-level atomic filesystem writes)
+const storage = multer.memoryStorage();
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
 router.use(authenticateToken);

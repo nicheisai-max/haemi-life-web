@@ -3,6 +3,9 @@ import { recordRepository } from '../repositories/record-repository';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
 import { pool } from '../config/db';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 // Get current patient's own medical records
 export const getMyRecords = async (req: Request, res: Response) => {
@@ -36,7 +39,7 @@ export const getPatientRecords = async (req: Request, res: Response) => {
         if (role === 'doctor' || role === 'pharmacist') {
             const relationship = await pool.query(
                 `SELECT 1 FROM appointments 
-                 WHERE (doctor_id = $1 OR 1=1) AND patient_id = $2 
+                 WHERE doctor_id = $1 AND patient_id = $2 
                  LIMIT 1`,
                 [userId, patientId]
             );
@@ -69,24 +72,38 @@ export const uploadRecord = async (req: Request, res: Response) => {
         const { originalname, mimetype, size, buffer } = file;
         const fileSize = (size / 1024).toFixed(2) + ' KB';
 
+        // PRODUCTION HARDENING: Filesystem Offloading
+        // We store on disk to prevent DB bloat, but metadata stays in DB for transactional safety.
+        const fileExt = path.extname(originalname);
+        const uniqueFileName = `${crypto.randomUUID()}${fileExt}`;
+        const relativePath = `uploads/medical_records/${uniqueFileName}`;
+        const fullPath = path.join(process.cwd(), relativePath);
+
+        // Ensure directory exists (Defensive)
+        if (!fs.existsSync(path.dirname(fullPath))) {
+            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+        }
+
+        // Write to filesystem
+        fs.writeFileSync(fullPath, buffer);
+
         const newRecord = await recordRepository.create({
             patientId: patientId as string,
             name: originalname,
-            filePath: 'DB_ONLY',
-            fileData: buffer,
+            filePath: relativePath,
             fileMime: mimetype,
             fileSize: fileSize,
             recordType: 'Patient Upload',
-            status: 'Pending Review',
+            status: 'Final',
             notes: 'Uploaded by patient'
         });
 
-        sendResponse(res, 201, true, 'Medical record uploaded successfully', {
+        return sendResponse(res, 201, true, 'Medical record uploaded successfully', {
             record: newRecord
         });
     } catch (error) {
         console.error('Error uploading medical record:', error);
-        sendError(res, 500, 'Error uploading medical record');
+        return sendError(res, 500, 'Error uploading medical record');
     }
 };
 
@@ -131,9 +148,18 @@ export const deleteRecord = async (req: Request, res: Response) => {
         }
 
         await recordRepository.softDelete(id as string);
-        sendResponse(res, 200, true, 'Medical record deleted successfully');
+
+        // PRODUCTION HARDENING: Cleanup filesystem on delete
+        if (record.file_path && record.file_path !== 'DB_ONLY') {
+            const fullPath = path.join(process.cwd(), record.file_path);
+            if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+            }
+        }
+
+        return sendResponse(res, 200, true, 'Medical record deleted successfully');
     } catch (error) {
         console.error('Error deleting medical record:', error);
-        sendError(res, 500, 'Error deleting medical record');
+        return sendError(res, 500, 'Error deleting medical record');
     }
 };

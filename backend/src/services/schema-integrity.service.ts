@@ -16,7 +16,7 @@ export class SchemaIntegrityService {
     try {
       logger.info('🛡️ Starting Institutional Schema Integrity Check...');
 
-      // 1. Verify audit_logs table alignment (Physical user_id vs Code actor_id)
+      // 1. Verify audit_logs table alignment (Physical user_id vs Code user_id)
       const auditLogsCheck = await pool.query(`
         SELECT column_name, data_type 
         FROM information_schema.columns 
