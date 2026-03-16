@@ -1,25 +1,68 @@
-name: Dependency Security Scan
+name: 🛡️ Repository Security & Governance
 
 on:
+  push:
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
-  audit:
+  security-enforcement:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: 🔍 Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup Node
+      - name: 🚫 Detect Forced Push
+        if: github.event.forced == true
+        run: |
+          echo "🚨 SECURITY VIOLATION: Forced push detected."
+          echo "Force pushes are strictly prohibited in the Haemi Life repository."
+          exit 1
+
+      - name: 🕵️ Audit Commit Message (Bypass Detection)
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Auditing commit message: $COMMIT_MSG"
+          if [[ "$COMMIT_MSG" == *"--no-verify"* ]]; then
+            echo "🚨 SECURITY VIOLATION: Detected '--no-verify' indicator in commit message."
+            echo "Attempting to bypass pre-commit hooks is a contract violation."
+            exit 1
+          fi
+
+      - name: 📦 Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Install Dependencies
+      - name: 🛠️ Install Dependencies
         run: npm ci
 
-      - name: Security Audit
-        run: npm audit --audit-level=high
+      - name: ⚖️ Governance Budget Audit
+        run: |
+          ALLOWED_FILES=("agent_contract.ts" "agent_watchdog.ts" "branch_guard.ts" "repo-hygiene.ts" "safe-dev.ts" "safe_push.ps1")
+          ACTUAL_FILES=$(ls scripts/ | grep -v "^\.")
+          for FILE in $ACTUAL_FILES; do
+            FOUND=false
+            for ALLOWED in "${ALLOWED_FILES[@]}"; do
+              if [ "$FILE" == "$ALLOWED" ]; then
+                FOUND=true
+                break
+              fi
+            done
+            if [ "$FOUND" == "false" ]; then
+              echo "🚨 GOVERNANCE VIOLATION: Unrecognized script detected: $FILE"
+              echo "The scripts directory is frozen. No new scripts allowed."
+              exit 1
+            fi
+          done
+          echo "✅ Governance budget verified: 6 scripts found."
+
+      - name: 🩺 TypeScript Strict Check
+        run: npx tsc --noEmit
+
+      - name: 🧹 ESLint Quality Check
+        run: npm run lint

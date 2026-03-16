@@ -1,8 +1,7 @@
 #!/bin/sh
 
-echo "Running enterprise post-checkout branch governance check..."
+# Master Guard Dispatcher (Branch, Schema, Identity, Code Quality, Size)
+npx tsx scripts/branch_guard.ts --commit || exit 1
 
-# Enforce Sandbox Policy: Revert to main if forbidden branch is checked out
-node scripts/branch_guard.js --revert || exit 1
-
-node scripts/git-prune-check.js || echo "Warning: Orphan branch check failed."
+# Forensic Hygiene Sync
+npx tsx scripts/repo-hygiene.ts --silent || echo "Hygiene skip."
