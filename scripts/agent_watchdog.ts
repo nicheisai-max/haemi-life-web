@@ -72,7 +72,20 @@ export function run_safe_command(command: string) {
                 timeout: CONFIG.TIMEOUT_MS,
                 stdio: 'pipe' // Pipe for better control in wrapper
             });
-        } catch (error) {
+        } catch (error: any) {
+            const stderr = error.stderr?.toString() || '';
+            const stdout = error.stdout?.toString() || '';
+            const message = error.message || '';
+            const combinedOutput = `${message} ${stdout} ${stderr}`;
+
+            // 4. Deterministic Failure Detection (Institutional Standard)
+            // Abort retries for policy violations to avoid infinite loops
+            if (combinedOutput.includes('BRANCH POLICY VIOLATION') || combinedOutput.includes('CONTRACT VIOLATION')) {
+                console.error(`🛑 [WATCHDOG] DETERMINISTIC FAILURE: Policy violation detected. Aborting retries.`);
+                console.error(`   Output: ${combinedOutput.trim()}`);
+                process.exit(1);
+            }
+
             attempts++;
             if (attempts >= CONFIG.RETRY_LIMIT) {
                 console.error(`❌ [WATCHDOG] Command failed after ${CONFIG.RETRY_LIMIT} attempts: ${command}`);

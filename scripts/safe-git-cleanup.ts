@@ -42,8 +42,7 @@ export function runSafeGitCleanup(action: 'reset' | 'clean' | 'force-push' | 'sy
             run_safe_command(cmd);
         } else if (action === 'sync') {
             console.log('🔄 Executing Safe Local Sync...');
-            run_safe_command('git checkout main');
-            run_safe_command('git fetch origin');
+            run_safe_command('git fetch origin --prune');
             run_safe_command('git reset --hard origin/main');
         } else if (action === 'delete-branch') {
             console.log(`🗑️ Executing Safe Branch Deletion for ${targetBranch}...`);

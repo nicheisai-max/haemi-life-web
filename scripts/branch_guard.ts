@@ -52,7 +52,8 @@ function verifyBranch() {
 
             if (isRevert) {
                 console.log('🔄 Reverting to main...');
-                run_safe_command('git checkout main');
+                run_safe_command('git fetch origin --prune');
+                run_safe_command('git reset --hard origin/main');
             }
 
             process.exit(1);
