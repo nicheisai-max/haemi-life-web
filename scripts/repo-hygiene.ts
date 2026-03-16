@@ -74,8 +74,9 @@ async function purgeFiles() {
                     fs.rmSync(fullPath, { recursive: true, force: true });
                 }
             }
-        } catch (err: any) {
-            log(`Failed to purge ${pattern}: ${err.message}`, 'warn');
+        } catch (err: unknown) {
+            const error = err as Error;
+            log(`Failed to purge ${pattern}: ${error.message}`, 'warn');
         }
     }
     log('File system hygiene achieved.', 'success');
