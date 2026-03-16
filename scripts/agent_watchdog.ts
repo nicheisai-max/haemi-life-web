@@ -42,7 +42,7 @@ import { validateAgentCommand } from './agent_contract';
 
 let commandCount = 0;
 
-export function run_safe_command(command: string) {
+export function run_safe_command(command: string, allowedExitCodes: number[] = [0]) {
     commandCount++;
 
     // 0. Deterministic Contract Guard
