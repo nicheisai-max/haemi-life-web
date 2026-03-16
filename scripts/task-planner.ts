@@ -9,11 +9,17 @@ interface Task {
     status: 'pending' | 'executing' | 'completed' | 'failed';
 }
 
-function loadQueue() {
+interface TaskQueue {
+    tasks: Task[];
+    completed: Task[];
+    failed: Task[];
+}
+
+function loadQueue(): TaskQueue {
     return JSON.parse(fs.readFileSync(QUEUE_PATH, 'utf-8'));
 }
 
-function saveQueue(queue: any) {
+function saveQueue(queue: TaskQueue) {
     fs.writeFileSync(QUEUE_PATH, JSON.stringify(queue, null, 2));
 }
 

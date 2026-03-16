@@ -61,8 +61,9 @@ function verifyBranch() {
 
         // Success: Inside valid AI Sandbox
         process.exit(0);
-    } catch (error: any) {
-        console.error('Guard Infrastructure Error:', error.message);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Guard Infrastructure Error:', message);
         process.exit(0);
     }
 }

@@ -16,7 +16,12 @@ import * as path from 'path';
 const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024;   // 1 MB — hard block
 const WARN_FILE_SIZE_BYTES = 500 * 1024;        // 500 KB — warning
 
-const FORBIDDEN_PATTERNS = [
+interface ForbiddenPattern {
+  pattern: RegExp;
+  isAllowed?: (file: string) => boolean;
+}
+
+const FORBIDDEN_PATTERNS: (RegExp | ForbiddenPattern)[] = [
   /node_modules\//,
   {
     pattern: /\.sql$/i,
@@ -59,11 +64,11 @@ function main() {
     // Check forbidden patterns
     for (const p of FORBIDDEN_PATTERNS) {
       const isRegex = p instanceof RegExp;
-      const pattern = isRegex ? p : (p as any).pattern;
+      const pattern = isRegex ? p : (p as ForbiddenPattern).pattern;
       
       if (pattern.test(file)) {
         // If it's a whitelisting object, check the exception
-        if (!isRegex && (p as any).isAllowed && (p as any).isAllowed(file)) {
+        if (!isRegex && (p as ForbiddenPattern).isAllowed && (p as ForbiddenPattern).isAllowed!(file)) {
           continue; 
         }
 

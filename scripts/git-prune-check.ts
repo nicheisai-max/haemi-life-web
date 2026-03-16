@@ -44,8 +44,9 @@ async function pruneRepo() {
         }
 
         console.log('✅ Git Hygiene: Branch state is clean.');
-    } catch (error: any) {
-        console.warn(`⚠️ Git Hygiene warning: ${error.message}`);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`⚠️ Git Hygiene warning: ${message}`);
     }
 }
 
