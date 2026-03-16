@@ -38,8 +38,7 @@ jobs:
         run: |
           git fetch origin main
           git log origin/main..HEAD --format="%s" | while IFS= read -r msg; do
-            echo "$msg" > /tmp/commit-msg.txt
-            node scripts/commit-msg-guard.js /tmp/commit-msg.txt || exit 1
+            node .github/governance/commit-msg-guard.js /tmp/commit-msg.txt || exit 1
           done
 
   # ─────────────────────────────────────────────────────────────────────────
