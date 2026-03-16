@@ -42,9 +42,9 @@ async function runReview() {
 
         const THRESHOLD = 85;
         console.log('\n--- WAITING FOR AI QUALITY SCORE ---');
-    } catch (error: any) {
-        console.error(`❌ Review Engine Failure: ${error.message}`);
-        logToMemory('ci_failures', `Review Engine Failure: ${error.message}`);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Review Engine Failure: ${message}`);
         process.exit(1);
     }
 }

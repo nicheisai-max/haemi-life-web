@@ -1,6 +1,12 @@
 import { run_safe_command } from './agent_watchdog';
 import * as fs from 'fs';
 
+interface GitHubPR {
+    head: {
+        ref: string;
+    };
+}
+
 function runCmd(cmd: string): string {
     return run_safe_command(cmd) || '';
 }
@@ -46,8 +52,8 @@ async function main() {
         const res = await fetch('https://api.github.com/repos/nicheisai-max/haemi-life-web/pulls?state=closed&per_page=100', { headers });
         if (!res.ok) throw new Error(`API returned ${res.status}`);
         
-        const closedPRs = await res.json();
-        const closedBranchNames = new Set(closedPRs.map((pr: any) => pr.head.ref));
+        const closedPRs = await res.json() as GitHubPR[];
+        const closedBranchNames = new Set(closedPRs.map((pr: GitHubPR) => pr.head.ref));
 
         let deletedCount = 0;
 
@@ -60,8 +66,9 @@ async function main() {
                     run_safe_command(`git push origin --delete ${branchName} --no-verify`);
                     console.log(`✅ Deleted: ${branchName}`);
                     deletedCount++;
-                } catch (e: any) {
-                    console.warn(`⚠️  Failed to delete ${branchName}: ${e.message}`);
+                } catch (e: unknown) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    console.warn(`⚠️  Failed to delete ${branchName}: ${message}`);
                 }
             }
         }
@@ -70,8 +77,9 @@ async function main() {
             console.log('✅ No orphaned/squashed remote sandbox branches found.');
         }
 
-    } catch (error: any) {
-        console.warn(`⚠️  Failed to fetch GitHub API data. Falling back to Git heuristic pruning. (${error.message})`);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`⚠️  Failed to fetch GitHub API data. Falling back to Git heuristic pruning. (${message})`);
         // Fallback: Delete any remote tracking branch that doesn't have an open PR equivalent, or strictly matches `--merged`
         const mergedBranches = runCmd('git branch -r --merged origin/main')
             .split('\n')
@@ -84,8 +92,9 @@ async function main() {
             try {
                 run_safe_command(`git push origin --delete ${branchName} --no-verify`);
                 console.log(`✅ Deleted: ${branchName}`);
-            } catch (e: any) {
-                console.warn(`⚠️  Failed to delete ${branchName}: ${e.message}`);
+            } catch (e: unknown) {
+                const message = e instanceof Error ? e.message : String(e);
+                console.warn(`⚠️  Failed to delete ${branchName}: ${message}`);
             }
         }
     }

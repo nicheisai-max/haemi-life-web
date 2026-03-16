@@ -39,9 +39,10 @@ async function run() {
         try {
             step.action();
             verify();
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
             console.error(`❌ Failure in step: ${step.task}`);
-            repair(error.message);
+            repair(message);
         }
     }
 
