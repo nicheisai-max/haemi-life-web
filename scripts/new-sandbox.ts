@@ -42,7 +42,6 @@ try {
 
     // Enterprise safe start: always branch from latest origin/main
     run_safe_command("git fetch origin");
-    run_safe_command("git checkout main");
     run_safe_command("git reset --hard origin/main");
 
     // Create and checkout the branch

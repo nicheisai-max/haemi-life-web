@@ -84,18 +84,12 @@ async function purgeFiles() {
 async function purgeBranches() {
     log('Pruning local merged and stale sandbox branches...', 'info');
     
-    // 1. Ensure we are on main
-    const currentBranch = run('git rev-parse --abbrev-ref HEAD');
-    if (currentBranch !== 'main') {
-        run('git checkout main');
-    }
-
-    // 2. Fetch and prune remote tracking
+    // 1. Fetch and prune remote tracking
     log('Pruning remote tracking and fetching origin...', 'info');
     run('git fetch origin --prune');
     run('git remote prune origin');
 
-    // 3. Reset to canonical main (Hard Reset)
+    // 2. Force resetting to origin/main (Hermetic State)
     log('Force resetting to origin/main (Hermetic State)...', 'info');
     run('git reset --hard origin/main');
 
