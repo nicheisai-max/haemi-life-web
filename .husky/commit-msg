@@ -4,5 +4,4 @@
 # Master Governance Validation
 
 # Redirect to Master Guard if commit message validation is extended there
-# For now, allowing commit to proceed to avoid orphan script failure
-exit 0
+node .github/governance/commit-msg-guard.js "$1" || exit 1
