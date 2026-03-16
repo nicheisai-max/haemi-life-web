@@ -8,12 +8,13 @@
  * Allowed format: type(scope): description
  * Allowed types: feat, fix, refactor, test, chore, docs, style, perf, ci, build, revert
  *
- * Usage: node scripts/commit-msg-guard.js <path-to-commit-msg-file>
+ * Usage: node .github/governance/commit-msg-guard.js <path-to-commit-msg-file>
  */
 
 'use strict';
 
 const fs = require('fs');
+const { execSync } = require('child_process');
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -47,24 +48,35 @@ const SKIP_PATTERNS = [
 
 function main() {
   const commitMsgFile = process.argv[2];
+  let commitMsg;
 
-  if (!commitMsgFile) {
-    console.error('❌ Commit-msg guard: No commit message file provided.');
-    console.error('   Usage: node scripts/commit-msg-guard.js <path-to-commit-msg-file>');
-    process.exit(1);
+  if (commitMsgFile && fs.existsSync(commitMsgFile)) {
+    // Mode 1: Local Git Hook / Manual file path
+    try {
+      // Read as Buffer first to allow BOM stripping.
+      // Windows tools (PowerShell Out-File, Git on Windows) may write a
+      // UTF-8 BOM (0xEF 0xBB 0xBF) which would corrupt the regex match.
+      const raw = fs.readFileSync(commitMsgFile);
+      const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+      const content = raw.slice(0, 3).equals(bom) ? raw.slice(3) : raw;
+      commitMsg = content.toString('utf8').trim();
+    } catch (err) {
+      console.error(`❌ Commit-msg guard: Cannot read commit message file: ${commitMsgFile}`);
+      process.exit(1);
+    }
+  } else {
+    // Mode 2: CI Execution / Fallback to git log
+    console.log('📡 [CI MODE] No valid commit message file provided. Falling back to git log...');
+    try {
+      commitMsg = execSync('git log -1 --pretty=%B', { encoding: 'utf8' }).trim();
+    } catch (err) {
+      console.error('❌ Commit-msg guard: Failed to read commit message from git log.');
+      process.exit(1);
+    }
   }
 
-  let commitMsg;
-  try {
-    // Read as Buffer first to allow BOM stripping.
-    // Windows tools (PowerShell Out-File, Git on Windows) may write a
-    // UTF-8 BOM (0xEF 0xBB 0xBF) which would corrupt the regex match.
-    const raw = fs.readFileSync(commitMsgFile);
-    const bom = Buffer.from([0xef, 0xbb, 0xbf]);
-    const content = raw.slice(0, 3).equals(bom) ? raw.slice(3) : raw;
-    commitMsg = content.toString('utf8').trim();
-  } catch {
-    console.error(`❌ Commit-msg guard: Cannot read commit message file: ${commitMsgFile}`);
+  if (!commitMsg) {
+    console.error('❌ Commit-msg guard: Empty commit message detected.');
     process.exit(1);
   }
 
