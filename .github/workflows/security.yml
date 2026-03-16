@@ -66,3 +66,9 @@ jobs:
 
       - name: 🧹 ESLint Quality Check
         run: npm run lint
+
+      - name: Governance Contract Check
+        run: npx tsx scripts/agent_contract.ts
+
+      - name: Governance Watchdog Audit
+        run: npx tsx scripts/agent_watchdog.ts
