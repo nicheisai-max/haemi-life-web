@@ -62,7 +62,7 @@ jobs:
           echo "✅ Governance budget verified: 6 scripts found."
 
       - name: 🩺 TypeScript Strict Check
-        run: npx tsc --noEmit
+        run: npm run type-check
 
       - name: 🧹 ESLint Quality Check
         run: npm run lint
