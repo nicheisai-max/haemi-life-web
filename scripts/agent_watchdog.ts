@@ -87,7 +87,7 @@ export function run_safe_command(command: string, allowedExitCodes: number[] = [
             const message = execError.message || '';
             const combinedOutput = `${message} ${stdout} ${stderr}`;
 
-            // 4. Deterministic Failure Detection (Institutional Standard)
+            // 5. Deterministic Failure Detection (Institutional Standard)
             // Abort retries for policy violations to avoid infinite loops
             if (combinedOutput.includes('BRANCH POLICY VIOLATION') || combinedOutput.includes('CONTRACT VIOLATION')) {
                 console.error(`🛑 [WATCHDOG] DETERMINISTIC FAILURE: Policy violation detected. Aborting retries.`);
