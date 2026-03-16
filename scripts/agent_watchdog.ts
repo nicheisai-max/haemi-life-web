@@ -72,10 +72,19 @@ export function run_safe_command(command: string) {
                 timeout: CONFIG.TIMEOUT_MS,
                 stdio: 'pipe' // Pipe for better control in wrapper
             });
-        } catch (error: any) {
-            const stderr = error.stderr?.toString() || '';
-            const stdout = error.stdout?.toString() || '';
-            const message = error.message || '';
+        } catch (error: unknown) {
+            const execError = error as { status?: number; stdout?: Buffer | string; stderr?: Buffer | string; message?: string };
+            const exitCode = execError.status;
+            
+            // 4. Allowed Exit Codes (Institutional Standard)
+            // If the command returned a whitelisted exit code, it's a deterministic result, not a failure.
+            if (typeof exitCode === 'number' && allowedExitCodes.includes(exitCode)) {
+                return execError.stdout?.toString() || '';
+            }
+
+            const stderr = execError.stderr?.toString() || '';
+            const stdout = execError.stdout?.toString() || '';
+            const message = execError.message || '';
             const combinedOutput = `${message} ${stdout} ${stderr}`;
 
             // 4. Deterministic Failure Detection (Institutional Standard)
