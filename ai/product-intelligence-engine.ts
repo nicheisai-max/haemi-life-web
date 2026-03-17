@@ -30,10 +30,17 @@ function getFiles(dir: string): string[] {
     return results;
 }
 
+interface IntelligenceInsight {
+    type: string;
+    file: string;
+    severity: 'low' | 'medium' | 'high';
+    message: string;
+}
+
 async function runIntelligence() {
     console.log('🧠 Running AI Product Intelligence Engine...');
     const files = getFiles(FRONTEND_SRC);
-    const insights: any[] = [];
+    const insights: IntelligenceInsight[] = [];
 
     files.forEach(file => {
         const content = fs.readFileSync(file, 'utf-8');

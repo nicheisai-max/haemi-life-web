@@ -32,7 +32,7 @@ export class AppointmentRepository {
     }
 
     async checkDoctorVerified(doctorId: string): Promise<boolean> {
-        const result = await this.db.query(`
+        const result = await this.db.query<{ id: string }>(`
             SELECT u.id FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
             WHERE u.id = $1 AND dp.is_verified = true
@@ -41,7 +41,7 @@ export class AppointmentRepository {
     }
 
     async checkConflict(doctorId: string, date: string, time: string): Promise<boolean> {
-        const result = await this.db.query(`
+        const result = await this.db.query<{ id: number }>(`
             SELECT id FROM appointments
             WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3 
               AND status != 'cancelled' AND deleted_at IS NULL
@@ -50,7 +50,7 @@ export class AppointmentRepository {
     }
 
     async create(data: Partial<Appointment>): Promise<Appointment> {
-        const result = await this.db.query(`
+        const result = await this.db.query<Appointment>(`
             INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status)
             VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
             RETURNING *
@@ -89,12 +89,12 @@ export class AppointmentRepository {
 
         query += ' ORDER BY a.appointment_date DESC, a.appointment_time DESC';
 
-        const result = await this.db.query(query, params);
+        const result = await this.db.query<AppointmentWithDetails>(query, params);
         return result.rows;
     }
 
     async findByIdWithDetails(id: number, userId: string): Promise<AppointmentWithDetails | null> {
-        const result = await this.db.query(`
+        const result = await this.db.query<AppointmentWithDetails>(`
             SELECT 
                 a.*,
                 u_doctor.name as doctor_name,
@@ -112,7 +112,7 @@ export class AppointmentRepository {
     }
 
     async updateStatus(id: number, doctorId: string, status: string, notes?: string): Promise<Appointment | null> {
-        const result = await this.db.query(`
+        const result = await this.db.query<Appointment>(`
             UPDATE appointments
             SET status = $1, notes = COALESCE($2, notes), updated_at = CURRENT_TIMESTAMP
             WHERE id = $3 AND doctor_id = $4 AND deleted_at IS NULL
@@ -122,7 +122,7 @@ export class AppointmentRepository {
     }
 
     async cancel(id: number, userId: string): Promise<Appointment | null> {
-        const result = await this.db.query(`
+        const result = await this.db.query<Appointment>(`
             UPDATE appointments
             SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
             WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2) AND deleted_at IS NULL
@@ -132,7 +132,7 @@ export class AppointmentRepository {
     }
 
     async getDoctorSchedule(doctorId: string, dayOfWeek: number): Promise<{ start_time: string; end_time: string }[]> {
-        const result = await this.db.query(`
+        const result = await this.db.query<{ start_time: string; end_time: string }>(`
             SELECT start_time, end_time FROM doctor_schedules
             WHERE doctor_id = $1 AND day_of_week = $2 AND is_available = true
         `, [doctorId, dayOfWeek]);

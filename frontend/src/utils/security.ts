@@ -35,7 +35,7 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
     // Filter out potential non-ArrayBuffer errors
     const baseKey = await window.crypto.subtle.importKey(
         'raw',
-        keyData as unknown as BufferSource,
+        keyData.buffer as ArrayBuffer,
         'PBKDF2',
         false,
         ['deriveKey']

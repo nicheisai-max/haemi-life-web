@@ -43,7 +43,7 @@ jobs:
 
       - name: ⚖️ Governance Budget Audit
         run: |
-          ALLOWED_FILES=("agent_contract.ts" "agent_watchdog.ts" "branch_guard.ts" "repo-hygiene.ts" "safe-dev.ts" "safe_push.ps1")
+          ALLOWED_FILES=("agent_contract.ts" "agent_watchdog.ts" "branch_guard.ts" "repo-hygiene.ts" "safe-dev.ts" "safe_push.ps1" "schema_guard.ts")
           ACTUAL_FILES=$(ls scripts/ | grep -v "^\.")
           for FILE in $ACTUAL_FILES; do
             FOUND=false
@@ -59,7 +59,7 @@ jobs:
               exit 1
             fi
           done
-          echo "✅ Governance budget verified: 6 scripts found."
+          echo "✅ Governance budget verified: 7 scripts found."
 
       - name: 🩺 TypeScript Strict Check
         run: npm run type-check

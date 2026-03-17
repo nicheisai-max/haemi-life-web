@@ -832,9 +832,12 @@ CREATE TABLE IF NOT EXISTS system_settings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seed default session timeout (60 minutes)
+-- Seed default session timeout (1440 minutes = 24 hours)
 INSERT INTO system_settings (key, value) 
-VALUES ('SESSION_TIMEOUT_MINUTES', '60')
+VALUES 
+    ('SESSION_TIMEOUT_MINUTES', '1440'),
+    ('JWT_ACCESS_EXPIRY_MINUTES', '15'),
+    ('JWT_REFRESH_EXPIRY_DAYS', '7')
 ON CONFLICT (key) DO NOTHING;
 
 -- Telemedicine Consent Table

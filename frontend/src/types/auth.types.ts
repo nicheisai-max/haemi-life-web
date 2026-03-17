@@ -24,6 +24,8 @@ export interface AuthResponse {
     token: string;
     refreshToken: string;
     user: User;
+    serverTime: string;
+    sessionTimeout: number;
 }
 
 export interface LoginCredentials {
@@ -40,4 +42,39 @@ export interface SignupCredentials {
     id_number?: string;
     // Dynamic fields for other roles can be added here or in extended types
     [key: string]: unknown;
+}
+
+// ─── Phase 7: Strict Event Typing ───────────────────────────────────────────
+export interface AuthTokenRefreshedDetail {
+    token: string;
+    refreshToken?: string;
+    serverTime?: string;
+    sessionTimeout?: number;
+}
+
+export interface AuthLogoutDetail {
+    userId: string;
+}
+
+export interface SystemErrorDetail {
+    message: string;
+    statusCode: number;
+}
+
+export interface AuthEvents {
+    'auth:token-refreshed': CustomEvent<AuthTokenRefreshedDetail>;
+    'auth:unauthorized': CustomEvent<void>;
+    'auth:logout': CustomEvent<AuthLogoutDetail>;
+    'auth:session-expiring': CustomEvent<{ timeLeft: number }>;
+    'system:error': CustomEvent<SystemErrorDetail>;
+}
+
+declare global {
+    interface WindowEventMap {
+        'auth:token-refreshed': AuthEvents['auth:token-refreshed'];
+        'auth:unauthorized': AuthEvents['auth:unauthorized'];
+        'auth:logout': AuthEvents['auth:logout'];
+        'auth:session-expiring': AuthEvents['auth:session-expiring'];
+        'system:error': AuthEvents['system:error'];
+    }
 }

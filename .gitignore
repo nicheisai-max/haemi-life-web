@@ -148,6 +148,10 @@ e2e/test-results/
 # Logs
 backend/full_lint_errors.txt
 backend/lint_failures.txt
+backend/lint_output.txt
+frontend/tsc_errors.txt
+frontend/lint_errors.txt
+*.txt
 
 # Media artifacts
 *.png

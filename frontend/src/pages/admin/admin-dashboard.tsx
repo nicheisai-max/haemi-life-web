@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import {
 import { GradientMesh } from '@/components/ui/gradient-mesh';
 import { getSystemStats, getRevenueStats, getActiveSessions, getSecurityEvents } from '../../services/admin.service';
 import type { SystemStats, RevenueStat } from '../../services/admin.service';
-import { PremiumAreaChart } from '@/components/charts/premium-area-chart';
+import { PremiumAreaChart, type ChartDataItem } from '@/components/charts/premium-area-chart';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { PremiumLoader } from '@/components/ui/premium-loader';
@@ -199,7 +199,7 @@ export const AdminDashboard: React.FC = () => {
                     <PremiumAreaChart
                         title="Revenue Analytics"
                         description="Monthly institutional revenue vs operating expenses"
-                        data={revenueData as unknown as Array<{ [key: string]: string | number | undefined }>}
+                        data={revenueData as (RevenueStat & ChartDataItem)[]}
                         dataKey="revenue"
                         categoryKey="name"
                         color="#6366f1" // Indigo-500

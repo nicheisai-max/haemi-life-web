@@ -20,15 +20,35 @@ export interface UserSession {
     session_id: string;
     ip_address: string | null;
     user_agent: string | null;
+    browser_name: string | null;
+    os_name: string | null;
+    device_type: string | null;
     created_at: Date;
     last_activity: Date | null;
     revoked: boolean;
 }
 
+interface SecurityEventRow {
+    id: string;
+    user_id: string | null;
+    user_role: string | null;
+    event_type: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    created_at: Date;
+    user_name: string | null;
+    user_email: string | null;
+}
+
+interface UserSessionRow extends UserSession {
+    user_name: string;
+    user_email: string;
+}
+
 export const securityRepository = {
     async getSecurityEvents(limit: number = 50, offset: number = 0): Promise<SecurityEvent[]> {
         // Fallback to audit_logs for security analysis
-        const result = await pool.query(
+        const result = await pool.query<SecurityEventRow>(
             `SELECT al.id, al.user_id, u.role as user_role, 
              al.action as event_type, al.ip_address, 
              al.user_agent, al.created_at, u.name as user_name, u.email as user_email 
@@ -48,8 +68,11 @@ export const securityRepository = {
     },
 
     async getActiveSessions(limit: number = 50, offset: number = 0): Promise<UserSession[]> {
-        const result = await pool.query(
-            `SELECT us.*, u.name as user_name, u.email as user_email 
+        const result = await pool.query<UserSessionRow>(
+            `SELECT us.id, us.user_id, us.user_role, us.session_id, us.ip_address, 
+             us.user_agent, us.browser_name, us.os_name, us.device_type, 
+             us.created_at, us.last_activity, us.revoked,
+             u.name as user_name, u.email as user_email 
              FROM user_sessions us
              JOIN users u ON us.user_id = u.id
              WHERE us.revoked = FALSE
@@ -61,7 +84,7 @@ export const securityRepository = {
     },
 
     async revokeSession(sessionId: string): Promise<boolean> {
-        const result = await pool.query(
+        const result = await pool.query<{ id: string }>(
             `UPDATE user_sessions 
              SET revoked = TRUE, logout_time = NOW() 
              WHERE session_id = $1 OR id::text = $1

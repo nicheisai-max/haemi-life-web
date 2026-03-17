@@ -5,7 +5,8 @@ import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
 import { logger } from '../utils/logger';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
-import { getSessionTimeoutMinutes } from '../utils/config.util';
+import { getSessionTimeoutMinutes, getJwtAccessExpiry, getJwtRefreshExpiry } from '../utils/config.util';
+import { parseUA } from '../utils/ua-parser.util';
 import { sendResponse, sendError } from '../utils/response';
 import { JWTPayload } from '../types/express';
 import crypto from 'crypto';
@@ -80,10 +81,12 @@ export const signup = async (req: Request, res: Response) => {
             const accessJti = crypto.randomBytes(16).toString('hex');
             const refreshJti = crypto.randomBytes(16).toString('hex');
 
+            const { browser, os, device } = parseUA(req.headers['user-agent'] as string);
+
             await pool.query(
-                `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, device_type)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], 'web']
+                `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, browser_name, os_name, device_type)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], browser, os, device]
             );
 
             // Generate Access Token (15m)
@@ -97,7 +100,7 @@ export const signup = async (req: Request, res: Response) => {
                     session_id: sessionId
                 },
                 process.env.JWT_SECRET as string,
-                { expiresIn: '15m' }
+                { expiresIn: await getJwtAccessExpiry() }
             );
 
             // Generate Refresh Token (7d)
@@ -109,7 +112,7 @@ export const signup = async (req: Request, res: Response) => {
                     session_id: sessionId
                 },
                 process.env.JWT_SECRET as string,
-                { expiresIn: '7d' }
+                { expiresIn: await getJwtRefreshExpiry() }
             );
 
             // Audit
@@ -218,11 +221,13 @@ export const login = async (req: Request, res: Response) => {
         const accessJti = crypto.randomBytes(16).toString('hex');
         const refreshJti = crypto.randomBytes(16).toString('hex');
 
+        const { browser, os, device } = parseUA(req.headers['user-agent'] as string);
+
         // Persistent Session record
         await pool.query(
-            `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, device_type)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [user.id, user.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], 'web']
+            `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, browser_name, os_name, device_type)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [user.id, user.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], browser, os, device]
         );
 
         // Audit Successful Login
@@ -251,7 +256,7 @@ export const login = async (req: Request, res: Response) => {
                 session_id: sessionId
             },
             process.env.JWT_SECRET as string,
-            { expiresIn: '15m' }
+            { expiresIn: await getJwtAccessExpiry() }
         );
 
         // Generate Refresh Token (7d)
@@ -263,7 +268,7 @@ export const login = async (req: Request, res: Response) => {
                 session_id: sessionId
             },
             process.env.JWT_SECRET as string,
-            { expiresIn: '7d' }
+            { expiresIn: await getJwtRefreshExpiry() }
         );
 
         /* 
@@ -281,9 +286,13 @@ export const login = async (req: Request, res: Response) => {
         // Update activity heartbeat on login
         await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
+        const timeoutMinutes = await getSessionTimeoutMinutes();
+
         return sendResponse(res, 200, true, 'Login successful', {
             token: accessToken,
             refreshToken: refreshToken,
+            serverTime: new Date().toISOString(),
+            sessionTimeout: timeoutMinutes,
             user: {
                 id: user.id,
                 email: user.email,
@@ -524,7 +533,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                     session_id: sessionId
                 },
                 process.env.JWT_SECRET as string,
-                { expiresIn: '15m' }
+                { expiresIn: await getJwtAccessExpiry() }
             );
 
             newRefreshToken = jwt.sign(
@@ -535,7 +544,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                     session_id: sessionId
                 },
                 process.env.JWT_SECRET as string,
-                { expiresIn: '7d' }
+                { expiresIn: await getJwtRefreshExpiry() }
             );
 
             await auditService.log({
@@ -563,7 +572,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                     session_id: sessionId
                 },
                 process.env.JWT_SECRET as string,
-                { expiresIn: '15m' }
+                { expiresIn: await getJwtAccessExpiry() }
             );
 
             newRefreshToken = jwt.sign(
@@ -574,16 +583,20 @@ export const refreshToken = async (req: Request, res: Response) => {
                     session_id: sessionId
                 },
                 process.env.JWT_SECRET as string,
-                { expiresIn: '7d' }
+                { expiresIn: await getJwtRefreshExpiry() }
             );
         }
 
         await client.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
         await client.query('COMMIT');
 
+        const timeoutMinutes = await getSessionTimeoutMinutes();
+
         return sendResponse(res, 200, true, 'Token refreshed successfully', {
             token: accessToken,
-            refreshToken: newRefreshToken
+            refreshToken: newRefreshToken,
+            serverTime: new Date().toISOString(),
+            sessionTimeout: timeoutMinutes
         });
 
     } catch (err: unknown) {
@@ -653,7 +666,12 @@ export const heartbeat = async (req: Request, res: Response) => {
 export const verifySession = async (req: Request, res: Response) => {
     try {
         const user = req.user;
-        return sendResponse(res, 200, true, 'Session valid', { user });
+        const timeoutMinutes = await getSessionTimeoutMinutes();
+        return sendResponse(res, 200, true, 'Session valid', { 
+            user,
+            serverTime: new Date().toISOString(),
+            sessionTimeout: timeoutMinutes
+        });
     } catch (err: unknown) {
         logger.error('Session verification failed', err);
         return sendError(res, 500, 'Server error');

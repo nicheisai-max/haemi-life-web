@@ -53,9 +53,21 @@ describe('AuthContext Lifecycle', () => {
 
     it('should authenticate user if health check passes and refresh succeeds', async () => {
         vi.mocked(authService.waitForBackend).mockResolvedValueOnce(true);
-        vi.mocked(authService.refreshToken).mockResolvedValueOnce({ authenticated: true, token: 'mock-token' });
+        vi.mocked(authService.refreshToken).mockResolvedValueOnce({ 
+            authenticated: true, 
+            token: 'mock-token',
+            refreshToken: 'mock-refresh-token'
+        });
         vi.mocked(authService.verifySession).mockResolvedValueOnce({
-            user: { id: '1', email: 'test@example.com', role: 'doctor', name: 'Dr. Test', phone_number: '555-010-999' }
+            user: { 
+                id: '1', 
+                email: 'test@example.com', 
+                role: 'doctor', 
+                name: 'Dr. Test', 
+                phone_number: '555-010-999' 
+            },
+            serverTime: new Date().toISOString(),
+            sessionTimeout: 1440
         });
 
         render(
@@ -72,7 +84,11 @@ describe('AuthContext Lifecycle', () => {
 
     it('should transition to unauthenticated if refresh fails (401)', async () => {
         vi.mocked(authService.waitForBackend).mockResolvedValueOnce(true);
-        vi.mocked(authService.refreshToken).mockResolvedValueOnce({ authenticated: false });
+        vi.mocked(authService.refreshToken).mockResolvedValueOnce({ 
+            authenticated: false,
+            token: undefined,
+            refreshToken: undefined
+        });
 
         render(
             <AuthProvider>

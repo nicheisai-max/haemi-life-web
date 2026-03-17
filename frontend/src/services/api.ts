@@ -1,5 +1,6 @@
-import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios';
 import { logger } from '../utils/logger';
+import type { AuthResponse } from '../types/auth.types';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 if (!API_BASE) {
@@ -13,7 +14,7 @@ const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 // Memory Token Storage (Closure)
 let accessToken: string | null = null;
 
-export const setAccessToken = (token: string | null) => {
+export const setAccessToken = (token: string | null, refreshToken?: string | null, serverTime?: string, sessionTimeout?: number) => {
     accessToken = token;
     
     // Phase 7: Atomic Network Layer Sync
@@ -24,7 +25,9 @@ export const setAccessToken = (token: string | null) => {
     }
 
     if (typeof window !== 'undefined' && token) {
-        window.dispatchEvent(new CustomEvent('auth:token-refreshed', { detail: { token } }));
+        window.dispatchEvent(new CustomEvent('auth:token-refreshed', { 
+            detail: { token, refreshToken, serverTime, sessionTimeout } 
+        }));
     }
 };
 
@@ -44,7 +47,7 @@ const INITIAL_RETRY_DELAY = 1000;
 let appInitialized = false;
 let initializationQueue: {
     config: ExtendedRequestConfig;
-    resolve: (value: unknown) => void;
+    resolve: (config: InternalAxiosRequestConfig) => void;
     reject: (reason?: unknown) => void
 }[] = [];
 
@@ -81,12 +84,12 @@ if (typeof window !== 'undefined') {
         const queueToProcess = [...initializationQueue];
         initializationQueue = [];
         
-        queueToProcess.forEach(({ config, resolve, reject }) => {
+        queueToProcess.forEach(({ config, resolve }) => {
             const token = accessToken || sessionStorage.getItem('token');
             if (token && config.headers) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
-            api(config).then(resolve).catch(reject);
+            resolve(config);
         });
     };
 
@@ -190,7 +193,7 @@ api.interceptors.request.use(
         if (!appInitialized && !isDiscoveryRoute) {
             return new Promise((resolve, reject) => {
                 initializationQueue.push({ config, resolve, reject });
-            }) as unknown as Promise<InternalAxiosRequestConfig>;
+            });
         }
 
         if (accessToken && config.headers) {
@@ -264,11 +267,16 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
         logger.info(`[API] Initiating synchronized token refresh (Attempt ${retryCount + 1})`);
         
         // Use direct axios to avoid interceptor loop
-        const response = await axios.post<{ success?: boolean; code?: string, message?: string, data?: { token?: string, refreshToken?: string } }>(
+        const response: AxiosResponse<AuthResponse> = await axios.post(
             `${API_URL}/auth/refresh-token`,
             { refreshToken: currentRefreshToken },
             { timeout: 8000 }
         );
+
+        const refreshData = response.data;
+        if (!refreshData || !refreshData.token) {
+            throw new Error('Refresh response invalid or failed');
+        }
 
         // Phase 6 Safety: If logout occurred while pending, discard result
         if (sessionVersion !== currentVersion) {
@@ -277,16 +285,10 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
             return null;
         }
 
-        // Backend Fix ensures success: true OR 401 error.
-        // We handle 200/true here.
-        if (!response.data || !response.data.data?.token) {
-            throw new Error('Refresh response invalid or failed');
-        }
-
-        const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
-        
         // Atomic state update
-        setAccessToken(newToken);
+        const { token: newToken, refreshToken: newRefreshToken, serverTime, sessionTimeout } = refreshData;
+        
+        setAccessToken(newToken, newRefreshToken, serverTime, sessionTimeout);
         sessionStorage.setItem('token', newToken);
         if (newRefreshToken) sessionStorage.setItem('refreshToken', newRefreshToken);
 

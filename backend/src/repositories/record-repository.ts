@@ -15,9 +15,23 @@ export interface MedicalRecord {
     deleted_at?: Date;
 }
 
+interface MedicalRecordRow {
+    id: string;
+    patient_id: string;
+    name: string;
+    file_path: string;
+    file_mime?: string;
+    file_size?: string;
+    record_type?: string;
+    status?: string;
+    notes?: string;
+    uploaded_at: Date;
+    deleted_at?: Date;
+}
+
 export const recordRepository = {
     async findByPatientId(patientId: string): Promise<MedicalRecord[]> {
-        const result = await pool.query(
+        const result = await pool.query<MedicalRecordRow>(
             'SELECT id, patient_id, name, file_path, file_mime, file_size, record_type, status, notes, uploaded_at FROM medical_records WHERE patient_id = $1 AND deleted_at IS NULL ORDER BY uploaded_at DESC',
             [patientId]
         );
@@ -40,7 +54,7 @@ export const recordRepository = {
             return null;
         }
 
-        const result = await pool.query(query, params);
+        const result = await pool.query<MedicalRecordRow>(query, params);
         return result.rows.length ? result.rows[0] : null;
     },
 
@@ -54,7 +68,7 @@ export const recordRepository = {
         status?: string;
         notes?: string;
     }): Promise<MedicalRecord> {
-        const result = await pool.query(
+        const result = await pool.query<MedicalRecordRow>(
             `INSERT INTO medical_records (patient_id, name, file_path, file_mime, file_size, record_type, status, notes)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
