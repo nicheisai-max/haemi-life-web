@@ -34,8 +34,25 @@ describe('Session Isolation (Phase 2)', () => {
     });
 
     describe('Cookie Security & Revocation', () => {
+        beforeEach(() => {
+            jest.clearAllMocks();
+            
+            // Centralized Deterministic Pool Mock
+            (pool.query as jest.Mock).mockImplementation(async (sql: string) => {
+                if (sql.includes('system_settings')) {
+                    if (sql.includes('SESSION_TIMEOUT_MINUTES')) return { rows: [{ value: '60' }] };
+                    if (sql.includes('JWT_ACCESS_EXPIRY_MINUTES')) return { rows: [{ value: '15' }] };
+                    if (sql.includes('JWT_REFRESH_EXPIRY_DAYS')) return { rows: [{ value: '7' }] };
+                    return { rows: [] };
+                }
+                if (sql.includes('UPDATE users SET last_activity')) return { rows: [] };
+                if (sql.includes('UPDATE users SET token_version')) return { rows: [] };
+                return { rows: [] };
+            });
+        });
+
         it('should reject refresh token with mismatched token_version', async () => {
-            const mockQuery = mockClient.query as jest.Mock;
+            const mockClientQuery = mockClient.query as jest.Mock;
 
             // 1. Create a "stale" refresh token (version 0)
             const staleToken = jwt.sign(
@@ -45,8 +62,9 @@ describe('Session Isolation (Phase 2)', () => {
             );
 
             // 2. Mock DB to return user with version 1 (revoked version 0)
-            mockQuery.mockResolvedValueOnce({ rows: [] }); // BEGIN
-            mockQuery.mockResolvedValueOnce({
+            mockClientQuery.mockResolvedValueOnce({ rows: [] }); // BEGIN
+            
+            mockClientQuery.mockResolvedValueOnce({
                 rows: [{
                     id: userId,
                     email: 'test@haemilife.com',
@@ -57,7 +75,7 @@ describe('Session Isolation (Phase 2)', () => {
             });
 
             // Mock the sessionRes check
-            mockQuery.mockResolvedValueOnce({
+            mockClientQuery.mockResolvedValueOnce({
                 rows: [{
                     refresh_token_jti: 'j1',
                     revoked: false
@@ -65,8 +83,8 @@ describe('Session Isolation (Phase 2)', () => {
             });
 
             // Mock the session revocation and commit
-            mockQuery.mockResolvedValueOnce({ rows: [] }); // UPDATE
-            mockQuery.mockResolvedValueOnce({ rows: [] }); // COMMIT
+            mockClientQuery.mockResolvedValueOnce({ rows: [] }); // UPDATE
+            mockClientQuery.mockResolvedValueOnce({ rows: [] }); // COMMIT
 
             // 3. Attempt to refresh
             const res = await request(app)
@@ -83,7 +101,7 @@ describe('Session Isolation (Phase 2)', () => {
         });
 
         it('should accept refresh token with matching token_version', async () => {
-            const mockQuery = mockClient.query as jest.Mock;
+            const mockClientQuery = mockClient.query as jest.Mock;
 
             // 1. Create a "valid" refresh token (version 1)
             const validToken = jwt.sign(
@@ -93,8 +111,9 @@ describe('Session Isolation (Phase 2)', () => {
             );
 
             // 2. Mock DB to return user with matching version 1
-            mockQuery.mockResolvedValueOnce({ rows: [] }); // BEGIN
-            mockQuery.mockResolvedValueOnce({
+            mockClientQuery.mockResolvedValueOnce({ rows: [] }); // BEGIN
+
+            mockClientQuery.mockResolvedValueOnce({
                 rows: [{
                     id: userId,
                     email: 'test@haemilife.com',
@@ -105,7 +124,7 @@ describe('Session Isolation (Phase 2)', () => {
             });
 
             // 3. Mock the session check
-            mockQuery.mockResolvedValueOnce({
+            mockClientQuery.mockResolvedValueOnce({
                 rows: [{
                     refresh_token_jti: 'j2',
                     revoked: false
@@ -113,11 +132,11 @@ describe('Session Isolation (Phase 2)', () => {
             });
 
             // 4. Mock the rotation update
-            mockQuery.mockResolvedValueOnce({ rows: [] });
+            mockClientQuery.mockResolvedValueOnce({ rows: [] });
             // 5. Mock the user activity update
-            mockQuery.mockResolvedValueOnce({ rows: [] });
+            mockClientQuery.mockResolvedValueOnce({ rows: [] });
             // 6. Mock COMMIT
-            mockQuery.mockResolvedValueOnce({ rows: [] });
+            mockClientQuery.mockResolvedValueOnce({ rows: [] });
 
             // 4. Attempt to refresh
             const res = await request(app)
