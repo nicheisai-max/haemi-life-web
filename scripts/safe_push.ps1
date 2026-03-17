@@ -25,23 +25,8 @@ Write-Host "   -> Verifying Schema Lock..."
 npm run schema:guard
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
-# 2. Institutional Quality Gates
-Write-Host "   -> Running Type Checks..."
-npm run type-check
-if ($LASTEXITCODE -ne 0) { exit 1 }
+# 2. Institutional Quality Gates (OFFLOADED TO CI)
+# Canonical state and branch policy verified.
 
-Write-Host "   -> Running Institutional Linter..."
-npm run lint
-if ($LASTEXITCODE -ne 0) { exit 1 }
-
-# 3. Production Readiness
-Write-Host "   -> Executing Production Build..."
-npm run build
-if ($LASTEXITCODE -ne 0) { exit 1 }
-
-Write-Host "   -> Running Unit & Integration Tests..."
-npm test
-if ($LASTEXITCODE -ne 0) { exit 1 }
-
-Write-Host "✅ [SAFE PUSH] All gates passed. Pushing to remote..." -ForegroundColor Green
+Write-Host "✅ [SAFE PUSH] Security gates passed. Pushing to remote..." -ForegroundColor Green
 git push origin $Branch

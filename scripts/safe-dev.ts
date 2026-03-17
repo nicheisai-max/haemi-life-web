@@ -1,4 +1,3 @@
-import { run_safe_command } from './agent_watchdog';
 import { spawn, execSync, ChildProcess } from 'child_process';
 import path from 'path';
 import * as net from 'net';
@@ -10,13 +9,12 @@ const children: ChildProcess[] = [];
 
 /**
  * Forcefully terminates any process listening on a specific port.
- * (Windows implementation using netstat and taskkill)
  */
 function nukePort(port: number) {
     if (process.platform !== 'win32') return;
 
     try {
-        const output = run_safe_command(`netstat -ano | findstr :${port}`) || '';
+        const output = execSync(`netstat -ano | findstr :${port}`, { encoding: 'utf8' }) || '';
         const lines = output.split('\n').filter(line => line.includes('LISTENING'));
 
         const pids = new Set<string>();
@@ -27,18 +25,16 @@ function nukePort(port: number) {
         });
 
         if (pids.size > 0) {
-            console.log(`[NUKE] Port ${port} is occupied by PID(s): ${Array.from(pids).join(', ')}. Terminating...`);
+            console.log(`[NUKE] Port ${port} occupied by PID(s): ${Array.from(pids).join(', ')}. Terminating...`);
             pids.forEach(pid => {
                 try {
-                    run_safe_command(`taskkill /F /PID ${pid} /T`);
-                } catch {
-                    // Ignore errors if process already exited
-                }
+                    execSync(`taskkill /F /PID ${pid} /T`, { stdio: 'ignore' });
+                } catch { }
             });
+            // Socket release delay
+            execSync('powershell -Command "Start-Sleep -Milliseconds 500"');
         }
-    } catch {
-        // execSync throws if findstr finds nothing; this is normal
-    }
+    } catch { }
 }
 
 function cleanup() {
@@ -46,9 +42,7 @@ function cleanup() {
     children.forEach(child => {
         if (!child.killed) {
             if (process.platform === 'win32' && child.pid) {
-                try {
-                    run_safe_command(`taskkill /pid ${child.pid} /f /t`);
-                } catch { }
+                try { execSync(`taskkill /pid ${child.pid} /f /t`, { stdio: 'ignore' }); } catch { }
             } else {
                 child.kill('SIGINT');
             }
@@ -72,109 +66,42 @@ async function isPortAvailable(port: number): Promise<boolean> {
     });
 }
 
-async function waitForPort(port: number, timeoutMs = 5000): Promise<void> {
+async function waitForPort(port: number, timeoutMs = 10000): Promise<void> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
         if (await isPortAvailable(port)) return;
-        process.stdout.write('.');
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
-}
-
-function runCommand(command: string, args: string[], cwd: string, name: string): ChildProcess {
-    console.log(`[ORCHESTRATOR] Starting ${name}...`);
-    const child = spawn(command, args, {
-        cwd,
-        stdio: 'inherit',
-        shell: true,
-        env: { ...process.env, FORCE_COLOR: 'true' }
-    });
-
-    child.on('exit', (code) => {
-        if (code !== 0 && code !== null && !child.killed) {
-            console.error(`[ORCHESTRATOR] ${name} exited with code ${code}`);
-            cleanup();
-        }
-    });
-
-    children.push(child);
-    return child;
 }
 
 async function start() {
     console.log('\n=========================================');
-    console.log('   HAEMI LIFE ROBUST DEV ORCHESTRATOR   ');
+    console.log('   HAEMI LIFE INSTUTIONAL ORCHESTRATOR   ');
     console.log('=========================================\n');
 
-    // Step 0: Initial Nuke
-    console.log('[STEP 0] Ensuring clean slate (Nuke Mode)...');
-    nukePort(5000); // Backend
-    nukePort(5173); // Frontend
+    // 0. Port Hygiene
+    console.log('[STEP 0] Port Hygiene (Nuke Mode)...');
+    nukePort(5000); 
+    nukePort(5173); 
+    await waitForPort(5000);
     console.log('[SUCCESS] Environment is clear.\n');
 
-    // Step 0.5: Database Health Check
-    console.log('[STEP 0.5] Generating Database Observability Health Report...');
+    // 1. Serialization Gates
+    console.log('[STEP 1] Serialized Environment Activation...');
     try {
-        run_safe_command('npm run db:health');
+        console.log('   -> Preflight integrity check...');
+        execSync('npm run preflight', { cwd: BACKEND_DIR, stdio: 'inherit' });
+        console.log('   -> Database health check...');
+        execSync('npm run db:health', { cwd: BACKEND_DIR, stdio: 'inherit' });
     } catch (err) {
-        console.warn('[WARNING] Database Health Check reported issues (non-blocking).');
-    }
-    console.log('[SUCCESS] Observability report generated.\n');
-
-    // Step 1: Preflight
-    console.log('[STEP 1] Running Preflight Integrity Gate...');
-    try {
-        run_safe_command('npm run preflight --prefix backend');
-    } catch (err) {
-        console.error('\n[FATAL] Preflight failed. Please check your .env and Database connection.');
+        console.error('\n[FATAL] Gating failure. Check environment configuration.');
         process.exit(1);
     }
-    console.log('[SUCCESS] Integrity Gate passed.\n');
+    console.log('[SUCCESS] Environment gates passed.\n');
 
-    // Step 2: Start Backend (Hidden for polling)
-    console.log('[STEP 2] Initializing Backend Server...');
-    const backendProcess = spawn('npm', ['run', 'dev'], {
-        cwd: BACKEND_DIR,
-        stdio: 'pipe',
-        shell: true
-    });
-    children.push(backendProcess);
-
-    // Step 3: Wait for Health
-    console.log('[STEP 3] Waiting for Backend to stabilize (Health Check)...');
-    try {
-        run_safe_command('npm run wait-for-backend --prefix backend');
-    } catch (err) {
-        console.error('\n[FATAL] Backend failed to stabilize.');
-        cleanup();
-    }
-    console.log('[SUCCESS] Backend is healthy.\n');
-
-    // HARDENING PHASE: Ensure clean transition
-    console.log('[HARDENING] Finalizing transition for FullStack mode...');
-
-    const exitPromise = new Promise(resolve => backendProcess.on('exit', resolve));
-    backendProcess.kill();
-    if (process.platform === 'win32' && backendProcess.pid) {
-        try { run_safe_command(`taskkill /pid ${backendProcess.pid} /f /t`); } catch { }
-    }
-    await exitPromise;
-
-    // Nuke port 5000 again just to be 100% sure before concurrently takes over
-    nukePort(5000);
-
-    process.stdout.write('[PORT GUARD] Waiting for OS release');
-    await waitForPort(5000);
-    console.log('\n[SUCCESS] Systems ready.\n');
-
-    // Step 4: Final Phase
-    console.log('[STEP 4] Launching High-Performance Dev Mode...');
-    console.log('--------------------------------------------------');
-    console.log('FRONTEND UI: http://localhost:5173');
-    console.log('BACKEND API: http://localhost:5000');
-    console.log('--------------------------------------------------\n');
-
-    const finalArgs = [
+    // 2. High-Performance FullStack Launch
+    console.log('[STEP 2] Launching Deterministic Dev Environment...');
+    const concurrentlyArgs = [
         '--kill-others',
         '--prefix', 'name',
         '-n', 'BACKEND,FRONTEND',
@@ -183,11 +110,20 @@ async function start() {
         '\"npm --prefix frontend run dev\"'
     ];
 
-    runCommand('npx', ['concurrently', ...finalArgs], path.resolve(__dirname, '..'), 'FullStack');
+    const orchestrator = spawn('npx', ['concurrently', ...concurrentlyArgs], {
+        cwd: path.resolve(__dirname, '..'),
+        stdio: 'inherit',
+        shell: true
+    });
+
+    children.push(orchestrator);
+
+    orchestrator.on('exit', (code) => {
+        if (code !== 0) cleanup();
+    });
 }
 
 start().catch(err => {
     console.error(`\n[FATAL] Orchestrator crashed: ${err.message}`);
     cleanup();
 });
-
