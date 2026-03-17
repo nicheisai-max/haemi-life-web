@@ -91,10 +91,18 @@ async function start() {
     try {
         console.log('   -> Preflight integrity check...');
         execSync('npm run preflight', { cwd: BACKEND_DIR, stdio: 'inherit' });
+        
         console.log('   -> Database health check...');
-        execSync('npm run db:health', { cwd: BACKEND_DIR, stdio: 'inherit' });
+        try {
+            execSync('npm run db:health', { cwd: BACKEND_DIR, stdio: 'inherit' });
+        } catch (dbErr) {
+            console.error('\n⚠️  [WARN] Database health check failed. Retrying in 2 seconds...');
+            execSync('powershell -Command "Start-Sleep -Seconds 2"');
+            execSync('npm run db:health', { cwd: BACKEND_DIR, stdio: 'inherit' });
+        }
     } catch (err) {
-        console.error('\n[FATAL] Gating failure. Check environment configuration.');
+        console.error('\n[FATAL] Gating failure. Environment configuration is invalid.');
+        console.error('Action: Verify .env variables and database availability.');
         process.exit(1);
     }
     console.log('[SUCCESS] Environment gates passed.\n');
