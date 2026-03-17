@@ -102,7 +102,7 @@ export const getConversations = async (req: Request, res: Response) => {
                     WHERE m.conversation_id = c.id 
                     ORDER BY m.created_at DESC 
                     LIMIT 1
-                ) as last_message, -- Plaintext preview
+                ) as last_message,
                 (
                     SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role, 'initials', u.initials, 'profile_image', u.profile_image))
                     FROM conversation_participants cp2
@@ -120,9 +120,14 @@ export const getConversations = async (req: Request, res: Response) => {
             FROM conversations c
             JOIN conversation_participants cp ON c.id = cp.conversation_id
             WHERE cp.user_id = $1
+            AND EXISTS (
+              SELECT 1
+              FROM messages m
+              WHERE m.conversation_id = c.id
+            )
+            AND c.last_message_at IS NOT NULL
             GROUP BY c.id
-            HAVING (SELECT COUNT(*) FROM messages m_check WHERE m_check.conversation_id = c.id) > 0
-            ORDER BY c.last_message_at DESC NULLS LAST
+            ORDER BY c.last_message_at DESC
             `,
             [userId]
         );

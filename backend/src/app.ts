@@ -1,7 +1,6 @@
 import './config/env'; // Must be first to load environment variables before other imports
 import express from 'express';
 
-import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { createServer } from 'http';
@@ -18,6 +17,7 @@ import { pool, checkConnection } from './config/db';
 import { chatReliabilityService } from './services/chat-reliability.service';
 import { env } from './config/env';
 import { schemaIntegrityService } from './services/schema-integrity.service';
+import { corsMiddleware } from './middleware/cors.middleware';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -38,25 +38,12 @@ import profileRoutes from './routes/profile.routes';
 
 const app = express();
 
-app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl) 
-        // OR if origin is in our whitelist.
-        if (!origin || env.allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
-        callback(new Error('CORS_NOT_ALLOWED'));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    // Reflect requested headers in Access-Control-Allow-Headers.
-    // This permanently solves the 'expires' or any custom header issue.
-    allowedHeaders: undefined,
-    optionsSuccessStatus: 204,
-}));
+app.use(corsMiddleware);
+
+// Global CORS handles all methods including OPTIONS before any auth logic
 
 app.use(helmet({
-    crossOriginResourcePolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     contentSecurityPolicy: env.isProduction ? undefined : false,
 }));
 
@@ -71,7 +58,7 @@ app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 
 // Rate Limiting
-if (!env.isDemoMode) {
+if (!env.isDemoMode && process.env.NODE_ENV !== 'test') {
     app.use('/api/auth/login', authLimiter);
     app.use('/api/auth/signup', authLimiter);
     app.use('/api/', apiLimiter);
@@ -120,13 +107,6 @@ app.get('/api/health/ready', async (_req, res) => {
     }
 });
 
-// Standard Response Headers
-app.use((_req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    next();
-});
 
 // API Routes
 app.use('/api/auth', authRoutes);

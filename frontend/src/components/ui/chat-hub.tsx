@@ -12,6 +12,7 @@ import doctor02 from '../../assets/images/doctors/doctor_02.png';
 import doctor03 from '../../assets/images/doctors/doctor_03.png';
 import { useLocation } from 'react-router-dom';
 import { useClickOutside } from '../../hooks/use-click-outside';
+import { secureDownload } from '../../services/file.service';
 
 // Override helper to get images
 const getDoctorImage = (name: string) => {
@@ -173,21 +174,11 @@ export const ChatHub: React.FC = () => {
     const handleDownload = async (messageId: string, fileName: string) => {
         try {
             setDownloadingId(messageId);
-            const response = await api.get(`/files/message/${messageId}`, {
-                responseType: 'blob'
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+            await secureDownload({
+                url: `${baseUrl}/api/files/message/${messageId}`,
+                fileName: fileName || 'attachment'
             });
-            // Use the Content-Type from the server response so the browser
-            // saves the file with the correct MIME type (e.g. application/pdf, not text/plain).
-            const mimeType = response.headers['content-type'] || 'application/octet-stream';
-            const blob = new Blob([response.data], { type: mimeType });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', fileName || 'attachment');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Download failed:', error);
         } finally {
