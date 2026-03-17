@@ -1,12 +1,11 @@
 import { execSync } from 'child_process';
-import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * 🧹 PROJECT HYGIENE GUARD (GUARDED SYNC SYSTEM)
+ * 🧹 ANTI-HALLUCINATION SYNC GUARD (CI-ONLY PROTECTION)
  * 
- * PROTECTS LOCAL DATA BY BLOCKING SYNC IF CHANGES EXIST.
- * ENSURES DETERMINISTIC CANONICAL STATE ON MAIN.
+ * PROTECTS REPOSITORY FROM LOCAL BLIND EXECUTION.
+ * ENSURES CANONICAL STATE ONLY IN CI AFTER MERGE.
  */
 
 function log(message: string, type: 'info' | 'success' | 'warn' | 'error' = 'info') {
@@ -23,102 +22,101 @@ function run(command: string): string {
 }
 
 /**
- * 🔒 PHASE 1: DATA PROTECTION
+ * 🔒 LAYER 0: CI ENVIRONMENT LOCK
  */
-function ensureCleanWorkingTree() {
-    log('Verifying localized state for data safety...', 'info');
-    const status = run('git status --porcelain');
-    if (status !== '') {
-        log('UNCOMMITTED CHANGES DETECTED. Sync blocked to protect local work.', 'error');
-        console.log('\n--- GIT STATUS ---');
-        console.log(status);
-        console.log('------------------\n');
-        log('Please commit or stash your changes before running sync.', 'info');
+function ensureCiContext() {
+    if (process.env.CI !== 'true' || process.env.SYNC_ALLOWED !== 'true') {
+        log('Sync blocked: Execution restricted to CI environment with SYNC_ALLOWED flag.', 'error');
+        log('Local Action: Please manually run "git checkout main && git pull origin main".', 'info');
         process.exit(1);
     }
 }
 
 /**
- * 🔒 PHASE 2: BRANCH CONTROL
+ * 🔒 LAYER 1: REAL BRANCH VALIDATION
  */
-function ensureBranchSafety() {
+function ensureMainBranch() {
     const branch = run('git rev-parse --abbrev-ref HEAD');
-    if (branch.startsWith('ai-sandbox/') || branch.startsWith('ai/sandbox')) {
-        log(`Detected Sandbox Branch: ${branch}. Safe-switching to main (NO RESET)...`, 'info');
-        try {
-            execSync('git switch main', { stdio: 'inherit' });
-        } catch (err) {
-            log('Safe switch failed. Manual intervention required.', 'error');
-            process.exit(1);
-        }
+    if (branch !== 'main') {
+        log(`Sync blocked: Not on main branch (Current: ${branch}).`, 'error');
+        log('Action: Please manually switch to main and pull latest changes.', 'warn');
+        process.exit(1);
     }
 }
 
 /**
- * 🔒 PHASE 3: GUARDED SYNC EXECUTION (LOCKED BY SAFETY GATES)
+ * 🔒 LAYER 2: WORKING TREE VALIDATION
  */
-function runGuardedSync() {
-    const branch = run('git rev-parse --abbrev-ref HEAD');
+function ensureCleanWorkingTree() {
     const status = run('git status --porcelain');
+    if (status !== '') {
+        log('Sync blocked: Uncommitted changes detected.', 'error');
+        console.log('\n--- GIT STATUS ---');
+        console.log(status);
+        console.log('------------------\n');
+        log('Action: Commit or stash changes before syncing.', 'warn');
+        process.exit(1);
+    }
+}
 
-    if (branch === 'main' && status === '') {
-        log('Hermetic environment confirmed. Executing canonical sync...', 'info');
+/**
+ * 🧹 PROGRAMMATIC SANDBOX CLEANUP
+ */
+function pruneSandboxes() {
+    log('Scanning for stale sandbox artifacts...', 'info');
+
+    // Local branches
+    const localOutput = run('git branch --list "ai-sandbox/*" "ai/sandbox*"');
+    const localBranches = localOutput.split('\n').map(s => s.replace('*', '').trim()).filter(Boolean);
+    for (const branch of localBranches) {
+        log(`Pruning local sandbox: ${branch}`, 'info');
+        execSync(`git branch -D ${branch}`, { stdio: 'inherit' });
+    }
+
+    // Note: Remote cleanup is handled by GitHub auto-delete-merged-branches
+}
+
+/**
+ * 🚀 CONTROLLED EXECUTION
+ */
+function executeSync() {
+    log('All safety layers passed. Executing canonical CI synchronization...', 'success');
+
+    try {
+        execSync('git fetch origin --prune', { stdio: 'inherit' });
+        execSync('git reset --hard origin/main', { stdio: 'inherit' });
         
-        try {
-            // CANONICAL SYNC SEQUENCE
-            execSync('git fetch origin --prune', { stdio: 'inherit' });
-            execSync('git reset --hard origin/main', { stdio: 'inherit' });
-            
-            const cleanCmd = [
-                'git clean -fd',
-                '-e ".env"',
-                '-e ".env.local"',
-                '-e ".gitignore"',
-                '-e ".gitkeep"'
-            ].join(' ');
-            execSync(cleanCmd, { stdio: 'inherit' });
+        const cleanCmd = [
+            'git clean -fd',
+            '-e ".env"',
+            '-e ".env.local"',
+            '-e ".gitignore"',
+            '-e ".gitkeep"'
+        ].join(' ');
+        execSync(cleanCmd, { stdio: 'inherit' });
 
-            execSync('git remote prune origin', { stdio: 'inherit' });
+        execSync('git remote prune origin', { stdio: 'inherit' });
+        pruneSandboxes();
 
-            // Prune local sandboxes
-            const sandboxOutput = run('git branch --list "ai-sandbox/*" "ai/sandbox*"');
-            const sandboxes = sandboxOutput.split('\n').map(s => s.replace('*', '').trim()).filter(Boolean);
-            
-            for (const sb of sandboxes) {
-                log(`Pruning stale repository artifact: ${sb}`, 'info');
-                execSync(`git branch -D ${sb}`, { stdio: 'inherit' });
-            }
-
-            log('Repository synchronization complete.', 'success');
-        } catch (err) {
-            log(`Sync operation failed: ${err}`, 'error');
-            process.exit(1);
-        }
-    } else {
-        log('Sync prerequisites not met. Execution blocked.', 'error');
+        log('Repository synchronization complete.', 'success');
+    } catch (err) {
+        log(`Sync operation failed: ${err}`, 'error');
         process.exit(1);
     }
 }
 
 async function startHygiene() {
-    console.log('\n🛡️  HEAMI LIFE: Guarded Lifecycle Integration');
+    console.log('\n🛡️  HEAMI LIFE: Hermetic Protection Lifecycle (CI-ONLY)');
     console.log('---------------------------------------------------');
 
-    // 1. Mandatory Safety Gates
+    // 🔒 Gating Sequence
+    ensureCiContext();
+    ensureMainBranch();
     ensureCleanWorkingTree();
-    ensureBranchSafety();
 
-    const currentBranch = run('git rev-parse --abbrev-ref HEAD');
-    if (currentBranch !== 'main') {
-        log('Terminal safety guard: Sync destination must be main.', 'error');
-        process.exit(1);
-    }
+    // 🚀 Armed Execution
+    executeSync();
 
-    log('Safety guards passed. Guarded Sync System is ARMED.', 'success');
-    log('To execute sync, ensure working tree is clean and destination is main.', 'info');
-    
-    // NOTE: runGuardedSync() is available but not auto-triggered in this audit phase.
-    log('Static integration complete. NO DESTRUCTIVE COMMANDS EXECUTED.', 'success');
     console.log('---------------------------------------------------\n');
 }
 
