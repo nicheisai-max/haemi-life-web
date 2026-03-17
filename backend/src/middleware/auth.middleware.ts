@@ -270,4 +270,6 @@ export const authorizeRole = (roles: string[]) => {
 /**
  * Alias for authorizeRole to support 'restrictTo' pattern
  */
-export const restrictTo = (...roles: string[]) => authorizeRole(roles);
+export function restrictTo(...roles: string[]) {
+    return authorizeRole(roles);
+}

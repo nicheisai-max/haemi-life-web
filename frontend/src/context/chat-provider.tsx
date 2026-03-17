@@ -31,7 +31,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const res = await api.get('/chat/conversations');
             const data = res.data;
-            const decryptedConversations = await Promise.all(data.map(async (conv: Conversation) => ({
+            // P1 FIX: Strictly filter out any conversations with NO real messages or empty previews
+            const validConversations = data.filter((conv: Conversation) => 
+                conv.last_message && conv.last_message.trim() !== ''
+            );
+
+            const decryptedConversations = await Promise.all(validConversations.map(async (conv: Conversation) => ({
                 ...conv,
                 last_message: conv.last_message ? await decrypt(conv.last_message) : conv.last_message
             })));
@@ -60,9 +65,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (seqA !== seqB) return seqA - seqB;
                 return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
             });
+
+            // P1 FIX: Prevent race condition if user switched conversation during load
+            if (activeConversationRef.current?.id !== conversationId) return;
+
             setMessages(sortedMessages);
-            if (formattedMessages.some(m => !m.isMe && m.status === 'sent')) {
-                api.put(`/chat/conversations/${conversationId}/delivered`).catch(console.error);
+            if (sortedMessages.some(m => !m.isMe && m.status === 'sent')) {
+                api.put(`/chat/conversations/${conversationId}/delivered`).catch(() => {});
             }
             await api.put(`/chat/conversations/${conversationId}/read`);
             fetchConversations();
@@ -158,7 +167,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
 
             // 1. Update Active Message List with Hardened Deduplication & Sorting
-            if (activeConversationRef.current && message.conversation_id === activeConversationRef.current.id) {
+            if (activeConversationRef.current && String(message.conversation_id) === String(activeConversationRef.current.id)) {
                 setMessages((prev) => {
                     const exists = prev.some(m => String(m.id) === String(message.id));
                     if (exists) return prev;
@@ -246,10 +255,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const selectConversation = (conversation: Conversation) => {
+        if (activeConversationRef.current?.id === conversation.id) return; // Prevent duplicate selection
         setActiveConversation(conversation);
         loadMessages(conversation.id);
         socketService.emit('join_conversation', conversation.id);
-        api.put(`/chat/conversations/${conversation.id}/read`).then(() => fetchConversations()).catch(console.error);
+        // P1 FIX: Removed redundant api.put call as loadMessages already handles marking as read
     };
 
     const startNewConversation = async (participantId: string) => {

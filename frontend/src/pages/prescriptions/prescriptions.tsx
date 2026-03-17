@@ -8,6 +8,7 @@ import { getMyRecords, uploadRecord, deleteRecord, type MedicalRecord } from '..
 import { useConfirm } from '@/hooks/use-confirm';
 import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, UploadCloud, Trash2, Download, Image as ImageIcon, File } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/premium-loader';
+import { secureDownload } from '../../services/file.service';
 
 import { TransitionItem } from '../../components/layout/page-transition';
 
@@ -48,6 +49,24 @@ export const Prescriptions: React.FC = () => {
         setUploading(true);
         try {
             for (const file of Array.from(files)) {
+                // P1 FIX: Duplicate File UX Integrity
+                const existing = uploadedRecords.find(r => r.name === file.name);
+                if (existing) {
+                    const shouldReplace = await confirm({
+                        title: 'Replace existing prescription?',
+                        message: `File '${file.name}' already exists. Do you want to replace it?`,
+                        type: 'warning',
+                        confirmText: 'Replace',
+                        cancelText: 'Cancel'
+                    });
+
+                    if (!shouldReplace) continue;
+
+                    // Execute replacement: Delete existing then upload new
+                    await deleteRecord(existing.id);
+                    setUploadedRecords(prev => prev.filter(r => r.id !== existing.id));
+                }
+
                 // Ideally, we might want to tag this as a prescription if the backend supported it.
                 // For now, we upload it as a generic record which is displayed here.
                 const newRecord = await uploadRecord(file);
@@ -59,6 +78,7 @@ export const Prescriptions: React.FC = () => {
             setError(uploadErr.message || 'Failed to upload file');
         } finally {
             setUploading(false);
+            if (e.target) e.target.value = ''; // P1 FIX: Prevent stale input state
         }
     };
 
@@ -104,6 +124,14 @@ export const Prescriptions: React.FC = () => {
 
     const handleUploadClick = () => {
         fileInputRef.current?.click();
+    };
+
+    const handleDownload = async (record: MedicalRecord) => {
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        await secureDownload({
+            url: `${baseUrl}/api/files/record/${record.id}`,
+            fileName: record.name || `prescription-${record.id}`
+        });
     };
 
     if (loading) {
@@ -239,11 +267,14 @@ export const Prescriptions: React.FC = () => {
                                                 </div>
                                             </div>
                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" asChild>
-                                                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${record.file_path}`} download target="_blank" rel="noopener noreferrer">
-                                                        <Download className="h-4 w-4" />
-                                                        <span className="sr-only">Download</span>
-                                                    </a>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                                    onClick={() => handleDownload(record)}
+                                                >
+                                                    <Download className="h-4 w-4" />
+                                                    <span className="sr-only">Download</span>
                                                 </Button>
                                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={(e) => handleDeleteRecord(e, record.id)}>
                                                     <Trash2 className="h-4 w-4" />

@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import * as fs from 'fs';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
@@ -197,13 +196,6 @@ export const login = async (req: Request, res: Response) => {
         }
 
         const validPassword = await bcrypt.compare(password, user.password!);
-        fs.appendFileSync('login_debug.log', JSON.stringify({
-            timestamp: new Date().toISOString(),
-            identifier,
-            passwordLength: password.length,
-            hashStart: user.password?.substring(0, 10),
-            validPassword
-        }) + '\n');
 
         if (!validPassword) {
             await auditService.log({
@@ -247,14 +239,6 @@ export const login = async (req: Request, res: Response) => {
 
         logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
 
-        fs.appendFileSync('login_debug.log', JSON.stringify({
-            timestamp: new Date().toISOString(),
-            identifier,
-            status: 'SUCCESS',
-            id: user.id,
-            role: user.role,
-            token_version: user.token_version
-        }) + '\n');
 
         // Generate Access Token (15m)
         const accessToken = jwt.sign(
@@ -434,7 +418,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         if (!user || user.status !== 'ACTIVE') {
             await client.query('ROLLBACK');
-            return sendResponse(res, 200, false, 'Invalid session');
+            return sendError(res, 401, 'Invalid session');
         }
 
         const sessionId = decoded.session_id;
@@ -449,7 +433,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         if (!checkRefreshRateLimit(sessionId)) {
             logger.warn('[Security] Refresh rate limit exceeded', { sessionId, userId: decoded.id });
             await client.query('ROLLBACK');
-            return sendResponse(res, 429, false, 'Too many refresh attempts. Please try again in a minute.');
+            return sendError(res, 429, 'Too many refresh attempts. Please try again in a minute.');
         }
 
         const sessionRes = await client.query(
@@ -500,7 +484,7 @@ export const refreshToken = async (req: Request, res: Response) => {
             }
             
             await client.query('ROLLBACK');
-            return sendResponse(res, 401, false, 'Invalid or expired session');
+            return sendError(res, 401, 'Invalid or expired session');
         }
 
         // 4. Perform Rotation & Heartbeat

@@ -73,8 +73,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const now = Math.floor(Date.now() / 1000);
             const timeUntilExpiry = decoded.exp - now;
 
-            // Phase 7: 90s Clock Drift Protection
-            if (timeUntilExpiry < 90) {
+            // Phase 7: 120s Clock Drift Protection (Mandatory Hardening)
+            if (timeUntilExpiry < 120) {
                 logger.info(`[Auth] Token expiring in ${timeUntilExpiry}s (90s cushion). Triggering proactive refresh...`);
                 try {
                     const { performRefresh } = await import('../services/api');

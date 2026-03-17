@@ -10,6 +10,7 @@ import { getGrowthStats, getClinicalPerformance } from '../../services/analytics
 import type { GrowthStat } from '../../services/analytics.service';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { getErrorMessage } from '../../lib/error';
+import { secureDownload } from '../../services/file.service';
 
 interface DiagnosisEntry { name: string; count: number; percentage: number; }
 interface ClinicalPerformance {
@@ -44,6 +45,18 @@ const Reports: React.FC = () => {
         }
     };
 
+    const handleExport = async () => {
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        try {
+            await secureDownload({
+                url: `${baseUrl}/api/analytics/export`,
+                fileName: `clinical-report-${new Date().toISOString().split('T')[0]}.csv`
+            });
+        } catch (err) {
+            console.error('Export failed:', err);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex h-96 items-center justify-center">
@@ -61,7 +74,11 @@ const Reports: React.FC = () => {
                         <h1 className="page-heading !text-white !mb-1">Clinical Insights & Reports</h1>
                         <p className="page-subheading !text-white/70">Comprehensive analytics of your clinical practice performance.</p>
                     </div>
-                    <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
+                    <Button 
+                        variant="outline" 
+                        className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                        onClick={handleExport}
+                    >
                         <Download className="h-4 w-4 mr-2" />
                         Export All Data
                     </Button>

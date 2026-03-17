@@ -5,6 +5,7 @@ import { sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import path from 'path';
 import fs from 'fs';
+import mime from 'mime';
 
 export const getProfileImage = async (req: Request, res: Response) => {
     try {
@@ -24,10 +25,21 @@ export const getProfileImage = async (req: Request, res: Response) => {
         if (user.profile_image && !user.profile_image.startsWith('/api/')) {
             const fullPath = path.join(process.cwd(), user.profile_image);
             if (fs.existsSync(fullPath)) {
-                res.setHeader('Content-Type', user.profile_image_mime || 'image/jpeg');
-                res.setHeader('Content-Disposition', `inline; filename="profile-${userId}${path.extname(user.profile_image)}"`);
-                res.setHeader('Cache-Control', 'public, max-age=3600');
-                return res.sendFile(fullPath);
+                // P1 FIX: Detect MIME using library
+                const detectedMime = mime.getType(fullPath) || user.profile_image_mime || 'image/jpeg';
+                res.type(detectedMime);
+                res.set('Content-Disposition', `inline; filename="profile-${userId}${path.extname(user.profile_image)}"`);
+                res.set('Cache-Control', 'public, max-age=3600');
+                
+                const stream = fs.createReadStream(fullPath);
+                stream.on('error', (err) => {
+                    logger.error('Stream error:', err);
+                    if (!res.headersSent) res.status(500).end();
+                });
+                return stream.pipe(res);
+            } else {
+                // P1 FIX: Return 404 JSON if file missing from disk
+                return sendError(res, 404, 'Profile image file not found on server');
             }
         }
 
@@ -65,10 +77,21 @@ export const getChatAttachment = async (req: Request, res: Response) => {
         if (message.attachment_url && !message.attachment_url.startsWith('/api/')) {
             const fullPath = path.join(process.cwd(), message.attachment_url);
             if (fs.existsSync(fullPath)) {
-                res.setHeader('Content-Type', message.attachment_mime || 'application/octet-stream');
+                // P1 FIX: Detect MIME using library
+                const detectedMime = mime.getType(fullPath) || message.attachment_mime || 'application/octet-stream';
+                res.type(detectedMime);
                 const safeFileName = (message.attachment_name || `attachment-${messageId}`).replace(/[^a-z0-9\-.]/gi, '_');
-                res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-                return res.sendFile(fullPath);
+                res.set('Content-Disposition', `attachment; filename="${safeFileName}"`);
+                
+                const stream = fs.createReadStream(fullPath);
+                stream.on('error', (err) => {
+                    logger.error('Stream error:', err);
+                    if (!res.headersSent) res.status(500).end();
+                });
+                return stream.pipe(res);
+            } else {
+                // P1 FIX: Return 404 JSON if file missing from disk
+                return sendError(res, 404, 'Attachment file not found on server');
             }
         }
 
@@ -86,7 +109,7 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
 
         // BOLA Fix: Patients can only see their own records. Doctors/Admins can see any record.
         let query = `
-            SELECT file_data, file_mime, file_path 
+            SELECT name, file_data, file_mime, file_path 
             FROM medical_records 
             WHERE id = $1 AND deleted_at IS NULL
         `;
@@ -108,10 +131,21 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
         if (record.file_path && record.file_path !== 'DB_ONLY') {
             const fullPath = path.join(process.cwd(), record.file_path);
             if (fs.existsSync(fullPath)) {
-                res.setHeader('Content-Type', record.file_mime || 'application/octet-stream');
+                // P1 FIX: Detect MIME using library
+                const detectedMime = mime.getType(fullPath) || record.file_mime || 'application/octet-stream';
+                res.type(detectedMime);
                 const safeFileName = (record.name || `record-${recordId}`).replace(/[^a-z0-9\-.]/gi, '_');
-                res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-                return res.sendFile(fullPath);
+                res.set('Content-Disposition', `attachment; filename="${safeFileName}"`);
+                
+                const stream = fs.createReadStream(fullPath);
+                stream.on('error', (err) => {
+                    logger.error('Stream error:', err);
+                    if (!res.headersSent) res.status(500).end();
+                });
+                return stream.pipe(res);
+            } else {
+                // P1 FIX: Return 404 JSON if file missing from disk
+                return sendError(res, 404, 'Medical record file not found on server');
             }
         }
 

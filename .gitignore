@@ -137,3 +137,22 @@ frontend_backup/
 # ─────────────────────────────────────────────────────────────────────────────
 !backend/db/
 !backend/scripts/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADDITIONAL ZERO-TRUST HARDENING
+# ─────────────────────────────────────────────────────────────────────────────
+# Test artifacts
+e2e/playwright-report/
+e2e/test-results/
+
+# Logs
+backend/full_lint_errors.txt
+backend/lint_failures.txt
+
+# Media artifacts
+*.png
+*.webm
+*.mp4
+
+# Temp
+temp/

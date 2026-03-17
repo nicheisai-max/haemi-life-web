@@ -17,6 +17,7 @@ import type { MedicalRecord } from '../../services/record.service';
 
 import { TransitionItem } from '../../components/layout/page-transition';
 import { motion, AnimatePresence } from 'framer-motion';
+import { secureDownload } from '../../services/file.service';
 
 export const MedicalRecords: React.FC = () => {
     const [records, setRecords] = useState<MedicalRecord[]>([]);
@@ -77,6 +78,24 @@ export const MedicalRecords: React.FC = () => {
         setUploading(true);
         try {
             for (const file of Array.from(files)) {
+                // P1 FIX: Duplicate File UX Integrity
+                const existing = records.find(r => r.name === file.name);
+                if (existing) {
+                    const shouldReplace = await confirm({
+                        title: 'Replace existing file?',
+                        message: `File '${file.name}' already exists. Do you want to replace it?`,
+                        type: 'warning',
+                        confirmText: 'Replace',
+                        cancelText: 'Cancel'
+                    });
+
+                    if (!shouldReplace) continue;
+
+                    // Execute replacement: Delete existing then upload new
+                    await deleteRecord(existing.id);
+                    setRecords(prev => prev.filter(r => r.id !== existing.id));
+                }
+
                 const newRecord = await uploadRecord(file);
                 setRecords(prev => [newRecord, ...prev]);
             }
@@ -84,6 +103,7 @@ export const MedicalRecords: React.FC = () => {
             console.error('Error uploading file:', error);
         } finally {
             setUploading(false);
+            if (e.target) e.target.value = ''; // P1 FIX: Prevent stale input state
         }
     };
 
@@ -139,6 +159,14 @@ export const MedicalRecords: React.FC = () => {
 
     const handleUploadClick = () => {
         fileInputRef.current?.click();
+    };
+
+    const handleDownload = async (record: MedicalRecord) => {
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        await secureDownload({
+            url: `${baseUrl}/api/files/record/${record.id}`,
+            fileName: record.name || `record-${record.id}`
+        });
     };
 
     return (
@@ -282,16 +310,22 @@ export const MedicalRecords: React.FC = () => {
 
                                             {/* Actions */}
                                             <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-border/50">
-                                                <Button variant="outline" size="sm" className="hidden md:flex gap-2" asChild>
-                                                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/record/${record.id}`} download target="_blank" rel="noopener noreferrer">
-                                                        <Download className="h-4 w-4" />
-                                                        Download
-                                                    </a>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="hidden md:flex gap-2"
+                                                    onClick={() => handleDownload(record)}
+                                                >
+                                                    <Download className="h-4 w-4" />
+                                                    Download
                                                 </Button>
-                                                <Button variant="outline" size="icon" className="md:hidden h-9 w-9" asChild>
-                                                    <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/files/record/${record.id}`} download target="_blank" rel="noopener noreferrer">
-                                                        <Download className="h-4 w-4" />
-                                                    </a>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="icon" 
+                                                    className="md:hidden h-9 w-9"
+                                                    onClick={() => handleDownload(record)}
+                                                >
+                                                    <Download className="h-4 w-4" />
                                                 </Button>
 
 
