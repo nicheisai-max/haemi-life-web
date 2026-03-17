@@ -11,6 +11,8 @@ interface AuthState {
     token: string | null;
     authStatus: 'initializing' | 'auth_check' | 'onboarding_check' | 'authenticated' | 'unauthenticated' | 'offline' | 'app_ready';
     profileImageVersion: number;
+    serverOffset: number; // ms difference (server - client)
+    sessionTimeout: number | null; // minutes
 }
 
 // ─── Surgical JWT Decoder (No dependencies) ──────────────────────────────────
@@ -37,7 +39,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user: initialUser ? JSON.parse(initialUser) : null,
         token: initialToken,
         authStatus: 'initializing',
-        profileImageVersion: Date.now()
+        profileImageVersion: Date.now(),
+        serverOffset: 0,
+        sessionTimeout: null
     });
 
     // Restore API state immediately before any hooks run
@@ -52,6 +56,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // ─── Phase 5, 6 & 7 Hardening: Silent Proactive Refresh (Singleton & Multi-Event)
     const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const isRefreshingRef = useRef<boolean>(false);
+    const lastActivityRef = useRef<number>(Date.now());
 
     useEffect(() => {
         const cleanup = () => {
@@ -70,24 +76,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const decoded = decodeJWT(latestToken);
             if (!decoded?.exp) return;
 
-            const now = Math.floor(Date.now() / 1000);
+            const now = Math.floor((Date.now() + authStateRef.current.serverOffset) / 1000);
             const timeUntilExpiry = decoded.exp - now;
 
-            // Phase 7: 120s Clock Drift Protection (Mandatory Hardening)
+            // Zero-Trust: 120s buffer adjusted by server-time sync
             if (timeUntilExpiry < 120) {
-                logger.info(`[Auth] Token expiring in ${timeUntilExpiry}s (90s cushion). Triggering proactive refresh...`);
+                if (isRefreshingRef.current) return;
+                
+                logger.info(`[Auth] Proactive refresh (exp: ${timeUntilExpiry}s, offset: ${authStateRef.current.serverOffset}ms)`);
                 try {
+                    isRefreshingRef.current = true;
+                    // Use the centralized performRefresh which handles the API call
                     const { performRefresh } = await import('../services/api');
                     await performRefresh();
                 } catch (err) {
                     logger.error('[Auth] Proactive refresh failed', err);
+                } finally {
+                    isRefreshingRef.current = false;
+                }
+            }
+
+            // Phase 3: Idle Detection logic
+            const timeoutMinutes = authStateRef.current.sessionTimeout;
+            if (timeoutMinutes) {
+                const idleLimitMs = timeoutMinutes * 60 * 1000;
+                const timeIdle = Date.now() - lastActivityRef.current;
+                const timeRemaining = idleLimitMs - timeIdle;
+
+                // Trigger popup 2 minutes before absolute timeout
+                if (timeRemaining > 0 && timeRemaining < 120000) {
+                    window.dispatchEvent(new CustomEvent('auth:session-expiring', { 
+                        detail: { timeLeft: Math.floor(timeRemaining / 1000) } 
+                    }));
                 }
             }
         };
 
+        const updateActivity = () => {
+            lastActivityRef.current = Date.now();
+        };
+
+        // Phase 7: Activity Listeners
+        const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+        events.forEach(name => window.addEventListener(name, updateActivity));
+
         // Phase 7: Visibility-Event Refresh (Bypasses background throttling)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
+                updateActivity();
                 logger.info('[Auth] Tab visible again. Performing proactive expiry check...');
                 checkRefreshNeeded();
             }
@@ -99,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return () => {
             cleanup();
             window.removeEventListener('visibilitychange', handleVisibilityChange);
+            events.forEach(name => window.removeEventListener(name, updateActivity));
         };
     }, [authState.authStatus, authState.token]);
 
@@ -122,7 +159,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         sessionStorage.removeItem('user');
                         sessionStorage.removeItem('token');
                         sessionStorage.removeItem('refreshToken');
-                        setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
+                        setAuthState(prev => ({ 
+                            ...prev,
+                            user: null, 
+                            token: null, 
+                            authStatus: 'unauthenticated'
+                        }));
                     }
                 } else if (type === 'TOKEN_REFRESHED') {
                     // MULTI-TAB SYNC: Update credentials only if the message targets our current user identity
@@ -149,7 +191,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             sessionStorage.removeItem('user');
             sessionStorage.removeItem('token');
             sessionStorage.removeItem('refreshToken');
-            setAuthState({ user: null, token: null, authStatus: 'unauthenticated', profileImageVersion: Date.now() });
+            setAuthState(prev => ({ 
+                ...prev,
+                user: null, 
+                token: null, 
+                authStatus: 'unauthenticated'
+            }));
             
             // Broadcast logout ONLY for this specific user ID
             if (authChannel && currentUserId) {
@@ -159,15 +206,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         window.addEventListener('auth:unauthorized', handleUnauthorized);
 
+        // Lifecycle Guard: Move token-refreshed event out of render
+        const handleTokenRefreshed = (event: Event) => {
+            const customEvent = event as CustomEvent<{ 
+                token: string, 
+                refreshToken?: string, 
+                serverTime?: string, 
+                sessionTimeout?: number 
+            }>;
+            const { token, refreshToken, serverTime, sessionTimeout } = customEvent.detail;
+            const decoded = decodeJWT(token);
+            if (!decoded) return;
+
+            const serverMs = serverTime ? new Date(serverTime).getTime() : Date.now();
+            const offset = serverMs - Date.now();
+
+            setAuthState(prev => ({
+                ...prev,
+                token,
+                serverOffset: offset,
+                sessionTimeout: sessionTimeout || prev.sessionTimeout,
+                authStatus: prev.authStatus === 'unauthenticated' ? 'authenticated' : prev.authStatus
+            }));
+            
+            sessionStorage.setItem('token', token);
+            if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
+        };
+
+        window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
+
         return () => {
             if (authChannel) authChannel.close();
             window.removeEventListener('auth:unauthorized', handleUnauthorized);
+            window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
         };
     }, []); 
 
     // ─── Phase 7 Hardening: Atomic Identity Guard ──────────────────────────
-    const commitAuthState = useCallback((user: User | null, token: string | null, status: AuthState['authStatus'], refreshToken?: string | null) => {
-        // 1. Unified Network Sink
+    const commitAuthState = useCallback((
+        user: User | null, 
+        token: string | null, 
+        status: AuthState['authStatus'], 
+        refreshToken?: string | null,
+        serverTime?: string,
+        sessionTimeout?: number
+    ) => {
+        // 1. Unified Network Sink (Atomic update outside of render)
         setAccessToken(token);
 
         // 2. Unified Storage Sink
@@ -181,15 +265,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             sessionStorage.removeItem('user');
         }
 
-        // 3. Unified State Sink
-        setAuthState({
+        // 3. Server Time Sync
+        const serverMs = serverTime ? new Date(serverTime).getTime() : Date.now();
+        const offset = serverMs - Date.now();
+
+        // 4. Unified State Sink
+        setAuthState(prev => ({
             user,
             token,
             authStatus: status,
-            profileImageVersion: Date.now()
-        });
+            profileImageVersion: Date.now(),
+            serverOffset: offset,
+            sessionTimeout: sessionTimeout || prev.sessionTimeout
+        }));
         
-        logger.info(`[Auth] Identity Commit: ${status} (User: ${user?.email || 'none'})`);
+        logger.info(`[Auth] Identity Commit: ${status} (Offset: ${offset}ms)`);
     }, []);
 
     // ─── Initial Boot ────────────────────────────────────────────────────────
@@ -216,8 +306,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const refreshResult = await authService.refreshToken();
 
                 if (refreshResult.authenticated && refreshResult.token) {
-                    const { user } = await authService.verifySession();
-                    commitAuthState(user, refreshResult.token, 'authenticated', refreshResult.refreshToken);
+                    const verifyResult = await authService.verifySession();
+                    commitAuthState(
+                        verifyResult.user, 
+                        refreshResult.token, 
+                        'authenticated', 
+                        refreshResult.refreshToken,
+                        verifyResult.serverTime,
+                        verifyResult.sessionTimeout
+                    );
                 } else {
                     commitAuthState(null, null, 'unauthenticated');
                 }
@@ -240,13 +337,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [commitAuthState]);
 
     const login = useCallback(async (credentials: LoginCredentials) => {
-        const { token: newToken, refreshToken: newRefreshToken, user: newUser } = await authService.login(credentials);
-        commitAuthState(newUser, newToken, 'authenticated', newRefreshToken);
+        const result = await authService.login(credentials);
+        commitAuthState(
+            result.user, 
+            result.token, 
+            'authenticated', 
+            result.refreshToken, 
+            result.serverTime, 
+            result.sessionTimeout
+        );
     }, [commitAuthState]);
 
     const signup = useCallback(async (credentials: SignupCredentials) => {
-        const { token: newToken, refreshToken: newRefreshToken, user: newUser } = await authService.signup(credentials);
-        commitAuthState(newUser, newToken, 'authenticated', newRefreshToken);
+        const result = await authService.signup(credentials);
+        commitAuthState(
+            result.user, 
+            result.token, 
+            'authenticated', 
+            result.refreshToken, 
+            result.serverTime, 
+            result.sessionTimeout
+        );
     }, [commitAuthState]);
 
     const logout = useCallback(async () => {

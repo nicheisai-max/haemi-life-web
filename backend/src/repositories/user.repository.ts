@@ -24,6 +24,24 @@ export interface User {
     updated_at: Date;
 }
 
+interface UserRow {
+    id: string;
+    name: string;
+    phone_number: string;
+    email: string | null;
+    password?: string;
+    role: string;
+    id_number: string | null;
+    status: string;
+    initials: string;
+    is_active: boolean;
+    token_version: number;
+    profile_image: string | null;
+    profile_image_mime?: string | null;
+    created_at: Date;
+    updated_at: Date;
+}
+
 export class UserRepository {
     private db: Pool;
 
@@ -33,7 +51,7 @@ export class UserRepository {
 
     async findByEmailOrPhone(identifier: string): Promise<User | null> {
         const blindIndex = getBlindIndex(identifier);
-        const result = await this.db.query(
+        const result = await this.db.query<UserRow>(
             'SELECT * FROM users WHERE email = $1 OR phone_blind_index = $2 OR phone_number = $1',
             [identifier, blindIndex]
         );
@@ -47,13 +65,13 @@ export class UserRepository {
             ? 'SELECT * FROM users WHERE phone_blind_index = $1 OR email = $2 OR phone_number = $3'
             : 'SELECT * FROM users WHERE phone_blind_index = $1 OR phone_number = $2';
         const params = email ? [phoneBlindIndex, email, phoneNumber] : [phoneBlindIndex, phoneNumber];
-        const result = await this.db.query(query, params);
+        const result = await this.db.query<UserRow>(query, params);
         const user = result.rows[0];
         return user ? this.decryptUser(user) : null;
     }
 
     async findById(id: string): Promise<User | null> {
-        const result = await this.db.query(
+        const result = await this.db.query<UserRow>(
             'SELECT * FROM users WHERE id = $1',
             [id]
         );
@@ -71,7 +89,7 @@ export class UserRepository {
         const encryptedID = id_number ? encrypt(id_number) : null;
         const idBlindIndex = id_number ? getBlindIndex(id_number) : null;
 
-        const result = await db.query(
+        const result = await db.query<UserRow>(
             `INSERT INTO users (
                 name, phone_number, email, password, role, id_number, phone_blind_index, id_blind_index, created_at, updated_at, status
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), 'ACTIVE') 
@@ -85,20 +103,25 @@ export class UserRepository {
         const encryptedPhone = encrypt(data.phone_number);
         const phoneBlindIndex = getBlindIndex(data.phone_number);
 
-        const result = await this.db.query(
+        const result = await this.db.query<UserRow>(
             'UPDATE users SET name = $1, email = $2, phone_number = $3, phone_blind_index = $4, updated_at = NOW() WHERE id = $5 RETURNING *',
             [data.name, data.email, encryptedPhone, phoneBlindIndex, userId]
         );
         return this.decryptUser(result.rows[0]);
     }
 
-    private decryptUser(user: Record<string, unknown>): User {
-        if (!user) return user as unknown as User;
-        return {
+    private decryptUser(user: UserRow): User {
+        if (!user) {
+            throw new Error('User data is missing');
+        }
+
+        const userData: User = {
             ...user,
-            phone_number: decrypt(user.phone_number as string),
-            id_number: user.id_number ? decrypt(user.id_number as string) : null
-        } as User;
+            phone_number: user.phone_number ? decrypt(user.phone_number) : '',
+            id_number: user.id_number ? decrypt(user.id_number) : null
+        };
+
+        return userData;
     }
 
     async updateProfileImage(userId: string, imageBuffer: Buffer, mimeType: string): Promise<User> {

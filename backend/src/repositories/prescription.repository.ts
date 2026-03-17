@@ -33,6 +33,20 @@ export interface PrescriptionWithDetails extends Prescription {
     items?: (PrescriptionItem & { medicine_name: string; category: string; strength: string })[];
 }
 
+interface PrescriptionRow extends Prescription {
+    patient_name: string;
+    patient_phone?: string;
+    doctor_name: string;
+    specialization?: string;
+    medication_count?: string | number;
+}
+
+interface PrescriptionItemRow extends PrescriptionItem {
+    medicine_name: string;
+    category: string;
+    strength: string;
+}
+
 export class PrescriptionRepository {
     private db: Pool;
 
@@ -42,7 +56,7 @@ export class PrescriptionRepository {
 
     async create(data: Partial<Prescription>, client?: PoolClient): Promise<Prescription> {
         const db = client || this.db;
-        const result = await db.query(`
+        const result = await db.query<Prescription>(`
             INSERT INTO prescriptions (patient_id, doctor_id, appointment_id, notes, prescription_date, status)
             VALUES ($1, $2, $3, $4, CURRENT_DATE, 'pending')
             RETURNING *
@@ -82,12 +96,15 @@ export class PrescriptionRepository {
             GROUP BY p.id, u_patient.name, u_doctor.name
             ORDER BY p.prescription_date DESC
         `;
-        const result = await this.db.query(query, [userId]);
-        return result.rows;
+        const result = await this.db.query<PrescriptionRow>(query, [userId]);
+        return result.rows.map(row => ({
+            ...row,
+            medication_count: row.medication_count ? Number(row.medication_count) : 0
+        }));
     }
 
     async findByIdWithDetails(id: number, userId: string, role: string): Promise<PrescriptionWithDetails | null> {
-        const result = await this.db.query(`
+        const query = `
             SELECT 
                 p.*,
                 u_patient.name as patient_name,
@@ -99,14 +116,19 @@ export class PrescriptionRepository {
             JOIN users u_doctor ON p.doctor_id = u_doctor.id
             LEFT JOIN doctor_profiles dp ON p.doctor_id = dp.user_id
             WHERE p.id = $1 AND (p.patient_id = $2 OR p.doctor_id = $2 OR $3 = 'pharmacist') AND p.deleted_at IS NULL
-        `, [id, userId, role]);
+        `;
+        const result = await this.db.query<PrescriptionRow>(query, [id, userId, role]);
 
         if (result.rows.length === 0) return null;
-        return result.rows[0];
+        const row = result.rows[0];
+        return {
+            ...row,
+            medication_count: row.medication_count ? Number(row.medication_count) : 0
+        };
     }
 
     async findItemsByPrescriptionId(id: number): Promise<PrescriptionItem[]> {
-        const result = await this.db.query(`
+        const query = `
             SELECT 
                 pi.*,
                 m.name as medicine_name,
@@ -115,12 +137,13 @@ export class PrescriptionRepository {
             FROM prescription_items pi
             LEFT JOIN medicines m ON pi.medicine_id = m.id
             WHERE pi.prescription_id = $1
-        `, [id]);
+        `;
+        const result = await this.db.query<PrescriptionItemRow>(query, [id]);
         return result.rows;
     }
 
     async updateStatus(id: number, status: string): Promise<Prescription | null> {
-        const result = await this.db.query(`
+        const result = await this.db.query<Prescription>(`
             UPDATE prescriptions
             SET status = $1, updated_at = CURRENT_TIMESTAMP
             WHERE id = $2
@@ -130,7 +153,7 @@ export class PrescriptionRepository {
     }
 
     async findPending(): Promise<PrescriptionWithDetails[]> {
-        const result = await this.db.query(`
+        const query = `
             SELECT 
                 p.*,
                 u_patient.name as patient_name,
@@ -144,12 +167,16 @@ export class PrescriptionRepository {
             WHERE p.status = 'pending' AND p.deleted_at IS NULL
             GROUP BY p.id, u_patient.name, u_patient.phone_number, u_doctor.name
             ORDER BY p.prescription_date ASC
-        `);
-        return result.rows;
+        `;
+        const result = await this.db.query<PrescriptionRow>(query);
+        return result.rows.map(row => ({
+            ...row,
+            medication_count: row.medication_count ? Number(row.medication_count) : 0
+        }));
     }
 
     async checkAppointmentAccess(appointmentId: number, doctorId: string): Promise<boolean> {
-        const result = await this.db.query(
+        const result = await this.db.query<{ id: number }>(
             'SELECT id FROM appointments WHERE id = $1 AND doctor_id = $2 AND deleted_at IS NULL',
             [appointmentId, doctorId]
         );

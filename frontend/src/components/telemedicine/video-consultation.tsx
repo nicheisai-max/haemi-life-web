@@ -21,6 +21,10 @@ const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 type SocketType = ReturnType<typeof io>;
 
+interface SocketWithAuth extends SocketType {
+    auth: { token: string };
+}
+
 export const VideoConsultation: React.FC = () => {
     const { id: appointmentId } = useParams<{ id: string }>();
     const { user } = useAuth();
@@ -34,7 +38,7 @@ export const VideoConsultation: React.FC = () => {
     const [status, setStatus] = useState<'lobby' | 'connecting' | 'active' | 'ended'>('lobby');
     const [systemReady, setSystemReady] = useState({ mic: false, camera: false });
 
-    const socketRef = useRef<SocketType | null>(null);
+    const socketRef = useRef<SocketWithAuth | null>(null);
     const myVideo = useRef<HTMLVideoElement>(null);
     const userVideo = useRef<HTMLVideoElement>(null);
     const peerRef = useRef<Instance | null>(null);
@@ -46,7 +50,7 @@ export const VideoConsultation: React.FC = () => {
             const newToken = customEvent.detail?.token;
             if (socketRef.current && newToken) {
                 // Enterprise Fix: Safely update token on existing socket instance
-                (socketRef.current as unknown as { auth: { token: string } }).auth.token = newToken;
+                socketRef.current.auth.token = newToken;
             }
         };
 
@@ -60,7 +64,7 @@ export const VideoConsultation: React.FC = () => {
                 const token = getAccessToken();
                 socketRef.current = io(SOCKET_URL, {
                     auth: { token }
-                });
+                }) as SocketWithAuth;
 
                 window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
             } catch (err) {

@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
-interface ChartDataItem {
+export interface ChartDataItem {
     [key: string]: string | number | undefined;
 }
 

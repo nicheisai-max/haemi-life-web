@@ -1,13 +1,18 @@
 /// <reference types="vite/client" />
 import io from 'socket.io-client';
-type Socket = ReturnType<typeof io>;
 import { getAccessToken } from './api';
 
 const SOCKET_URL = (import.meta.env?.VITE_API_URL || 'http://localhost:5000');
 
+type InternalSocket = ReturnType<typeof io>;
+
+interface SocketWithAuth extends InternalSocket {
+    auth: { token: string };
+}
+
 class SocketService {
     private static instance: SocketService;
-    private socket: Socket | null = null;
+    private socket: SocketWithAuth | null = null;
     private listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
 
     private constructor() {
@@ -31,8 +36,8 @@ class SocketService {
         const authToken = token || getAccessToken();
         if (!authToken) return;
 
-        const socketWithAuth = this.socket as unknown as { auth?: { token: string }; connected: boolean };
-        if (this.socket?.connected && socketWithAuth.auth?.token === authToken) {
+        const socketWithAuth = this.socket;
+        if (this.socket?.connected && socketWithAuth?.auth?.token === authToken) {
             return;
         }
 
@@ -47,7 +52,7 @@ class SocketService {
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             randomizationFactor: 0.5
-        });
+        }) as SocketWithAuth;
 
         this.socket.on('connect', () => {
             console.log('[SocketService] Connected');
@@ -82,7 +87,7 @@ class SocketService {
     public reconnectWithToken(token: string) {
         if (!token) return;
         if (this.socket) {
-            (this.socket as unknown as { auth: { token: string } }).auth = { token };
+            this.socket.auth = { token };
             if (this.socket.connected) {
                 this.socket.disconnect().connect();
                 console.log('[SocketService] Re-handshake performed with new token');
@@ -114,7 +119,7 @@ class SocketService {
         this.socket?.emit(event, data);
     }
 
-    public getSocket(): Socket | null {
+    public getSocket(): SocketWithAuth | null {
         return this.socket;
     }
 }

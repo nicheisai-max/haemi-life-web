@@ -75,26 +75,25 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                     return sendError(res, 401, 'Session expired. Please log in again.');
                 }
 
-                // 5. Access Token JTI Enforcement (Dispacement Tolerance)
-                // Check if this token's JTI matches the current session or the recently rotated one (grace window)
+                // 5. Access Token JTI Enforcement (Multi-tab synchronization)
                 const currentAccessJti = sessionData.access_token_jti;
                 const previousAccessJti = sessionData.previous_access_token_jti;
                 const rotatedAt = sessionData.jti_rotated_at ? new Date(sessionData.jti_rotated_at).getTime() : 0;
                 const nowMs = Date.now();
-                const GRACE_PERIOD_MS = 60 * 1000;
+                const GRACE_PERIOD_MS = 60 * 1000; // 60s grace for atomic tab sync
 
                 const isCurrentJti = currentAccessJti && payload.jti === currentAccessJti;
                 const isGracefulJti = previousAccessJti && payload.jti === previousAccessJti && (nowMs - rotatedAt) < GRACE_PERIOD_MS;
 
                 if (!isCurrentJti && !isGracefulJti) {
-                    logger.warn('Access token JTI violation (displaced)', {
+                    logger.warn('[Security] Access token JTI violation (multi-tab collision detected)', {
                         userId: payload.id,
                         jti: payload.jti,
                         currentJti: currentAccessJti,
                         previousJti: previousAccessJti,
-                        rotatedAt: sessionData.jti_rotated_at
+                        timeSinceRotation: rotatedAt ? (nowMs - rotatedAt) / 1000 : 'N/A'
                     });
-                    return sendError(res, 401, 'Session token displaced. Please log in again.');
+                    return sendError(res, 401, 'Session token displaced. Please synchronize tabs or log in again.');
                 }
 
                 // Fingerprint Validation (Session Hijacking Protection)
@@ -185,7 +184,7 @@ export const relaxedAuthenticateToken = (req: Request, res: Response, next: Next
 
             if (userData.status !== 'ACTIVE') return next();
 
-            const timeoutMinutes = 60;
+            const timeoutMinutes = await getSessionTimeoutMinutes();
             if (userData.minutes_since_activity !== null && userData.minutes_since_activity > timeoutMinutes) {
                 return next();
             }

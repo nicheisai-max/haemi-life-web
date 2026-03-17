@@ -19,16 +19,21 @@ export const authService = {
         return response.data;
     },
 
-    verifySession: async (): Promise<{ user: User }> => {
-        const response = await api.get<User & { profile: { fullName: string; avatar: string } }>('/profiles/me');
+    verifySession: async (): Promise<{ user: User; serverTime: string; sessionTimeout: number }> => {
+        const response = await api.get<{ 
+            user: User & { profile: { fullName: string; avatar: string } };
+            serverTime: string;
+            sessionTimeout: number;
+        }>('/auth/verify');
         const data = response.data;
         return {
             user: {
-                ...data,
-                name: data.profile.fullName,
-                profile_image: data.profile.avatar,
-                profile: data.profile
-            }
+                ...data.user,
+                name: data.user.profile?.fullName || data.user.name,
+                profile_image: data.user.profile?.avatar || data.user.profile_image
+            },
+            serverTime: data.serverTime,
+            sessionTimeout: data.sessionTimeout
         };
     },
 
