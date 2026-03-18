@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import io from 'socket.io-client';
 import { getAccessToken } from './api';
+import { logger } from '../utils/logger';
 
 const SOCKET_URL = (import.meta.env?.VITE_API_URL || 'http://localhost:5000');
 
@@ -9,6 +10,29 @@ type InternalSocket = ReturnType<typeof io>;
 interface SocketWithAuth extends InternalSocket {
     auth: { token: string };
 }
+
+// ─── Deterministic JWT Validation (Zero-Dependency) ──────────────────────────
+const decodeJWT = (token: string | null) => {
+    if (!token) return null;
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    } catch {
+        return null;
+    }
+};
+
+const isTokenValid = (token: string | null): boolean => {
+    const decoded = decodeJWT(token);
+    if (!decoded?.exp) return false;
+    const now = Math.floor(Date.now() / 1000);
+    // Strict 30s buffer: Never attempt socket connection if token is expiring imminently
+    return decoded.exp > now + 30;
+};
 
 class SocketService {
     private static instance: SocketService;
@@ -22,6 +46,11 @@ class SocketService {
                 const token = customEvent.detail.token;
                 this.reconnectWithToken(token);
             });
+
+            window.addEventListener('auth:unauthorized', () => {
+                // Identity eviction requires deterministic destruction of active channels
+                this.disconnect();
+            });
         }
     }
 
@@ -34,9 +63,14 @@ class SocketService {
 
     public connect(token?: string) {
         const authToken = token || getAccessToken();
-        if (!authToken) return;
+        
+        // 🧱 SOCKET CONNECTION GATING: Intercept expired tokens pre-connection
+        if (!authToken || !isTokenValid(authToken)) {
+            this.disconnect();
+            return;
+        }
 
-        const socketWithAuth = this.socket;
+        const socketWithAuth = this.socket as SocketWithAuth | null;
         if (this.socket?.connected && socketWithAuth?.auth?.token === authToken) {
             return;
         }
@@ -55,12 +89,11 @@ class SocketService {
         }) as SocketWithAuth;
 
         this.socket.on('connect', () => {
-            console.log('[SocketService] Connected');
+            // Silent by design: ZERO-NOISE policy
         });
 
         this.socket.on('reconnect', (attemptNumber: number) => {
-            console.log(`[SocketService] Reconnected after ${attemptNumber} attempts`);
-            // Trigger manual callbacks for recovery logic
+            // Restore event subscriptions without polluting terminal
             const callbacks = this.listeners.get('reconnect');
             if (callbacks) {
                 callbacks.forEach(cb => cb(attemptNumber));
@@ -68,7 +101,17 @@ class SocketService {
         });
 
         this.socket.on('connect_error', (err: Error) => {
-            console.error('[SocketService] Connection error:', err.message);
+            // 🧠 ERROR CLASSIFICATION
+            const msg = err.message?.toLowerCase() || '';
+            const isAuthError = msg.includes('jwt') || msg.includes('auth') || msg.includes('unauthorized');
+            
+            if (isAuthError) {
+                // A. AUTH EXPECTED (SILENT): Disconnect and await refresh lifecycle
+                this.disconnect();
+            } else {
+                // B. SYSTEM ERRORS (LOG REQUIRED): Bubble up real network/connectivity failures
+                logger.error('[SocketService] Connection failure', { reason: err.message });
+            }
         });
 
         // Re-attach all global listeners
@@ -85,12 +128,16 @@ class SocketService {
     }
 
     public reconnectWithToken(token: string) {
-        if (!token) return;
+        if (!token || !isTokenValid(token)) {
+            this.disconnect();
+            return;
+        }
+
         if (this.socket) {
             this.socket.auth = { token };
             if (this.socket.connected) {
+                // 🔄 SAFE RECONNECT STRATEGY: Update pointer and force re-handshake
                 this.socket.disconnect().connect();
-                console.log('[SocketService] Re-handshake performed with new token');
             } else {
                 this.socket.connect();
             }
@@ -114,14 +161,16 @@ class SocketService {
 
     public emit(event: string, data: unknown) {
         if (!this.socket?.connected) {
-            console.warn(`[SocketService] Attempted to emit ${event} while disconnected`);
+            // Silenced missing connection warning to adhere to zero-noise output policy
+            return;
         }
         this.socket?.emit(event, data);
     }
 
     public getSocket(): SocketWithAuth | null {
-        return this.socket;
+        return this.socket as SocketWithAuth | null;
     }
 }
 
 export const socketService = SocketService.getInstance();
+
