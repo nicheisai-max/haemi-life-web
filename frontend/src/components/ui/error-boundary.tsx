@@ -56,7 +56,11 @@ export class ErrorBoundary extends Component<Props, State> {
                             <Button variant="default" onClick={this.handleReset} className="w-[140px]">
                                 Back to Safety
                             </Button>
-                            <Button variant="outline" onClick={() => window.location.reload()} className="w-[140px]">
+                            <Button variant="outline" onClick={() => {
+                                sessionStorage.clear();
+                                localStorage.removeItem('token'); 
+                                window.location.reload();
+                            }} className="w-[140px]">
                                 Try Reloading
                             </Button>
                         </div>

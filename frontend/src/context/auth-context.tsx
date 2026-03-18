@@ -30,24 +30,34 @@ const decodeJWT = (token: string | null) => {
     }
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // ─── Deterministic Initialization Phase ──────────────────────────────────
-    const initialUser = sessionStorage.getItem('user');
-    const initialToken = sessionStorage.getItem('token');
+// ─── MODULE-LEVEL BOOTSTRAP GUARD ──────────────────────────────────────────
+let hasGlobalBootstrapExecuted = false;
 
-    const [authState, setAuthState] = useState<AuthState>({
-        user: initialUser ? JSON.parse(initialUser) : null,
-        token: initialToken,
-        authStatus: 'initializing',
-        profileImageVersion: Date.now(),
-        serverOffset: 0,
-        sessionTimeout: null
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    // ─── ISOLATED RENDER-SAFE STATE INIT ─────────────────────────────────────
+    const [authState, setAuthState] = useState<AuthState>(() => {
+        const initialUser = sessionStorage.getItem('user');
+        const initialToken = sessionStorage.getItem('token');
+        return {
+            user: initialUser ? JSON.parse(initialUser) : null,
+            token: initialToken,
+            authStatus: 'initializing',
+            profileImageVersion: Date.now(),
+            serverOffset: 0,
+            sessionTimeout: null
+        };
     });
 
-    // Restore API state immediately before any hooks run
-    if (initialToken) {
-        setAccessToken(initialToken);
-    }
+    // ─── STRICT MODE SAFE INITIALIZATION ─────────────────────────────────────
+    useEffect(() => {
+        if (!hasGlobalBootstrapExecuted) {
+            hasGlobalBootstrapExecuted = true;
+            const token = sessionStorage.getItem('token');
+            if (token) {
+                setAccessToken(token);
+            }
+        }
+    }, []);
 
     const authStateRef = useRef<AuthState>(authState);
     useEffect(() => {
@@ -173,11 +183,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         setAccessToken(payload.token);
                         sessionStorage.setItem('token', payload.token);
                         sessionStorage.setItem('refreshToken', payload.refreshToken);
-                        setAuthState(prev => ({ 
-                            ...prev, 
-                            token: payload.token,
-                            authStatus: prev.authStatus === 'unauthenticated' ? 'authenticated' : prev.authStatus
-                        }));
+                        setAuthState(prev => {
+                            if (prev.token === payload.token) return prev;
+                            return { 
+                                ...prev, 
+                                token: payload.token,
+                                authStatus: prev.authStatus === 'unauthenticated' ? 'authenticated' : prev.authStatus
+                            };
+                        });
                     }
                 }
             };
@@ -221,13 +234,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const serverMs = serverTime ? new Date(serverTime).getTime() : Date.now();
             const offset = serverMs - Date.now();
 
-            setAuthState(prev => ({
-                ...prev,
-                token,
-                serverOffset: offset,
-                sessionTimeout: sessionTimeout || prev.sessionTimeout,
-                authStatus: prev.authStatus === 'unauthenticated' ? 'authenticated' : prev.authStatus
-            }));
+            setAuthState(prev => {
+                // EVENT HANDLER HARDENING: Idempotent Token Sync Guard
+                if (prev.token === token) return prev;
+                return {
+                    ...prev,
+                    token,
+                    serverOffset: offset,
+                    sessionTimeout: sessionTimeout || prev.sessionTimeout,
+                    authStatus: prev.authStatus === 'unauthenticated' ? 'authenticated' : prev.authStatus
+                };
+            });
             
             sessionStorage.setItem('token', token);
             if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
@@ -316,6 +333,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         verifyResult.sessionTimeout
                     );
                 } else {
+                    // INVALID TOKEN PURGE (Refresh logic failed / denied)
+                    setAccessToken(null);
+                    sessionStorage.removeItem('token');
+                    sessionStorage.removeItem('refreshToken');
                     commitAuthState(null, null, 'unauthenticated');
                 }
                 
@@ -324,7 +345,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             } catch (error: unknown) {
                 logger.error('[Boot] Initialization failure', error);
+                
+                // INVALID TOKEN PURGE (Full Crash Protection via Try Reloading)
+                setAccessToken(null);
+                sessionStorage.removeItem('token');
+                sessionStorage.removeItem('refreshToken');
                 commitAuthState(null, null, 'unauthenticated');
+                
                 setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
             } finally {
                 clearTimeout(timeoutGuard);
@@ -366,9 +393,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
         if (!IS_DEMO_MODE && currentUserId) {
-            const authChannel = new BroadcastChannel('haemi_auth_sync');
-            authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
-            authChannel.close();
+            try {
+                const authChannel = new BroadcastChannel('haemi_auth_sync');
+                authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
+                authChannel.close();
+            } catch (err) {
+                logger.error('[AuthSync] Logout broadcast channel crash insulated', err);
+            }
         }
 
         try {

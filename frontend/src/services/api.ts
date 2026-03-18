@@ -15,6 +15,9 @@ const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 let accessToken: string | null = null;
 
 export const setAccessToken = (token: string | null, refreshToken?: string | null, serverTime?: string, sessionTimeout?: number) => {
+    // Phase 9: Enforce Idempotency & Event Dispatch Guard
+    if (accessToken === token) return;
+
     accessToken = token;
     
     // Phase 7: Atomic Network Layer Sync
@@ -238,6 +241,7 @@ const clearAuthSession = () => {
     sessionStorage.removeItem('user');
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('refreshToken');
+    localStorage.removeItem('token'); // Phase 2: Ultimate purge guarantee
     
     // Deterministic Queue Cleanout
     processQueue(new Error('Session terminated'));
@@ -296,22 +300,26 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
 
         // 📢 Broadcast to other tabs for multi-tab sync
         if (typeof window !== 'undefined') {
-            const base64Url = newToken.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const decoded = JSON.parse(atob(base64));
-            const userId = decoded?.id;
+            try {
+                const base64Url = newToken.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const decoded = JSON.parse(atob(base64));
+                const userId = decoded?.id;
 
-            const syncChannel = new BroadcastChannel('haemi_auth_sync');
-            syncChannel.postMessage({ 
-                type: 'TOKEN_REFRESHED', 
-                payload: { 
-                    token: newToken, 
-                    refreshToken: newRefreshToken, 
-                    version: sessionVersion,
-                    userId: userId 
-                } 
-            });
-            syncChannel.close();
+                const syncChannel = new BroadcastChannel('haemi_auth_sync');
+                syncChannel.postMessage({ 
+                    type: 'TOKEN_REFRESHED', 
+                    payload: { 
+                        token: newToken, 
+                        refreshToken: newRefreshToken, 
+                        version: sessionVersion,
+                        userId: userId 
+                    } 
+                });
+                syncChannel.close();
+            } catch (err) {
+                logger.error('[API] BroadcastChannel sync failed dynamically. Insulated from auth flow.', err);
+            }
         }
 
         processQueue(null, newToken);
