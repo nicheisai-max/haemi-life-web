@@ -377,7 +377,7 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
         auditLogger.log('ERROR', { message: errMessage });
         // Type-Safe Error Narrowing
         const isNetworkErr = (axios.isAxiosError(error) && (!error.response || error.code === 'ECONNABORTED')) || isNetworkError(error);
-        const isAuthErr = (axios.isAxiosError(error) && (error.response?.status === 401 || err.response?.status === 403)) || isAuthError(error);
+        const isAuthErr = (axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) || isAuthError(error);
         
         // Network Failure Resilience (Exponential Backoff + Jitter)
         if (isNetworkErr && retryCount < 2 && sessionVersion === currentVersion) {

@@ -27,12 +27,16 @@ export type AuditEventType =
     | 'TOKEN_REFRESH_SUCCESS' 
     | 'TOKEN_REFRESH_FAILURE' 
     | 'UNAUTHORIZED_EVENT' 
-    | 'SESSION_TERMINATED';
+    | 'SESSION_TERMINATED'
+    | 'UNHANDLED_ERROR'
+    | 'ERROR';
 
 export interface AuditEventPayload {
     userId?: string;
     reason?: string;
+    message?: string;
     details?: Record<string, unknown>;
+    context?: string;
 }
 
 export const auditLogger = {
