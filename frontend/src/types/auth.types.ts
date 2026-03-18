@@ -19,6 +19,13 @@ export interface User {
     profile?: UserProfile;
 }
 
+// ─── Phase 10: Strict API Response Engine ─────────────────────────────────────
+export interface ApiResponse<T> {
+    success: boolean;
+    message: string;
+    data: T;
+    statusCode: number;
+}
 
 export interface AuthResponse {
     token: string;
@@ -40,9 +47,35 @@ export interface SignupCredentials {
     name: string;
     role: UserRole;
     id_number?: string;
-    // Dynamic fields for other roles can be added here or in extended types
     [key: string]: unknown;
 }
+
+// ─── Phase 10: Error Classification System ──────────────────────────────────
+export class NetworkError extends Error {
+    constructor(message: string) { super(message); this.name = 'NetworkError'; }
+}
+export class AuthError extends Error {
+    public isSilent?: boolean;
+    constructor(message: string, public statusCode?: number, isSilent = false) { 
+        super(message); 
+        this.name = 'AuthError'; 
+        this.isSilent = isSilent;
+    }
+}
+export class TokenExpiredError extends Error {
+    constructor(message: string) { super(message); this.name = 'TokenExpiredError'; }
+}
+export class RefreshFailureError extends Error {
+    constructor(message: string, public reason?: unknown) { super(message); this.name = 'RefreshFailureError'; }
+}
+export class FatalAuthError extends Error {
+    constructor(message: string) { super(message); this.name = 'FatalAuthError'; }
+}
+
+export const isNetworkError = (error: unknown): error is NetworkError => typeof error === 'object' && error !== null && 'name' in error && (error as Error).name === 'NetworkError';
+export const isAuthError = (error: unknown): error is AuthError => typeof error === 'object' && error !== null && 'name' in error && (error as Error).name === 'AuthError';
+export const isRefreshFailureError = (error: unknown): error is RefreshFailureError => typeof error === 'object' && error !== null && 'name' in error && (error as Error).name === 'RefreshFailureError';
+export const isFatalAuthError = (error: unknown): error is FatalAuthError => typeof error === 'object' && error !== null && 'name' in error && (error as Error).name === 'FatalAuthError';
 
 // ─── Phase 7: Strict Event Typing ───────────────────────────────────────────
 export interface AuthTokenRefreshedDetail {

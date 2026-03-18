@@ -1,6 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios';
-import { logger } from '../utils/logger';
-import type { AuthResponse } from '../types/auth.types';
+import { logger, auditLogger, intrusionDetector } from '../utils/logger';
+import { NetworkError, AuthError, RefreshFailureError, FatalAuthError, isAuthError, isNetworkError, isFatalAuthError } from '../types/auth.types';
+import type { AuthResponse, ApiResponse } from '../types/auth.types';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 if (!API_BASE) {
@@ -69,13 +70,42 @@ const api = axios.create({
     timeout: 10000,
 });
 
+// ─── Phase 10: Refresh Client (Dual Axios System) ──────────────────────────
+const refreshClient = axios.create({
+    baseURL: API_URL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    withCredentials: false,
+    timeout: 8000,
+});
+
+// ─── Centralized Response Normalization ────────────────────────────────────
+const normalizeResponse = <T>(
+    response: AxiosResponse<ApiResponse<T>>
+): T => {
+    if (
+        typeof response.data !== 'object' ||
+        response.data === null ||
+        !('success' in response.data) ||
+        !('data' in response.data)
+    ) {
+        throw new Error('Invalid API response structure');
+    }
+
+    return response.data.data;
+};
+
 // ─── Orchestration Engine ────────────────────────────────────────────────────
 if (typeof window !== 'undefined') {
     const checkBackendReady = async () => {
         try {
             const res = await axios.get(`${API_URL}/health/ready`, { timeout: 2000 });
             return res.data?.status === 'ready' || res.data?.status === 'ok';
-        } catch {
+        } catch (error) {
+            auditLogger.log('UNHANDLED_ERROR', {
+                message: error instanceof Error ? error.message : 'Unknown error',
+            });
             return false;
         }
     };
@@ -184,7 +214,7 @@ function recordFailure(error: AxiosError) {
 api.interceptors.request.use(
     (config: ExtendedRequestConfig) => {
         if (!checkCircuitBreaker()) {
-            return Promise.reject(new Error('Circuit is OPEN.'));
+            return Promise.reject(new NetworkError('Circuit is OPEN.'));
         }
 
         const isDiscoveryRoute = config.url?.includes('/auth/') ||
@@ -244,7 +274,22 @@ const clearAuthSession = () => {
     localStorage.removeItem('token'); // Phase 2: Ultimate purge guarantee
     
     // Deterministic Queue Cleanout
-    processQueue(new Error('Session terminated'));
+    processQueue(new FatalAuthError('Session terminated'));
+    
+    auditLogger.log('LOGOUT', { reason: 'clearAuthSession invoked' });
+
+    // Broadcast cross-tab kill-switch safely
+    if (typeof window !== 'undefined') {
+        try {
+            const syncChannel = new BroadcastChannel('haemi_auth_sync');
+            syncChannel.postMessage({ type: 'HARD_LOGOUT', payload: { version: sessionVersion } });
+            syncChannel.close();
+        } catch (error) {
+            const errMessage = error instanceof Error ? error.message : 'Unknown error';
+            auditLogger.log('UNHANDLED_ERROR', { message: errMessage });
+            /* ignore */
+        }
+    }
     
     window.dispatchEvent(new CustomEvent('auth:unauthorized'));
 };
@@ -263,23 +308,22 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
         const currentRefreshToken = sessionStorage.getItem('refreshToken');
         if (!currentRefreshToken) {
             logger.info('[API] No refresh token found. Draining queue.');
-            processQueue(new Error('No active session'), null);
+            processQueue(new FatalAuthError('No active session'), null);
             isRefreshing = false;
             return null;
         }
 
         logger.info(`[API] Initiating synchronized token refresh (Attempt ${retryCount + 1})`);
         
-        // Use direct axios to avoid interceptor loop
-        const response: AxiosResponse<AuthResponse> = await axios.post(
-            `${API_URL}/auth/refresh-token`,
-            { refreshToken: currentRefreshToken },
-            { timeout: 8000 }
+        // Use isolated refreshClient (safe from interceptor loops, but shares normalization)
+        const rawResponse = await refreshClient.post<ApiResponse<AuthResponse>>(
+            `/auth/refresh-token`,
+            { refreshToken: currentRefreshToken }
         );
 
-        const refreshData = response.data;
+        const refreshData = normalizeResponse(rawResponse);
         if (!refreshData || !refreshData.token) {
-            throw new Error('Refresh response invalid or failed');
+            throw new RefreshFailureError('Refresh response invalid or missing token');
         }
 
         // Phase 6 Safety: If logout occurred while pending, discard result
@@ -297,6 +341,7 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
         if (newRefreshToken) sessionStorage.setItem('refreshToken', newRefreshToken);
 
         logger.info('[API] Token refresh successful');
+        auditLogger.log('TOKEN_REFRESH_SUCCESS');
 
         // 📢 Broadcast to other tabs for multi-tab sync
         if (typeof window !== 'undefined') {
@@ -317,21 +362,29 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
                     } 
                 });
                 syncChannel.close();
-            } catch (err) {
-                logger.error('[API] BroadcastChannel sync failed dynamically. Insulated from auth flow.', err);
+            } catch (error) {
+                const errMessage = error instanceof Error ? error.message : 'Unknown error';
+                auditLogger.log('ERROR', { message: errMessage });
+                logger.error('[API] BroadcastChannel sync failed dynamically. Insulated from auth flow.', error);
             }
         }
 
         processQueue(null, newToken);
         isRefreshing = false;
         return newToken;
-    } catch (err: unknown) {
-        const isNetworkError = axios.isAxiosError(err) && (!err.response || err.code === 'ECONNABORTED');
-        const isAuthError = axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403);
+    } catch (error: unknown) {
+        const errMessage = error instanceof Error ? error.message : 'Unknown error';
+        auditLogger.log('ERROR', { message: errMessage });
+        // Type-Safe Error Narrowing
+        const isNetworkErr = (axios.isAxiosError(error) && (!error.response || error.code === 'ECONNABORTED')) || isNetworkError(error);
+        const isAuthErr = (axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) || isAuthError(error);
         
-        // Network Failure Resilience (Exponential Backoff)
-        if (isNetworkError && retryCount < 2 && sessionVersion === currentVersion) {
-            const backoff = 1000 * Math.pow(2, retryCount);
+        // Network Failure Resilience (Exponential Backoff + Jitter)
+        if (isNetworkErr && retryCount < 2 && sessionVersion === currentVersion) {
+            const baseBackoff = 1000 * Math.pow(2, retryCount);
+            const jitter = Math.floor(Math.random() * 500); // 0-500ms random jitter
+            const backoff = Math.min(baseBackoff + jitter, 5000); // Bounded max retry wait
+            
             logger.warn(`[API] Refresh network error. Retrying in ${backoff}ms...`);
             isRefreshing = false;
             await new Promise(r => setTimeout(r, backoff));
@@ -340,14 +393,25 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
 
         // Phase 6: Only clear session if we are still on the same session version
         if (sessionVersion === currentVersion) {
-            if (isAuthError) {
+            let forceLogout = false;
+            if (isAuthErr) {
                 logger.info('[API] Session refresh unauthorized (Silent Failure Handling)');
+                auditLogger.log('UNAUTHORIZED_EVENT', { reason: 'Refresh token rejected' });
+                forceLogout = intrusionDetector.trackFailure('unauthorized');
             } else {
-                logger.error('[API] Sync refresh failed permanently', err);
+                logger.error('[API] Sync refresh failed permanently', error);
+                auditLogger.log('TOKEN_REFRESH_FAILURE', { reason: error instanceof Error ? error.message : 'Unknown' });
+                forceLogout = intrusionDetector.trackFailure('refresh');
             }
             
-            processQueue(err, null);
-            clearAuthSession();
+            // Format strict error before rejecting queue
+            const strictErr = error instanceof Error ? error : new RefreshFailureError('Unknown refresh failure');
+            processQueue(strictErr, null);
+            
+            // Safe Kill-Switch Logout System triggers ONLY on Invalid Refresh or Fatal Threshold
+            if (isAuthErr || isFatalAuthError(strictErr) || forceLogout) {
+                clearAuthSession();
+            }
         }
         isRefreshing = false;
         return null;
@@ -356,9 +420,14 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
 
 api.interceptors.response.use(
     async (response) => {
-        // Standardize response unwrapping
-        if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
-            response.data = response.data.data;
+        try {
+            const unwrappedData = normalizeResponse(response);
+            response = { ...response, data: unwrappedData };
+        } catch (error) {
+            auditLogger.log('UNHANDLED_ERROR', {
+                message: error instanceof Error ? error.message : 'Unknown error',
+            });
+            // Keep raw response for routes like /health/ready that don't match the ApiResponse envelope
         }
         recordSuccess();
         return response;
@@ -374,7 +443,7 @@ api.interceptors.response.use(
             if (error.response?.status === 401) {
                 clearAuthSession();
             }
-            return Promise.reject(error);
+            return Promise.reject(new AuthError('Refresh token invalid', error.response?.status));
         }
 
         // 2. Expected Auth Failures (Silent)
@@ -383,11 +452,8 @@ api.interceptors.response.use(
             originalRequest.url?.includes('/auth/');
 
         if (isExpectedAuthFailure) {
-            return Promise.reject({
-                ...(error.response!.data as object),
-                status: error.response!.status,
-                _isSilent: true
-            });
+            const msg = (error.response!.data as { message?: string })?.message || error.message;
+            return Promise.reject(new AuthError(msg, error.response!.status, true));
         }
 
         // 3. 401 Handling with Request Queuing System (Mutex Locked)
