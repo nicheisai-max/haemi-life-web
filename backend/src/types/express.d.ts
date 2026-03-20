@@ -10,6 +10,8 @@ export interface JWTPayload {
     status?: string;
     jti?: string;
     session_id?: string;
+    exp?: number;
+    iat?: number;
 }
 
 import { Socket } from 'socket.io';

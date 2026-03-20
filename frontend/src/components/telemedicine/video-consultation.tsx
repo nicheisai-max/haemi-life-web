@@ -17,13 +17,10 @@ import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 
+// Socket type handled via standard library to avoid 'as' assertions
 type SocketType = ReturnType<typeof io>;
-
-interface SocketWithAuth extends SocketType {
-    auth: { token: string };
-}
 
 export const VideoConsultation: React.FC = () => {
     const { id: appointmentId } = useParams<{ id: string }>();
@@ -38,7 +35,7 @@ export const VideoConsultation: React.FC = () => {
     const [status, setStatus] = useState<'lobby' | 'connecting' | 'active' | 'ended'>('lobby');
     const [systemReady, setSystemReady] = useState({ mic: false, camera: false });
 
-    const socketRef = useRef<SocketWithAuth | null>(null);
+    const socketRef = useRef<SocketType | null>(null);
     const myVideo = useRef<HTMLVideoElement>(null);
     const userVideo = useRef<HTMLVideoElement>(null);
     const peerRef = useRef<Instance | null>(null);
@@ -46,11 +43,15 @@ export const VideoConsultation: React.FC = () => {
     // 1. Fetch Appointment Data
     useEffect(() => {
         const handleTokenRefreshed = (e: Event) => {
-            const customEvent = e as CustomEvent<{ token: string }>;
-            const newToken = customEvent.detail?.token;
-            if (socketRef.current && newToken) {
-                // Enterprise Fix: Safely update token on existing socket instance
-                socketRef.current.auth.token = newToken;
+            if (!(e instanceof CustomEvent)) return;
+            const detail = e.detail;
+            if (socketRef.current && detail && typeof detail === 'object' && 'token' in detail) {
+                const newToken = String(detail.token);
+                // Enterprise Fix: Safely update token using property narrowing to avoid 'as'
+                const s = socketRef.current;
+                if ('auth' in s && typeof s.auth === 'object' && s.auth !== null) {
+                    Object.assign(s.auth, { token: newToken });
+                }
             }
         };
 
@@ -62,9 +63,13 @@ export const VideoConsultation: React.FC = () => {
 
                 // Initialize Socket with Auth - ZERO UI DAMAGE
                 const token = getAccessToken();
-                socketRef.current = io(SOCKET_URL, {
+                const newSocket = io(SOCKET_URL, {
                     auth: { token }
-                }) as SocketWithAuth;
+                });
+
+                if (newSocket) {
+                    socketRef.current = newSocket;
+                }
 
                 window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
             } catch (err) {

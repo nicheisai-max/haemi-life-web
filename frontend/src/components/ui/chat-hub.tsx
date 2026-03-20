@@ -328,15 +328,14 @@ export const ChatHub: React.FC = () => {
         }
 
         const displayName = other.name && other.name !== 'Unknown' ? other.name : 'Health Professional';
-        const participant = other as { id: string; name: string; role: string; profile_image?: string; initials?: string };
         const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
-        const dbImage = participant.id !== 'unknown' ? `${baseUrl}/api/files/profile/${participant.id}` : '';
+        const dbImage = other.id !== 'unknown' ? `${baseUrl}/api/files/profile/${other.id}` : '';
 
         return {
             ...other,
             name: displayName,
             image: dbImage,
-            initials: participant.initials || displayName.substring(0, 1)
+            initials: ('initials' in other && typeof other.initials === 'string') ? other.initials : displayName.substring(0, 1)
         };
     }, [user?.id]);
 

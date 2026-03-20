@@ -3,8 +3,8 @@ import { pool } from '../config/db';
 import { JWTPayload } from '../types/express';
 import { sendError } from '../utils/response';
 import { logger } from '../utils/logger';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 import mime from 'mime';
 
 export const getProfileImage = async (req: Request, res: Response) => {
@@ -23,7 +23,14 @@ export const getProfileImage = async (req: Request, res: Response) => {
 
         // 1. Serve from Filesystem (Production Hardened)
         if (user.profile_image && !user.profile_image.startsWith('/api/')) {
-            const fullPath = path.join(process.cwd(), user.profile_image);
+            const normalizedPath = path.normalize(user.profile_image).replace(/^(\.\.(\/|\\|$))+/, '');
+            const fullPath = path.resolve(process.cwd(), normalizedPath);
+            
+            // Path Traversal Protection
+            if (!fullPath.startsWith(process.cwd())) {
+                return sendError(res, 403, 'Restricted path');
+            }
+
             if (fs.existsSync(fullPath)) {
                 // P1 FIX: Detect MIME using library
                 const detectedMime = mime.getType(fullPath) || user.profile_image_mime || 'image/jpeg';
@@ -34,11 +41,12 @@ export const getProfileImage = async (req: Request, res: Response) => {
                 const stream = fs.createReadStream(fullPath);
                 stream.on('error', (err) => {
                     logger.error('Stream error:', err);
-                    if (!res.headersSent) res.status(500).end();
+                    if (!res.headersSent) {
+                        res.status(500).json({ success: false, message: 'Internal Server Error' });
+                    }
                 });
                 return stream.pipe(res);
             } else {
-                // P1 FIX: Return 404 JSON if file missing from disk
                 return sendError(res, 404, 'Profile image file not found on server');
             }
         }
@@ -75,7 +83,14 @@ export const getChatAttachment = async (req: Request, res: Response) => {
         const message = accessCheck.rows[0];
 
         if (message.attachment_url && !message.attachment_url.startsWith('/api/')) {
-            const fullPath = path.join(process.cwd(), message.attachment_url);
+            const normalizedPath = path.normalize(message.attachment_url).replace(/^(\.\.(\/|\\|$))+/, '');
+            const fullPath = path.resolve(process.cwd(), normalizedPath);
+
+            // Path Traversal Protection
+            if (!fullPath.startsWith(process.cwd())) {
+                return sendError(res, 403, 'Restricted path');
+            }
+
             if (fs.existsSync(fullPath)) {
                 // P1 FIX: Detect MIME using library
                 const detectedMime = mime.getType(fullPath) || message.attachment_mime || 'application/octet-stream';
@@ -86,11 +101,12 @@ export const getChatAttachment = async (req: Request, res: Response) => {
                 const stream = fs.createReadStream(fullPath);
                 stream.on('error', (err) => {
                     logger.error('Stream error:', err);
-                    if (!res.headersSent) res.status(500).end();
+                    if (!res.headersSent) {
+                        res.status(500).json({ success: false, message: 'Internal Server Error' });
+                    }
                 });
                 return stream.pipe(res);
             } else {
-                // P1 FIX: Return 404 JSON if file missing from disk
                 return sendError(res, 404, 'Attachment file not found on server');
             }
         }
@@ -129,7 +145,14 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
         const record = result.rows[0];
 
         if (record.file_path && record.file_path !== 'DB_ONLY') {
-            const fullPath = path.join(process.cwd(), record.file_path);
+            const normalizedPath = path.normalize(record.file_path).replace(/^(\.\.(\/|\\|$))+/, '');
+            const fullPath = path.resolve(process.cwd(), normalizedPath);
+
+            // Path Traversal Protection
+            if (!fullPath.startsWith(process.cwd())) {
+                return sendError(res, 403, 'Restricted path');
+            }
+
             if (fs.existsSync(fullPath)) {
                 // P1 FIX: Detect MIME using library
                 const detectedMime = mime.getType(fullPath) || record.file_mime || 'application/octet-stream';
@@ -140,11 +163,12 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
                 const stream = fs.createReadStream(fullPath);
                 stream.on('error', (err) => {
                     logger.error('Stream error:', err);
-                    if (!res.headersSent) res.status(500).end();
+                    if (!res.headersSent) {
+                        res.status(500).json({ success: false, message: 'Internal Server Error' });
+                    }
                 });
                 return stream.pipe(res);
             } else {
-                // P1 FIX: Return 404 JSON if file missing from disk
                 return sendError(res, 404, 'Medical record file not found on server');
             }
         }

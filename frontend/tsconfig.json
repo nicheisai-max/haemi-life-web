@@ -8,7 +8,9 @@
       "DOM.Iterable"
     ],
     "module": "ESNext",
+    "types": ["vite/client"],
     "skipLibCheck": true,
+    "esModuleInterop": true,
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -22,7 +24,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "verbatimModuleSyntax": true,
     /* Path Aliases */
     "baseUrl": ".",
     "paths": {

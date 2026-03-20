@@ -43,3 +43,36 @@ export interface PeerSignalPayload {
  * Type-safe listener function for socket events
  */
 export type SocketListener<T = unknown> = (...args: T[]) => void;
+
+/**
+ * Enterprise Hardening: Strict Connection States (Phase 5)
+ */
+export type SocketConnectionState = 
+  | 'IDLE' 
+  | 'CONNECTING' 
+  | 'CONNECTED' 
+  | 'FAILED' 
+  | 'RETRYING' 
+  | 'CLOSED' 
+  | 'TRANSPORT_DISCONNECTED' 
+  | 'TRANSPORT_TIMEOUT' 
+  | 'HANDSHAKE_FAILED';
+
+/**
+ * Enterprise Hardening: Typed Socket Error Codes (Phase 3 & 8)
+ */
+export type SocketErrorCode = 
+  | 'AUTH_EXPIRED' 
+  | 'AUTH_INVALID' 
+  | 'TRANSPORT_FAILURE' 
+  | 'TRANSPORT_TIMEOUT'
+  | 'TRANSPORT_DISCONNECTED'
+  | 'TRANSPORT_HANDSHAKE_FAILED'
+  | 'NETWORK_OFFLINE'
+  | 'SERVER_REJECTED' 
+  | 'UNKNOWN';
+
+export interface SocketErrorPayload {
+    code: SocketErrorCode;
+    message: string;
+}

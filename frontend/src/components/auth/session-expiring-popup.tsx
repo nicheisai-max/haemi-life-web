@@ -35,8 +35,10 @@ export const SessionExpiringPopup: React.FC<SessionExpiringPopupProps> = ({ onEx
     // ─── Event Subscriptions ─────────────────────────────────
     useEffect(() => {
         const handleSessionExpiring = (event: Event) => {
-            const customEvent = event as CustomEvent<{ timeLeft: number }>;
-            const eventTimeLeft = customEvent.detail.timeLeft;
+            if (!(event instanceof CustomEvent)) return;
+            const detail = event.detail;
+            if (typeof detail !== 'object' || detail === null || !('timeLeft' in detail)) return;
+            const eventTimeLeft = Number(detail.timeLeft);
             
             setTimeLeft(eventTimeLeft);
             if (!isOpen) {

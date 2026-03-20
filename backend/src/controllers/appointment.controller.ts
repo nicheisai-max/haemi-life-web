@@ -90,8 +90,8 @@ export const getMyAppointments = async (req: Request, res: Response) => {
         const { status, upcoming } = req.query;
 
         const appointments = await appointmentRepository.findByUserId(
-            userId as string,
-            status as string,
+            userId,
+            typeof status === 'string' ? status : undefined,
             upcoming === 'true'
         );
         return sendResponse(res, 200, true, 'Appointments fetched successfully', appointments);
@@ -108,7 +108,7 @@ export const getAppointmentById = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        const appointment = await appointmentRepository.findByIdWithDetails(Number(id), user.id as string);
+        const appointment = await appointmentRepository.findByIdWithDetails(Number(id), user.id);
 
         if (!appointment) {
             return sendError(res, 404, 'Appointment not found');
@@ -129,7 +129,12 @@ export const updateAppointmentStatus = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        const appointment = await appointmentRepository.updateStatus(Number(id), user.id as string, status as string, notes as string);
+        const appointment = await appointmentRepository.updateStatus(
+            Number(id), 
+            user.id, 
+            typeof status === 'string' ? status : '', 
+            typeof notes === 'string' ? notes : ''
+        );
 
         if (!appointment) {
             return sendError(res, 404, 'Appointment not found or access denied');
@@ -149,7 +154,7 @@ export const cancelAppointment = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        const appointment = await appointmentRepository.cancel(Number(id), user.id as string);
+        const appointment = await appointmentRepository.cancel(Number(id), user.id);
 
         if (!appointment) {
             return sendError(res, 404, 'Appointment not found or access denied');
@@ -173,7 +178,7 @@ export const deleteAppointment = async (req: Request, res: Response) => {
             return res.status(403).json({ message: 'Only patients can permanently delete appointments' });
         }
 
-        const deleted = await appointmentRepository.softDelete(Number(id), user.id as string);
+        const deleted = await appointmentRepository.softDelete(Number(id), user.id);
 
         if (!deleted) {
             return sendError(res, 404, 'Appointment not found, already deleted, or cannot be deleted (only past/completed/cancelled appointments can be deleted)');
@@ -191,24 +196,24 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
     try {
         const { doctor_id, date } = req.query;
 
-        if (!doctor_id || !date) {
+        if (typeof doctor_id !== 'string' || typeof date !== 'string') {
             return res.status(400).json({ message: 'doctor_id and date are required' });
         }
-
+        
         // Get day of week from date using UTC-safe local parsing
-        const [year, month, day] = (date as string).split('-').map(Number);
+        const [year, month, day] = date.split('-').map(Number);
         const dateObj = new Date(year, month - 1, day);
         const dayOfWeek = dateObj.getDay(); // 0 is Sunday, 6 is Saturday
 
         // Get doctor's schedule for that day (passing integer as defined in init.sql)
-        const schedule = await appointmentRepository.getDoctorSchedule(doctor_id as string, dayOfWeek);
+        const schedule = await appointmentRepository.getDoctorSchedule(doctor_id, dayOfWeek);
 
         if (schedule.length === 0) {
             return res.json({ slots: [] });
         }
 
         // Get booked appointments
-        const bookedTimes = await appointmentRepository.getBookedTimes(doctor_id as string, date as string);
+        const bookedTimes = await appointmentRepository.getBookedTimes(doctor_id, date);
 
         const slots: string[] = [];
         for (const row of schedule) {

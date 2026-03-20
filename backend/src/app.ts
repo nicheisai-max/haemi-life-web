@@ -4,8 +4,15 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
-import { JWTPayload, AuthenticatedSocket } from './types/express';
+import { Server, Socket } from 'socket.io';
+import { JWTPayload } from './types/express';
+import { 
+    ServerToClientEvents, 
+    ClientToServerEvents, 
+    InterServerEvents, 
+    SocketData, 
+    StrictAuthenticatedSocket 
+} from './types/socket.types';
 import * as jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 
@@ -18,6 +25,7 @@ import { chatReliabilityService } from './services/chat-reliability.service';
 import { env } from './config/env';
 import { schemaIntegrityService } from './services/schema-integrity.service';
 import { corsMiddleware } from './middleware/cors.middleware';
+import * as guards from './utils/guards/socket.guards';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -96,7 +104,7 @@ app.get('/api/health/ready', async (_req, res) => {
         // 1. Check DB
         await pool.query('SELECT 1');
         // 2. Check Socket.IO (if initialized)
-        const isSocketReady = !!io;
+        const isSocketReady = !!socketIO;
 
         if (isSocketReady) {
             return res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
@@ -128,7 +136,7 @@ app.use('/api/profiles', profileRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-let io: Server | undefined;
+export let socketIO: Server<ClientToServerEvents, ServerToClientEvents> | undefined;
 
 // Server & Sockets
 const startServer = async () => {
@@ -141,12 +149,25 @@ const startServer = async () => {
         logger.info('✅ Database and Schema Integrity verified.');
 
         const server = createServer(app);
-        io = new Server(server, {
-            cors: { origin: "*", credentials: true }
+        socketIO = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
+            cors: {
+                origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+                    const allowed = env.allowedOrigins && env.allowedOrigins.length > 0 ? env.allowedOrigins : ["http://localhost:5173"];
+                    if (!origin || allowed.includes(origin)) {
+                        callback(null, true);
+                    } else {
+                        callback(new Error(JSON.stringify({
+                            code: "SERVER_REJECTED",
+                            message: "Origin not allowed"
+                        })));
+                    }
+                },
+                credentials: true
+            }
         });
 
         // ... (Socket logic remains identical)
-        setupSockets(io);
+        setupSockets(socketIO);
 
         const PORT = env.port;
 
@@ -163,23 +184,62 @@ const startServer = async () => {
         }
         return server;
     } catch (err: unknown) {
-        const error = err as Error;
+        const errorMessage = err instanceof Error ? err.message : 'Unknown fatal error';
         console.error('\n-------------------------------------------');
         console.error('❌ FATAL: BACKEND BOOT FAILED');
-        console.error(`Reason: ${error.message}`);
+        console.error(`Reason: ${errorMessage}`);
         console.error('-------------------------------------------\n');
         process.exit(1);
     }
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+function isAuthenticatedSocket(socket: Socket): socket is StrictAuthenticatedSocket {
+    return guards.isAuthenticatedSocketData(socket.data);
+}
+
 // Extracted socket setup to keep startServer clean
-function setupSockets(io: Server) {
-    io.use(async (socket, next) => {
-        const token = socket.handshake.auth.token;
-        if (!token) return next(new Error('Authentication required'));
+function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>) {
+    io.use(async (socket: Socket, next: (err?: Error) => void) => {
+        const auth = socket.handshake.auth;
+        const token = typeof auth === 'object' && auth !== null && 'token' in auth && typeof auth.token === 'string' ? auth.token : null;
+
+        if (!token) {
+            return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Authentication required' })));
+        }
 
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as JWTPayload;
+            const secret = process.env.JWT_SECRET;
+            if (typeof secret !== 'string') {
+                logger.error('JWT_SECRET is not a string', { secretType: typeof secret });
+                return next(new Error(JSON.stringify({ code: 'SERVER_REJECTED', message: 'Internal server error' })));
+            }
+
+            const decodedPayload: unknown = jwt.verify(token, secret);
+
+            if (typeof decodedPayload !== 'object' || decodedPayload === null || !('id' in decodedPayload) || !('role' in decodedPayload) || !('token_version' in decodedPayload) || !('email' in decodedPayload) || !('name' in decodedPayload)) {
+                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid token payload' })));
+            }
+
+            if (!isRecord(decodedPayload)) {
+                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid token payload' })));
+            }
+
+            const role = decodedPayload.role;
+            if (role !== 'patient' && role !== 'doctor' && role !== 'pharmacist') {
+                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid role' })));
+            }
+
+            const decoded: JWTPayload = {
+                id: String(decodedPayload.id),
+                email: String(decodedPayload.email),
+                role: role,
+                name: String(decodedPayload.name),
+                token_version: Number(decodedPayload.token_version)
+            };
 
             // Database-level verification: Check token_version and status
             const userResult = await pool.query(
@@ -187,76 +247,96 @@ function setupSockets(io: Server) {
                 [decoded.id]
             );
 
-            if (userResult.rows.length === 0) {
-                return next(new Error('User not found'));
+            if (userResult.rowCount === 0) {
+                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'User not found' })));
             }
 
             const user = userResult.rows[0];
+            if (typeof user !== 'object' || user === null || !('status' in user) || !('token_version' in user)) {
+                return next(new Error(JSON.stringify({ code: 'SERVER_REJECTED', message: 'Database integrity error' })));
+            }
+
             if (user.status !== 'ACTIVE') {
-                return next(new Error('User account is inactive'));
+                return next(new Error(JSON.stringify({ code: 'SERVER_REJECTED', message: 'User account is inactive' })));
             }
 
             if (decoded.token_version !== user.token_version) {
-                return next(new Error('Session expired or revoked'));
+                return next(new Error(JSON.stringify({ code: 'AUTH_EXPIRED', message: 'Session expired or revoked' })));
             }
 
-            (socket as AuthenticatedSocket).user = decoded;
+            // Explicitly extending socket with user data
+            socket.data.user = decoded;
             next();
         } catch (err) {
             logger.error('Socket authentication failed', { error: err });
-            next(new Error('Invalid authentication token'));
+            next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid authentication token' })));
         }
     });
 
-    io.on('connection', (socket: import('socket.io').Socket) => {
-        const authSocket = socket as AuthenticatedSocket;
-        if (!authSocket.user) {
+    io.on('connection', (socket: Socket) => {
+        if (!isAuthenticatedSocket(socket)) {
             logger.error('Socket connected without user data');
             return socket.disconnect();
         }
-        const userId = authSocket.user.id;
+
+        const user = socket.data.user;
+        if (!user) {
+            logger.error('Socket connected but user data is missing from socket.data');
+            return socket.disconnect();
+        }
+        const userId = user.id;
         socket.join(`user:${userId}`);
         logger.info(`Socket: ${socket.id} user:${userId}`);
 
         // ENTERPRISE HARDENING: Standardized Event Listeners
-        socket.on('join_conversation', (conversationId: string) => {
-            // We still join rooms for specialized low-latency events if needed, 
-            // but message flow is now O(1) via user streams.
+        socket.on('join_conversation', (conversationId: unknown) => {
+            if (!guards.isJoinConversationPayload(conversationId)) return;
             socket.join(`conversation:${conversationId}`);
         });
 
-        socket.on('ack_read', async (data: { conversationId: string; user_id: string }) => {
-            // This is the trigger for read receipts
+        socket.on('ack_read', async (data: unknown) => {
+            if (!guards.isAckReadPayload(data)) return;
+            
             if (io) {
                 const participantIds = await chatReliabilityService.getParticipants(data.conversationId);
 
                 // Optimized: Only the original sender(s) in the conversation should receive message_read updates.
-                // For simplicity in a 1:1 or small group, we exclude the reader (data.user_id) 
-                // ensuring only the peers get the update.
                 participantIds.filter((pid: string) => pid !== data.user_id).forEach((pid: string) => {
-                    io!.to(`user:${pid}`).emit('message_read', data);
+                    io?.to(`user:${pid}`).emit('message_read', data);
                 });
             }
         });
 
         // Ephemeral Typing Stream (Lightweight)
-        socket.on('typing_started', (data: { conversationId: string; name: string }) => {
+        socket.on('typing_started', (data: unknown) => {
+            if (!guards.isTypingPayload(data)) return;
             socket.to(`conversation:${data.conversationId}`).emit('typing_started', data);
         });
 
-        socket.on('typing_stopped', (data: { conversationId: string; name: string }) => {
+        socket.on('typing_stopped', (data: unknown) => {
+            if (!guards.isTypingPayload(data)) return;
             socket.to(`conversation:${data.conversationId}`).emit('typing_stopped', data);
         });
 
         // WebRTC hooks
-        socket.on('call-user', (data: { to: string; offer: JWTPayload }) => {
+        socket.on('call-user', (data: unknown) => {
+            if (!guards.isSignalPayload(data)) return;
             if (io) io.to(data.to).emit('call-made', { offer: data.offer, socket: socket.id });
         });
-        socket.on('make-answer', (data: { to: string; answer: JWTPayload }) => {
+
+        socket.on('make-answer', (data: unknown) => {
+            if (!guards.isAnswerPayload(data)) return;
             if (io) io.to(data.to).emit('answer-made', { answer: data.answer, socket: socket.id });
         });
-        socket.on('ice-candidate', (data: { to: string; candidate: JWTPayload }) => {
-            if (io) io.to(data.to).emit('ice-candidate', { candidate: data.candidate, socket: socket.id });
+
+        socket.on('ice-candidate', (data: unknown) => {
+            if (!guards.isIcePayload(data)) return;
+            if (socketIO) socketIO.to(data.to).emit('ice-candidate', { candidate: data.candidate, socket: socket.id });
+        });
+
+        socket.on('ack_delivery', (data: unknown) => {
+            if (!guards.isAckDeliveryPayload(data)) return; // STRICT REJECTION via guard
+            socket.to(`conversation:${data.conversationId}`).emit('ack_delivery', data);
         });
 
         socket.on('disconnect', () => logger.info(`Socket disconnected: ${socket.id}`));
@@ -265,7 +345,7 @@ function setupSockets(io: Server) {
 
 if (process.env.NODE_ENV !== 'test') startServer();
 
-export { app, startServer, io };
+export { app, startServer };
 
 // Graceful Shutdown
 const shutdown = () => {
@@ -277,11 +357,12 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-    const errorReason = reason as Error;
+    const errorMsg = reason instanceof Error ? reason.message : String(reason);
+    const errorStack = reason instanceof Error ? reason.stack : undefined;
     logger.error('Unhandled Rejection at:', {
         promise,
-        reason: errorReason?.message || reason,
-        stack: errorReason?.stack
+        reason: errorMsg,
+        stack: errorStack
     });
 });
 

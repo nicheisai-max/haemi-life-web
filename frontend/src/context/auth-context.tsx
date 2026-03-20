@@ -5,6 +5,7 @@ import { authService } from '../services/auth.service';
 import { setAccessToken, setAppInitialized } from '../services/api';
 import { AuthContext } from './auth-context-def';
 import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
+import { isUser, isJWTPayload, safeParseJSON } from '../utils/type-guards';
 
 interface AuthState {
     user: User | null;
@@ -21,10 +22,8 @@ const decodeJWT = (token: string | null) => {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        return JSON.parse(jsonPayload);
+        const jsonString = atob(base64);
+        return safeParseJSON(jsonString, isJWTPayload);
     } catch {
         return null;
     }
@@ -36,10 +35,11 @@ let hasGlobalBootstrapExecuted = false;
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // ─── ISOLATED RENDER-SAFE STATE INIT ─────────────────────────────────────
     const [authState, setAuthState] = useState<AuthState>(() => {
-        const initialUser = sessionStorage.getItem('user');
+        const initialUserJson = sessionStorage.getItem('user');
         const initialToken = sessionStorage.getItem('token');
+        const initialUser = initialUserJson ? safeParseJSON(initialUserJson, isUser) : null;
         return {
-            user: initialUser ? JSON.parse(initialUser) : null,
+            user: initialUser,
             token: initialToken,
             authStatus: 'initializing',
             profileImageVersion: Date.now(),

@@ -3,7 +3,7 @@ import { ChatContext } from './chat-context';
 import { useAuth } from '../hooks/use-auth';
 import api from '../services/api';
 import { decrypt, encrypt } from '../utils/security';
-import { socketService } from '../services/socket.service';
+import { socketService, type ServerToClientEvents } from '../services/socket.service';
 import type { Conversation, Message } from '../hooks/use-chat';
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -85,14 +85,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         if (!isAuthenticated || !token || !user?.id) return;
 
-        interface ReactionPayload {
-            messageId: string;
-            userId: string;
-            reactionType: string;
-            action: 'added' | 'removed';
-        }
-
-        const onReaction = ({ messageId, userId, reactionType, action }: ReactionPayload) => {
+        const onReaction: ServerToClientEvents["message_reaction"] = ({ messageId, userId, reactionType, action }) => {
             setMessages(prev => prev.map(msg => {
                 if (msg.id === messageId) {
                     const reactions = msg.reactions || [];
@@ -107,17 +100,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }));
         };
 
-        const onDeleted = ({ messageId, forEveryone }: { messageId: string; forEveryone: boolean }) => {
+        const onDeleted: ServerToClientEvents["message_deleted"] = ({ messageId, forEveryone }) => {
             if (forEveryone) setMessages(prev => prev.filter(msg => msg.id !== messageId));
         };
 
         const syncMissedMessages = async () => {
             try {
                 const res = await api.get(`/chat/sync?since=${lastSyncRef.current}`);
-                const missedMessages = res.data;
+                const missedMessages = res.data as Message[];
 
                 if (missedMessages.length > 0) {
-                    // Process missed messages in order
                     for (const msg of missedMessages) {
                         await onReceiveMessage(msg);
                     }
@@ -128,15 +120,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         };
 
-        const onTypingStarted = ({ userId }: { userId: string }) => {
-            setTypingUsers((prev) => [...new Set([...prev, userId])]);
+        const onTypingStarted: ServerToClientEvents["typing_started"] = (data) => {
+            if ('userId' in data) {
+                setTypingUsers((prev) => [...new Set([...prev, data.userId])]);
+            }
         };
 
-        const onTypingStopped = ({ userId }: { userId: string }) => {
-            setTypingUsers((prev) => prev.filter(id => id !== userId));
+        const onTypingStopped: ServerToClientEvents["typing_stopped"] = (data) => {
+            if ('userId' in data) {
+                setTypingUsers((prev) => prev.filter(id => id !== data.userId));
+            }
         };
 
-        const onDelivered = ({ conversationId, messageIds }: { conversationId: string; messageIds: string[] }) => {
+        const onDelivered: ServerToClientEvents["message_delivered"] = ({ conversationId, messageIds }) => {
             if (activeConversationRef.current?.id === conversationId) {
                 setMessages(prev => prev.map(msg =>
                     messageIds.includes(msg.id) ? { ...msg, status: 'delivered' } : msg
@@ -144,7 +140,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         };
 
-        const onRead = ({ conversationId, user_id }: { conversationId: string; user_id: string }) => {
+        const onRead: ServerToClientEvents["message_read"] = ({ conversationId, user_id }) => {
             if (activeConversationRef.current?.id === conversationId) {
                 setMessages(prev => prev.map(msg =>
                     msg.sender_id === user_id ? msg : { ...msg, status: 'read', is_read: true }
@@ -153,7 +149,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             fetchConversations();
         };
 
-        const onReceiveMessage = async (message: Message) => {
+        const onReceiveMessage: ServerToClientEvents["message_received"] = async (message) => {
             const decryptedContent = await decrypt(message.content);
             const decryptedReplyContent = message.reply_to ? await decrypt(message.reply_to.content) : undefined;
 

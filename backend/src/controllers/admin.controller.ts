@@ -4,7 +4,6 @@ import { systemSettingsRepository } from '../repositories/system-settings.reposi
 import { securityRepository } from '../repositories/security.repository';
 import { analyticsRepository } from '../repositories/analytics.repository';
 import { sendResponse, sendError } from '../utils/response';
-import { JWTPayload } from '../types/express';
 
 // Get pending doctor verifications (Admin only)
 export const getPendingVerifications = async (req: Request, res: Response) => {
@@ -86,18 +85,18 @@ export const getAllUsers = async (req: Request, res: Response) => {
         let query = 'SELECT id, name, email, phone_number, role, status, initials, created_at FROM users WHERE 1=1';
         const params: (string | number | boolean | null)[] = [];
 
-        if (role) {
-            params.push(role as string);
+        if (typeof role === 'string') {
+            params.push(role);
             query += ` AND role = $${params.length}`;
         }
 
-        if (status) {
-            params.push(status as string);
+        if (typeof status === 'string') {
+            params.push(status);
             query += ` AND status = $${params.length}`;
         }
 
-        if (search) {
-            params.push(`%${search as string}%`);
+        if (typeof search === 'string') {
+            params.push(`%${search}%`);
             const idx = params.length;
             query += ` AND (name ILIKE $${idx} OR email ILIKE $${idx} OR phone_number ILIKE $${idx})`;
         }
@@ -164,7 +163,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
 // Get system statistics (Admin only)
 export const getSystemStats = async (req: Request, res: Response) => {
     try {
-        const user = req.user as JWTPayload;
+        const user = req.user;
         if (!user || user.role !== 'admin') return sendError(res, 403, 'Unauthorized');
 
         const stats = await Promise.all([
@@ -278,7 +277,8 @@ export const getActiveSessions = async (req: Request, res: Response) => {
 export const revokeSession = async (req: Request, res: Response) => {
     try {
         const { sessionId } = req.params;
-        const success = await securityRepository.revokeSession(sessionId as string);
+        if (typeof sessionId !== 'string') return sendError(res, 400, 'Invalid Session ID');
+        const success = await securityRepository.revokeSession(sessionId);
         if (success) {
             sendResponse(res, 200, true, 'Session revoked successfully');
         } else {
