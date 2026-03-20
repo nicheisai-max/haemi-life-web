@@ -30,6 +30,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Validate PR Title (Conventional Commit)
         run: |
           echo "PR titles are ignored in favor of strict Git commit validation."
