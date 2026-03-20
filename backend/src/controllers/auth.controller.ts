@@ -9,7 +9,7 @@ import { getSessionTimeoutMinutes, getJwtAccessExpiry, getJwtRefreshExpiry } fro
 import { parseUA } from '../utils/ua-parser.util';
 import { sendResponse, sendError } from '../utils/response';
 import crypto from 'crypto';
-import { isJWTPayloadStrict } from '../utils/type-guards';
+import { isRefreshJWTPayload } from '../utils/type-guards';
 
 const getJwtSecret = (): string => {
     const secret = process.env.JWT_SECRET;
@@ -433,7 +433,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         // 1. Verify token signature and basic expiration
         const decoded = jwt.verify(refreshTokenHeader, getJwtSecret());
-        if (!isJWTPayloadStrict(decoded)) {
+        if (!isRefreshJWTPayload(decoded)) {
             await client.query('ROLLBACK');
             return sendError(res, 401, 'Invalid session structure');
         }
