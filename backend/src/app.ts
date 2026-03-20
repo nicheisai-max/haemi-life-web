@@ -26,6 +26,7 @@ import { env } from './config/env';
 import { schemaIntegrityService } from './services/schema-integrity.service';
 import { corsMiddleware } from './middleware/cors.middleware';
 import * as guards from './utils/guards/socket.guards';
+import { observabilityService } from './services/observability.service';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -229,7 +230,7 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
             }
 
             const role = decodedPayload.role;
-            if (role !== 'patient' && role !== 'doctor' && role !== 'pharmacist') {
+            if (role !== 'patient' && role !== 'doctor' && role !== 'pharmacist' && role !== 'admin') {
                 return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid role' })));
             }
 
@@ -286,6 +287,13 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
         }
         const userId = user.id;
         socket.join(`user:${userId}`);
+        
+        // Admin Observability Auto-Join
+        if (user.role === 'admin') {
+            socket.join('admin:observability');
+            logger.info(`Admin joined observability room: ${userId}`);
+        }
+
         logger.info(`Socket: ${socket.id} user:${userId}`);
 
         // ENTERPRISE HARDENING: Standardized Event Listeners
@@ -339,7 +347,18 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
             socket.to(`conversation:${data.conversationId}`).emit('ack_delivery', data);
         });
 
-        socket.on('disconnect', () => logger.info(`Socket disconnected: ${socket.id}`));
+        socket.on('disconnect', () => {
+            logger.info(`Socket disconnected: ${socket.id}`);
+            if (user && user.id) {
+                observabilityService.logSessionEnd({
+                    session_id: null, // Socket disconnect is not an explicit logout
+                    user_id: user.id,
+                    reason: 'Socket disconnect',
+                    timestamp: new Date().toISOString(),
+                    source: 'backend'
+                });
+            }
+        });
     });
 }
 

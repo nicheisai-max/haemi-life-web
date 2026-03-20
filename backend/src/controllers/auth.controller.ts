@@ -10,6 +10,8 @@ import { parseUA } from '../utils/ua-parser.util';
 import { sendResponse, sendError } from '../utils/response';
 import crypto from 'crypto';
 import { isRefreshJWTPayload } from '../utils/type-guards';
+import { observabilityService } from '../services/observability.service';
+import { UserRoleSchema } from '../../../shared/schemas/observability.schema';
 
 const getJwtSecret = (): string => {
     const secret = process.env.JWT_SECRET;
@@ -141,6 +143,21 @@ export const signup = async (req: Request, res: Response) => {
                 refresh_token_jti: refreshJti
             });
 
+            observabilityService.logSessionStart({
+                session: {
+                    session_id: sessionId,
+                    user_id: newUser.id,
+                    role: UserRoleSchema.parse(newUser.role),
+                    login_time: new Date().toISOString(),
+                    last_activity: new Date().toISOString(),
+                    status: 'active',
+                    ip_address: req.ip,
+                    user_agent: userAgent
+                },
+                timestamp: new Date().toISOString(),
+                source: 'backend'
+            });
+
             /* 
                PATCH: Removing cookie-based refresh token for multi-tab isolation.
                Now returning refreshToken in the JSON response body.
@@ -197,6 +214,17 @@ export const login = async (req: Request, res: Response) => {
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
+
+            observabilityService.logLogin({
+                success: false,
+                identifier,
+                reason: 'User not found',
+                timestamp: new Date().toISOString(),
+                ip_address: req.ip,
+                user_agent: getUA(req),
+                source: 'backend'
+            });
+
             return sendError(res, 400, 'Invalid credentials', 'INVALID_CREDENTIALS');
         }
 
@@ -210,6 +238,19 @@ export const login = async (req: Request, res: Response) => {
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
+
+            observabilityService.logLogin({
+                success: false,
+                user_id: user.id,
+                role: UserRoleSchema.parse(user.role),
+                identifier,
+                reason: `Account status: ${user.status}`,
+                timestamp: new Date().toISOString(),
+                ip_address: req.ip,
+                user_agent: getUA(req),
+                source: 'backend'
+            });
+
             return sendError(res, 403, 'Account is not active. Please contact support.');
         }
 
@@ -224,6 +265,19 @@ export const login = async (req: Request, res: Response) => {
                 ip_address: req.ip,
                 user_agent: req.headers['user-agent']
             });
+
+            observabilityService.logLogin({
+                success: false,
+                user_id: user.id,
+                role: UserRoleSchema.parse(user.role),
+                identifier,
+                reason: 'Invalid password',
+                timestamp: new Date().toISOString(),
+                ip_address: req.ip,
+                user_agent: getUA(req),
+                source: 'backend'
+            });
+
             logger.auth('Failed login attempt: Invalid password', { identifier, ip: req.ip });
             return sendError(res, 400, 'Invalid credentials', 'INVALID_CREDENTIALS');
         }
@@ -256,6 +310,32 @@ export const login = async (req: Request, res: Response) => {
             session_id: sessionId,
             access_token_jti: accessJti,
             refresh_token_jti: refreshJti
+        });
+
+        observabilityService.logLogin({
+            success: true,
+            user_id: user.id,
+            role: UserRoleSchema.parse(user.role),
+            identifier,
+            timestamp: new Date().toISOString(),
+            ip_address: req.ip,
+            user_agent: userAgent,
+            source: 'backend'
+        });
+
+        observabilityService.logSessionStart({
+            session: {
+                session_id: sessionId,
+                user_id: user.id,
+                role: UserRoleSchema.parse(user.role),
+                login_time: new Date().toISOString(),
+                last_activity: new Date().toISOString(),
+                status: 'active',
+                ip_address: req.ip,
+                user_agent: userAgent
+            },
+            timestamp: new Date().toISOString(),
+            source: 'backend'
         });
 
         logger.auth('Successful login', { userId: user.id, email: user.email, role: user.role });
@@ -576,6 +656,13 @@ export const refreshToken = async (req: Request, res: Response) => {
                 access_token_jti: newAccessJti,
                 refresh_token_jti: newRefreshJti
             });
+
+            observabilityService.logTokenRefresh({
+                session_id: sessionId,
+                user_id: user.id,
+                timestamp: new Date().toISOString(),
+                source: 'backend'
+            });
         } else {
             // Grace Period Match: Return current tokens to re-sync the tab
             logger.info('Grace window hit, synchronizing tab with current session', { userId: user.id, sessionId });
@@ -655,6 +742,13 @@ export const logout = async (req: Request, res: Response) => {
                 ip_address: req.ip,
                 user_agent: getUA(req),
                 session_id: req.user.session_id
+            });
+
+            observabilityService.logSessionEnd({
+                session_id: req.user.session_id || null,
+                user_id: req.user.id,
+                timestamp: new Date().toISOString(),
+                source: 'backend'
             });
         }
     } catch (dbError: unknown) {
