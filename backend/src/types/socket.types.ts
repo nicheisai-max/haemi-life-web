@@ -43,7 +43,7 @@ export interface HaemiNotification {
     is_read: boolean;
 }
 
-export type UserRole = 'patient' | 'doctor' | 'pharmacist';
+export type UserRole = 'patient' | 'doctor' | 'pharmacist' | 'admin';
 
 /* ---------------- PAYLOAD TYPES ---------------- */
 
@@ -106,6 +106,26 @@ export interface TypingStartedPushPayload {
     name: string;
 }
 
+/* ---------------- OBSERVABILITY PAYLOADS ---------------- */
+
+import { 
+    SessionMetadata, 
+    SessionStartedEvent, 
+    SessionEndedEvent, 
+    LoginEvent, 
+    TokenRefreshedEvent,
+    ObservabilityBatch
+} from '../../../shared/schemas/observability.schema';
+
+export type { 
+    SessionMetadata, 
+    SessionStartedEvent, 
+    SessionEndedEvent, 
+    LoginEvent, 
+    TokenRefreshedEvent,
+    ObservabilityBatch
+};
+
 /* ---------------- EVENT INTERFACES ---------------- */
 
 export interface ServerToClientEvents {
@@ -133,6 +153,14 @@ export interface ServerToClientEvents {
     "typing_started": (data: { userId: string } | { conversationId: string; name: string }) => void;
     "typing_stopped": (data: { userId: string } | { conversationId: string; name: string }) => void;
     "notification:new": (notification: HaemiNotification) => void; 
+
+    // Admin Observability Events
+    "session_started": (data: SessionStartedEvent) => void;
+    "session_ended": (data: SessionEndedEvent) => void;
+    "login_success": (data: LoginEvent) => void;
+    "login_failure": (data: LoginEvent) => void;
+    "token_refreshed": (data: TokenRefreshedEvent) => void;
+    "observability_batch": (data: ObservabilityBatch) => void;
 }
 
 export interface ClientToServerEvents {
