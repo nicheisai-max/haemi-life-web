@@ -1,20 +1,19 @@
 import { Request, Response } from 'express';
 import { recordRepository } from '../repositories/record-repository';
 import { sendResponse, sendError } from '../utils/response';
-import { JWTPayload } from '../types/express';
 import { pool } from '../config/db';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import crypto from 'crypto';
 
 // Get current patient's own medical records
 export const getMyRecords = async (req: Request, res: Response) => {
     try {
-        const user = req.user as JWTPayload;
+        const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
         const patientId = user.id;
 
-        const records = await recordRepository.findByPatientId(patientId as string);
+        const records = await recordRepository.findByPatientId(patientId);
         sendResponse(res, 200, true, 'Medical records fetched', records);
     } catch (error) {
         console.error('Error fetching medical records:', error);
@@ -25,7 +24,7 @@ export const getMyRecords = async (req: Request, res: Response) => {
 // Get records for a specific patient (Doctor/Pharmacist oversight)
 export const getPatientRecords = async (req: Request, res: Response) => {
     try {
-        const user = req.user as JWTPayload;
+        const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
         const userId = user.id;
         const role = user.role;
@@ -49,7 +48,8 @@ export const getPatientRecords = async (req: Request, res: Response) => {
             }
         }
 
-        const records = await recordRepository.findByPatientId(patientId as string);
+        if (typeof patientId !== 'string') return sendError(res, 400, 'Invalid Patient ID');
+        const records = await recordRepository.findByPatientId(patientId);
         sendResponse(res, 200, true, 'Patient records fetched', records);
     } catch (error) {
         console.error('Error fetching patient records:', error);
@@ -60,7 +60,7 @@ export const getPatientRecords = async (req: Request, res: Response) => {
 // Upload a new medical record (Patient only)
 export const uploadRecord = async (req: Request, res: Response) => {
     try {
-        const user = req.user as JWTPayload;
+        const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
         const patientId = user.id;
         const file = req.file;
@@ -88,7 +88,7 @@ export const uploadRecord = async (req: Request, res: Response) => {
         fs.writeFileSync(fullPath, buffer);
 
         const newRecord = await recordRepository.create({
-            patientId: patientId as string,
+            patientId: patientId,
             name: originalname,
             filePath: relativePath,
             fileMime: mimetype,
@@ -115,7 +115,8 @@ export const getRecordById = async (req: Request, res: Response) => {
         if (!user) return sendError(res, 401, 'Unauthorized');
         const { id: userId, role } = user;
 
-        const record = await recordRepository.findById(id as string, userId as string, role as string);
+        if (typeof id !== 'string') return sendError(res, 400, 'Invalid Record ID');
+        const record = await recordRepository.findById(id, userId, role);
 
         if (!record) {
             return sendError(res, 404, 'Record not found or access denied');
@@ -136,18 +137,18 @@ export const deleteRecord = async (req: Request, res: Response) => {
         if (!user) return sendError(res, 401, 'Unauthorized');
         const { id: userId, role } = user;
 
-        // Institutional Hardening: Only patients can delete their own records
         if (role !== 'patient') {
             return sendError(res, 403, 'Only patients can delete their own records');
         }
 
-        const record = await recordRepository.findById(id as string, userId as string, role as string);
+        if (typeof id !== 'string') return sendError(res, 400, 'Invalid Record ID');
+        const record = await recordRepository.findById(id, userId, role);
 
         if (!record) {
             return sendError(res, 404, 'Record not found or access denied');
         }
 
-        await recordRepository.softDelete(id as string);
+        await recordRepository.softDelete(id);
 
         // PRODUCTION HARDENING: Cleanup filesystem on delete
         if (record.file_path && record.file_path !== 'DB_ONLY') {

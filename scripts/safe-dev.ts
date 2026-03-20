@@ -1,5 +1,7 @@
 import { spawn, execSync, ChildProcess } from 'child_process';
-import path from 'path';
+import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as net from 'net';
 
 const BACKEND_DIR = path.resolve(__dirname, '../backend');

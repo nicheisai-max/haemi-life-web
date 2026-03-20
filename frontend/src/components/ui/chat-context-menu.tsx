@@ -40,7 +40,8 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+            const target = event.target;
+            if (menuRef.current && target instanceof Node && !menuRef.current.contains(target)) {
                 onClose();
             }
         };

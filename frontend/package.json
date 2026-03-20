@@ -30,7 +30,6 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@types/simple-peer": "^9.11.9",
-    "@types/socket.io-client": "^1.4.36",
     "axios": "^1.13.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

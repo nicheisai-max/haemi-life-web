@@ -2,6 +2,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig, type AxiosResponse 
 import { logger, auditLogger, intrusionDetector } from '../utils/logger';
 import { NetworkError, AuthError, RefreshFailureError, FatalAuthError, isAuthError, isNetworkError, isFatalAuthError } from '../types/auth.types';
 import type { AuthResponse, ApiResponse } from '../types/auth.types';
+import { isJWTPayload, safeParseJSON } from '../utils/type-guards';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 if (!API_BASE) {
@@ -37,11 +38,22 @@ export const setAccessToken = (token: string | null, refreshToken?: string | nul
 
 export const getAccessToken = () => accessToken;
 
-// Custom interface for request configuration
 interface ExtendedRequestConfig extends InternalAxiosRequestConfig {
     __cachedData?: unknown;
     __retryCount?: number;
     _retry?: boolean;
+}
+
+function isExtendedConfig(config: unknown): config is ExtendedRequestConfig {
+    return !!config && typeof config === 'object';
+}
+
+interface ErrorResponseData {
+    message?: string;
+}
+
+function isErrorResponseData(data: unknown): data is ErrorResponseData {
+    return !!data && typeof data === 'object';
 }
 
 const MAX_RETRIES = 2;
@@ -348,8 +360,8 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
             try {
                 const base64Url = newToken.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const decoded = JSON.parse(atob(base64));
-                const userId = decoded?.id;
+                const decodedToken = safeParseJSON(atob(base64), isJWTPayload);
+                const userId = decodedToken?.id;
 
                 const syncChannel = new BroadcastChannel('haemi_auth_sync');
                 syncChannel.postMessage({ 
@@ -433,10 +445,10 @@ api.interceptors.response.use(
         return response;
     },
     async (error: AxiosError) => {
-        const originalRequest = error.config as ExtendedRequestConfig;
+        const originalRequest = error.config;
         recordFailure(error);
 
-        if (!originalRequest) return Promise.reject(error);
+        if (!isExtendedConfig(originalRequest)) return Promise.reject(error);
         
         // 1. Interceptor Loop Protection
         if (originalRequest.url?.includes('/auth/refresh-token')) {
@@ -451,9 +463,10 @@ api.interceptors.response.use(
             (error.response.status === 400 || error.response.status === 401 || error.response.status === 403) &&
             originalRequest.url?.includes('/auth/');
 
-        if (isExpectedAuthFailure) {
-            const msg = (error.response!.data as { message?: string })?.message || error.message;
-            return Promise.reject(new AuthError(msg, error.response!.status, true));
+        if (isExpectedAuthFailure && error.response) {
+            const data = error.response.data;
+            const msg = isErrorResponseData(data) ? data.message || error.message : error.message;
+            return Promise.reject(new AuthError(msg, error.response.status, true));
         }
 
         // 3. 401 Handling with Request Queuing System (Mutex Locked)

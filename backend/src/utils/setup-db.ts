@@ -1,6 +1,6 @@
 import { pool } from '../config/db';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import bcrypt from 'bcrypt';
 
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD as string;

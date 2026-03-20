@@ -37,20 +37,20 @@ export interface Patient {
 
 // List all verified doctors
 export const listDoctors = async (params?: { specialization?: string; search?: string }) => {
-    const response = await api.get('/doctor', { params });
-    return response.data as DoctorProfile[];
+    const response = await api.get<DoctorProfile[]>('/doctor', { params });
+    return response.data;
 };
 
 // Get doctor profile by ID
 export const getDoctorProfile = async (id: string) => {
-    const response = await api.get(`/doctor/${id}`);
-    return response.data as DoctorProfile;
+    const response = await api.get<DoctorProfile>(`/doctor/${id}`);
+    return response.data;
 };
 
 // Get list of specializations
 export const getSpecializations = async () => {
-    const response = await api.get('/doctor/specializations');
-    return response.data as string[];
+    const response = await api.get<string[]>('/doctor/specializations');
+    return response.data;
 };
 
 // Update doctor's own profile (Doctor only)
@@ -66,8 +66,8 @@ export const updateDoctorProfile = async (data: {
 
 // Get doctor's schedule
 export const getDoctorSchedule = async () => {
-    const response = await api.get('/doctor/me/schedule');
-    return response.data as DoctorSchedule[];
+    const response = await api.get<DoctorSchedule[]>('/doctor/me/schedule');
+    return response.data;
 };
 
 // Update doctor's schedule
@@ -83,8 +83,8 @@ export const updateDoctorSchedule = async (schedule: Array<{
 
 // Get doctor's patients
 export const getDoctorPatients = async () => {
-    const response = await api.get('/doctor/me/patients');
-    return response.data as Patient[];
+    const response = await api.get<Patient[]>('/doctor/me/patients');
+    return response.data;
 };
 
 // Alias for listDoctors (used by some components)

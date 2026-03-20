@@ -13,7 +13,8 @@ export const corsMiddleware = (req: Request, res: Response, next: NextFunction) 
     if (origin && isAllowed) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     } else {
-        res.setHeader('Access-Control-Allow-Origin', env.allowedOrigins ? env.allowedOrigins[0] : '*');
+        const fallbackOrigin = env.allowedOrigins && env.allowedOrigins.length > 0 ? env.allowedOrigins[0] : 'http://localhost:5173';
+        res.setHeader('Access-Control-Allow-Origin', fallbackOrigin);
     }
 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');

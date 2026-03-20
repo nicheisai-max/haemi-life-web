@@ -32,10 +32,15 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
 
     const saltData = encoder.encode(SALT);
 
+    const buffer = keyData.buffer;
+    if (!(buffer instanceof ArrayBuffer)) {
+        throw new Error('🔥 SECURITY ARCHITECTURE BLOCK: Buffer source is not an ArrayBuffer.');
+    }
+
     // Filter out potential non-ArrayBuffer errors
     const baseKey = await window.crypto.subtle.importKey(
         'raw',
-        keyData.buffer as ArrayBuffer,
+        buffer,
         'PBKDF2',
         false,
         ['deriveKey']

@@ -1,5 +1,5 @@
 import { pool } from '../config/db';
-import { io } from '../app';
+import { socketIO as io } from '../app';
 
 export type NotificationType = 'success' | 'info' | 'warning' | 'error';
 

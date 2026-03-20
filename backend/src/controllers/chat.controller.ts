@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
-import { io } from '../app';
+import { socketIO as io } from '../app';
 import { chatReliabilityService } from '../services/chat-reliability.service';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 import { encrypt, decrypt } from '../utils/security';
 import { sendResponse, sendError } from '../utils/response';
 import { notificationService } from '../services/notification.service';
@@ -180,6 +180,7 @@ export const getMessages = async (req: Request, res: Response) => {
                     WHERE rm.id = m.reply_to_id
                 ) as reply_to,
                 u.name as sender_name,
+                u.role as sender_role,
                 COALESCE(
                     (
                         SELECT json_agg(json_build_object('url', ma.file_url, 'type', ma.file_type, 'size', ma.file_size, 'name', ma.file_name))
@@ -264,11 +265,11 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         const msgResult = await client.query(
             `
-            INSERT INTO messages (conversation_id, sender_id, content, preview_text, message_type, reply_to_id, status, sequence_number)
-            VALUES ($1, $2, $3, $4, $5, $6, 'sent', $7)
+            INSERT INTO messages (conversation_id, sender_id, sender_role, content, preview_text, message_type, reply_to_id, status, sequence_number)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', $8)
             RETURNING *
             `,
-            [conversationId, senderId, encryptedContent, decodedPreview, messageType, req.body.replyToId, sequenceNumber]
+            [conversationId, senderId, user.role, encryptedContent, decodedPreview, messageType, req.body.replyToId, sequenceNumber]
         );
 
         const newMessage = msgResult.rows[0];
@@ -368,6 +369,7 @@ export const sendMessage = async (req: Request, res: Response) => {
         const socketPayload = {
             ...newMessage,
             sender_name: senderName,
+            sender_role: user.role,
             attachments: (attachment && attachment.url) ? [
                 {
                     url: `/api/files/message/${newMessage.id}`,
@@ -486,14 +488,14 @@ export const markAsDelivered = async (req: Request, res: Response) => {
 
         if (result.rows.length > 0 && io) {
             const payload = {
-                conversationId,
+                conversationId: conversationId as string,
                 receiver_id: userId,
-                messageIds: result.rows.map(r => r.id),
+                messageIds: result.rows.map(r => String(r.id)),
                 status: 'delivered'
             };
 
             // Targeted Read Receipt Optimization: Notify original senders only
-            const senderIds = [...new Set(result.rows.map(r => r.sender_id))];
+            const senderIds = [...new Set(result.rows.map(r => String(r.sender_id)))];
             senderIds.forEach(sid => {
                 io!.to(`user:${sid}`).emit('message_delivered', payload);
             });
@@ -526,10 +528,8 @@ export const markAsRead = async (req: Request, res: Response) => {
 
         if (result.rows.length > 0 && io) {
             const payload = {
-                conversationId,
-                user_id: userId,
-                messageIds: result.rows.map(r => r.id),
-                status: 'read'
+                conversationId: conversationId as string,
+                user_id: userId
             };
 
             // Targeted Read Receipt Optimization: Notify original senders only
@@ -582,7 +582,12 @@ export const reactToMessage = async (req: Request, res: Response) => {
                 [messageId, userId, reactionType]
             );
             if (io) {
-                const payload = { messageId, userId, reactionType, action: 'removed' };
+                const payload = { 
+                    messageId: messageId as string, 
+                    userId, 
+                    reactionType: reactionType as string, 
+                    action: 'removed' as const 
+                };
                 const participantIds = await chatReliabilityService.getParticipants(conversationId);
                 participantIds.forEach(pid => io!.to(`user:${pid}`).emit('message_reaction', payload));
             }
@@ -595,7 +600,12 @@ export const reactToMessage = async (req: Request, res: Response) => {
                 [messageId, userId, reactionType]
             );
             if (io) {
-                const payload = { messageId, userId, reactionType, action: 'added' };
+                const payload = { 
+                    messageId: messageId as string, 
+                    userId, 
+                    reactionType: reactionType as string, 
+                    action: 'added' as const 
+                };
                 const participantIds = await chatReliabilityService.getParticipants(conversationId);
                 participantIds.forEach(pid => io!.to(`user:${pid}`).emit('message_reaction', payload));
             }
@@ -657,7 +667,10 @@ export const deleteMessage = async (req: Request, res: Response) => {
 
 
             if (io) {
-                const payload = { messageId, forEveryone: true };
+                const payload = { 
+                    messageId: messageId as string, 
+                    forEveryone: true 
+                };
                 const participantIds = await chatReliabilityService.getParticipants(conversationId);
                 participantIds.forEach(pid => io!.to(`user:${pid}`).emit('message_deleted', payload));
             }

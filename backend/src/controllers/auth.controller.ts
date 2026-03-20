@@ -8,8 +8,22 @@ import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 import { getSessionTimeoutMinutes, getJwtAccessExpiry, getJwtRefreshExpiry } from '../utils/config.util';
 import { parseUA } from '../utils/ua-parser.util';
 import { sendResponse, sendError } from '../utils/response';
-import { JWTPayload } from '../types/express';
 import crypto from 'crypto';
+import { isJWTPayloadStrict } from '../utils/type-guards';
+
+const getJwtSecret = (): string => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      logger.error('CRITICAL: JWT_SECRET is not configured in environment variables');
+      return 'UNSET_SECRET_INTERNAL_FAILSAFE';
+    }
+    return secret;
+};
+
+const getUA = (req: Request): string => {
+    const ua = req.headers['user-agent'];
+    return typeof ua === 'string' ? ua : '';
+};
 
 // Phase 7: Backend Refresh Rate Limiting (In-Memory Sliding Window)
 const refreshRateLimitMap = new Map<string, { counts: number[]; lastCleanup: number }>();
@@ -81,12 +95,13 @@ export const signup = async (req: Request, res: Response) => {
             const accessJti = crypto.randomBytes(16).toString('hex');
             const refreshJti = crypto.randomBytes(16).toString('hex');
 
-            const { browser, os, device } = parseUA(req.headers['user-agent'] as string);
+            const userAgent = getUA(req);
+            const { browser, os, device } = parseUA(userAgent);
 
             await pool.query(
                 `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, browser_name, os_name, device_type)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], browser, os, device]
+                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip, userAgent, browser, os, device]
             );
 
             // Generate Access Token (15m)
@@ -99,7 +114,7 @@ export const signup = async (req: Request, res: Response) => {
                     jti: accessJti,
                     session_id: sessionId
                 },
-                process.env.JWT_SECRET as string,
+                getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
             );
 
@@ -111,7 +126,7 @@ export const signup = async (req: Request, res: Response) => {
                     jti: refreshJti,
                     session_id: sessionId
                 },
-                process.env.JWT_SECRET as string,
+                getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }
             );
 
@@ -120,7 +135,7 @@ export const signup = async (req: Request, res: Response) => {
                 user_id: newUser.id,
                 action_type: 'SIGNUP_SUCCESS',
                 ip_address: req.ip,
-                user_agent: req.headers['user-agent'] as string,
+                user_agent: userAgent,
                 session_id: sessionId,
                 access_token_jti: accessJti,
                 refresh_token_jti: refreshJti
@@ -221,13 +236,14 @@ export const login = async (req: Request, res: Response) => {
         const accessJti = crypto.randomBytes(16).toString('hex');
         const refreshJti = crypto.randomBytes(16).toString('hex');
 
-        const { browser, os, device } = parseUA(req.headers['user-agent'] as string);
+        const userAgent = getUA(req);
+        const { browser, os, device } = parseUA(userAgent);
 
         // Persistent Session record
         await pool.query(
             `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, browser_name, os_name, device_type)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [user.id, user.role, sessionId, accessJti, refreshJti, req.ip, req.headers['user-agent'], browser, os, device]
+            [user.id, user.role, sessionId, accessJti, refreshJti, req.ip, userAgent, browser, os, device]
         );
 
         // Audit Successful Login
@@ -236,7 +252,7 @@ export const login = async (req: Request, res: Response) => {
             actor_role: user.role,
             action_type: 'LOGIN_SUCCESS',
             ip_address: req.ip,
-            user_agent: req.headers['user-agent'] as string,
+            user_agent: userAgent,
             session_id: sessionId,
             access_token_jti: accessJti,
             refresh_token_jti: refreshJti
@@ -255,7 +271,7 @@ export const login = async (req: Request, res: Response) => {
                 jti: accessJti,
                 session_id: sessionId
             },
-            process.env.JWT_SECRET as string,
+            getJwtSecret(),
             { expiresIn: await getJwtAccessExpiry() }
         );
 
@@ -267,7 +283,7 @@ export const login = async (req: Request, res: Response) => {
                 jti: refreshJti,
                 session_id: sessionId
             },
-            process.env.JWT_SECRET as string,
+            getJwtSecret(),
             { expiresIn: await getJwtRefreshExpiry() }
         );
 
@@ -416,7 +432,11 @@ export const refreshToken = async (req: Request, res: Response) => {
         await client.query('BEGIN');
 
         // 1. Verify token signature and basic expiration
-        const decoded = jwt.verify(refreshTokenHeader, process.env.JWT_SECRET as string) as JWTPayload;
+        const decoded = jwt.verify(refreshTokenHeader, getJwtSecret());
+        if (!isJWTPayloadStrict(decoded)) {
+            await client.query('ROLLBACK');
+            return sendError(res, 401, 'Invalid session structure');
+        }
 
         // 2. Fetch User and Session state with row-level locking
         const userRes = await client.query(
@@ -532,7 +552,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                     jti: newAccessJti,
                     session_id: sessionId
                 },
-                process.env.JWT_SECRET as string,
+                getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
             );
 
@@ -543,7 +563,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                     jti: newRefreshJti,
                     session_id: sessionId
                 },
-                process.env.JWT_SECRET as string,
+                getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }
             );
 
@@ -551,7 +571,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                 user_id: user.id,
                 action_type: 'TOKEN_REFRESH',
                 ip_address: req.ip,
-                user_agent: req.headers['user-agent'] as string,
+                user_agent: getUA(req),
                 session_id: sessionId,
                 access_token_jti: newAccessJti,
                 refresh_token_jti: newRefreshJti
@@ -571,7 +591,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                     jti: session.access_token_jti,
                     session_id: sessionId
                 },
-                process.env.JWT_SECRET as string,
+                getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
             );
 
@@ -582,7 +602,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                     jti: session.refresh_token_jti,
                     session_id: sessionId
                 },
-                process.env.JWT_SECRET as string,
+                getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }
             );
         }
@@ -601,8 +621,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
     } catch (err: unknown) {
         await client.query('ROLLBACK');
-        const error = err as Error;
-        if (error.name === 'TokenExpiredError') {
+        if (err instanceof Error && err.name === 'TokenExpiredError') {
             return sendResponse(res, 401, false, 'Session expired. Please log in again.');
         }
         logger.error('Refresh operation failed', err);
@@ -634,7 +653,7 @@ export const logout = async (req: Request, res: Response) => {
                 user_id: req.user.id,
                 action_type: 'LOGOUT',
                 ip_address: req.ip,
-                user_agent: req.headers['user-agent'] as string,
+                user_agent: getUA(req),
                 session_id: req.user.session_id
             });
         }

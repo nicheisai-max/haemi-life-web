@@ -9,7 +9,8 @@ import { logger } from '../utils/logger';
  */
 export const getMe = async (req: Request, res: Response) => {
     const start = Date.now();
-    const requestId = (req.headers['x-request-id'] as string) || Math.random().toString(36).substring(7);
+    const rawRequestId = req.headers['x-request-id'];
+    const requestId = typeof rawRequestId === 'string' ? rawRequestId : Math.random().toString(36).substring(7);
 
     try {
         const userId = req.user?.id;
@@ -113,10 +114,10 @@ export const getMe = async (req: Request, res: Response) => {
         });
 
     } catch (error: unknown) {
-        const err = error as Error;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown profile error';
         const duration = Date.now() - start;
         logger.error('Internal server error during profile fetch', {
-            error: err.message,
+            error: errorMsg,
             userId: req.user?.id,
             requestId,
             duration: `${duration}ms`

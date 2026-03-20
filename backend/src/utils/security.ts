@@ -9,6 +9,14 @@ const ENCRYPTED_PREFIX = 'enc:';
 const GCM_PREFIX = 'gcm:';
 const LEGACY_IV_LENGTH = 16; // For CBC fallback
 
+function isCipherGCM(cipher: unknown): cipher is crypto.CipherGCM {
+    return typeof cipher === 'object' && cipher !== null && 'getAuthTag' in cipher;
+}
+
+function isDecipherGCM(decipher: unknown): decipher is crypto.DecipherGCM {
+    return typeof decipher === 'object' && decipher !== null && 'setAuthTag' in decipher;
+}
+
 // Helper to ensure key is 32 bytes
 // Standardized to PBKDF2 for production-grade compatibility with Web Crypto API (Frontend)
 function getKey() {
@@ -28,11 +36,16 @@ export const encrypt = (text: string): string => {
     if (!text) return text;
     try {
         const iv = crypto.randomBytes(IV_LENGTH);
-        const cipher = crypto.createCipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH }) as crypto.CipherGCM;
+        const cipher = crypto.createCipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
+        
+        if (!isCipherGCM(cipher)) {
+            throw new Error('GCM cipher initialization failed');
+        }
 
         let encrypted = cipher.update(text, 'utf8', 'hex');
         encrypted += cipher.final('hex');
         const authTag = cipher.getAuthTag().toString('hex');
+
 
         return `${ENCRYPTED_PREFIX}${GCM_PREFIX}${iv.toString('hex')}:${authTag}:${encrypted}`;
     } catch (error) {
@@ -58,7 +71,12 @@ export const decrypt = (text: string): string => {
             const tag = Buffer.from(parts[1], 'hex');
             const encryptedText = parts[2];
 
-            const decipher = crypto.createDecipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH }) as crypto.DecipherGCM;
+            const decipher = crypto.createDecipheriv(ALGORITHM_GCM, getKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
+            
+            if (!isDecipherGCM(decipher)) {
+                throw new Error('GCM decipher initialization failed');
+            }
+
             decipher.setAuthTag(tag);
 
             let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
@@ -81,18 +99,18 @@ export const decrypt = (text: string): string => {
 
         return result;
     } catch (err: unknown) {
-        const error = err as Error;
-        console.error('[Security] Decryption failed (Mode mismatch or key error):', error);
+        const errorMsg = err instanceof Error ? err.message : 'Unknown decryption error';
+        console.error('[Security] Decryption failed (Mode mismatch or key error):', errorMsg);
 
         // STRICT MODE: Return informative placeholder instead of silent fail
-        if (error.message && error.message.includes('auth tag')) {
+        if (errorMsg.includes('auth tag')) {
             return `[DECRYPTION_ERROR: AUTH_TAG_MISMATCH]`;
         }
-        if (error.message && error.message.includes('bad decrypt')) {
+        if (errorMsg.includes('bad decrypt')) {
             return `[DECRYPTION_ERROR: BAD_DECRYPT]`;
         }
 
-        return `[DECRYPTION_FAILED: ${error.message}]`;
+        return `[DECRYPTION_FAILED: ${errorMsg}]`;
     }
 };
 

@@ -1,8 +1,8 @@
 import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/db';
 import { encrypt, decrypt, getBlindIndex } from '../utils/security';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import crypto from 'crypto';
 
 export interface User {

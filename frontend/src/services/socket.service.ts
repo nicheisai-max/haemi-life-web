@@ -1,213 +1,199 @@
-/// <reference types="vite/client" />
-import io from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
 import { getAccessToken } from './api';
 import { logger } from '../utils/logger';
+import type { SocketConnectionState } from '../types/socket.types';
+import { safeParseJSON, isSocketErrorPayload } from '../utils/type-guards';
+import type { Notification as HaemiNotification } from './notification.service';
+import type { Message } from '../hooks/use-chat';
 
-const SOCKET_URL = (import.meta.env?.VITE_API_URL || 'http://localhost:5000');
+const SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 
-type InternalSocket = ReturnType<typeof io>;
+/* ---------------- SIGNAL ---------------- */
 
-interface SocketWithAuth extends InternalSocket {
-    auth: { token: string };
+interface SignalData {
+    type?: 'offer' | 'answer' | 'pranswer' | 'rollback';
+    sdp?: string;
+    candidate?: Record<string, string | number | boolean>;
 }
 
-// ─── Deterministic JWT Validation (Zero-Dependency) ──────────────────────────
-const decodeJWT = (token: string | null) => {
-    if (!token) return null;
-    try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        return JSON.parse(jsonPayload);
-    } catch {
-        return null;
-    }
-};
+/* ---------------- EVENTS ---------------- */
 
-const isTokenValid = (token: string | null): boolean => {
-    const decoded = decodeJWT(token);
-    if (!decoded?.exp) return false;
-    const now = Math.floor(Date.now() / 1000);
-    // Strict 30s buffer: Never attempt socket connection if token is expiring imminently
-    return decoded.exp > now + 30;
-};
+export interface ServerToClientEvents {
+    connect: () => void;
+    disconnect: (reason: string) => void;
+    connect_error: (err: Error) => void;
+    reconnect_attempt: (attempt: number) => void;
+    reconnect_failed: () => void;
+    reconnect: () => void;
+    'participant-joined': (participantId: string) => void;
+    'call-made': (data: { offer: SignalData; socket: string }) => void;
+    'answer-made': (data: { answer: SignalData; socket: string }) => void;
+    'ice-candidate': (data: { candidate: SignalData; socket: string }) => void;
+    message_reaction: (data: {
+        messageId: string;
+        userId: string;
+        reactionType: string;
+        action: 'added' | 'removed';
+    }) => void;
+    message_deleted: (data: { messageId: string; forEveryone: boolean }) => void;
+    typing_started: (data: { userId: string } | { conversationId: string; name: string }) => void;
+    typing_stopped: (data: { userId: string } | { conversationId: string; name: string }) => void;
+    message_delivered: (data: { conversationId: string; messageIds: string[] }) => void;
+    message_read: (data: { conversationId: string; user_id: string }) => void;
+    message_received: (message: Message) => void;
+    'notification:new': (notification: HaemiNotification) => void;
+}
+
+export interface ClientToServerEvents {
+    'join-consultation': (appointmentId: string) => void;
+    'call-user': (data: { offer: SignalData; to: string }) => void;
+    'make-answer': (data: { answer: SignalData; to: string }) => void;
+    'ice-candidate': (data: { candidate: SignalData; to: string }) => void;
+    ack_delivery: (data: { conversationId: string; messageId: string }) => void;
+    join_conversation: (conversationId: string) => void;
+    ack_read: (data: { conversationId: string; user_id: string }) => void;
+    typing_started: (data: { conversationId: string; name: string }) => void;
+    typing_stopped: (data: { conversationId: string; name: string }) => void;
+}
+
+/* ---------------- TYPES ---------------- */
+
+type SocketInstance = Socket<ServerToClientEvents, ClientToServerEvents>;
+
+type ListenerMap = Map<
+    keyof ServerToClientEvents,
+    Set<(...args: unknown[]) => void>
+>;
+
+/* ---------------- SERVICE ---------------- */
 
 class SocketService {
-    private static instance: SocketService;
-    private socket: SocketWithAuth | null = null;
-    private listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
+    private socket: SocketInstance | null = null;
+    private listeners: ListenerMap = new Map();
+    private state: SocketConnectionState = 'IDLE';
 
-    // Gating state locks
-    private appReady = false;
-    private isConnecting = false;
-    private backendReady = false;
-
-    private constructor() {
-        if (typeof window !== 'undefined') {
-            window.addEventListener('auth:ready', () => {
-                this.appReady = true;
-                void this.connect();
-            });
-
-            window.addEventListener('auth:token-refreshed', (e: Event) => {
-                const customEvent = e as CustomEvent<{ token: string }>;
-                const token = customEvent.detail.token;
-                this.reconnectWithToken(token);
-            });
-
-            window.addEventListener('auth:unauthorized', () => {
-                // Identity eviction requires deterministic destruction of active channels
-                this.disconnect();
-            });
-        }
+    private setState(state: SocketConnectionState) {
+        if (this.state === state) return;
+        this.state = state;
+        logger.info(`Socket → ${state}`);
     }
 
-    public static getInstance(): SocketService {
-        if (!SocketService.instance) {
-            SocketService.instance = new SocketService();
+    private getSet(event: keyof ServerToClientEvents) {
+        let set = this.listeners.get(event);
+        if (!set) {
+            set = new Set();
+            this.listeners.set(event, set);
         }
-        return SocketService.instance;
+        return set;
     }
 
-    private async checkBackendReady(): Promise<boolean> {
-        if (this.backendReady) return true;
-        try {
-            const res = await fetch(`${SOCKET_URL === '/' ? '' : SOCKET_URL}/api/health/ready`);
-            const data = await res.json();
-            if (data?.status === 'ready' || data?.status === 'ok') {
-                this.backendReady = true;
-                return true;
-            }
-            return false;
-        } catch {
-            return false;
-        }
+    private attachAll(socket: SocketInstance) {
+        this.listeners.forEach((set, event) => {
+            set.forEach((cb) => {
+                socket.on(event, cb as never);
+            });
+        });
     }
 
-    public async connect(token?: string) {
-        if (this.isConnecting) return;
-        this.isConnecting = true;
+    async connect(tokenOverride?: string) {
+        const token = tokenOverride || getAccessToken();
+        if (!token) return;
 
         try {
-            const authToken = token || getAccessToken();
-            const hasSession = typeof window !== 'undefined' ? !!sessionStorage.getItem('user') : false;
-            const appInitialized = this.appReady || hasSession;
-            const authStatus = authToken && hasSession ? 'authenticated' : 'unauthenticated';
-
-            // 🧱 SOCKET CONNECTION GATING: Intercept unregistered loops pre-connection
-            if (!appInitialized || authStatus !== 'authenticated' || !authToken || !isTokenValid(authToken)) {
-                this.disconnect();
-                return;
-            }
-
-            const isBackendReady = await this.checkBackendReady();
-            if (!isBackendReady) {
-                this.disconnect();
-                return;
-            }
-
-            const socketWithAuth = this.socket as SocketWithAuth | null;
-            if (this.socket?.connected && socketWithAuth?.auth?.token === authToken) {
-                return;
-            }
-
-            if (this.socket) {
-                this.socket.disconnect();
-                this.socket = null;
-            }
-
-            this.socket = io(SOCKET_URL, {
-                auth: { token: authToken },
-                transports: ['websocket'],
-                reconnection: true,
-                reconnectionDelay: 1000,
-                reconnectionDelayMax: 5000,
-                randomizationFactor: 0.5
-            }) as SocketWithAuth;
-
-            this.socket.on('connect', () => {
-                // Silent by design: ZERO-NOISE policy
+            const socket = io(SOCKET_URL, {
+                auth: { token },
+                transports: ['polling', 'websocket'],
             });
 
-            this.socket.on('reconnect', (attemptNumber: number) => {
-                // Restore event subscriptions without polluting terminal
-                const callbacks = this.listeners.get('reconnect');
-                if (callbacks) {
-                    callbacks.forEach(cb => cb(attemptNumber));
+            this.socket?.disconnect();
+            this.socket = socket;
+
+            this.attachAll(socket);
+
+            socket.on('connect', () => this.setState('CONNECTED'));
+
+            socket.on('disconnect', (reason) => {
+                this.setState(
+                    reason === 'io server disconnect'
+                        ? 'CLOSED'
+                        : 'TRANSPORT_DISCONNECTED'
+                );
+            });
+
+            socket.on('connect_error', (err) => {
+                const parsed = safeParseJSON(err.message, isSocketErrorPayload);
+
+                if (!parsed) {
+                    this.setState('HANDSHAKE_FAILED');
+                    return;
                 }
-            });
 
-            this.socket.on('connect_error', (err: Error) => {
-                // 🧠 ERROR CLASSIFICATION
-                const msg = err.message?.toLowerCase() || '';
-                const isAuthError = msg.includes('jwt') || msg.includes('auth') || msg.includes('unauthorized');
-
-                if (isAuthError) {
-                    // A. AUTH EXPECTED (SILENT): Disconnect and await refresh lifecycle
+                if (parsed.code === 'AUTH_EXPIRED') {
+                    this.setState('FAILED');
                     this.disconnect();
-                } else {
-                    // B. SYSTEM ERRORS (LOG REQUIRED): Bubble up real network/connectivity failures
-                    logger.error('[SocketService] Connection failure', { reason: err.message });
                 }
             });
 
-            // Re-attach all global listeners
-            this.listeners.forEach((callbacks, event) => {
-                callbacks.forEach(cb => this.socket?.on(event, cb as (...args: unknown[]) => void));
-            });
-        } finally {
-            this.isConnecting = false;
+        } catch (e) {
+            const error = e instanceof Error ? e : new Error('Unknown error');
+            logger.error(error.message);
+            this.setState('FAILED');
         }
     }
 
-    public disconnect() {
-        if (this.socket) {
-            this.socket.disconnect();
-            this.socket = null;
-        }
-    }
+    on<K extends keyof ServerToClientEvents>(
+        event: K,
+        cb: ServerToClientEvents[K]
+    ) {
+        const set = this.getSet(event);
+        const wrapped = cb as unknown as (...args: unknown[]) => void;
 
-    public reconnectWithToken(token: string) {
-        if (!token || !isTokenValid(token)) {
-            this.disconnect();
-            return;
-        }
+        set.add(wrapped);
 
         if (this.socket) {
-            this.socket.disconnect();
-            this.socket = null;
+            this.socket.on(event, wrapped as never);
         }
-
-        void this.connect(token);
     }
 
-    public on<T extends unknown[]>(event: string, callback: (...args: T) => void) {
-        if (!this.listeners.has(event)) {
-            this.listeners.set(event, new Set());
+    off<K extends keyof ServerToClientEvents>(
+        event: K,
+        cb: ServerToClientEvents[K]
+    ) {
+        const set = this.listeners.get(event);
+        if (!set) return;
+
+        const wrapped = cb as unknown as (...args: unknown[]) => void;
+        set.delete(wrapped);
+
+        if (this.socket) {
+            this.socket.off(event, wrapped as never);
         }
-        this.listeners.get(event)?.add(callback as (...args: unknown[]) => void);
-        this.socket?.on(event, callback as (...args: unknown[]) => void);
     }
 
-    public off<T extends unknown[]>(event: string, callback: (...args: T) => void) {
-        this.listeners.get(event)?.delete(callback as (...args: unknown[]) => void);
-        this.socket?.off(event, callback as (...args: unknown[]) => void);
+    emit<K extends keyof ClientToServerEvents>(
+        event: K,
+        ...args: Parameters<ClientToServerEvents[K]>
+    ) {
+        if (!this.socket || this.state !== 'CONNECTED') return;
+        this.socket.emit(event, ...args);
     }
 
-    public emit(event: string, data: unknown) {
-        if (!this.socket?.connected) {
-            // Silenced missing connection warning to adhere to zero-noise output policy
-            return;
-        }
-        this.socket?.emit(event, data);
-    }
-
-    public getSocket(): SocketWithAuth | null {
-        return this.socket as SocketWithAuth | null;
+    disconnect() {
+        this.socket?.disconnect();
+        this.socket = null;
+        this.setState('CLOSED');
     }
 }
 
-export const socketService = SocketService.getInstance();
+/* ---------------- SINGLETON ---------------- */
 
+declare global {
+    interface Window {
+        __SOCKET__?: SocketService;
+    }
+}
+
+export const socketService =
+    typeof window !== 'undefined'
+        ? (window.__SOCKET__ ??= new SocketService())
+        : new SocketService();
