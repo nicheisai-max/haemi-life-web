@@ -238,16 +238,16 @@ export const FindDoctors: React.FC = () => {
                                             )}
 
                                             <div className="pt-4 border-t border-border/50 grid gap-3">
-                                                {doctor.license_number && (
+                                                {doctor.licenseNumber && (
                                                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                                         <BadgeInfo className="h-4 w-4 shrink-0" />
-                                                        <span>License: <span className="font-medium text-foreground">{doctor.license_number}</span></span>
+                                                        <span>License: <span className="font-medium text-foreground">{doctor.licenseNumber}</span></span>
                                                     </div>
                                                 )}
-                                                {doctor.years_of_experience && (
+                                                {doctor.yearsOfExperience && (
                                                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                                         <Briefcase className="h-4 w-4 shrink-0" />
-                                                        <span>Experience: <span className="font-medium text-foreground">{doctor.years_of_experience} years</span></span>
+                                                        <span>Experience: <span className="font-medium text-foreground">{doctor.yearsOfExperience} years</span></span>
                                                     </div>
                                                 )}
                                             </div>

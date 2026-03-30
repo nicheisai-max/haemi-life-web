@@ -17,6 +17,7 @@ import { User as UserIcon, Settings, LogOut } from 'lucide-react';
 import { CommandCenter } from '../ui/command-center';
 import { NotificationMenu } from '../ui/notification-menu';
 import { MobileSidebar } from './mobile-sidebar';
+import { getInitials } from '@/utils/avatar.resolver';
 
 // Import Real Assets
 import doctorImg from '../../assets/images/doctors/doctor_01.jpg';
@@ -48,43 +49,30 @@ export const Navbar: React.FC = () => {
         // will handle the state-driven redirection to /login.
     };
 
-    const getInitials = (name: string) => {
-        return name
-            .split(' ')
-            .map((n) => n[0])
-            .join('')
-            .toUpperCase()
-            .slice(0, 2);
-    };
+
 
     // Determine User Image
     const getUserImage = () => {
         if (!user) return '';
 
-        // Prioritize Secure API Endpoint (BYTEA or Legacy Redirection)
-        const baseUrl = (import.meta.env.VITE_API_URL || '');
-        const apiImage = `${baseUrl}/api/files/profile/${user.id}`;
-
-        // However, we only return the API image if we aren't using a default asset.
-        // For the investor demo, the default assets are imported as variables like 'patientImg'.
-        // To maintain "Zero-Breakage", if the API returns 404, the browser will show a broken image.
-        // So we should check if the user actually has any image associated.
-        // But since we want to be "Industry Grade", we'll return the API URL and let the backend 
-        // handle the fallback to the static /uploads/ path if it exists.
-
-        // If user has NO image at all in the DB, use local imported assets.
-        if (!user.profile_image && !user.profile_image_mime) {
-            switch (user.role) {
-                case 'admin': return adminImg;
-                case 'doctor': return doctorImg;
-                case 'patient': return patientImg;
-                case 'pharmacist': return pharmacistImg;
-                default: return patientImg;
-            }
+        // Prioritize the standardized profileImage property
+        if (user.profileImage) {
+            // If it's a full URL, use it directly. Otherwise, resolve via API.
+            if (user.profileImage.startsWith('http')) return user.profileImage;
+            
+            const baseUrl = (import.meta.env.VITE_API_URL || '');
+            // Append profileImageVersion as cache-bust to ensure latest image
+            return `${baseUrl}/api/files/profile/${user.id}?v=${profileImageVersion}`;
         }
 
-        // Append profileImageVersion as cache-bust so Navbar always shows the latest image
-        return `${apiImage}?v=${profileImageVersion}`;
+        // Fallback to local imported assets for demo/new users without images
+        switch (user.role) {
+            case 'admin': return adminImg;
+            case 'doctor': return doctorImg;
+            case 'patient': return patientImg;
+            case 'pharmacist': return pharmacistImg;
+            default: return patientImg;
+        }
     };
 
 
@@ -134,7 +122,7 @@ export const Navbar: React.FC = () => {
                                 <Avatar className="h-full w-full">
                                     <AvatarImage src={getUserImage()} alt={user?.name || 'User'} className="object-cover" />
                                     <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                        {user?.initials || (user?.name ? getInitials(user.name) : 'U')}
+                                        {user?.name ? getInitials(user.name) : 'U'}
                                     </AvatarFallback>
                                 </Avatar>
                             </Button>

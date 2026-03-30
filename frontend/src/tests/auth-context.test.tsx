@@ -64,7 +64,13 @@ describe('AuthContext Lifecycle', () => {
                 email: 'test@example.com', 
                 role: 'doctor', 
                 name: 'Dr. Test', 
-                phone_number: '555-010-999' 
+                phoneNumber: '555-010-999',
+                idNumber: '123456789',
+                initials: 'DT',
+                profileImage: null,
+                isVerified: true,
+                status: 'ACTIVE',
+                createdAt: new Date().toISOString()
             },
             serverTime: new Date().toISOString(),
             sessionTimeout: 1440

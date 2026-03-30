@@ -7,15 +7,17 @@ export interface ChatContextType {
     messages: Message[];
     loading: boolean;
     typingUsers: string[];
+    presence: Record<string, { isOnline: boolean, lastSeen: string }>;
     fetchConversations: () => Promise<void>;
     selectConversation: (conversation: Conversation) => void;
-    sendMessage: (content: string, conversationId: string, attachmentUrl?: string, attachmentType?: string, replyToId?: string) => Promise<void>;
+    sendMessage: (content: string, conversationId: string, attachmentUrl?: string, attachmentType?: string, replyToId?: string, attachmentName?: string) => Promise<void>;
     startNewConversation: (participantId: string) => Promise<void>;
     emitTyping: (conversationId: string, isTyping: boolean) => void;
-    uploadAttachment: (file: File) => Promise<{ url: string; type: string } | null>;
+    uploadAttachment: (file: File) => Promise<{ url: string; type: string; originalName: string } | null>;
     deleteMessage: (messageId: string, forEveryone: boolean) => Promise<void>;
     reactToMessage: (messageId: string, reactionType: string) => Promise<void>;
     markAsRead: (conversationId: string) => Promise<void>;
+    markMessageAsRead: (messageId: string) => Promise<void>;
     user: { id: string; name: string; role: string } | null;
 }
 

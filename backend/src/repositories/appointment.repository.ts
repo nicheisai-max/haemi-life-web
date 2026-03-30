@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { pool } from '../config/db';
+import { logger } from '../utils/logger';
 
 export interface Appointment {
     id: number;
@@ -7,6 +8,7 @@ export interface Appointment {
     doctor_id: string;
     appointment_date: string;
     appointment_time: string;
+    duration_minutes: number;
     consultation_type: string;
     reason: string | null;
     status: string;
@@ -16,12 +18,13 @@ export interface Appointment {
 }
 
 export interface AppointmentWithDetails extends Appointment {
-    doctor_name: string;
-    patient_name: string;
-    patient_phone: string;
-    specialization: string;
+    doctor_name?: string;
+    patient_name?: string;
+    patient_phone?: string;
+    specialization?: string;
     other_party_name?: string;
     user_role?: string;
+    profile_image?: string | null;
 }
 
 export class AppointmentRepository {
@@ -32,147 +35,249 @@ export class AppointmentRepository {
     }
 
     async checkDoctorVerified(doctorId: string): Promise<boolean> {
-        const result = await this.db.query<{ id: string }>(`
-            SELECT u.id FROM users u
-            JOIN doctor_profiles dp ON u.id = dp.user_id
-            WHERE u.id = $1 AND dp.is_verified = true
-        `, [doctorId]);
-        return result.rows.length > 0;
+        try {
+            const result = await this.db.query<{ id: string }>(`
+                SELECT u.id FROM users u
+                JOIN doctor_profiles dp ON u.id = dp.user_id
+                WHERE u.id = $1 AND dp.is_verified = true
+            `, [doctorId]);
+            return result.rows.length > 0;
+        } catch (error: unknown) {
+            logger.error('Failed to check doctor verification', {
+                error: error instanceof Error ? error.message : String(error),
+                doctorId
+            });
+            throw error;
+        }
     }
 
     async checkConflict(doctorId: string, date: string, time: string): Promise<boolean> {
-        const result = await this.db.query<{ id: number }>(`
-            SELECT id FROM appointments
-            WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3 
-              AND status != 'cancelled' AND deleted_at IS NULL
-        `, [doctorId, date, time]);
-        return result.rows.length > 0;
+        try {
+            const result = await this.db.query<{ id: number }>(`
+                SELECT id FROM appointments
+                WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3 
+                AND status != 'cancelled' AND deleted_at IS NULL
+            `, [doctorId, date, time]);
+            return result.rows.length > 0;
+        } catch (error: unknown) {
+            logger.error('Failed to check appointment conflict', {
+                error: error instanceof Error ? error.message : String(error),
+                doctorId,
+                date,
+                time
+            });
+            throw error;
+        }
     }
 
     async create(data: Partial<Appointment>): Promise<Appointment> {
-        const result = await this.db.query<Appointment>(`
-            INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status)
-            VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
-            RETURNING *
-        `, [data.patient_id, data.doctor_id, data.appointment_date, data.appointment_time, data.consultation_type, data.reason]);
-        return result.rows[0];
+        try {
+            const result = await this.db.query<Appointment>(`
+                INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status)
+                VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
+                RETURNING *
+            `, [data.patient_id, data.doctor_id, data.appointment_date, data.appointment_time, data.consultation_type, data.reason]);
+            return result.rows[0];
+        } catch (error: unknown) {
+            logger.error('Failed to create appointment', {
+                error: error instanceof Error ? error.message : String(error),
+                patientId: data.patient_id,
+                doctorId: data.doctor_id
+            });
+            throw error;
+        }
     }
 
     async findByUserId(userId: string, status?: string, upcoming?: boolean): Promise<AppointmentWithDetails[]> {
-        let query = `
-            SELECT 
-                a.*,
-                CASE 
-                    WHEN a.patient_id = $1 THEN u_doctor.name
-                    ELSE u_patient.name
-                END as other_party_name,
-                CASE 
-                    WHEN a.patient_id = $1 THEN 'patient'
-                    ELSE 'doctor'
-                END as user_role
-            FROM appointments a
-            LEFT JOIN users u_doctor ON a.doctor_id = u_doctor.id
-            LEFT JOIN users u_patient ON a.patient_id = u_patient.id
-            WHERE (a.patient_id = $1 OR a.doctor_id = $1) AND a.deleted_at IS NULL
-        `;
+        try {
+            let query = `
+                SELECT 
+                    a.*,
+                    CASE 
+                        WHEN a.patient_id = $1 THEN u_doctor.name
+                        ELSE u_patient.name
+                    END as other_party_name,
+                    CASE 
+                        WHEN a.patient_id = $1 THEN 'patient'
+                        ELSE 'doctor'
+                    END as user_role
+                FROM appointments a
+                LEFT JOIN users u_doctor ON a.doctor_id = u_doctor.id
+                LEFT JOIN users u_patient ON a.patient_id = u_patient.id
+                WHERE (a.patient_id = $1 OR a.doctor_id = $1) AND a.deleted_at IS NULL
+            `;
 
-        const params: (string | number | boolean | null)[] = [userId];
+            const params: string[] = [userId];
 
-        if (status) {
-            params.push(status as string);
-            query += ` AND a.status = $${params.length}`;
+            if (status) {
+                params.push(status);
+                query += ` AND a.status = $${params.length}`;
+            }
+
+            if (upcoming) {
+                query += ` AND (a.appointment_date + a.appointment_time) >= CURRENT_TIMESTAMP`;
+                query += ' ORDER BY a.appointment_date ASC, a.appointment_time ASC';
+            } else {
+                query += ' ORDER BY a.appointment_date DESC, a.appointment_time DESC';
+            }
+
+            const result = await this.db.query<AppointmentWithDetails>(query, params);
+            return result.rows;
+        } catch (error: unknown) {
+            logger.error('Failed to find appointments by user ID', {
+                error: error instanceof Error ? error.message : String(error),
+                userId,
+                status,
+                upcoming
+            });
+            throw error;
         }
-
-        if (upcoming) {
-            query += ` AND a.appointment_date >= CURRENT_DATE`;
-        }
-
-        query += ' ORDER BY a.appointment_date DESC, a.appointment_time DESC';
-
-        const result = await this.db.query<AppointmentWithDetails>(query, params);
-        return result.rows;
     }
 
     async findByIdWithDetails(id: number, userId: string): Promise<AppointmentWithDetails | null> {
-        const result = await this.db.query<AppointmentWithDetails>(`
-            SELECT 
-                a.*,
-                u_doctor.name as doctor_name,
-                u_patient.name as patient_name,
-                u_patient.phone_number as patient_phone,
-                dp.specialization
-            FROM appointments a
-            JOIN users u_doctor ON a.doctor_id = u_doctor.id
-            JOIN users u_patient ON a.patient_id = u_patient.id
-            LEFT JOIN doctor_profiles dp ON a.doctor_id = dp.user_id
-            WHERE a.id = $1 AND (a.patient_id = $2 OR a.doctor_id = $2) AND a.deleted_at IS NULL
-        `, [id, userId]);
+        try {
+            const result = await this.db.query<AppointmentWithDetails>(`
+                SELECT 
+                    a.*,
+                    u_doctor.name as doctor_name,
+                    u_patient.name as patient_name,
+                    u_patient.phone_number as patient_phone,
+                    dp.specialization
+                FROM appointments a
+                JOIN users u_doctor ON a.doctor_id = u_doctor.id
+                JOIN users u_patient ON a.patient_id = u_patient.id
+                LEFT JOIN doctor_profiles dp ON a.doctor_id = dp.user_id
+                WHERE a.id = $1 AND (a.patient_id = $2 OR a.doctor_id = $2) AND a.deleted_at IS NULL
+            `, [id, userId]);
 
-        return result.rows[0] || null;
+            return result.rows[0] || null;
+        } catch (error: unknown) {
+            logger.error('Failed to find appointment by ID with details', {
+                error: error instanceof Error ? error.message : String(error),
+                id,
+                userId
+            });
+            throw error;
+        }
     }
 
     async updateStatus(id: number, doctorId: string, status: string, notes?: string): Promise<Appointment | null> {
-        const result = await this.db.query<Appointment>(`
-            UPDATE appointments
-            SET status = $1, notes = COALESCE($2, notes), updated_at = CURRENT_TIMESTAMP
-            WHERE id = $3 AND doctor_id = $4 AND deleted_at IS NULL
-            RETURNING *
-        `, [status, notes || null, id, doctorId]);
-        return result.rows[0] || null;
+        try {
+            const result = await this.db.query<Appointment>(`
+                UPDATE appointments
+                SET status = $1, notes = COALESCE($2, notes), updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3 AND doctor_id = $4 AND deleted_at IS NULL
+                RETURNING *
+            `, [status, notes || null, id, doctorId]);
+            return result.rows[0] || null;
+        } catch (error: unknown) {
+            logger.error('Failed to update appointment status', {
+                error: error instanceof Error ? error.message : String(error),
+                id,
+                doctorId,
+                status
+            });
+            throw error;
+        }
     }
 
     async cancel(id: number, userId: string): Promise<Appointment | null> {
-        const result = await this.db.query<Appointment>(`
-            UPDATE appointments
-            SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2) AND deleted_at IS NULL
-            RETURNING *
-        `, [id, userId]);
-        return result.rows[0] || null;
+        try {
+            const result = await this.db.query<Appointment>(`
+                UPDATE appointments
+                SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2) AND deleted_at IS NULL
+                RETURNING *
+            `, [id, userId]);
+            return result.rows[0] || null;
+        } catch (error: unknown) {
+            logger.error('Failed to cancel appointment', {
+                error: error instanceof Error ? error.message : String(error),
+                id,
+                userId
+            });
+            throw error;
+        }
     }
 
     async getDoctorSchedule(doctorId: string, dayOfWeek: number): Promise<{ start_time: string; end_time: string }[]> {
-        const result = await this.db.query<{ start_time: string; end_time: string }>(`
-            SELECT start_time, end_time FROM doctor_schedules
-            WHERE doctor_id = $1 AND day_of_week = $2 AND is_available = true
-        `, [doctorId, dayOfWeek]);
-        return result.rows;
+        try {
+            const result = await this.db.query<{ start_time: string; end_time: string }>(`
+                SELECT start_time, end_time FROM doctor_schedules
+                WHERE doctor_id = $1 AND day_of_week = $2 AND is_available = true
+            `, [doctorId, dayOfWeek]);
+            return result.rows;
+        } catch (error: unknown) {
+            logger.error('Failed to get doctor schedule', {
+                error: error instanceof Error ? error.message : String(error),
+                doctorId,
+                dayOfWeek
+            });
+            throw error;
+        }
     }
 
     async getBookedTimes(doctorId: string, date: string): Promise<string[]> {
-        const result = await this.db.query(`
-            SELECT appointment_time FROM appointments
-            WHERE doctor_id = $1 AND appointment_date = $2 
-              AND status != 'cancelled' AND deleted_at IS NULL
-        `, [doctorId, date]);
-        return result.rows.map(row => {
-            const time = row.appointment_time;
-            return typeof time === 'string' ? time.slice(0, 5) : time;
-        });
+        try {
+            const result = await this.db.query<{ appointment_time: string }>(`
+                SELECT appointment_time FROM appointments
+                WHERE doctor_id = $1 AND appointment_date = $2 
+                  AND status != 'cancelled' AND deleted_at IS NULL
+            `, [doctorId, date]);
+            return result.rows.map(row => {
+                const time = row.appointment_time;
+                return typeof time === 'string' ? time.slice(0, 5) : time;
+            });
+        } catch (error: unknown) {
+            logger.error('Failed to get booked times', {
+                error: error instanceof Error ? error.message : String(error),
+                doctorId,
+                date
+            });
+            throw error;
+        }
     }
 
     async checkOwnership(id: number, userId: string): Promise<boolean> {
-        const result = await this.db.query(
-            'SELECT id FROM appointments WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2)',
-            [id, userId]
-        );
-        return result.rows.length > 0;
+        try {
+            const result = await this.db.query<{ id: number }>(
+                'SELECT id FROM appointments WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2)',
+                [id, userId]
+            );
+            return result.rows.length > 0;
+        } catch (error: unknown) {
+            logger.error('Failed to check appointment ownership', {
+                error: error instanceof Error ? error.message : String(error),
+                id,
+                userId
+            });
+            throw error;
+        }
     }
 
     // Permanently remove a past/completed/cancelled appointment (patient only)
     // Institutional Soft delete (only for past/completed/cancelled)
     async softDelete(id: number, patientId: string): Promise<boolean> {
-        const result = await this.db.query(`
-            UPDATE appointments
-            SET deleted_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-              AND patient_id = $2
-              AND (
-                    appointment_date < CURRENT_DATE
-                    OR status IN ('completed', 'cancelled')
-                  )
-        `, [id, patientId]);
-        return (result.rowCount ?? 0) > 0;
+        try {
+            const result = await this.db.query(`
+                UPDATE appointments
+                SET deleted_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+                  AND patient_id = $2
+                  AND (
+                        appointment_date < CURRENT_DATE
+                        OR status IN ('completed', 'cancelled')
+                      )
+            `, [id, patientId]);
+            return (result.rowCount ?? 0) > 0;
+        } catch (error: unknown) {
+            logger.error('Failed to soft delete appointment', {
+                error: error instanceof Error ? error.message : String(error),
+                id,
+                patientId
+            });
+            throw error;
+        }
     }
 }
 

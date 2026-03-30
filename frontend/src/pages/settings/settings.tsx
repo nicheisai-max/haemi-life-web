@@ -55,8 +55,8 @@ export const Settings: React.FC = () => {
     const form = useForm<ChangePasswordFormData>({
         resolver: zodResolver(changePasswordSchema),
         defaultValues: {
-            current_password: '',
-            new_password: '',
+            currentPassword: '',
+            newPassword: '',
             confirmPassword: '',
         },
     });
@@ -76,8 +76,8 @@ export const Settings: React.FC = () => {
             setSuccess(null);
 
             await changePassword({
-                current_password: data.current_password,
-                new_password: data.new_password
+                currentPassword: data.currentPassword,
+                newPassword: data.newPassword
             });
 
             setSuccess('Password changed successfully!');
@@ -138,8 +138,7 @@ export const Settings: React.FC = () => {
                                 <User className="h-5 w-5" />
                             </div>
                             <div>
-                                <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Name</div>
-                                <div className="font-medium">{user?.profile?.fullName || user?.name || 'N/A'}</div>
+                                <div className="font-medium">{user?.name || 'N/A'}</div>
                             </div>
                         </div>
 
@@ -159,7 +158,7 @@ export const Settings: React.FC = () => {
                             </div>
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Phone</div>
-                                <div className="font-medium">{user?.phone_number || 'N/A'}</div>
+                                <div className="font-medium">{user?.phoneNumber || 'N/A'}</div>
                             </div>
                         </div>
 
@@ -194,7 +193,7 @@ export const Settings: React.FC = () => {
                         <form onSubmit={form.handleSubmit(onSubmitPassword)} className="space-y-4 flex-1">
                             <FormField
                                 control={form.control}
-                                name="current_password"
+                                name="currentPassword"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Current Password</FormLabel>
@@ -213,7 +212,7 @@ export const Settings: React.FC = () => {
 
                             <FormField
                                 control={form.control}
-                                name="new_password"
+                                name="newPassword"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>New Password</FormLabel>

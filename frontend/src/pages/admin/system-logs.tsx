@@ -42,7 +42,7 @@ export const SystemLogs: React.FC = () => {
     const filteredLogs = logs.filter(log =>
         log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (log.details && JSON.stringify(log.details).toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (log.user_name && log.user_name.toLowerCase().includes(searchTerm.toLowerCase()))
+        (log.userName && log.userName.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     // Must be called unconditionally before any early returns — React Rules of Hooks.
@@ -146,11 +146,11 @@ export const SystemLogs: React.FC = () => {
                                     <td>
                                         <div className="flex items-center gap-2">
                                             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
-                                                {(log.user_name || 'Sys').charAt(0).toUpperCase()}
+                                                {(log.userName || 'Sys').charAt(0).toUpperCase()}
                                             </div>
                                             <div className="flex flex-col">
-                                                <span className="font-medium text-foreground">{log.user_name || 'System User'}</span>
-                                                <span className="text-xs text-muted-foreground">{log.user_email}</span>
+                                                <span className="font-medium text-foreground">{log.userName || 'System User'}</span>
+                                                <span className="text-xs text-muted-foreground">{log.userEmail}</span>
                                             </div>
                                         </div>
                                     </td>
@@ -160,16 +160,16 @@ export const SystemLogs: React.FC = () => {
                                     <td className="text-muted-foreground font-mono text-xs">
                                         <div className="flex items-center gap-2">
                                             <Monitor className="h-3 w-3" />
-                                            {log.ip_address || '127.0.0.1'}
+                                            {log.ipAddress || '127.0.0.1'}
                                         </div>
                                     </td>
                                     <td className="text-right whitespace-nowrap">
                                         <div className="flex flex-col items-end">
                                             <span className="text-sm font-medium text-foreground">
-                                                {new Date(log.created_at).toLocaleDateString()}
+                                                {new Date(log.createdAt).toLocaleDateString()}
                                             </span>
                                             <span className="text-xs text-muted-foreground">
-                                                {new Date(log.created_at).toLocaleTimeString()}
+                                                {new Date(log.createdAt).toLocaleTimeString()}
                                             </span>
                                         </div>
                                     </td>

@@ -1,35 +1,45 @@
 import { useContext } from 'react';
 import { ChatContext, type ChatContextType } from '../context/chat-context';
 
+export interface ChatParticipant {
+    id: string;
+    name: string;
+    role: string;
+    profileImage?: string;
+    initials?: string;
+}
+
 export interface Message {
     id: string;
-    conversation_id: string;
-    sender_id: string;
+    conversationId: string;
+    senderId: string;
     content: string;
-    message_type: 'text' | 'file';
+    messageType: 'text' | 'image' | 'document';
     attachments?: { url: string; type: string; size: number; name?: string }[];
-    is_read: boolean;
-    status: 'sent' | 'delivered' | 'read';
-    delivered_at?: string;
-    read_at?: string;
-    created_at: string;
-    sender_name?: string;
+    isRead?: boolean;
+    status: 'sending' | 'sent' | 'delivered' | 'read';
+    deliveredAt?: string;
+    readAt?: string;
+    createdAt: string;
+    senderName?: string;
     isMe?: boolean;
     reactions?: { type: string; userId: string }[];
-    reply_to?: { id: string; content: string; sender_name: string };
-    reply_to_id?: string;
-    sequence_number?: string | number;
+    replyTo?: { id: string; content: string; senderName: string };
+    replyToId?: string;
+    sequenceNumber?: number;
 }
 
 export interface Conversation {
     id: string;
-    updated_at: string;
-    last_message_at: string;
-    last_message?: string;
-    participants: { id: string; name: string; role: string; profile_image?: string }[];
-    unread_count: string;
-    message_count?: string;
-    sequence_counter?: string | number;
+    name?: string;
+    updatedAt: string;
+    lastMessageAt: string;
+    lastMessage: string;
+    lastMessageId: string;
+    participants: ChatParticipant[];
+    unreadCount: number;
+    messageCount: number;
+    sequenceCounter: number;
 }
 
 export const useChat = (): ChatContextType => {

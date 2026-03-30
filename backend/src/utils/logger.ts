@@ -48,13 +48,11 @@ export const logger = {
     warn: (message: string, meta?: unknown) => {
         const maskedMeta = meta ? maskPHI(meta) : undefined;
         const log = { timestamp: getTimestamp(), level: 'WARN', message, meta: maskedMeta };
-        console.warn(`[WARN] ${message}`, maskedMeta || '');
         appendToFile(log);
     },
     error: (message: string, meta?: unknown) => {
         const maskedMeta = meta ? maskPHI(meta) : undefined;
         const log = { timestamp: getTimestamp(), level: 'ERROR', message, meta: maskedMeta };
-        console.error(`[ERROR] ${message}`, maskedMeta || '');
         appendToFile(log);
     },
     auth: (message: string, meta?: unknown) => {
@@ -72,7 +70,8 @@ function appendToFile(log: unknown, filename: string = 'app.log') {
             fs.mkdirSync(LOG_DIR);
         }
         fs.appendFileSync(path.join(LOG_DIR, filename), logLine);
-    } catch (err) {
-        console.error('Failed to write to log file', err);
+    } catch {
+        // Institutional Hardening: Silent failure for the logger to prevent crash-loops
     }
+
 }

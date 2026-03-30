@@ -333,10 +333,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         verifyResult.sessionTimeout
                     );
                 } else {
-                    // INVALID TOKEN PURGE (Refresh logic failed / denied)
-                    setAccessToken(null);
-                    sessionStorage.removeItem('token');
-                    sessionStorage.removeItem('refreshToken');
+                    // PHASE 2 FIX: Graceful Fallback
+                    // Only set to unauthenticated, do NOT purge tokens if they exist in session
                     commitAuthState(null, null, 'unauthenticated');
                 }
                 
@@ -346,10 +344,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } catch (error: unknown) {
                 logger.error('[Boot] Initialization failure', error);
                 
-                // INVALID TOKEN PURGE (Full Crash Protection via Try Reloading)
-                setAccessToken(null);
-                sessionStorage.removeItem('token');
-                sessionStorage.removeItem('refreshToken');
+                // PHASE 2 FIX: Only set status, avoid destructive purge in the boot catch block
                 commitAuthState(null, null, 'unauthenticated');
                 
                 setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
@@ -389,8 +384,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const logout = useCallback(async () => {
         const currentUserId = authStateRef.current.user?.id;
-        commitAuthState(null, null, 'unauthenticated');
+        
+        // Phase 1: Call logout API FIRST before stripping credentials
+        // Use dynamic import for axios to keep bootstrap light
+        try {
+            await authService.logout();
+            logger.info('[Auth] Remote session invalidated successfully');
+        } catch (error: unknown) {
+            // Enterprise Resilience: Handle 401 gracefully during logout
+            const isAxiosError = (err: unknown): err is { isAxiosError: boolean; response?: { status: number } } => {
+                return (
+                    typeof err === 'object' &&
+                    err !== null &&
+                    'isAxiosError' in err &&
+                    (err as { isAxiosError: unknown }).isAxiosError === true
+                );
+            };
 
+            if (isAxiosError(error)) {
+                if (error.response?.status === 401) {
+                    logger.warn('[Auth] Logout: Remote session already void or expired (Idempotent success)');
+                } else {
+                    logger.error('[Auth] Remote logout failed', { status: error.response?.status });
+                }
+            } else {
+                logger.error('[Auth] Unknown error during remote logout', error);
+            }
+        }
+
+
+        // Phase 2: Broadcast to other tabs
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
         if (!IS_DEMO_MODE && currentUserId) {
             try {
@@ -398,15 +421,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
                 authChannel.close();
             } catch (err) {
-                logger.error('[AuthSync] Logout broadcast channel crash insulated', err);
+                logger.error('[AuthSync] Logout broadcast failure insulated', err);
             }
         }
 
-        try {
-            await authService.logout();
-        } catch (e) {
-            logger.error('Logout failed', e);
-        }
+        // Phase 3: Final local state purge
+        commitAuthState(null, null, 'unauthenticated');
     }, [commitAuthState]);
 
     const refreshUser = useCallback(async () => {

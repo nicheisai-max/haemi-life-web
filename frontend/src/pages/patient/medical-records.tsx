@@ -37,11 +37,11 @@ export const MedicalRecords: React.FC = () => {
 
         if (selectedType !== 'all') {
             result = result.filter(r =>
-                selectedType === 'lab' ? r.record_type === 'Lab Result' :
-                    selectedType === 'radiology' ? r.record_type === 'Radiology' :
-                        selectedType === 'prescription' ? r.record_type === 'Prescription' :
-                            selectedType === 'notes' ? ['Clinical Note', 'Specialist Report'].includes(r.record_type || '') :
-                                selectedType === 'other' ? !['Lab Result', 'Radiology', 'Prescription', 'Clinical Note', 'Specialist Report'].includes(r.record_type || '') :
+                selectedType === 'lab' ? r.recordType === 'Lab Result' :
+                    selectedType === 'radiology' ? r.recordType === 'Radiology' :
+                        selectedType === 'prescription' ? r.recordType === 'Prescription' :
+                            selectedType === 'notes' ? ['Clinical Note', 'Specialist Report'].includes(r.recordType || '') :
+                                selectedType === 'other' ? !['Lab Result', 'Radiology', 'Prescription', 'Clinical Note', 'Specialist Report'].includes(r.recordType || '') :
                                     true
             );
         }
@@ -50,8 +50,8 @@ export const MedicalRecords: React.FC = () => {
             const lowerTerm = searchTerm.toLowerCase();
             result = result.filter(r =>
                 r.name.toLowerCase().includes(lowerTerm) ||
-                r.doctor_name?.toLowerCase().includes(lowerTerm) ||
-                r.facility_name?.toLowerCase().includes(lowerTerm) ||
+                r.doctorName?.toLowerCase().includes(lowerTerm) ||
+                r.facilityName?.toLowerCase().includes(lowerTerm) ||
                 r.notes?.toLowerCase().includes(lowerTerm)
             );
         }
@@ -255,9 +255,9 @@ export const MedicalRecords: React.FC = () => {
                                 >
                                     <Card className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full rounded-card">
                                         {/* Left Accent Strip */}
-                                        <div className={`w-full md:w-1.5 h-1.5 md:h-auto ${record.record_type === 'Lab Result' ? 'bg-purple-500' :
-                                            record.record_type === 'Radiology' ? 'bg-blue-500' :
-                                                record.record_type === 'Immunization' ? 'bg-emerald-500' :
+                                        <div className={`w-full md:w-1.5 h-1.5 md:h-auto ${record.recordType === 'Lab Result' ? 'bg-purple-500' :
+                                            record.recordType === 'Radiology' ? 'bg-blue-500' :
+                                                record.recordType === 'Immunization' ? 'bg-emerald-500' :
                                                     'bg-slate-400'
                                             }`} />
 
@@ -265,7 +265,7 @@ export const MedicalRecords: React.FC = () => {
                                             {/* Icon */}
                                             <div className="shrink-0">
                                                 <div className="w-12 h-12 rounded-xl bg-muted/30 flex items-center justify-center text-foreground border shadow-sm">
-                                                    {getFileIcon(record.file_type)}
+                                                    {getFileIcon(record.fileMime)}
                                                 </div>
                                             </div>
 
@@ -273,8 +273,8 @@ export const MedicalRecords: React.FC = () => {
                                             <div className="flex-1 min-w-0 space-y-1">
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <Badge variant="outline" className="text-xs font-normal gap-1 bg-muted/30">
-                                                        {getTypeIcon(record.record_type || 'General')}
-                                                        {record.record_type || 'General Record'}
+                                                        {getTypeIcon(record.recordType || 'General')}
+                                                        {record.recordType || 'General Record'}
                                                     </Badge>
                                                     {record.status && (
                                                         <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${getStatusColor(record.status)}`}>
@@ -284,21 +284,21 @@ export const MedicalRecords: React.FC = () => {
                                                 </div>
                                                 <h3 className="font-bold text-lg text-foreground truncate">{record.name}</h3>
                                                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-1">
-                                                    {record.doctor_name && (
+                                                    {record.doctorName && (
                                                         <div className="flex items-center gap-1.5">
                                                             <Stethoscope className="h-3.5 w-3.5" />
-                                                            <span>{record.doctor_name}</span>
+                                                            <span>{record.doctorName}</span>
                                                         </div>
                                                     )}
-                                                    {record.facility_name && (
+                                                    {record.facilityName && (
                                                         <div className="flex items-center gap-1.5">
                                                             <Building2 className="h-3.5 w-3.5" />
-                                                            <span>{record.facility_name}</span>
+                                                            <span>{record.facilityName}</span>
                                                         </div>
                                                     )}
                                                     <div className="flex items-center gap-1.5">
                                                         <Calendar className="h-3.5 w-3.5" />
-                                                        <span>{new Date(record.date_of_service || record.uploaded_at).toLocaleDateString()}</span>
+                                                        <span>{new Date(record.dateOfService || record.uploadedAt).toLocaleDateString()}</span>
                                                     </div>
                                                 </div>
                                                 {record.notes && (
@@ -329,7 +329,7 @@ export const MedicalRecords: React.FC = () => {
                                                 </Button>
 
 
-                                                {record.record_type === 'Patient Upload' && (
+                                                {record.recordType === 'Patient Upload' && (
                                                     <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={(e) => handleDeleteRecord(e, record.id)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>

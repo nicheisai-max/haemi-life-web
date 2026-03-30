@@ -15,7 +15,7 @@ class StatusService {
         try {
             const id = String(userId);
             const result = await pool.query<{ exists: boolean }>('SELECT EXISTS(SELECT 1 FROM active_connections WHERE user_id = $1)', [id]);
-            return !!result.rows[0].exists;
+            return result.rows[0]?.exists ?? false;
         } catch (error: unknown) {
             logger.error('[StatusService] isOnline DB check failed:', {
                 error: error instanceof Error ? error.message : String(error),
@@ -29,11 +29,12 @@ class StatusService {
     public async setUserOnline(userId: string, socketId: string): Promise<UserStatusEvent> {
         const id = String(userId);
         
-        // Memory map kept ONLY for tracking local socket sessions
-        if (!this.onlineUsers.has(id)) {
-            this.onlineUsers.set(id, new Set());
+        let connections = this.onlineUsers.get(id);
+        if (!connections) {
+            connections = new Set();
+            this.onlineUsers.set(id, connections);
         }
-        this.onlineUsers.get(id)!.add(socketId);
+        connections.add(socketId);
 
         try {
             // P0: Mandatory DB persistence
@@ -74,7 +75,7 @@ class StatusService {
 
             // 4. Fresh DB query for user-level status AFTER deletion
             const stillOnlineResult = await pool.query<{ exists: boolean }>('SELECT EXISTS(SELECT 1 FROM active_connections WHERE user_id = $1)', [id]);
-            const stillOnline = !!stillOnlineResult.rows[0].exists;
+            const stillOnline = stillOnlineResult.rows[0]?.exists ?? false;
             
             if (!stillOnline) {
                 // Updated user table only if definitively offline in DB

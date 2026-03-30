@@ -6,6 +6,30 @@ import { JWTPayload } from '../types/express';
 import { logger } from '../utils/logger';
 import { sendError } from '../utils/response';
 import { getSessionTimeoutMinutes } from '../utils/config.util';
+import { UserRole, UserStatus } from '../types/db.types';
+
+interface AuthUserRow {
+    name: string;
+    initials: string;
+    profile_image: string | null;
+    profile_image_mime: string | null;
+    status: UserStatus;
+    role: UserRole;
+    token_version: number;
+    last_activity: Date;
+    minutes_since_activity: number | null;
+}
+
+interface AuthSessionRow {
+    revoked: boolean;
+    access_token_jti: string | null;
+    previous_access_token_jti: string | null;
+    jti_rotated_at: Date | string | null;
+    ip_address: string | null;
+    user_agent: string | null;
+    expires_at: Date | null;
+    last_activity: Date;
+}
 
 /**
  * Standard Authentication Middleware
@@ -30,7 +54,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
         const payload = decoded as JWTPayload;
 
         try {
-            const userResult = await pool.query(
+            const userResult = await pool.query<AuthUserRow>(
                 `SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity, 
                 (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
                 FROM users WHERE id = $1`,
@@ -44,8 +68,8 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
             const userData = userResult.rows[0];
 
             // 1. Token Version Check (Emergency Revocation)
-            if (payload.token_version !== undefined && userData.token_version !== undefined) {
-                if (payload.token_version !== userData.token_version) {
+            if (payload.tokenVersion !== undefined && userData.token_version !== undefined) {
+                if (payload.tokenVersion !== userData.token_version) {
                     return sendError(res, 401, 'Session revoked. Please log in again.');
                 }
             }
@@ -54,13 +78,11 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                 return sendError(res, 403, 'Access denied. Account restricted.');
             }
 
-            // (Legacy user-level inactivity check removed in favor of per-session sliding window)
-
-            // 2. Phase 9: Detailed Session & Fingerprint Validation
-            if (payload.session_id) {
-                const sessionResult = await pool.query(
-                    'SELECT revoked, access_token_jti, previous_access_token_jti, jti_rotated_at, ip_address, user_agent, expires_at FROM user_sessions WHERE session_id = $1',
-                    [payload.session_id]
+            // 2. Detailed Session & Fingerprint Validation
+            if (payload.sessionId) {
+                const sessionResult = await pool.query<AuthSessionRow>(
+                    'SELECT revoked, access_token_jti, previous_access_token_jti, jti_rotated_at, ip_address, user_agent, expires_at, last_activity FROM user_sessions WHERE session_id = $1',
+                    [payload.sessionId]
                 );
 
                 if (sessionResult.rows.length === 0 || sessionResult.rows[0].revoked) {
@@ -93,12 +115,10 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                         previousJti: previousAccessJti,
                         timeSinceRotation: rotatedAt ? (nowMs - rotatedAt) / 1000 : 'N/A'
                     });
-                    return sendError(res, 401, 'Session token displaced. Please synchronize tabs or log in again.');
+                    return sendError(res, 401, 'Session token displaced. Synchronizing tabs required.');
                 }
 
-                // Fingerprint Validation (Session Hijacking Protection)
-                // Note: We allow minor IP changes in dynamic environments, but log suspicious ones
-                const currentIp = req.ip;
+                // Fingerprint Validation
                 const currentUserAgent = req.headers['user-agent'];
 
                 if (sessionData.user_agent !== currentUserAgent) {
@@ -107,47 +127,51 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
                         expected: sessionData.user_agent,
                         received: currentUserAgent
                     });
-                    // For local development, we might be lenient, but for P0 hardening we reject
                     return sendError(res, 401, 'Security fingerprint mismatch. Session invalidated.');
                 }
 
-                // IP binding check (log only or reject if process.env.STRICT_IP_CHECK is true)
-                if (sessionData.ip_address !== currentIp && process.env.STRICT_IP_CHECK === 'true') {
+                // IP binding check
+                if (sessionData.ip_address !== req.ip && process.env.STRICT_IP_CHECK === 'true') {
                     return sendError(res, 401, 'Security fingerprint mismatch. Session invalidated.');
                 }
 
                 // Heartbeat: Update session last_activity and sliding expires_at
-                const timeoutMinutes = await getSessionTimeoutMinutes();
-                const newExpiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
+                const lastActivityTime = sessionData.last_activity ? new Date(sessionData.last_activity).getTime() : 0;
+                
+                if (nowMs - lastActivityTime > 60000) { // 1 minute throttle
+                    const timeoutMinutes = await getSessionTimeoutMinutes();
+                    const newExpiresAt = new Date(nowMs + timeoutMinutes * 60 * 1000);
 
-                await pool.query(
-                    'UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP, expires_at = $1 WHERE session_id = $2',
-                    [newExpiresAt, payload.session_id]
-                );
+                    await pool.query(
+                        'UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP, expires_at = $1 WHERE session_id = $2',
+                        [newExpiresAt, payload.sessionId]
+                    );
+                    
+                    await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [payload.id]);
+                }
             }
-
-            await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [payload.id]);
 
             req.user = {
                 ...payload,
                 role: userData.role,
                 name: userData.name,
                 initials: userData.initials,
-                profile_image: userData.profile_image,
-                profile_image_mime: userData.profile_image_mime,
+                profileImage: userData.profile_image,
+                profileImageMime: userData.profile_image_mime,
                 status: userData.status
             };
-            next();
+            return next();
         } catch (error: unknown) {
-            logger.error('Session verification failed', error);
-            return sendError(res, 500, 'Server error');
+            logger.error('Session verification failed', { 
+                error: error instanceof Error ? error.message : String(error),
+                userId: payload.id,
+                sessionId: payload.sessionId 
+            });
+            return sendError(res, 500, 'Server error during session verification');
         }
     });
 };
 
-/**
- * Alias for authenticateToken to support both legacy and new names
- */
 export const protect = authenticateToken;
 
 /**
@@ -160,14 +184,12 @@ export const relaxedAuthenticateToken = (req: Request, res: Response, next: Next
     if (!token) return next();
 
     jwt.verify(token, process.env.JWT_SECRET as string, async (err: jwt.VerifyErrors | null, decoded: unknown) => {
-        if (err) return next();
-
-        if (!decoded || typeof decoded !== 'object') return next();
+        if (err || !decoded || typeof decoded !== 'object') return next();
 
         const payload = decoded as JWTPayload;
 
         try {
-            const userResult = await pool.query(
+            const userResult = await pool.query<AuthUserRow>(
                 `SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity, 
                 (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity)) / 60) as minutes_since_activity 
                 FROM users WHERE id = $1`,
@@ -178,8 +200,8 @@ export const relaxedAuthenticateToken = (req: Request, res: Response, next: Next
 
             const userData = userResult.rows[0];
 
-            if (payload.token_version !== undefined && userData.token_version !== undefined) {
-                if (payload.token_version !== userData.token_version) return next();
+            if (payload.tokenVersion !== undefined && userData.token_version !== undefined) {
+                if (payload.tokenVersion !== userData.token_version) return next();
             }
 
             if (userData.status !== 'ACTIVE') return next();
@@ -190,10 +212,10 @@ export const relaxedAuthenticateToken = (req: Request, res: Response, next: Next
             }
 
             // Relaxed JTI check
-            if (payload.jti && payload.session_id) {
-                const sessionResult = await pool.query(
+            if (payload.jti && payload.sessionId) {
+                const sessionResult = await pool.query<AuthSessionRow>(
                     'SELECT revoked, access_token_jti FROM user_sessions WHERE session_id = $1',
-                    [payload.session_id]
+                    [payload.sessionId]
                 );
                 if (sessionResult.rows.length === 0 || sessionResult.rows[0].revoked) return next();
                 if (sessionResult.rows[0].access_token_jti !== payload.jti) return next();
@@ -204,14 +226,16 @@ export const relaxedAuthenticateToken = (req: Request, res: Response, next: Next
                 role: userData.role,
                 name: userData.name,
                 initials: userData.initials,
-                profile_image: userData.profile_image,
-                profile_image_mime: userData.profile_image_mime,
+                profileImage: userData.profile_image,
+                profileImageMime: userData.profile_image_mime,
                 status: userData.status
             };
-            next();
+            return next();
         } catch (error: unknown) {
-            logger.error('Unexpected error in relaxed authentication', error);
-            next();
+            logger.warn('Unexpected error in relaxed authentication', { 
+                error: error instanceof Error ? error.message : String(error) 
+            });
+            return next();
         }
     });
 };
@@ -223,16 +247,16 @@ export const requireRole = (allowedRole: string) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || req.user.role !== allowedRole) {
             await auditService.log({
-                user_id: req.user?.id || SYSTEM_ANONYMOUS_ID,
-                actor_role: req.user?.role,
-                action_type: 'ACCESS_DENIED_RBAC',
+                userId: req.user?.id || SYSTEM_ANONYMOUS_ID,
+                actorRole: req.user?.role,
+                actionType: 'ACCESS_DENIED_RBAC',
                 metadata: {
                     required_role: allowedRole,
                     attempted_path: req.originalUrl,
                     method: req.method,
                 },
-                ip_address: req.ip,
-                user_agent: req.headers['user-agent'],
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
             });
 
             return sendError(res, 403, 'Access denied. Insufficient permissions.');
@@ -248,16 +272,16 @@ export const authorizeRole = (roles: string[]) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || !roles.includes(req.user.role)) {
             await auditService.log({
-                user_id: req.user?.id || SYSTEM_ANONYMOUS_ID,
-                actor_role: req.user?.role,
-                action_type: 'ACCESS_DENIED_RBAC_MULTI',
+                userId: req.user?.id || SYSTEM_ANONYMOUS_ID,
+                actorRole: req.user?.role,
+                actionType: 'ACCESS_DENIED_RBAC_MULTI',
                 metadata: {
                     required_roles: roles,
                     attempted_path: req.originalUrl,
                     method: req.method,
                 },
-                ip_address: req.ip,
-                user_agent: req.headers['user-agent'],
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
             });
 
             return sendError(res, 403, 'Access denied. Insufficient permissions.');
@@ -266,9 +290,6 @@ export const authorizeRole = (roles: string[]) => {
     };
 };
 
-/**
- * Alias for authorizeRole to support 'restrictTo' pattern
- */
 export function restrictTo(...roles: string[]) {
     return authorizeRole(roles);
 }

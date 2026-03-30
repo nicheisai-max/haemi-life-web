@@ -57,14 +57,14 @@ export function isIcePayload(value: unknown): value is { candidate: SignalData; 
     return hasTo && hasCandidate;
 }
 
-export function isAckDeliveryPayload(value: unknown): value is { sender_id: string; sender_role: UserRole; conversationId: string; messageId: string } {
+export function isAckDeliveryPayload(value: unknown): value is { senderId: string; senderRole: UserRole; conversationId: string; messageId: string } {
     if (!isObject(value)) return false;
     
     return (
         'conversationId' in value && typeof value.conversationId === 'string' &&
         'messageId' in value && typeof value.messageId === 'string' &&
-        'sender_id' in value && typeof value.sender_id === 'string' &&
-        'sender_role' in value && isValidRole(value.sender_role)
+        'senderId' in value && typeof value.senderId === 'string' &&
+        'senderRole' in value && isValidRole(value.senderRole)
     );
 }
 
@@ -72,12 +72,12 @@ export function isJoinConversationPayload(value: unknown): value is string {
     return typeof value === 'string' && value.length > 0;
 }
 
-export function isAckReadPayload(value: unknown): value is { conversationId: string; user_id: string } {
+export function isAckReadPayload(value: unknown): value is { conversationId: string; userId: string } {
     if (!isObject(value)) return false;
     
     return (
         'conversationId' in value && typeof value.conversationId === 'string' &&
-        'user_id' in value && typeof value.user_id === 'string'
+        'userId' in value && typeof value.userId === 'string'
     );
 }
 
@@ -87,6 +87,15 @@ export function isTypingPayload(value: unknown): value is { conversationId: stri
     return (
         'conversationId' in value && typeof value.conversationId === 'string' &&
         'name' in value && typeof value.name === 'string'
+    );
+}
+
+export function isMessageReadEvent(value: unknown): value is { messageId: string; userId: string } {
+    if (!isObject(value)) return false;
+    
+    return (
+        'messageId' in value && typeof value.messageId === 'string' &&
+        'userId' in value && typeof value.userId === 'string'
     );
 }
 

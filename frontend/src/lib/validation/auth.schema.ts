@@ -32,12 +32,12 @@ export type LoginFormData = z.infer<typeof loginSchema>;
 export const signupSchema = z.object({
     name: z.string().trim().min(2, { message: "Name must be at least 2 characters" }),
     email: z.string().trim().email({ message: "Please enter a valid email address" }),
-    phone_number: z
+    phoneNumber: z
         .string()
         .trim()
         .length(8, { message: "Phone number must be exactly 8 digits" })
         .regex(/^[0-9]+$/, { message: "Phone number must contain only digits" }),
-    omang_id: z
+    idNumber: z
         .string()
         .trim()
         .optional()
@@ -75,11 +75,11 @@ export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
  * Change Password Schema
  */
 export const changePasswordSchema = z.object({
-    current_password: z
+    currentPassword: z
         .string()
         .trim()
         .min(1, { message: "Current password is required" }),
-    new_password: z
+    newPassword: z
         .string()
         .trim()
         .min(6, { message: "New password must be at least 6 characters" }),
@@ -87,7 +87,7 @@ export const changePasswordSchema = z.object({
         .string()
         .trim()
         .min(6, { message: "Please confirm your new password" }),
-}).refine((data) => data.new_password === data.confirmPassword, {
+}).refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
 });

@@ -232,8 +232,8 @@ export const ClinicalCopilot: React.FC<ClinicalCopilotProps> = ({ isOpen, onClos
                                             // Handle error
                                             console.error('AI Error: No response data');
                                         }
-                                    } catch (err) {
-                                        console.error('Network Error:', err);
+                                    } catch (err: unknown) {
+                                        console.error('[ClinicalCopilot] Network Error:', err instanceof Error ? err.message : String(err));
                                     } finally {
                                         setIsLoading(false);
                                     }

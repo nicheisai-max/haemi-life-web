@@ -63,12 +63,12 @@ export function isUser(value: unknown): value is User {
 
 export function isJWTPayload(value: unknown): value is JWTPayload {
     if (!isObject(value)) return false;
-    const { id, role, token_version } = value;
+    const { id, role, tokenVersion } = value;
     return (
         isString(id) &&
         isString(role) &&
         (role === 'patient' || role === 'doctor' || role === 'pharmacist' || role === 'admin') &&
-        isNumber(token_version)
+        isNumber(tokenVersion)
     );
 }
 

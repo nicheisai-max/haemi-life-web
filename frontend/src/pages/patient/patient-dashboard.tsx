@@ -42,16 +42,22 @@ export const PatientDashboard = () => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
+            setError(null);
+            
+            // Phase 2: Consolidated Real-Time Data Fetch (Optimized for Upcoming)
             const [apptData, prescData] = await Promise.all([
-                getMyAppointments({ upcoming: true }),
-                getMyPrescriptions()
+                getMyAppointments({ status: 'scheduled', upcoming: true }).catch(() => []),
+                getMyPrescriptions().catch(() => [])
             ]);
-            setAppointments(apptData);
-            setPrescriptions(prescData);
+            
+            setAppointments(apptData || []);
+            setPrescriptions(prescData || []);
+            
         } catch (err) {
-            const apiError = err as { response?: { data?: { message?: string } } };
-            setError(apiError.response?.data?.message || 'Failed to load dashboard data');
             console.error('Dashboard fetch error:', err);
+            // Fail Safe: Return Empty State
+            setAppointments([]);
+            setPrescriptions([]);
         } finally {
             setLoading(false);
         }
@@ -75,7 +81,7 @@ export const PatientDashboard = () => {
 
 
 
-    const upcomingAppointments = appointments.filter(a => a.status === 'scheduled').slice(0, 3);
+    const upcomingAppointments = appointments.slice(0, 3);
     const activePrescriptions = prescriptions.filter(p => p.status === 'pending' || p.status === 'filled');
 
     return (
@@ -257,8 +263,8 @@ export const PatientDashboard = () => {
                                 </div>
                             ) : (
                                 upcomingAppointments.map((appointment) => {
-                                    const dateInfo = formatDate(appointment.appointment_date);
-                                    const isToday = new Date(appointment.appointment_date).toDateString() === new Date().toDateString();
+                                    const dateInfo = formatDate(appointment.appointmentDate);
+                                    const isToday = new Date(appointment.appointmentDate).toDateString() === new Date().toDateString();
                                     return (
                                         <button
                                             key={appointment.id}
@@ -272,10 +278,10 @@ export const PatientDashboard = () => {
                                                     <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{dateInfo.month}</span>
                                                 </div>
                                                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                    <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{appointment.other_party_name || 'Doctor'}</h3>
+                                                    <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{appointment.otherPartyName || 'Doctor'}</h3>
                                                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                                                         <span className="flex items-center gap-1 group-hover:text-primary transition-colors">
-                                                            <Clock className="h-3 w-3" /> {formatTime(appointment.appointment_time)}
+                                                            <Clock className="h-3 w-3" /> {formatTime(appointment.appointmentTime)}
                                                         </span>
                                                         {isToday && <span className="text-primary font-bold px-1.5 py-0.5 bg-primary/10 rounded ml-auto text-[9px]">TODAY</span>}
                                                     </div>

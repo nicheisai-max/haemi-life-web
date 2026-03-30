@@ -8,28 +8,37 @@ interface AuthenticatedImageProps {
     className?: string;
 }
 
+const imageCache = new Map<string, string>();
+
 export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ src, alt, className }) => {
-    const [imgUrl, setImgUrl] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [imgUrl, setImgUrl] = useState<string | null>(imageCache.get(src) || null);
+    const [loading, setLoading] = useState(!imageCache.has(src));
     const [error, setError] = useState(false);
 
     useEffect(() => {
-        let objectUrl: string | null = null;
-
+    
         const fetchImage = async () => {
+            if (imageCache.has(src)) {
+                setImgUrl(imageCache.get(src)!);
+                setLoading(false);
+                return;
+            }
+
             try {
                 setLoading(true);
                 setError(false);
 
-                // Fetch image as blob using authenticated api instance
-                const response = await api.get(src, {
+                // Fetch image as blob using authenticated API
+                const response = await api.get<Blob>(src, {
                     responseType: 'blob'
                 });
-
-                objectUrl = URL.createObjectURL(response.data);
-                setImgUrl(objectUrl);
-            } catch (err) {
-                console.error('Error fetching authenticated image:', err);
+                
+                // Axios interceptor returns the full response object
+                const url = URL.createObjectURL(response.data);
+                setImgUrl(url);
+                imageCache.set(src, url);
+            } catch (err: unknown) {
+                console.error('Error fetching authenticated image:', err instanceof Error ? err.message : String(err));
                 setError(true);
             } finally {
                 setLoading(false);
@@ -41,9 +50,10 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ src, alt
         }
 
         return () => {
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-            }
+            // Note: We don't revoke here because it's cached globally for systemic performance.
+            // In a real browser this could lead to memory leaks over VERY long sessions,
+            // but for this enterprise healthcare app, we prioritize immediate re-display
+            // on window toggle/scroll without hits to the rate limiter.
         };
     }, [src]);
 

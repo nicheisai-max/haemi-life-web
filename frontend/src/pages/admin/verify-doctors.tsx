@@ -103,7 +103,7 @@ export const VerifyDoctors: React.FC = () => {
                                         </div>
                                         <div className="flex items-center gap-2 truncate">
                                             <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                                            <span>{verification.phone_number || 'N/A'}</span>
+                                            <span>{verification.phoneNumber || 'N/A'}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -123,14 +123,14 @@ export const VerifyDoctors: React.FC = () => {
                                     <FileText className="h-3.5 w-3.5" />
                                     License Number
                                 </span>
-                                <span className="font-medium text-right font-mono">{verification.license_number || 'N/A'}</span>
+                                <span className="font-medium text-right font-mono">{verification.licenseNumber || 'N/A'}</span>
                             </div>
                             <div className="flex justify-between items-center py-1 border-b border-border/50">
                                 <span className="text-muted-foreground flex items-center gap-2">
                                     <Clock className="h-3.5 w-3.5" />
                                     Experience
                                 </span>
-                                <span className="font-medium text-right">{verification.years_of_experience || 0} years</span>
+                                <span className="font-medium text-right">{verification.yearsOfExperience || 0} years</span>
                             </div>
                             <div className="flex justify-between items-center py-1">
                                 <span className="text-muted-foreground flex items-center gap-2">
@@ -138,7 +138,7 @@ export const VerifyDoctors: React.FC = () => {
                                     Registered
                                 </span>
                                 <span className="font-medium text-right">
-                                    {new Date(verification.created_at).toLocaleDateString('en-US', {
+                                    {new Date(verification.createdAt).toLocaleDateString('en-US', {
                                         month: 'short',
                                         day: 'numeric',
                                         year: 'numeric'

@@ -11,17 +11,16 @@ import { DbMessage, DbConversation, ConversationResponse } from '../types/chat.t
  * Normalizes a Message object from DB to camelCase API response
  */
 export const mapMessageToResponse = (message: DbMessage): ChatMessage | null => {
-    if (!message) return null;
+    if (!message || !message.id || !message.conversation_id) return null;
 
     // P0 FIX: Derive messageType strictly from message_type or attachments
     // Fallback to 'document' only if explicitly marked as 'file' with no type info
     let normalizedType: 'text' | 'image' | 'document' = 'text';
-    if (message.message_type === 'image') {
-        normalizedType = 'image';
-    } else if (message.message_type === 'document' || message.message_type === 'file') {
-        normalizedType = 'document';
+    const allowedTypes = ['text', 'image', 'document'] as const;
+    if (allowedTypes.includes(message.message_type as typeof allowedTypes[number])) {
+        normalizedType = message.message_type as typeof allowedTypes[number];
     } else {
-        normalizedType = message.message_type as 'text' | 'image' | 'document';
+        normalizedType = 'text';
     }
 
     return {

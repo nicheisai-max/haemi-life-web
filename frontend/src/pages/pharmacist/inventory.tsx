@@ -11,7 +11,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle, Activity, Microscope, Zap, Heart, Wind, Filter } from 'lucide-react';
+import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle, Activity, Microscope, Zap, Heart, Wind, Filter, Loader2 } from 'lucide-react';
+
 import { inventorySchema } from '../../lib/validation/inventory.schema';
 import { PremiumNumberInput } from '@/components/ui/premium-number-input';
 import { TransitionItem } from '../../components/layout/page-transition';
@@ -30,14 +31,39 @@ interface InventoryItem {
 
 const CATEGORIES = ['Pain Relief', 'Antibiotics', 'Digestive', 'Supplements', 'Cardiovascular', 'Respiratory'];
 
+import { commonService, type Medicine } from '../../services/common.service';
+import { toast } from 'sonner';
+
 export const Inventory: React.FC = () => {
-    const [inventory, setInventory] = useState<InventoryItem[]>([
-        { id: '1', name: 'Paracetamol 500mg', category: 'Pain Relief', stock: 450, minStock: 200, price: 2.50, lastRestocked: '2026-02-08' },
-        { id: '2', name: 'Amoxicillin 250mg', category: 'Antibiotics', stock: 120, minStock: 150, price: 8.75, lastRestocked: '2026-02-05' },
-        { id: '3', name: 'Ibuprofen 400mg', category: 'Pain Relief', stock: 380, minStock: 200, price: 3.20, lastRestocked: '2026-02-07' },
-        { id: '4', name: 'Omeprazole 20mg', category: 'Digestive', stock: 95, minStock: 100, price: 5.50, lastRestocked: '2026-02-01' },
-        { id: '5', name: 'Vitamin D3 1000IU', category: 'Supplements', stock: 280, minStock: 150, price: 4.00, lastRestocked: '2026-02-09' },
-    ]);
+    const [inventory, setInventory] = useState<InventoryItem[]>([]);
+    const [loading, setLoading] = useState(true);
+
+
+    useEffect(() => {
+        const fetchMedicines = async () => {
+            try {
+                const medicines = await commonService.getMedicines();
+                // Map the shared Medicine type to the local InventoryItem interface
+                const mappedItems: InventoryItem[] = medicines.map((m: Medicine) => ({
+                    id: String(m.id),
+                    name: m.name,
+                    category: m.category || 'General',
+                    stock: m.stockQuantity || 0,
+                    minStock: m.minStockLevel || 50,
+                    price: Number(m.price) || 0,
+                    lastRestocked: m.updatedAt || new Date().toISOString()
+                }));
+                setInventory(mappedItems);
+            } catch (error) {
+                console.error('Error fetching inventory:', error);
+                toast.error('Failed to load medicine inventory');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchMedicines();
+    }, []);
+
 
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('all');
@@ -56,7 +82,8 @@ export const Inventory: React.FC = () => {
 
     const onSubmit = (data: z.input<typeof inventorySchema>) => {
         const newItem: InventoryItem = {
-            id: crypto.randomUUID(),
+            id: Math.random().toString(36).substring(2, 11),
+
             name: data.name,
             category: data.category,
             stock: Number(data.stock),
@@ -343,7 +370,16 @@ export const Inventory: React.FC = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {paginatedInventory.length === 0 ? (
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="h-32 text-center">
+                                            <div className="flex flex-col items-center justify-center gap-2">
+                                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                                <span className="text-muted-foreground font-medium">Loading inventory...</span>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : paginatedInventory.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                             No items found.
@@ -351,6 +387,7 @@ export const Inventory: React.FC = () => {
                                     </TableRow>
                                 ) : (
                                     paginatedInventory.map((item) => {
+
                                         const status = getStockStatus(item);
                                         return (
                                             <TableRow key={item.id} className="hover:bg-muted/50">

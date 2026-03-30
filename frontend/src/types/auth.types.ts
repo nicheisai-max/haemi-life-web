@@ -1,22 +1,17 @@
 export type UserRole = 'patient' | 'doctor' | 'admin' | 'pharmacist';
 
-export interface UserProfile {
-    fullName: string;
-    avatar: string | null;
-    metadata: Record<string, unknown>;
-}
-
 export interface User {
     id: string;
     email: string | null;
-    phone_number?: string;
+    phoneNumber: string | null;
     name: string;
     role: UserRole;
-    id_number?: string | null;
-    initials?: string;
-    profile_image?: string | null;
-    profile_image_mime?: string | null;
-    profile?: UserProfile;
+    idNumber: string | null;
+    initials: string;
+    profileImage: string | null;
+    isVerified: boolean;
+    status: string;
+    createdAt: string;
 }
 
 // ─── Phase 10: Strict API Response Engine ─────────────────────────────────────
@@ -42,11 +37,11 @@ export interface LoginCredentials {
 
 export interface SignupCredentials {
     email?: string;
-    phone_number: string;
+    phoneNumber: string;
     password: string;
     name: string;
     role: UserRole;
-    id_number?: string;
+    idNumber?: string;
     [key: string]: unknown;
 }
 
@@ -72,10 +67,17 @@ export class FatalAuthError extends Error {
     constructor(message: string) { super(message); this.name = 'FatalAuthError'; }
 }
 
-export const isNetworkError = (error: unknown): error is NetworkError => typeof error === 'object' && error !== null && 'name' in error && (error as Error).name === 'NetworkError';
-export const isAuthError = (error: unknown): error is AuthError => typeof error === 'object' && error !== null && 'name' in error && (error as Error).name === 'AuthError';
-export const isRefreshFailureError = (error: unknown): error is RefreshFailureError => typeof error === 'object' && error !== null && 'name' in error && (error as Error).name === 'RefreshFailureError';
-export const isFatalAuthError = (error: unknown): error is FatalAuthError => typeof error === 'object' && error !== null && 'name' in error && (error as Error).name === 'FatalAuthError';
+export const isNetworkError = (error: unknown): error is NetworkError => 
+    error instanceof NetworkError || (error instanceof Error && error.name === 'NetworkError');
+
+export const isAuthError = (error: unknown): error is AuthError => 
+    error instanceof AuthError || (error instanceof Error && error.name === 'AuthError');
+
+export const isRefreshFailureError = (error: unknown): error is RefreshFailureError => 
+    error instanceof RefreshFailureError || (error instanceof Error && error.name === 'RefreshFailureError');
+
+export const isFatalAuthError = (error: unknown): error is FatalAuthError => 
+    error instanceof FatalAuthError || (error instanceof Error && error.name === 'FatalAuthError');
 
 // ─── Phase 7: Strict Event Typing ───────────────────────────────────────────
 export interface AuthTokenRefreshedDetail {

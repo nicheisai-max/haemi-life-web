@@ -22,9 +22,9 @@ export const signupSchema = z.object({
         name: z.string().min(2, { message: 'Name must be at least 2 characters long' }),
         email: z.string().email({ message: 'Please enter a valid email address' }),
         password: z.string().min(6, { message: 'Password must be at least 6 characters long' }),
-        phone_number: z.string().min(8, { message: 'Valid phone number is required' }),
+        phoneNumber: z.string().min(8, { message: 'Valid phone number is required' }),
         // SECURITY: 'admin' is intentionally excluded from self-registration
         role: z.enum(['patient', 'doctor', 'pharmacist']).default('patient'),
-        id_number: z.string().optional(),
+        idNumber: z.string().optional(),
     }),
 });

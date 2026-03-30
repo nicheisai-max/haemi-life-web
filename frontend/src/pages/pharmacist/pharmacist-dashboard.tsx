@@ -174,11 +174,11 @@ export const PharmacistDashboard = () => {
                                         <span className="block text-xs font-bold uppercase tracking-wider">New</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="font-semibold truncate text-foreground">{prescription.patient_name || 'Patient'}</h3>
+                                        <h3 className="font-semibold truncate text-foreground">{prescription.patientName || 'Patient'}</h3>
                                         <p className="text-sm text-muted-foreground truncate flex items-center gap-1.5">
-                                            <span>{prescription.medication_count || 0} item{(prescription.medication_count || 0) !== 1 ? 's' : ''}</span>
+                                            <span>{prescription.medicationCount || 0} item{(prescription.medicationCount || 0) !== 1 ? 's' : ''}</span>
                                             <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                                            <span>{prescription.doctor_name || 'N/A'}</span>
+                                            <span>{prescription.doctorName || 'N/A'}</span>
                                         </p>
                                     </div>
                                     <Button variant="default" size="sm" className="action-btn shadow-sm" onClick={() => navigate(PATHS.PHARMACIST.PRESCRIPTION_DETAIL(prescription.id))}>

@@ -126,43 +126,43 @@ export const PrescriptionQueue: React.FC = () => {
                                         <AlertTriangle className="h-6 w-6" />
                                     </div>
 
-                                    <div className="flex-1 space-y-3 w-full">
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <div className="flex md:hidden flex-shrink-0 w-8 h-8 rounded-md bg-orange-100 dark:bg-orange-900/30 items-center justify-center text-orange-600 dark:text-orange-400">
-                                                <AlertTriangle className="h-4 w-4" />
-                                            </div>
-                                            <h3 className="text-lg font-semibold text-foreground">Patient: {prescription.patient_name || 'Unknown'}</h3>
-                                            <Badge variant="secondary" className="flex items-center gap-1.5 font-normal ml-auto md:ml-0">
-                                                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                                {new Date(prescription.created_at).toLocaleTimeString('en-US', {
-                                                    hour: 'numeric',
-                                                    minute: '2-digit',
-                                                    hour12: true
-                                                })}
-                                            </Badge>
-                                        </div>
+                                            <div className="flex-1 space-y-3 w-full">
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    <div className="flex md:hidden flex-shrink-0 w-8 h-8 rounded-md bg-orange-100 dark:bg-orange-900/30 items-center justify-center text-orange-600 dark:text-orange-400">
+                                                        <AlertTriangle className="h-4 w-4" />
+                                                    </div>
+                                                    <h3 className="text-lg font-semibold text-foreground">Patient: {prescription.patientName || 'Unknown'}</h3>
+                                                    <Badge variant="secondary" className="flex items-center gap-1.5 font-normal ml-auto md:ml-0">
+                                                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        {new Date(prescription.createdAt).toLocaleTimeString('en-US', {
+                                                            hour: 'numeric',
+                                                            minute: '2-digit',
+                                                            hour12: true
+                                                        })}
+                                                    </Badge>
+                                                </div>
 
-                                        <p className="text-sm text-muted-foreground">Prescribed by: <span className="font-medium text-foreground">{prescription.doctor_name || 'Unknown'}</span></p>
+                                                <p className="text-sm text-muted-foreground">Prescribed by: <span className="font-medium text-foreground">{prescription.doctorName || 'Unknown'}</span></p>
 
-                                        <div className="flex flex-wrap gap-4 pt-1">
-                                            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
-                                                <Calendar className="h-4 w-4 text-primary" />
-                                                <span>{new Date(prescription.created_at).toLocaleDateString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    year: 'numeric'
-                                                })}</span>
+                                                <div className="flex flex-wrap gap-4 pt-1">
+                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
+                                                        <Calendar className="h-4 w-4 text-primary" />
+                                                        <span>{new Date(prescription.createdAt).toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric'
+                                                        })}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
+                                                        <Pill className="h-4 w-4 text-primary" />
+                                                        <span>{prescription.medicationCount || 0} item(s)</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
-                                                <Pill className="h-4 w-4 text-primary" />
-                                                <span>{prescription.medication_count || 0} item(s)</span>
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    <div className="flex md:flex-col gap-3 w-full md:w-[10rem] mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-0 border-border/50">
-                                        <Button
-                                            onClick={() => handleFill(prescription.id)}
+                                            <div className="flex md:flex-col gap-3 w-full md:w-[10rem] mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-0 border-border/50">
+                                                <Button
+                                                    onClick={() => handleFill(prescription.id)}
                                             disabled={processing === prescription.id.toString()}
                                             className="clinical-action-primary flex-1 shadow-md"
                                         >

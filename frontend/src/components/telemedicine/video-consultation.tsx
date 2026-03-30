@@ -297,7 +297,7 @@ export const VideoConsultation: React.FC = () => {
                             </div>
                             <h1 className="text-h1 leading-tight text-foreground">Video Consultation</h1>
                             <p className="text-xl font-medium text-primary flex items-center gap-2">
-                                with {appointment?.doctor_name}
+                                with {appointment?.doctorName}
                             </p>
                             <p className="text-muted-foreground mt-2 font-medium">{appointment?.specialization || 'Specialist'}</p>
                         </div>
@@ -349,7 +349,7 @@ export const VideoConsultation: React.FC = () => {
                         <div className="text-center">
                             <PremiumLoader />
                             <p className="font-semibold mt-4 text-foreground">Waiting for Specialist...</p>
-                            <p className="text-neutral-400 mt-2">{appointment?.doctor_name} is being notified of your arrival.</p>
+                            <p className="text-neutral-400 mt-2">{appointment?.doctorName} is being notified of your arrival.</p>
 
                             <div className="mt-12 p-6 rounded-2xl bg-white/5 border border-white/5 max-w-sm mx-auto flex items-center gap-4 text-left">
                                 <Info className="h-8 w-8 text-primary shrink-0" />
@@ -409,7 +409,7 @@ export const VideoConsultation: React.FC = () => {
             <div className="w-full md:w-[360px] bg-card border-t md:border-t-0 md:border-l border-border flex flex-col p-8 z-30 shadow-2xl">
                 <div className="space-y-6">
                     <div>
-                        <h3 className="text-h3 tracking-tight text-foreground">{appointment?.doctor_name}</h3>
+                        <h3 className="text-h3 tracking-tight text-foreground">{appointment?.doctorName}</h3>
                         <p className="text-primary font-black text-xs uppercase tracking-[0.2em] mt-2 bg-primary/5 inline-block px-2 py-1 rounded">{appointment?.specialization}</p>
                     </div>
 

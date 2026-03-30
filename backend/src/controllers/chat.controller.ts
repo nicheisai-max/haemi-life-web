@@ -516,7 +516,7 @@ export const sendMessage = async (req: Request, res: Response) => {
         // Attach to the message object for REST response and socket emission
         newMessage.attachments = attachmentsArr;
 
-        const socketPayload = mapMessageToResponse({
+        const socketPayload: ChatMessage | null = mapMessageToResponse({
             ...newMessage,
             sender_name: senderName,
             sender_role: user.role,
@@ -526,7 +526,7 @@ export const sendMessage = async (req: Request, res: Response) => {
         // Standardized Enterprise Event: messageReceived
         // Emitted once to the conversation room for real-time delivery
         if (io && socketPayload) {
-            io.to(`conversation:${conversationId}`).emit('messageReceived', socketPayload as ChatMessage);
+            io.to(`conversation:${conversationId}`).emit('messageReceived', socketPayload);
             logger.info('[ChatController] Message emitted to room', { conversationId, messageId: newMessage.id });
         }
 

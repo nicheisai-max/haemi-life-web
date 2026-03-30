@@ -52,7 +52,7 @@ export const SecurityMonitoring: React.FC = () => {
         },
         {
             label: 'Suspicious Activities',
-            value: events.filter(e => e.is_suspicious).length.toString(),
+            value: events.filter(e => e.isSuspicious).length.toString(),
             description: 'Login attempts from unusual locations flagged for review.',
             trend: 'neutral' as const,
             trendValue: 'Stable',
@@ -123,33 +123,33 @@ export const SecurityMonitoring: React.FC = () => {
                                         <tr key={event.id} className="bg-background hover:bg-muted/30 transition-colors group">
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
-                                                    <span className="font-bold text-foreground group-hover:text-primary transition-colors text-xs">{event.event_type}</span>
-                                                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter opacity-70">{event.event_category}</span>
+                                                    <span className="font-bold text-foreground group-hover:text-primary transition-colors text-xs">{event.eventType}</span>
+                                                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter opacity-70">{event.eventCategory}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300">
-                                                        {(event.user_name || 'Sys').charAt(0).toUpperCase()}
+                                                        {(event.userName || 'Sys').charAt(0).toUpperCase()}
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="font-semibold text-foreground text-xs">{event.user_name || 'System'}</span>
-                                                        <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{event.user_email || 'internal'}</span>
+                                                        <span className="font-semibold text-foreground text-xs">{event.userName || 'System'}</span>
+                                                        <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{event.userEmail || 'internal'}</span>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <Badge variant="outline" className={`rounded-lg px-2 py-0.5 text-[9px] font-bold border ${getSeverityColor(event.event_severity)}`}>
-                                                    {event.event_severity || 'INFO'}
+                                                <Badge variant="outline" className={`rounded-lg px-2 py-0.5 text-[9px] font-bold border ${getSeverityColor(event.eventSeverity)}`}>
+                                                    {event.eventSeverity || 'INFO'}
                                                 </Badge>
                                             </td>
                                             <td className="px-6 py-4 text-muted-foreground font-mono text-[11px]">
-                                                {event.ip_address || '0.0.0.0'}
+                                                {event.ipAddress || '0.0.0.0'}
                                             </td>
                                             <td className="px-6 py-4 text-right whitespace-nowrap">
                                                 <div className="flex flex-col text-[11px]">
-                                                    <span className="font-bold text-foreground">{new Date(event.created_at).toLocaleDateString()}</span>
-                                                    <span className="text-muted-foreground text-[10px]">{new Date(event.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    <span className="font-bold text-foreground">{new Date(event.createdAt).toLocaleDateString()}</span>
+                                                    <span className="text-muted-foreground text-[10px]">{new Date(event.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                 </div>
                                             </td>
                                         </tr>

@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { pool } from '../config/db';
+import { logger } from '../utils/logger';
 
 export interface SystemSetting {
     id: number;
@@ -16,21 +17,37 @@ export class SystemSettingsRepository {
     }
 
     async getSetting(key: string): Promise<string | null> {
-        const result = await this.db.query(
-            'SELECT value FROM system_settings WHERE key = $1',
-            [key]
-        );
-        return result.rows[0]?.value || null;
+        try {
+            const result = await this.db.query<{ value: string }>(
+                'SELECT value FROM system_settings WHERE key = $1',
+                [key]
+            );
+            return result.rows[0]?.value || null;
+        } catch (error: unknown) {
+            logger.error('Failed to get system setting', {
+                error: error instanceof Error ? error.message : String(error),
+                key
+            });
+            throw error;
+        }
     }
 
     async updateSetting(key: string, value: string): Promise<void> {
-        await this.db.query(
-            `INSERT INTO system_settings (key, value, updated_at) 
-             VALUES ($1, $2, NOW())
-             ON CONFLICT (key) DO 
-             UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-            [key, value]
-        );
+        try {
+            await this.db.query(
+                `INSERT INTO system_settings (key, value, updated_at) 
+                 VALUES ($1, $2, NOW())
+                 ON CONFLICT (key) DO 
+                 UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+                [key, value]
+            );
+        } catch (error: unknown) {
+            logger.error('Failed to update system setting', {
+                error: error instanceof Error ? error.message : String(error),
+                key
+            });
+            throw error;
+        }
     }
 }
 

@@ -147,9 +147,9 @@ export const signup = async (req: Request, res: Response) => {
                     id: newUser.id,
                     email: newUser.email,
                     role: newUser.role,
-                    tokenVersion: newUser.token_version,
+                    token_version: newUser.token_version,
                     jti: accessJti,
-                    sessionId: sessionId
+                    session_id: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
@@ -159,9 +159,9 @@ export const signup = async (req: Request, res: Response) => {
             const refreshToken = jwt.sign(
                 {
                     id: newUser.id,
-                    tokenVersion: newUser.token_version,
+                    token_version: newUser.token_version,
                     jti: refreshJti,
-                    sessionId: sessionId
+                    session_id: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }
@@ -383,9 +383,9 @@ export const login = async (req: Request, res: Response) => {
                 id: user.id,
                 email: user.email,
                 role: user.role,
-                tokenVersion: user.token_version,
+                token_version: user.token_version,
                 jti: accessJti,
-                sessionId: sessionId
+                session_id: sessionId
             },
             getJwtSecret(),
             { expiresIn: await getJwtAccessExpiry() }
@@ -395,9 +395,9 @@ export const login = async (req: Request, res: Response) => {
         const refreshToken = jwt.sign(
             {
                 id: user.id,
-                tokenVersion: user.token_version,
+                token_version: user.token_version,
                 jti: refreshJti,
-                sessionId: sessionId
+                session_id: sessionId
             },
             getJwtSecret(),
             { expiresIn: await getJwtRefreshExpiry() }
@@ -576,10 +576,11 @@ export const refreshToken = async (req: Request, res: Response) => {
             return sendError(res, 401, 'Invalid session');
         }
 
-        const sessionId = decoded.sessionId;
+        const decodedPayload = decoded as JWTPayload & { session_id: string; token_version?: number };
+        const sessionId = decodedPayload.session_id;
 
         if (!sessionId) {
-            logger.error('[Security] Refresh token missing sessionId', { userId: decoded.id });
+            logger.error('[Security] Refresh token missing session_id', { userId: decoded.id });
             await client.query('ROLLBACK');
             return sendResponse(res, 401, false, 'Invalid token structure');
         }
@@ -600,7 +601,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
 
         // 3. Security Check: Token Rotation & Versioning
-        const isVersionMismatch = decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.token_version;
+        const isVersionMismatch = decodedPayload.token_version !== undefined && decodedPayload.token_version !== user.token_version;
         
         // GRACE WINDOW LOGIC (Google/Meta Grade)
         const currentJti = session?.refresh_token_jti;
@@ -675,9 +676,9 @@ export const refreshToken = async (req: Request, res: Response) => {
                     id: user.id,
                     email: user.email,
                     role: user.role,
-                    tokenVersion: user.token_version,
+                    token_version: user.token_version,
                     jti: newAccessJti,
-                    sessionId: sessionId
+                    session_id: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
@@ -686,9 +687,9 @@ export const refreshToken = async (req: Request, res: Response) => {
             newRefreshToken = jwt.sign(
                 {
                     id: user.id,
-                    tokenVersion: user.token_version,
+                    token_version: user.token_version,
                     jti: newRefreshJti,
-                    sessionId: sessionId
+                    session_id: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }
@@ -721,9 +722,9 @@ export const refreshToken = async (req: Request, res: Response) => {
                     id: user.id,
                     email: user.email,
                     role: user.role,
-                    tokenVersion: user.token_version,
+                    token_version: user.token_version,
                     jti: session.access_token_jti,
-                    sessionId: sessionId
+                    session_id: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
@@ -732,9 +733,9 @@ export const refreshToken = async (req: Request, res: Response) => {
             newRefreshToken = jwt.sign(
                 {
                     id: user.id,
-                    tokenVersion: user.token_version,
+                    token_version: user.token_version,
                     jti: session.refresh_token_jti,
-                    sessionId: sessionId
+                    session_id: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }

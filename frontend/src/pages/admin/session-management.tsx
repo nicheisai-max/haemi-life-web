@@ -39,7 +39,7 @@ export const SessionManagement: React.FC = () => {
             const res = await revokeSession(sessionId);
             if (res.success) {
                 toast.success("Session revoked successfully");
-                setSessions(prev => prev.filter(s => s.session_id !== sessionId && s.id !== sessionId));
+                setSessions(prev => prev.filter(s => s.sessionId !== sessionId && s.id !== sessionId));
             }
         } catch (err) {
             console.error("Failed to revoke session:", err);
@@ -125,34 +125,34 @@ export const SessionManagement: React.FC = () => {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold ring-2 ring-background ring-offset-2">
-                                                        {session.user_name.charAt(0).toUpperCase()}
+                                                        {session.userName.charAt(0).toUpperCase()}
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="font-bold text-foreground text-xs">{session.user_name}</span>
-                                                        <span className="text-[10px] text-muted-foreground">{session.user_email}</span>
+                                                        <span className="font-bold text-foreground text-xs">{session.userName}</span>
+                                                        <span className="text-[10px] text-muted-foreground">{session.userEmail}</span>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <Badge variant="secondary" className="rounded-full px-2 py-0 text-[9px] font-bold uppercase ring-1 ring-border shadow-sm">
-                                                    {session.user_role}
+                                                    {session.userRole}
                                                 </Badge>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:scale-110 transition-transform">
-                                                        {getDeviceIcon(session.user_agent)}
+                                                        {getDeviceIcon(session.userAgent)}
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="text-[11px] font-mono text-foreground font-bold">{session.ip_address || '127.0.0.1'}</span>
-                                                        <span className="text-[9px] text-muted-foreground truncate max-w-[150px]">{session.user_agent || 'Client Agent'}</span>
+                                                        <span className="text-[11px] font-mono text-foreground font-bold">{session.ipAddress || '127.0.0.1'}</span>
+                                                        <span className="text-[9px] text-muted-foreground truncate max-w-[150px]">{session.userAgent || 'Client Agent'}</span>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col text-[10px]">
-                                                    <span className="font-bold text-foreground">{session.last_activity_at ? new Date(session.last_activity_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
-                                                    <span className="text-muted-foreground opacity-70">Logged: {new Date(session.login_time).toLocaleDateString()}</span>
+                                                    <span className="font-bold text-foreground">{session.lastActivity ? new Date(session.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
+                                                    <span className="text-muted-foreground opacity-70">Logged: {new Date(session.loginTime).toLocaleDateString()}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
@@ -161,7 +161,7 @@ export const SessionManagement: React.FC = () => {
                                                     size="sm"
                                                     className="h-8 w-8 p-0 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all hover:scale-110 active:scale-95"
                                                     title="Revoke Session"
-                                                    onClick={() => handleRevoke(session.session_id || session.id)}
+                                                    onClick={() => handleRevoke(session.sessionId || session.id)}
                                                 >
                                                     <LogOut className="h-4 w-4" />
                                                 </Button>

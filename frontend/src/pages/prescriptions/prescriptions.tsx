@@ -212,7 +212,7 @@ export const Prescriptions: React.FC = () => {
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                                                         <h3 className="text-lg font-semibold text-foreground truncate">
-                                                            {prescription.doctor_name || 'Unknown'}
+                                                            {prescription.doctorName || 'Unknown'}
                                                         </h3>
                                                         <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide border ${getStatusStyles(prescription.status)}`}>
                                                             {prescription.status}
@@ -221,7 +221,7 @@ export const Prescriptions: React.FC = () => {
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
                                                         <Calendar className="h-3.5 w-3.5" />
                                                         <span>
-                                                            {new Date(prescription.created_at).toLocaleDateString('en-US', {
+                                                            {new Date(prescription.createdAt).toLocaleDateString('en-US', {
                                                                 month: 'long',
                                                                 day: 'numeric',
                                                                 year: 'numeric'
@@ -230,7 +230,7 @@ export const Prescriptions: React.FC = () => {
                                                     </div>
                                                     <div className="flex items-center gap-2 text-sm font-medium text-foreground/80">
                                                         <Stethoscope className="h-4 w-4 text-primary/70" />
-                                                        <span>{prescription.medication_count || 0} medication{(prescription.medication_count || 0) !== 1 ? 's' : ''}</span>
+                                                        <span>{prescription.medicationCount || 0} medication{(prescription.medicationCount || 0) !== 1 ? 's' : ''}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -256,14 +256,14 @@ export const Prescriptions: React.FC = () => {
                                     {uploadedRecords.map((record) => (
                                         <Card key={record.id} className="group p-4 flex items-start gap-4 transition-all hover:shadow-md hover:border-primary/50">
                                             <div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                                {getFileIcon(record.file_type)}
+                                                {getFileIcon(record.fileMime)}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <h4 className="font-semibold truncate mb-1 text-sm" title={record.name}>{record.name}</h4>
                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <span>{record.file_size}</span>
+                                                    <span>{record.fileSize}</span>
                                                     <span className="w-1 h-1 rounded-full bg-muted-foreground/40"></span>
-                                                    <span>{new Date(record.uploaded_at).toLocaleDateString()}</span>
+                                                    <span>{new Date(record.uploadedAt).toLocaleDateString()}</span>
                                                 </div>
                                             </div>
                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -314,7 +314,7 @@ export const Prescriptions: React.FC = () => {
                                                 Doctor Information
                                             </h3>
                                             <div className="bg-muted/30 p-3 rounded-lg border">
-                                                <div className="text-sm font-medium text-foreground">{selectedPrescription.doctor_name || 'Unknown'}</div>
+                                                <div className="text-sm font-medium text-foreground">{selectedPrescription.doctorName || 'Unknown'}</div>
                                                 <div className="text-xs text-muted-foreground">Prescribing Physician</div>
                                             </div>
                                         </div>
@@ -328,7 +328,7 @@ export const Prescriptions: React.FC = () => {
                                                 <div className="bg-muted/30 p-3 rounded-lg border">
                                                     <div className="text-xs text-muted-foreground mb-1">Prescribed On</div>
                                                     <div className="text-sm font-medium">
-                                                        {new Date(selectedPrescription.created_at).toLocaleDateString('en-US', {
+                                                        {new Date(selectedPrescription.createdAt).toLocaleDateString('en-US', {
                                                             month: 'short',
                                                             day: 'numeric',
                                                             year: 'numeric'
@@ -352,14 +352,14 @@ export const Prescriptions: React.FC = () => {
                                                 <Pill className="h-3.5 w-3.5" />
                                                 Medications
                                             </h3>
-                                            {selectedPrescription.medication_count && selectedPrescription.medication_count > 0 ? (
+                                            {selectedPrescription.medicationCount && selectedPrescription.medicationCount > 0 ? (
                                                 <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 flex gap-3 items-start">
                                                     <div className="shrink-0 w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary mt-0.5">
                                                         <Building2 className="h-4 w-4" />
                                                     </div>
                                                     <div>
                                                         <div className="font-medium text-foreground">
-                                                            {selectedPrescription.medication_count} medication{(selectedPrescription.medication_count || 0) !== 1 ? 's' : ''} prescribed
+                                                            {selectedPrescription.medicationCount} medication{(selectedPrescription.medicationCount || 0) !== 1 ? 's' : ''} prescribed
                                                         </div>
                                                         <div className="text-xs text-muted-foreground mt-1">
                                                             Full formulation details available at pharmacy

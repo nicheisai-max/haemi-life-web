@@ -28,8 +28,8 @@ export const Signup: React.FC = () => {
         defaultValues: {
             name: '',
             email: '',
-            phone_number: '',
-            omang_id: '',
+            phoneNumber: '',
+            idNumber: '',
             password: '',
             confirmPassword: '',
             role: 'patient',
@@ -48,11 +48,11 @@ export const Signup: React.FC = () => {
         try {
             await signup({
                 name: data.name,
-                phone_number: data.phone_number,
+                phoneNumber: `+267${data.phoneNumber}`,
                 email: data.email || undefined,
                 password: data.password,
                 role: data.role,
-                id_number: data.omang_id || undefined,
+                idNumber: data.idNumber || undefined,
             });
 
             // Navigation is now handled by the AuthContext state change effect
@@ -150,7 +150,7 @@ export const Signup: React.FC = () => {
 
                         <FormField
                             control={form.control}
-                            name="phone_number"
+                            name="phoneNumber"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Phone Number</FormLabel>
@@ -203,7 +203,7 @@ export const Signup: React.FC = () => {
                     {selectedRole === 'patient' && (
                         <FormField
                             control={form.control}
-                            name="omang_id"
+                            name="idNumber"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Omang ID (Optional)</FormLabel>

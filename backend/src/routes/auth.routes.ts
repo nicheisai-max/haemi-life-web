@@ -16,7 +16,7 @@ router.put('/profile', authenticateToken, updateProfile);
 router.post('/profile-image', authenticateToken, upload.single('image'), uploadProfileImage);
 router.put('/change-password', authenticateToken, changePassword);
 router.post('/refresh-token', refreshToken);
-router.post('/logout', authenticateToken, logout);
+router.post('/logout', relaxedAuthenticateToken, logout);
 router.get('/verify', authenticateToken, verifySession);
 router.get('/me', relaxedAuthenticateToken, getMe);
 

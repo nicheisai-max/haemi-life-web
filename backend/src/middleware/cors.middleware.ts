@@ -6,6 +6,12 @@ import { env } from '../config/env';
  * Central authority for all cross-origin and security header policies.
  */
 export const corsMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    // Socket.IO has its own CORS handling. Manually setting headers here can cause 
+    // "Multiple Access-Control-Allow-Origin" errors leading to 400 Bad Request.
+    if (req.path.startsWith('/socket.io/')) {
+        return next();
+    }
+
     const origin = req.header('Origin');
     const isAllowed = !origin || (env.allowedOrigins && env.allowedOrigins.includes(origin));
 

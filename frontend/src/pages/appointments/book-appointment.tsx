@@ -43,16 +43,16 @@ export const BookAppointment: React.FC = () => {
     const form = useForm<z.input<typeof bookAppointmentSchema>, undefined, BookAppointmentFormData>({
         resolver: zodResolver(bookAppointmentSchema),
         defaultValues: {
-            doctor_id: '',
-            appointment_date: '',
-            appointment_time: '',
-            consultation_type: 'in-person',
+            doctorId: '',
+            appointmentDate: '',
+            appointmentTime: '',
+            consultationType: 'in-person',
             reason: '',
         },
     });
 
-    const watchedDoctorId = form.watch('doctor_id');
-    const watchedDate = form.watch('appointment_date');
+    const watchedDoctorId = form.watch('doctorId');
+    const watchedDate = form.watch('appointmentDate');
 
     useEffect(() => {
         fetchDoctors();
@@ -70,7 +70,7 @@ export const BookAppointment: React.FC = () => {
 
     useEffect(() => {
         if (preselectedDoctorId && doctors.length > 0) {
-            form.setValue('doctor_id', preselectedDoctorId);
+            form.setValue('doctorId', preselectedDoctorId);
         }
 
         // Restore form data from draft if arriving back from the /consent page
@@ -78,11 +78,11 @@ export const BookAppointment: React.FC = () => {
         if (draft && doctors.length > 0) {
             try {
                 const draftData = JSON.parse(draft);
-                if (draftData.doctor_id) form.setValue('doctor_id', draftData.doctor_id);
-                if (draftData.appointment_date) form.setValue('appointment_date', draftData.appointment_date);
-                if (draftData.appointment_time) form.setValue('appointment_time', draftData.appointment_time);
+                if (draftData.doctorId) form.setValue('doctorId', draftData.doctorId);
+                if (draftData.appointmentDate) form.setValue('appointmentDate', draftData.appointmentDate);
+                if (draftData.appointmentTime) form.setValue('appointmentTime', draftData.appointmentTime);
                 if (draftData.reason) form.setValue('reason', draftData.reason);
-                form.setValue('consultation_type', 'video');
+                form.setValue('consultationType', 'video');
                 // Clean up draft after restoring to avoid sticking state
                 sessionStorage.removeItem('book_appointment_draft');
             } catch {
@@ -138,9 +138,9 @@ export const BookAppointment: React.FC = () => {
     const handleSignConsent = async () => {
         // Save form state to sessionStorage so we can restore it when they come back
         sessionStorage.setItem('book_appointment_draft', JSON.stringify({
-            doctor_id: form.getValues('doctor_id'),
-            appointment_date: form.getValues('appointment_date'),
-            appointment_time: form.getValues('appointment_time'),
+            doctorId: form.getValues('doctorId'),
+            appointmentDate: form.getValues('appointmentDate'),
+            appointmentTime: form.getValues('appointmentTime'),
             reason: form.getValues('reason'),
         }));
 
@@ -198,7 +198,7 @@ export const BookAppointment: React.FC = () => {
                                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                                     <FormField
                                         control={form.control}
-                                        name="doctor_id"
+                                        name="doctorId"
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Select Doctor</FormLabel>
@@ -227,7 +227,7 @@ export const BookAppointment: React.FC = () => {
 
                                     <FormField
                                         control={form.control}
-                                        name="appointment_date"
+                                        name="appointmentDate"
                                         render={({ field }) => (
                                             <FormItem className="space-y-4">
                                                 <div className="space-y-1">
@@ -255,7 +255,7 @@ export const BookAppointment: React.FC = () => {
                                             >
                                                 <FormField
                                                     control={form.control}
-                                                    name="appointment_time"
+                                                    name="appointmentTime"
                                                     render={({ field }) => (
                                                         <FormItem className="space-y-4">
                                                             <div className="space-y-1">
@@ -280,7 +280,7 @@ export const BookAppointment: React.FC = () => {
 
                                     <FormField
                                         control={form.control}
-                                        name="consultation_type"
+                                        name="consultationType"
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Consultation Type</FormLabel>
@@ -323,7 +323,7 @@ export const BookAppointment: React.FC = () => {
                                     />
 
                                     {/* --- TELEMEDICINE CONSENT GUARD --- */}
-                                    {form.watch('consultation_type') === 'video' && hasConsent === false ? (
+                                    {form.watch('consultationType') === 'video' && hasConsent === false ? (
                                         <Alert className="border-primary/50 bg-primary/5 shadow-md">
                                             <div className="flex gap-4 items-start">
                                                 <div className="shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary mt-1">
@@ -402,10 +402,10 @@ export const BookAppointment: React.FC = () => {
                                                 year: 'numeric'
                                             })}</span>
                                         </div>
-                                        {form.watch('appointment_time') && (
+                                        {form.watch('appointmentTime') && (
                                             <div className="flex items-center gap-3 text-sm text-foreground">
                                                 <Clock className="h-5 w-5 text-muted-foreground" />
-                                                <span>{new Date(`2000-01-01T${form.watch('appointment_time')}`).toLocaleTimeString('en-US', {
+                                                <span>{new Date(`2000-01-01T${form.watch('appointmentTime')}`).toLocaleTimeString('en-US', {
                                                     hour: 'numeric',
                                                     minute: '2-digit',
                                                     hour12: true
@@ -424,14 +424,14 @@ export const BookAppointment: React.FC = () => {
                                     </div>
                                 )}
 
-                                {form.watch('consultation_type') && (
+                                {form.watch('consultationType') && (
                                     <div className="pt-4 border-t border-border/40">
                                         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Type</h3>
                                         <Badge variant="secondary" className={cn(
                                             "capitalize",
-                                            form.watch('consultation_type') === 'video' ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                                            form.watch('consultationType') === 'video' ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
                                         )}>
-                                            {form.watch('consultation_type') === 'video' ? 'Video Call' : 'Physical Visit'}
+                                            {form.watch('consultationType') === 'video' ? 'Video Call' : 'Physical Visit'}
                                         </Badge>
                                     </div>
                                 )}

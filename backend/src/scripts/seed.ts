@@ -84,7 +84,7 @@ const seedMedicalRecords = async (client: import('pg').PoolClient, patientId: st
             status: "Final",
             notes: "Patient reports general well-being. Routine screening conducted.",
             file_path: "uploads/medical_records/demo_initial_assessment.pdf", // Placeholder
-            file_type: "application/pdf",
+            file_mime: "application/pdf",
             file_size: "1.2 MB"
         }
     ];
@@ -92,7 +92,7 @@ const seedMedicalRecords = async (client: import('pg').PoolClient, patientId: st
     for (const record of records) {
         await client.query(`
             INSERT INTO medical_records 
-            (patient_id, name, record_type, doctor_name, facility_name, date_of_service, status, notes, file_path, file_type, file_size)
+            (patient_id, name, record_type, doctor_name, facility_name, date_of_service, status, notes, file_path, file_mime, file_size)
             VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, $6, $7, $8, $9, $10)
         `, [
             patientId,
@@ -103,7 +103,7 @@ const seedMedicalRecords = async (client: import('pg').PoolClient, patientId: st
             record.status,
             record.notes,
             record.file_path,
-            record.file_type,
+            record.file_mime,
             record.file_size
         ]);
     }

@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getInitials } from '@/utils/avatar.resolver';
 import { getMyAppointments } from '../../services/appointment.service';
-import { getDoctorPatients } from '../../services/doctor.service';
 import type { Appointment } from '../../services/appointment.service';
 import {
     CalendarCheck, Users, ClipboardCheck, Contact, AlertCircle,
@@ -77,16 +77,21 @@ export const DoctorDashboard = () => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
-            const [apptData, patientsData] = await Promise.all([
-                getMyAppointments({ upcoming: true }),
-                getDoctorPatients().catch(() => [])
-            ]);
+            setError(null);
+            
+            // Phase 2: Consolidated Real-Time Data Fetch (Optimized for Upcoming)
+            const apptData = await getMyAppointments({ status: 'scheduled', upcoming: true });
             setAppointments(apptData);
-            setPatientCount(patientsData.length);
+            
+            // Institutional Logic: Derive Stats from Appointments
+            const uniquePatients = new Set(apptData.map(a => a.patientId));
+            setPatientCount(uniquePatients.size);
+            
         } catch (err) {
-            const apiError = err as { response?: { data?: { message?: string } } };
-            setError(apiError.response?.data?.message || 'Failed to load dashboard data');
             console.error('Dashboard fetch error:', err);
+            // Fail Safe: Return Empty State
+            setAppointments([]);
+            setPatientCount(0);
         } finally {
             setLoading(false);
         }
@@ -100,8 +105,14 @@ export const DoctorDashboard = () => {
         });
     };
 
+    const todayCount = appointments.filter(a => {
+        const apptDate = new Date(a.appointmentDate);
+        const today = new Date();
+        return apptDate.toDateString() === today.toDateString();
+    }).length;
+
     const todayAppointments = appointments.filter(a => {
-        const apptDate = new Date(a.appointment_date);
+        const apptDate = new Date(a.appointmentDate);
         const today = new Date();
         return apptDate.toDateString() === today.toDateString() && a.status === 'scheduled';
     }).slice(0, 3);
@@ -127,7 +138,7 @@ export const DoctorDashboard = () => {
                         <div className="page-subheading !text-white/80 !opacity-100 italic">
                             {loading
                                 ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
-                                : `You have ${appointments.length} appointments scheduled for today.`
+                                : `You have ${todayCount} appointments scheduled for today.`
                             }
                         </div>
                     </div>
@@ -301,7 +312,7 @@ export const DoctorDashboard = () => {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
-                                        <p className="text-3xl font-bold text-white tracking-tight">{appointments.filter(a => new Date(a.appointment_date).toDateString() === new Date().toDateString()).length}</p>
+                                        <p className="text-3xl font-bold text-white tracking-tight">{appointments.filter(a => new Date(a.appointmentDate).toDateString() === new Date().toDateString()).length}</p>
                                         <p className="text-xs font-semibold uppercase tracking-wider text-teal-100/70">Check-ins</p>
                                     </div>
                                     <div className="space-y-1 border-l border-teal-500/30 pl-4">
@@ -344,7 +355,7 @@ export const DoctorDashboard = () => {
                                 </div>
                             ) : (
                                 todayAppointments.map((appointment) => {
-                                    const time = formatTime(appointment.appointment_time);
+                                    const time = formatTime(appointment.appointmentTime);
                                     return (
                                         <DashboardCard key={appointment.id} className="group p-4 flex items-center gap-4 transition-all hover:border-primary/50 hover:bg-muted/30">
                                             <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-xl p-3 w-20 text-center shrink-0 border border-blue-100 dark:border-blue-900/50">
@@ -355,11 +366,13 @@ export const DoctorDashboard = () => {
                                             <div className="shrink-0 relative">
                                                 <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
                                                     <AvatarImage
-                                                        src={`/images/patients/${appointment.other_party_name?.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`}
-                                                        alt={appointment.other_party_name || 'Patient'}
+                                                        src={appointment.profileImage 
+                                                            ? (appointment.profileImage.startsWith('http') ? appointment.profileImage : `/api/files/profile/${appointment.patientId}`)
+                                                            : `/images/patients/${appointment.otherPartyName?.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`}
+                                                        alt={appointment.otherPartyName || 'Patient'}
                                                     />
                                                     <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                                        {appointment.other_party_name?.slice(0, 2).toUpperCase() || 'PT'}
+                                                        {appointment.otherPartyName ? getInitials(appointment.otherPartyName) : 'PT'}
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 <div className="absolute -bottom-1 -right-1 bg-amber-400 w-2.5 h-2.5 rounded-full border-2 border-white"></div>
@@ -367,7 +380,7 @@ export const DoctorDashboard = () => {
 
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-1">
-                                                    <h3 className="font-semibold truncate text-foreground">{appointment.other_party_name || 'Patient'}</h3>
+                                                    <h3 className="font-semibold truncate text-foreground">{appointment.otherPartyName || 'Patient'}</h3>
                                                 </div>
                                                 <p className="text-sm text-muted-foreground truncate flex items-center gap-1.5">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-primary/40"></span>

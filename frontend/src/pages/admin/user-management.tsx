@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getInitials } from '@/utils/avatar.resolver';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +47,7 @@ export const UserManagement: React.FC = () => {
             filtered = filtered.filter(user =>
                 user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                user.phone_number.includes(searchTerm)
+                user.phoneNumber.includes(searchTerm)
             );
         }
 
@@ -130,9 +131,13 @@ export const UserManagement: React.FC = () => {
         }
     };
 
-    const getUserImageUrl = (userId: string) => {
-        const baseUrl = (import.meta.env.VITE_API_URL || '');
-        return `${baseUrl}/api/files/profile/${userId}`;
+    const getUserImageUrl = (user: UserListItem) => {
+        if (user.profileImage) {
+            if (user.profileImage.startsWith('http')) return user.profileImage;
+            const baseUrl = (import.meta.env.VITE_API_URL || '');
+            return `${baseUrl}/api/files/profile/${user.id}`;
+        }
+        return '';
     };
 
     if (loading) {
@@ -255,9 +260,9 @@ export const UserManagement: React.FC = () => {
                                     <TableCell>
                                         <div className="flex items-center gap-3">
                                             <Avatar className="h-10 w-10">
-                                                <AvatarImage src={getUserImageUrl(user.id)} alt={user.name} className="object-cover" />
+                                                <AvatarImage src={getUserImageUrl(user)} alt={user.name} className="object-cover" />
                                                 <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
-                                                    {user.initials || user.name?.charAt(0).toUpperCase() || 'U'}
+                                                    {user.name ? getInitials(user.name) : 'U'}
                                                 </AvatarFallback>
                                             </Avatar>
                                             <div className="flex flex-col">
@@ -276,10 +281,10 @@ export const UserManagement: React.FC = () => {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-sm">
-                                        {user.phone_number}
+                                        {user.phoneNumber}
                                     </TableCell>
                                     <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                                        {new Date(user.created_at).toLocaleDateString()}
+                                        {new Date(user.createdAt).toLocaleDateString()}
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant={user.status === 'ACTIVE' ? "outline" : "destructive"} className={user.status === 'ACTIVE' ? "text-green-500 border-green-500/30 bg-green-500/10" : ""}>
