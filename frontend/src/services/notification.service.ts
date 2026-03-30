@@ -1,26 +1,32 @@
-import api from './api';
+import api, { normalizeResponse } from './api';
+import type { ApiResponse } from '../types/auth.types';
 
 export interface Notification {
     id: string;
-    user_id: string;
+    userId: string;
     title: string;
     description: string;
     type: 'success' | 'warning' | 'info' | 'error';
-    is_read: boolean;
-    created_at: string;
+    isRead: boolean;
+    createdAt: string;
+    messageId?: string; // Phase 5 Link: Ensure notifications can be tracked to specific messages
+    conversationId?: string;
+    metadata?: Record<string, unknown>;
 }
 
 export const notificationService = {
     getNotifications: async (): Promise<Notification[]> => {
-        const response = await api.get<Notification[]>('/notifications');
-        return response.data;
+        const response = await api.get<ApiResponse<Notification[]>>('/notifications');
+        return normalizeResponse(response);
     },
 
     markAsRead: async (notificationId: string): Promise<void> => {
-        await api.patch(`/notifications/${notificationId}/read`);
+        const response = await api.patch<ApiResponse<void>>(`/notifications/${notificationId}/read`);
+        normalizeResponse(response);
     },
 
     markAllAsRead: async (): Promise<void> => {
-        await api.post('/notifications/read-all');
+        const response = await api.post<ApiResponse<void>>('/notifications/read-all');
+        normalizeResponse(response);
     },
 };

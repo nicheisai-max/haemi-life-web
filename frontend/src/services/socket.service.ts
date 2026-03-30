@@ -18,6 +18,11 @@ interface SignalData {
 
 /* ---------------- EVENTS ---------------- */
 
+export interface MessageReadEvent {
+    messageId: string;
+    userId: string;
+}
+
 export interface ServerToClientEvents {
     connect: () => void;
     disconnect: (reason: string) => void;
@@ -29,19 +34,21 @@ export interface ServerToClientEvents {
     'call-made': (data: { offer: SignalData; socket: string }) => void;
     'answer-made': (data: { answer: SignalData; socket: string }) => void;
     'ice-candidate': (data: { candidate: SignalData; socket: string }) => void;
-    message_reaction: (data: {
+    messageReaction: (data: {
         messageId: string;
         userId: string;
         reactionType: string;
         action: 'added' | 'removed';
-    }) => void;
-    message_deleted: (data: { messageId: string; forEveryone: boolean }) => void;
-    typing_started: (data: { userId: string } | { conversationId: string; name: string }) => void;
-    typing_stopped: (data: { userId: string } | { conversationId: string; name: string }) => void;
-    message_delivered: (data: { conversationId: string; messageIds: string[] }) => void;
-    message_read: (data: { conversationId: string; user_id: string }) => void;
-    message_received: (message: Message) => void;
-    'notification:new': (notification: HaemiNotification) => void;
+    }) => void | Promise<void>;
+    messageDeleted: (data: { messageId: string; forEveryone: boolean }) => void | Promise<void>;
+    typingStarted: (data: { userId: string; conversationId: string; name: string }) => void | Promise<void>;
+    typingStopped: (data: { userId: string; conversationId: string; name: string }) => void | Promise<void>;
+    messageDelivered: (data: { conversationId: string; messageIds: string[] }) => void | Promise<void>;
+    'message:read': (data: MessageReadEvent) => void | Promise<void>; // Standardized per-message event
+    messageReceived: (message: Message) => void | Promise<void>;
+    'notification:new': (notification: HaemiNotification) => void | Promise<void>;
+    userStatus: (data: { userId: string; isOnline: boolean; lastSeen: string }) => void | Promise<void>;
+    ackDelivery: (data: { conversationId: string; messageId: string }) => void | Promise<void>;
 }
 
 export interface ClientToServerEvents {
@@ -49,11 +56,11 @@ export interface ClientToServerEvents {
     'call-user': (data: { offer: SignalData; to: string }) => void;
     'make-answer': (data: { answer: SignalData; to: string }) => void;
     'ice-candidate': (data: { candidate: SignalData; to: string }) => void;
-    ack_delivery: (data: { conversationId: string; messageId: string }) => void;
-    join_conversation: (conversationId: string) => void;
-    ack_read: (data: { conversationId: string; user_id: string }) => void;
-    typing_started: (data: { conversationId: string; name: string }) => void;
-    typing_stopped: (data: { conversationId: string; name: string }) => void;
+    ackDelivery: (data: { conversationId: string; messageId: string }) => void;
+    joinConversation: (conversationId: string) => void;
+    'message:read': (data: MessageReadEvent) => void; // Standardized client emission
+    typingStarted: (data: { conversationId: string; name: string }) => void;
+    typingStopped: (data: { conversationId: string; name: string }) => void;
 }
 
 /* ---------------- TYPES ---------------- */
@@ -62,7 +69,7 @@ type SocketInstance = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 type ListenerMap = Map<
     keyof ServerToClientEvents,
-    Set<(...args: unknown[]) => void>
+    Set<ServerToClientEvents[keyof ServerToClientEvents]>
 >;
 
 /* ---------------- SERVICE ---------------- */
@@ -90,7 +97,12 @@ class SocketService {
     private attachAll(socket: SocketInstance) {
         this.listeners.forEach((set, event) => {
             set.forEach((cb) => {
-                socket.on(event, cb as never);
+                // Type-safe attachment using the specific event key
+                // Convert to unknown first to allow cross-type casting without 'any'
+                socket.on(
+                    event as keyof ServerToClientEvents, 
+                    cb as unknown as Parameters<SocketInstance['on']>[1]
+                ); 
             });
         });
     }
@@ -102,7 +114,10 @@ class SocketService {
         try {
             const socket = io(SOCKET_URL, {
                 auth: { token },
-                transports: ['polling', 'websocket'],
+                withCredentials: true,
+                transports: ['websocket'], // P0: Strict websocket only
+                reconnection: true,
+                reconnectionAttempts: 5,
             });
 
             this.socket?.disconnect();
@@ -134,9 +149,9 @@ class SocketService {
                 }
             });
 
-        } catch (e) {
-            const error = e instanceof Error ? e : new Error('Unknown error');
-            logger.error(error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            logger.error(err.message);
             this.setState('FAILED');
         }
     }
@@ -146,12 +161,20 @@ class SocketService {
         cb: ServerToClientEvents[K]
     ) {
         const set = this.getSet(event);
-        const wrapped = cb as unknown as (...args: unknown[]) => void;
+        
+        // P0: Idempotency Guard. Prevent multiple socket.on registrations for same callback
+        if (set.has(cb)) {
+            logger.warn(`[SocketService] Duplicate registration skipped for event: ${event}`);
+            return;
+        }
 
-        set.add(wrapped);
+        set.add(cb);
 
         if (this.socket) {
-            this.socket.on(event, wrapped as never);
+            this.socket.on(
+                event as keyof ServerToClientEvents, 
+                cb as unknown as Parameters<SocketInstance['on']>[1]
+            );
         }
     }
 
@@ -162,11 +185,10 @@ class SocketService {
         const set = this.listeners.get(event);
         if (!set) return;
 
-        const wrapped = cb as unknown as (...args: unknown[]) => void;
-        set.delete(wrapped);
+        set.delete(cb);
 
         if (this.socket) {
-            this.socket.off(event, wrapped as never);
+            this.socket.off(event as Parameters<SocketInstance['off']>[0], cb as never);
         }
     }
 

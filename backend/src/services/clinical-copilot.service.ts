@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { logger } from '../utils/logger';
 
 export class ClinicalCopilotService {
     private model: GenerativeModel | null = null;
@@ -34,8 +35,10 @@ export class ClinicalCopilotService {
     async generateResponse(query: string, context?: Record<string, unknown>): Promise<string> {
         try {
             this.initModel();
-        } catch {
-            console.error('[ClinicalCopilot] FATAL: GEMINI_API_KEY is missing.');
+        } catch (error: unknown) {
+            logger.error('[ClinicalCopilot] FATAL: GEMINI_API_KEY is missing or init failed', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             throw new Error('SERVICE_UNAVAILABLE');
         }
 
@@ -64,26 +67,30 @@ export class ClinicalCopilotService {
             `;
 
             // Race the AI call against the timeout
-            const resultPromise = this.model.generateContent(systemInstruction);
-            const result = await Promise.race([resultPromise, timeoutPromise]);
+            const result = await Promise.race([this.model.generateContent(systemInstruction), timeoutPromise]);
 
             // Type guard to handle GenerateContentResponse structure safely
-            if (!result || typeof result !== 'object' || !('response' in result)) {
+            if (
+                !result || 
+                typeof result !== 'object' || 
+                !('response' in result) || 
+                typeof result.response !== 'object' || 
+                result.response === null || 
+                !('text' in result.response) || 
+                typeof result.response.text !== 'function'
+            ) {
                 throw new Error('INVALID_AI_RESPONSE');
             }
 
-            const response = (result as { response: { text: () => string } }).response;
-            const text = response.text();
-
-            return text;
+            return result.response.text();
 
         } catch (error: unknown) {
-            const err = error as Error;
-            if (err.message === 'AI_TIMEOUT') {
-                console.error('[ClinicalCopilot] Request timed out after 15s');
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (errorMessage === 'AI_TIMEOUT') {
+                logger.error('[ClinicalCopilot] Request timed out after 15s');
                 throw new Error('SERVICE_UNAVAILABLE');
             }
-            console.error('[ClinicalCopilot] Error generating response:', error);
+            logger.error('[ClinicalCopilot] Error generating response:', { error: errorMessage });
             throw new Error('Failed to generate AI response. Please try again.');
         }
     }

@@ -1,3 +1,9 @@
+// 🔒 HAEMI ATTACHMENT PIPELINE LOCK
+// DO NOT MODIFY WITHOUT EXPLICIT USER APPROVAL
+// SINGLE SOURCE: message_attachments ONLY
+// FALLBACKS FORBIDDEN
+// TYPESCRIPT STRICT MODE ENFORCED
+
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button } from './button';
 import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus } from 'lucide-react';
@@ -7,12 +13,14 @@ import { useAuth } from '@/hooks/use-auth';
 import { format } from 'date-fns';
 import api from '../../services/api';
 import type { DoctorProfile } from '../../services/doctor.service';
+import { MedicalLoader } from './medical-loader';
 import doctor01 from '../../assets/images/doctors/doctor_01.jpg';
 import doctor02 from '../../assets/images/doctors/doctor_02.png';
 import doctor03 from '../../assets/images/doctors/doctor_03.png';
 import { useLocation } from 'react-router-dom';
 import { useClickOutside } from '../../hooks/use-click-outside';
 import { secureDownload } from '../../services/file.service';
+import { getInitials as resolveInitials } from '@/utils/avatar.resolver';
 
 // Override helper to get images
 const getDoctorImage = (name: string) => {
@@ -26,7 +34,7 @@ const getDoctorImage = (name: string) => {
 };
 
 // --- Premium Avatar Component ---
-const Avatar: React.FC<{ name: string; initials?: string; image?: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; className?: string }> = ({ name, initials, image, size = 'md', className = "" }) => {
+const Avatar: React.FC<{ name: string; initials?: string; image?: string; profileImage?: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; className?: string }> = ({ name, initials, image, profileImage, size = 'md', className = "" }) => {
     const sizeClasses = {
         xs: 'h-6 w-6 text-[9px]',
         sm: 'h-8 w-8 text-[11px]',
@@ -35,7 +43,10 @@ const Avatar: React.FC<{ name: string; initials?: string; image?: string; size?:
         xl: 'h-16 w-16 text-lg'
     };
 
-    const getInitials = (n: string) => n ? n.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase() : '?';
+    const getInitials = (n: string) => resolveInitials(n) || '?';
+
+    // Standardized ID-based Resolution
+    const avatarUrl = profileImage ? (profileImage.startsWith('http') ? profileImage : `/api/files/profile/${profileImage}`) : image;
 
     // Deterministic gradient based on name length/char
     const gradients = [
@@ -53,8 +64,8 @@ const Avatar: React.FC<{ name: string; initials?: string; image?: string; size?:
     return (
         <div className={`relative shrink-0 ${className}`}>
             <div className={`${sizeClasses[size]} rounded-full overflow-hidden ${bgClass} flex items-center justify-center shadow-sm border border-white/20 text-white font-bold tracking-wider`}>
-                {image && !imgError ? (
-                    <img src={image} alt={name} className="h-full w-full object-cover" onError={() => setImgError(true)} />
+                {avatarUrl && !imgError ? (
+                    <img src={avatarUrl} alt={name} className="h-full w-full object-cover" onError={() => setImgError(true)} />
                 ) : (
                     initials || getInitials(name)
                 )}
@@ -96,6 +107,7 @@ export const ChatHub: React.FC = () => {
         conversations,
         activeConversation,
         messages,
+        presence,
         fetchConversations,
         selectConversation,
         sendMessage,
@@ -104,6 +116,8 @@ export const ChatHub: React.FC = () => {
         deleteMessage,
         reactToMessage,
         markAsRead,
+        markMessageAsRead,
+        loading: isLoadingMessages
     } = useChat();
 
     // IntersectionObserver for Read Receipts
@@ -111,17 +125,31 @@ export const ChatHub: React.FC = () => {
         if (!activeConversation || messages.length === 0) return;
 
         const observer = new IntersectionObserver((entries) => {
+            let shouldMarkRead = false;
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const msgId = entry.target.id.replace('msg-', '');
-                    // Find the message
                     const msg = messages.find(m => m.id === msgId);
                     if (msg && !msg.isMe && msg.status !== 'read') {
-                        markAsRead(activeConversation.id);
+                        shouldMarkRead = true;
                     }
                 }
             });
-        }, { threshold: 0.5 });
+            if (shouldMarkRead) {
+                markAsRead(activeConversation.id);
+            }
+            
+            // Per-message socket emission for real-time peer updates
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const msgId = entry.target.id.replace('msg-', '');
+                    const msg = messages.find(m => m.id === msgId);
+                    if (msg && !msg.isMe && !msg.isRead) {
+                        markMessageAsRead(msgId);
+                    }
+                }
+            });
+        }, { threshold: 0.1 });
 
         // Observe the latest message(s) from the other party
         const unreadMessages = messages.filter(m => !m.isMe && m.status !== 'read');
@@ -131,7 +159,7 @@ export const ChatHub: React.FC = () => {
         });
 
         return () => observer.disconnect();
-    }, [activeConversation, messages, markAsRead]);
+    }, [activeConversation, messages, markAsRead, markMessageAsRead]);
 
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -168,19 +196,22 @@ export const ChatHub: React.FC = () => {
     });
 
     const scrollRef = useRef<HTMLDivElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
 
-    const handleDownload = async (messageId: string, fileName: string) => {
+    const handleDownload = async (url: string, fileName: string, loadingId: string) => {
         try {
-            setDownloadingId(messageId);
-            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+            setDownloadingId(loadingId);
+            
+            // P0 FRONTEND HARDENING: No manual URL building. Use API response verbatim.
             await secureDownload({
-                url: `${baseUrl}/api/files/message/${messageId}`,
-                fileName: fileName || 'attachment'
+                url,
+                fileName: fileName
             });
-        } catch (error) {
-            console.error('Download failed:', error);
+        } catch (err) {
+            console.error('[DOWNLOAD BLOCKED]', err);
+            alert('File not available or blocked for security reasons');
         } finally {
             setDownloadingId(null);
         }
@@ -207,18 +238,16 @@ export const ChatHub: React.FC = () => {
     // Re-fetch when the window is explicitly opened to ensure sync
     useEffect(() => {
         if (isOpen) {
-            fetchConversations();
+            // Controlled Refresh removed - redundant with socket-driven state
         }
-    }, [isOpen, fetchConversations]);
+    }, [isOpen]);
 
     // P1 Fix: Periodic polling to keep the unread badge fresh even if
     // sockets are dropped or browser tab was inactive.
     useEffect(() => {
         if (!user?.id) return;
-        // DEMO SHIELD: Reduce background polling to near-zero to prioritize socket performance
-        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-        const DEMO_SHIELD = import.meta.env.VITE_DEMO_SHIELD === 'true' || IS_DEMO_MODE;
-        const intervalTime = DEMO_SHIELD ? 600000 : 30000; // 10m vs 30s
+        // ENTERPRISE GUARDIAN: Reduced polling to once every 5 minutes (safety net only)
+        const intervalTime = 300000;
 
         const interval = setInterval(() => {
             fetchConversations();
@@ -231,12 +260,19 @@ export const ChatHub: React.FC = () => {
         if (view === 'new-chat') {
             const loadDoctors = async () => {
                 try {
-                    const res = await api.get('/doctor'); // Corrected endpoint
-                    // Handle both direct array and nested .data response
-                    const doctorData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+                    const res = await api.get<DoctorProfile[]>('/doctor');
+                    // Phase 8: Strict Type Narrowing (No 'as unknown' hacks)
+                    let doctorData: DoctorProfile[] = [];
+                    if (Array.isArray(res.data)) {
+                        doctorData = res.data;
+                    } else if (res.data && typeof res.data === 'object' && 'data' in (res.data as object)) {
+                        const potentialData = (res.data as { data: unknown }).data;
+                        if (Array.isArray(potentialData)) {
+                            doctorData = potentialData as DoctorProfile[];
+                        }
+                    }
                     setDoctors(doctorData);
-                } catch (error) {
-                    console.error("Failed to load doctors", error);
+                } catch {
                     setDoctors([]); // Set empty array on error
                 }
             };
@@ -244,18 +280,13 @@ export const ChatHub: React.FC = () => {
         }
     }, [view]);
 
-    // P1 Fix: Refresh conversations when active conversation changes to clear badge
-    // MOVED TO TOP-LEVEL TO COMPLY WITH REACT RULES OF HOOKS
-    useEffect(() => {
-        if (activeConversation?.id) {
-            fetchConversations();
-        }
-    }, [activeConversation?.id, fetchConversations]);
+    // Clear badge logic moved to local state sync in ChatProvider
 
     // Auto-scroll
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        if (messagesEndRef.current) {
+            // P0: Instant jump avoids mid-flight layout shifts caused by Framer offsets or image loads
+            messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
         }
     }, [messages, view, isOpen]);
 
@@ -310,32 +341,58 @@ export const ChatHub: React.FC = () => {
     };
 
     const getOtherParticipant = useCallback((conversation: Conversation) => {
-        const currentId = String(user?.id || '').toLowerCase();
+        const currentId = String(user?.id || '');
         const participants = Array.isArray(conversation.participants) ? conversation.participants : [];
+        const isGroup = participants.length > 2;
 
-        // Explicitly find the person who is NOT the current user
-        const other = participants.find(p => String(p.id).toLowerCase() !== currentId);
+        // 1. If conversation has an explicit name, prioritize it for groups
+        if (conversation.name) {
+            return {
+                id: `group-${conversation.id}`,
+                name: conversation.name,
+                role: 'Case Group',
+                initials: resolveInitials(conversation.name),
+                profileImage: undefined,
+                isGroup: true
+            };
+        }
+
+        // 2. If it's a group but has no name, concatenate participant names
+        if (isGroup) {
+            const others = participants.filter(p => String(p.id) !== currentId);
+            const groupName = others.map(p => p.name.split(' ')[0]).join(', ');
+            return {
+                id: `group-${conversation.id}`,
+                name: groupName || 'Medical Team',
+                role: 'Case Group',
+                initials: 'GP',
+                profileImage: undefined,
+                isGroup: true
+            };
+        }
+
+        // 3. Fallback to 1:1 logic
+        const other = participants.find(p => String(p.id) !== currentId);
 
         if (!other) {
-            // If API didn't return other participants, check the last message sender or use a generic fallback
             return {
                 id: 'unknown',
                 name: 'Haemi Member',
                 role: 'User',
                 initials: 'HM',
-                image: ''
+                profileImage: undefined,
+                isGroup: false
             };
         }
 
         const displayName = other.name && other.name !== 'Unknown' ? other.name : 'Health Professional';
-        const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000');
-        const dbImage = other.id !== 'unknown' ? `${baseUrl}/api/files/profile/${other.id}` : '';
 
         return {
             ...other,
             name: displayName,
-            image: dbImage,
-            initials: ('initials' in other && typeof other.initials === 'string') ? other.initials : displayName.substring(0, 1)
+            profileImage: other.id,
+            initials: resolveInitials(displayName),
+            isGroup: false
         };
     }, [user?.id]);
 
@@ -357,7 +414,7 @@ export const ChatHub: React.FC = () => {
     const getFormattedTime = (dateString: string) => {
         if (!dateString) return '';
         const date = new Date(dateString);
-        return format(date, 'HH:mm');
+        return format(date, 'h:mm a');
     };
 
 
@@ -388,11 +445,11 @@ export const ChatHub: React.FC = () => {
                     {/* Inner Glow */}
                     <div className="absolute inset-0 bg-white/20 blur-xl group-hover:bg-white/30 transition-all duration-500" />
 
-                    <MessageCircle className="relative h-8 w-8 text-white drop-shadow-md group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
+                    <MessageCircle className="relative h-8 w-8 text-white drop-shadow-md group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                 </Button>
 
                 {(() => {
-                    const totalUnread = conversations.reduce((acc, c) => acc + parseInt(c.unread_count || '0'), 0);
+                    const totalUnread = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
                     if (totalUnread > 0) {
                         return (
                             <span className="chat-unread-badge animate-badge-pop">
@@ -421,14 +478,20 @@ export const ChatHub: React.FC = () => {
                     className="h-16 w-16 rounded-full bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/50 p-0 flex items-center justify-center group border border-slate-200 dark:border-slate-700 overflow-hidden"
                 >
                     {activeConversation ? (
-                        <Avatar name={getOtherParticipant(activeConversation).name} initials={getOtherParticipant(activeConversation).initials} image={getOtherParticipant(activeConversation).image} size="md" className="h-full w-full rounded-none opacity-90 group-hover:opacity-100 transition-opacity" />
+                        <Avatar 
+                            name={getOtherParticipant(activeConversation).name} 
+                            initials={getOtherParticipant(activeConversation).initials} 
+                            profileImage={getOtherParticipant(activeConversation).profileImage} 
+                            size="md" 
+                            className="h-full w-full rounded-none opacity-90 group-hover:opacity-100 transition-opacity" 
+                        />
                     ) : (
-                        <MessageCircle className="h-8 w-8 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} />
+                        <MessageCircle className="h-8 w-8 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                     )}
                 </Button>
 
                 {(() => {
-                    const totalUnread = conversations.reduce((acc, c) => acc + parseInt(c.unread_count || '0'), 0);
+                    const totalUnread = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
                     if (totalUnread > 0) {
                         return (
                             <span className="chat-unread-badge animate-badge-pop">
@@ -540,25 +603,44 @@ export const ChatHub: React.FC = () => {
                                         onClick={() => setView('contacts')}
                                     >
                                         <ChevronLeft className="h-5 w-5 text-white" />
-                                    </Button>
+                                     </Button>
                                 )}
+                                 {view === 'conversation' && activeConversation ? (() => {
+                                    const other = getOtherParticipant(activeConversation);
+                                    const userPresence = presence[String(other.id)];
+                                    const isOnline = !other.isGroup && !!userPresence?.isOnline;
+                                    const lastSeenTime = !other.isGroup && userPresence?.lastSeen ? format(new Date(userPresence.lastSeen), 'h:mm a') : 'Unknown';
 
-                                {view === 'conversation' && activeConversation ? (
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="relative shrink-0">
-                                            <Avatar name={getOtherParticipant(activeConversation).name} initials={getOtherParticipant(activeConversation).initials} image={getOtherParticipant(activeConversation).image} size="sm" />
-                                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-[#1a1c23] rounded-full"></span>
+                                    return (
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="relative shrink-0">
+                                                {other.isGroup ? (
+                                                    <div className="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-700">
+                                                        <UserPlus className="h-4 w-4" />
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <Avatar 
+                                                            name={other.name} 
+                                                            initials={other.initials} 
+                                                            profileImage={other.profileImage} 
+                                                            size="sm" 
+                                                        />
+                                                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-[#1a1c23] rounded-full transition-colors duration-300 ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                                                    </>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col truncate">
+                                                <h3 className="text-sm font-bold text-white truncate leading-tight">
+                                                    {other.name}
+                                                </h3>
+                                                <span className="text-[11px] text-teal-100 dark:text-teal-400 font-medium truncate leading-tight capitalize">
+                                                    {other.isGroup ? 'Multi-Professional Case Group' : (isOnline ? 'Online' : `Last seen at ${lastSeenTime}`)}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col truncate">
-                                            <h3 className="text-sm font-bold text-white truncate leading-tight">
-                                                {getOtherParticipant(activeConversation).name}
-                                            </h3>
-                                            <span className="text-[11px] text-teal-100 dark:text-teal-400 font-medium truncate leading-tight capitalize">
-                                                {getOtherParticipant(activeConversation).role}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ) : view === 'new-chat' ? (
+                                    );
+                                })() : view === 'new-chat' ? (
                                     <h3 className="text-lg font-bold text-white tracking-tight">New Message</h3>
                                 ) : (
                                     <div className="flex flex-col">
@@ -632,7 +714,7 @@ export const ChatHub: React.FC = () => {
                                                 <div className="h-12 w-12 bg-slate-100 dark:bg-slate-900 rounded-full flex items-center justify-center mb-3">
                                                     <MessageSquare className="h-6 w-6 text-slate-400" />
                                                 </div>
-                                                <p className="text-sm font-medium text-slate-900 dark:text-white">No messages yet</p>
+                                                <p className="text-sm font-medium text-slate-00 dark:text-white">No messages yet</p>
                                                 <p className="text-xs text-slate-500 mt-1">Start a consultation or chat with a doctor.</p>
                                             </div>
                                         ) : (
@@ -644,23 +726,41 @@ export const ChatHub: React.FC = () => {
                                                         onClick={() => handleSelectConversation(conv)}
                                                         className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 dark:hover:bg-accent/20 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
                                                     >
-                                                        <Avatar name={other.name} initials={other.initials} image={other.image} size="md" />
+                                                        <div className="relative shrink-0">
+                                                            {other.isGroup ? (
+                                                                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-800">
+                                                                    <UserPlus className="h-5 w-5" />
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <Avatar 
+                                                                        name={other.name} 
+                                                                        initials={other.initials} 
+                                                                        profileImage={other.profileImage} 
+                                                                        size="md" 
+                                                                    />
+                                                                    {presence[String(other.id)]?.isOnline && (
+                                                                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 group-hover:scale-110 transition-transform animate-pulse" />
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </div>
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex justify-between items-center mb-0.5">
                                                                 <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">
                                                                     {other.name}
                                                                 </h4>
                                                                 <span className="text-[10px] font-medium text-slate-400 shrink-0">
-                                                                    {getFormattedTime(conv.last_message_at)}
+                                                                    {getFormattedTime(conv.lastMessageAt)}
                                                                 </span>
                                                             </div>
                                                             <div className="flex justify-between items-center gap-2">
                                                                 <p className="text-xs text-slate-500 truncate dark:text-slate-400">
-                                                                    {conv.last_message || 'Start a conversation'}
+                                                                    {conv.lastMessage || 'Start a conversation'}
                                                                 </p>
-                                                                {parseInt(conv.unread_count) > 0 && (
+                                                                {((conv.unreadCount as number) || 0) > 0 && (
                                                                     <span className="conv-unread-pill animate-badge-pop">
-                                                                        {conv.unread_count}
+                                                                        {conv.unreadCount}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -733,6 +833,7 @@ export const ChatHub: React.FC = () => {
                                                 </button>
                                             ))
                                         )}
+                                        <div ref={messagesEndRef} />
                                     </div>
                                 </motion.div>
                             )}
@@ -754,14 +855,26 @@ export const ChatHub: React.FC = () => {
                                         className="flex-1 overflow-y-auto p-4 space-y-4 chat-scrollbar z-0"
                                     >
                                         <div className="h-2" />
-                                        {messages.map((msg, idx) => (
-                                            <motion.div
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                key={msg.id || idx}
-                                                id={`msg-${msg.id}`}
-                                                className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
-                                            >
+                                        
+                                        {isLoadingMessages ? (
+                                            <div className="h-full flex items-center justify-center">
+                                                <MedicalLoader message="Retrieving messages..." />
+                                            </div>
+                                        ) : messages.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center h-full opacity-40 text-center px-8">
+                                                <MessageSquare className="h-12 w-12 mb-4" />
+                                                <p className="text-sm font-medium">No messages yet. Send a greeting to start the conversation.</p>
+                                            </div>
+                                        ) : (
+                                            messages.map((msg, idx) => (
+                                                <motion.div
+                                                    layout
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    key={msg.id || idx}
+                                                    id={`msg-${msg.id}`}
+                                                    className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
+                                                >
                                                 <div
                                                     onContextMenu={(e) => {
                                                         e.preventDefault();
@@ -784,11 +897,11 @@ export const ChatHub: React.FC = () => {
                                                         }`}
                                                 >
                                                     {/* Reply Preview in Bubble (Enhanced WhatsApp Style) */}
-                                                    {msg.reply_to && (
+                                                    {msg.replyTo && (
                                                         <div
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                const element = document.getElementById(`msg-${msg.reply_to_id}`);
+                                                                const element = document.getElementById(`msg-${msg.replyToId}`);
                                                                 if (element) {
                                                                     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                                                     element.classList.add('ring-2', 'ring-teal-500', 'ring-offset-2');
@@ -802,26 +915,30 @@ export const ChatHub: React.FC = () => {
                                                         >
                                                             <div className="flex items-center justify-between mb-0.5">
                                                                 <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
-                                                                    {msg.reply_to.sender_name}
+                                                                    {msg.replyTo.senderName}
                                                                 </p>
                                                                 <Reply className="h-2.5 w-2.5 opacity-60" />
                                                             </div>
                                                             <p className="line-clamp-2 opacity-80 italic">
-                                                                {msg.reply_to.content}
+                                                                {msg.replyTo.content}
                                                             </p>
                                                         </div>
                                                     )}
 
                                                     {msg.attachments && msg.attachments.length > 0 && msg.attachments.map((att, i) => (
                                                         <div key={i} className="mb-2 -mx-1 -mt-1">
-                                                            {att.type?.startsWith('image') || (att.url && (att.url.match(/\.(jpeg|jpg|png|gif|webp)$/i) || att.url.includes('message/'))) ? (
+                                                            {att.type.startsWith('image/') ? (
                                                                 <div
                                                                     className="cursor-pointer group/img relative overflow-hidden rounded-xl"
-                                                                    onClick={() => setLightboxImage({ src: `/files/message/${msg.id}`, alt: att.name || 'Attachment' })}
+                                                                    onClick={() => {
+                                                                        if (att.url && att.name) {
+                                                                            setLightboxImage({ src: att.url, alt: att.name });
+                                                                        }
+                                                                    }}
                                                                 >
                                                                     <AuthenticatedImage
-                                                                        src={`/files/message/${msg.id}`}
-                                                                        alt="Attachment"
+                                                                        src={att.url}
+                                                                        alt={att.name || 'Attachment'}
                                                                         className="w-full max-h-48 object-cover border border-white/20 transition-all duration-300 group-hover:scale-105"
                                                                     />
                                                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
@@ -830,28 +947,15 @@ export const ChatHub: React.FC = () => {
                                                                 </div>
                                                             ) : (
                                                                 (() => {
-                                                                    // Determine file type for visual styling
-                                                                    const fileName = att.name || 'document';
-                                                                    const ext = fileName.split('.').pop()?.toLowerCase() || '';
-                                                                    const isPdf = ext === 'pdf';
-                                                                    const isDoc = ext === 'doc' || ext === 'docx';
+                                                                    // P0 FRONTEND LOCK: No extension logic (Step 1)
+                                                                    const fileName = att.name;
 
-                                                                    // Icon area color: PDF=red, DOC/DOCX=blue, other=slate
-                                                                    const iconBg = isPdf
-                                                                        ? (msg.isMe ? 'bg-red-500/30' : 'bg-red-50 dark:bg-red-900/20')
-                                                                        : isDoc
-                                                                            ? (msg.isMe ? 'bg-blue-400/30' : 'bg-blue-50 dark:bg-blue-900/20')
-                                                                            : (msg.isMe ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-700');
-                                                                    const iconColor = isPdf
-                                                                        ? 'text-red-400'
-                                                                        : isDoc
-                                                                            ? 'text-blue-400'
-                                                                            : (msg.isMe ? 'text-white/80' : 'text-slate-500');
-                                                                    const extLabel = ext.toUpperCase() || 'FILE';
+                                                                    // Brand-compliant static styling for all secure medical assets
+                                                                    const iconBg = msg.isMe ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-700';
+                                                                    const iconColor = msg.isMe ? 'text-white/80' : 'text-slate-500';
 
-                                                                    // Human-readable file size
+                                                                    // Human-readable file size (MIME-only truth)
                                                                     const formatSize = (bytes: number) => {
-                                                                        if (!bytes || bytes === 0) return '';
                                                                         if (bytes < 1024) return `${bytes} B`;
                                                                         if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
                                                                         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -859,7 +963,7 @@ export const ChatHub: React.FC = () => {
 
                                                                     return (
                                                                         <button
-                                                                            onClick={() => handleDownload(msg.id, fileName)}
+                                                                            onClick={() => att.url && att.name && handleDownload(att.url, att.name, msg.id)}
                                                                             disabled={downloadingId === msg.id}
                                                                             className={`w-full flex items-center gap-0 rounded-xl overflow-hidden border transition-all duration-200 hover:opacity-90 active:scale-[0.98] ${msg.isMe
                                                                                 ? 'border-white/10 bg-black/10 hover:bg-black/20'
@@ -877,7 +981,7 @@ export const ChatHub: React.FC = () => {
                                                                                             <path d="M14 0H2C0.9 0 0 0.9 0 2v24c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8l-10-8z" opacity="0.9" />
                                                                                             <path d="M14 0v8h10L14 0z" opacity="0.5" />
                                                                                         </svg>
-                                                                                        <span className={`text-[9px] font-extrabold tracking-wider ${iconColor} -mt-1`}>{extLabel}</span>
+                                                                                        <span className={`text-[9px] font-extrabold tracking-wider ${iconColor} -mt-1`}>FILE</span>
                                                                                     </>
                                                                                 )}
                                                                             </div>
@@ -890,7 +994,7 @@ export const ChatHub: React.FC = () => {
                                                                                 <p className={`text-[10px] mt-0.5 font-medium ${msg.isMe ? 'text-white/60' : 'text-slate-400 dark:text-slate-500'}`}>
                                                                                     {downloadingId === msg.id
                                                                                         ? 'Downloading...'
-                                                                                        : att.size ? formatSize(att.size) : extLabel + ' Document'}
+                                                                                        : formatSize(att.size)}
                                                                                 </p>
                                                                             </div>
 
@@ -938,22 +1042,22 @@ export const ChatHub: React.FC = () => {
                                                     )}
 
                                                     <div className={`flex items-center justify-end gap-1.5 mt-2 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
-                                                        <span className="font-semibold">{getFormattedTime(msg.created_at)}</span>
+                                                        <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
                                                         {msg.isMe && (
-                                                            <div className={`message-status-ticks ${msg.status === 'read' ? 'read' : ''}`}>
-                                                                {msg.status === 'sent' ? (
-                                                                    <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
-                                                                ) : msg.status === 'delivered' ? (
-                                                                    <CheckCheck className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
-                                                                ) : (
+                                                            <div className={`message-status-ticks ${msg.isRead ? 'read' : ''}`}>
+                                                                {msg.isRead ? (
                                                                     <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />
+                                                                ) : (
+                                                                    <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
                                                                 )}
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
                                             </motion.div>
-                                        ))}
+                                            ))
+                                        )}
+                                        <div ref={messagesEndRef} />
                                     </div>
 
                                     {/* Input Area - Sticky Bottom with Reply Preview */}
@@ -970,7 +1074,7 @@ export const ChatHub: React.FC = () => {
                                                         <div className="flex-1 min-w-0 pr-6">
                                                             <p className="text-[11px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
                                                                 <Reply className="h-3 w-3" />
-                                                                Replying to {replyingTo.sender_name}
+                                                                Replying to {replyingTo.senderName}
                                                             </p>
                                                             <p className="text-sm text-slate-600 dark:text-slate-400 truncate">
                                                                 {replyingTo.content}
@@ -994,8 +1098,15 @@ export const ChatHub: React.FC = () => {
                                                 onChange={async (e) => {
                                                     const file = e.target.files?.[0];
                                                     if (file && activeConversation) {
+                                                        const target = e.target;
                                                         const uploadRes = await uploadAttachment(file);
-                                                        if (uploadRes) sendMessage(file.name, activeConversation.id, uploadRes.url, uploadRes.type);
+                                                        // RESET BUFFER: Allow immediate re-upload of same file
+                                                        target.value = '';
+                                                        
+                                                        // Note: uploadRes is now the inner 'data' object from sendResponse
+                                                        if (uploadRes && uploadRes.url) {
+                                                            sendMessage(file.name, activeConversation.id, uploadRes.url, uploadRes.type, undefined, uploadRes.originalName);
+                                                        }
                                                     }
                                                 }}
                                             />
@@ -1026,7 +1137,7 @@ export const ChatHub: React.FC = () => {
                                                     : 'bg-slate-100 dark:bg-slate-800 text-slate-300 scale-95'
                                                     }`}
                                             >
-                                                <Send className="h-5 w-5 ml-0.5" />
+                                                <Send className="h-5 w-5 ml-0.5" strokeLinecap="round" strokeLinejoin="round" />
                                             </Button>
                                         </div>
                                     </div>
@@ -1109,10 +1220,10 @@ export const ChatHub: React.FC = () => {
 
                             <div className="absolute bottom-8 flex gap-3">
                                 <Button
-                                    onClick={() => handleDownload(lightboxImage.src.split('/').pop() || '', lightboxImage.alt)}
+                                    onClick={() => lightboxImage && handleDownload(lightboxImage.src, lightboxImage.alt, 'lightbox')}
                                     className="bg-[#148C8B] hover:bg-[#0E6B74] dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold px-6 h-11 rounded-xl shadow-lg shadow-teal-900/20 dark:shadow-teal-900/40 border-0 flex items-center gap-2"
                                 >
-                                    {downloadingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                    {downloadingId === 'lightbox' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                                     Save to Device
                                 </Button>
                                 <Button

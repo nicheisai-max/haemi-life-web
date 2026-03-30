@@ -1,47 +1,79 @@
-/**
- * 🩺 HAEMI LIFE — SECURE FILE DOWNLOAD SERVICE
- * CLASSIFICATION: ENTERPRISE-GRADE | ZERO-TRUST
- */
-
 import api from "./api";
+import { AxiosResponse } from "axios";
 
-export async function secureDownload({
-  url,
-  fileName,
-}: {
+// 🔒 HAEMI LIFE — CRITICAL DOWNLOAD PIPELINE LOCK
+// ⚠️ DO NOT MODIFY THIS BLOCK WITHOUT EXPLICIT USER APPROVAL
+// This section enforces file integrity and prevents ghost downloads.
+// Any modification requires forensic re-validation.
+// Unauthorized changes will be treated as SYSTEM BREACH.
+// id="lock1"
+
+// 🔒 HAEMI LIFE — TYPE SAFETY LOCK
+// id="lock2"
+export interface FileDownloadDTO {
   url: string;
   fileName: string;
-  token?: string; // Token is now handled automatically by api instance
-}) {
+}
+
+export async function secureDownload(dto: FileDownloadDTO) {
+  const { url, fileName } = dto;
+  
+  if (!url || typeof url !== 'string' || !url.includes('/files/')) {
+    console.error('[Lock-Guard] Blocked insecure or malformed download URL:', url);
+    return;
+  }
+
   try {
-    const response = await api.get(url, {
+    const response: AxiosResponse<Blob> = await api.get(url, {
       responseType: 'blob',
+      // Ensure we don't follow non-binary redirects if possible
+      validateStatus: (status) => status === 200
     });
 
-    // P1 FIX: Throw error if status is not 200 to prevent corrupt blob creation
-    if (response.status !== 200) {
-      throw new Error(`Download failed with status: ${response.status}`);
+    // P0 HARDENING: Prevent 'Ghost File' downloads from API / Vite fallback mapping
+    const contentType = response.headers['content-type'] || response.data.type || '';
+    
+    // 🔴 STEP 2 — ADD EXACTLY:
+    const allowedMimeTypes = [
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/gif',
+      'text/plain'
+    ];
+    const isAllowed = allowedMimeTypes.includes(contentType.toLowerCase());
+
+    // 🔴 STEP 3 — REPLACE VALIDATION BLOCK WITH:
+    if (!isAllowed || contentType === 'application/octet-stream') {
+      console.error('[SECURITY] Blocked MIME:', contentType);
+      throw new Error('Blocked: Invalid file type');
+    }
+
+    // 🔴 2.4 ZERO BYTE BLOCK (KEEP)
+    if (response.data.size === 0) {
+      throw new Error('Blocked: Empty file');
     }
 
     const blob = response.data;
-
-    // Integrity-safe download using safe blob URL
     const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.style.display = 'none';
     a.href = downloadUrl;
-    a.download = fileName;
+    a.download = fileName || 'attachment';
     
     document.body.appendChild(a);
     a.click();
     
     // Cleanup
     setTimeout(() => {
-        document.body.removeChild(a);
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
         window.URL.revokeObjectURL(downloadUrl);
     }, 100);
   } catch (error) {
-    console.error('[SECURE_DOWNLOAD] Error:', error);
+    console.error('[SECURE_DOWNLOAD] Locked Pipeline caught error:', error);
     throw error;
   }
 }

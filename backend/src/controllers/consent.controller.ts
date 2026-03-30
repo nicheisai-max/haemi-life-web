@@ -1,35 +1,44 @@
 import { Request, Response } from 'express';
 import { consentRepository } from '../repositories/consent.repository';
 import { sendResponse, sendError } from '../utils/response';
+import { logger } from '../utils/logger';
 
 // Check if current user has signed the telemedicine consent
 export const getConsentStatus = async (req: Request, res: Response) => {
-    try {
-        const user = req.user;
-        if (!user) return sendError(res, 401, 'Unauthorized');
+    const userId = req.user?.id;
+    const role = req.user?.role;
 
-        if (user.role !== 'patient') {
+    try {
+        if (!userId) return sendError(res, 401, 'Unauthorized');
+
+        if (role !== 'patient') {
             return sendError(res, 403, 'Only patients have telemedicine consent records.');
         }
 
-        const hasConsent = await consentRepository.hasConsent(user.id);
-        sendResponse(res, 200, true, 'Consent status fetched', { hasConsent });
-    } catch (error) {
-        console.error('Error fetching consent status:', error);
-        sendError(res, 500, 'Error fetching consent status');
+        const hasConsent = await consentRepository.hasConsent(userId);
+        return sendResponse(res, 200, true, 'Consent status fetched', { hasConsent });
+    } catch (error: unknown) {
+        logger.error('Error fetching consent status:', {
+            error: error instanceof Error ? error.message : String(error),
+            userId
+        });
+        return sendError(res, 500, 'Error fetching consent status');
     }
 };
 
 // Sign telemedicine consent
 export const signConsent = async (req: Request, res: Response) => {
-    try {
-        const user = req.user;
-        if (!user) return sendError(res, 401, 'Unauthorized');
-        const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-        const userAgent = req.headers['user-agent'] || 'unknown';
-        const { signature } = req.body;
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    const { signature } = req.body as { signature?: string };
 
-        if (user.role !== 'patient') {
+    try {
+        if (!userId) return sendError(res, 401, 'Unauthorized');
+        
+        const ipAddress = (req.ip || req.headers['x-forwarded-for'] || 'unknown') as string;
+        const userAgent = (req.headers['user-agent'] || 'unknown') as string;
+
+        if (role !== 'patient') {
             return sendError(res, 403, 'Only patients can sign telemedicine consent.');
         }
 
@@ -38,16 +47,19 @@ export const signConsent = async (req: Request, res: Response) => {
         }
 
         const record = await consentRepository.recordConsent(
-            user.id,
-            ipAddress as string,
-            userAgent as string,
-            signature as string,
+            userId,
+            ipAddress,
+            userAgent,
+            signature,
             'v1.0'
         );
 
-        sendResponse(res, 201, true, 'Telemedicine consent signed successfully', record);
-    } catch (error) {
-        console.error('Error signing consent:', error);
-        sendError(res, 500, 'Error signing telemedicine consent');
+        return sendResponse(res, 201, true, 'Telemedicine consent signed successfully', record);
+    } catch (error: unknown) {
+        logger.error('Error signing consent:', {
+            error: error instanceof Error ? error.message : String(error),
+            userId
+        });
+        return sendError(res, 500, 'Error signing telemedicine consent');
     }
 };

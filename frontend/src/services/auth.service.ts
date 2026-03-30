@@ -1,6 +1,7 @@
 import axios from 'axios';
-import api from './api';
-import type { LoginCredentials, SignupCredentials, AuthResponse, User } from '../types/auth.types';
+import api, { normalizeResponse } from './api';
+import { logger } from '../utils/logger';
+import type { LoginCredentials, SignupCredentials, AuthResponse, User, ApiResponse } from '../types/auth.types';
 
 // Track backend check status for UI (optional, can be exported if needed)
 let isCheckingBackend = false;
@@ -9,29 +10,26 @@ const setIsCheckingBackend = (status: boolean) => { isCheckingBackend = status; 
 
 export const authService = {
     login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-        const response = await api.post<AuthResponse>('/auth/login', credentials);
-        return response.data;
+        const response = await api.post<ApiResponse<AuthResponse>>('/auth/login', credentials);
+        return normalizeResponse(response);
     },
 
 
     signup: async (credentials: SignupCredentials): Promise<AuthResponse> => {
-        const response = await api.post<AuthResponse>('/auth/signup', credentials);
-        return response.data;
+        const response = await api.post<ApiResponse<AuthResponse>>('/auth/signup', credentials);
+        return normalizeResponse(response);
     },
 
     verifySession: async (): Promise<{ user: User; serverTime: string; sessionTimeout: number }> => {
-        const response = await api.get<{ 
-            user: User & { profile: { fullName: string; avatar: string } };
+        const response = await api.get<ApiResponse<{ 
+            user: User;
             serverTime: string;
             sessionTimeout: number;
-        }>('/auth/verify');
-        const data = response.data;
+        }>>('/auth/verify');
+        const data = normalizeResponse(response);
+        
         return {
-            user: {
-                ...data.user,
-                name: data.user.profile?.fullName || data.user.name,
-                profile_image: data.user.profile?.avatar || data.user.profile_image
-            },
+            user: data.user,
             serverTime: data.serverTime,
             sessionTimeout: data.sessionTimeout
         };
@@ -39,20 +37,16 @@ export const authService = {
 
     getMe: async (): Promise<{ user: User | null; authenticated: boolean }> => {
         try {
-            const response = await api.get<User & { profile: { fullName: string; avatar: string } }>('/profiles/me');
-            const data = response.data;
-            if (!data) return { user: null, authenticated: false };
+            const response = await api.get<ApiResponse<User>>('/profiles/me');
+            const user = normalizeResponse(response);
+            if (!user) return { user: null, authenticated: false };
 
             return {
-                user: {
-                    ...data,
-                    name: data.profile.fullName,
-                    profile_image: data.profile.avatar,
-                    profile: data.profile
-                },
+                user,
                 authenticated: true
             };
-        } catch {
+        } catch (error: unknown) {
+            logger.error('[AuthService] getMe failed:', error instanceof Error ? error.message : String(error));
             return { user: null, authenticated: false };
         }
     },
@@ -95,21 +89,21 @@ export const authService = {
     },
 
     logout: async (): Promise<void> => {
-        await api.post('/auth/logout');
+        await api.post<ApiResponse<void>>('/auth/logout');
     },
 
-    requestPasswordReset: async (identifier: string): Promise<{ message: string; dev_otp?: string }> => {
-        const response = await api.post<{ message: string; dev_otp?: string }>('/password-reset/request-reset', { identifier });
-        return response.data;
+    requestPasswordReset: async (identifier: string): Promise<{ message: string; devOtp?: string }> => {
+        const response = await api.post<ApiResponse<{ message: string; devOtp?: string }>>('/password-reset/request-reset', { identifier });
+        return normalizeResponse(response);
     },
 
     verifyOTP: async (identifier: string, otp: string): Promise<{ message: string; resetToken: string }> => {
-        const response = await api.post<{ message: string; resetToken: string }>('/password-reset/verify-otp', { identifier, otp });
-        return response.data;
+        const response = await api.post<ApiResponse<{ message: string; resetToken: string }>>('/password-reset/verify-otp', { identifier, otp });
+        return normalizeResponse(response);
     },
 
     resetPassword: async (resetToken: string, newPassword: string): Promise<{ message: string }> => {
-        const response = await api.post<{ message: string }>('/password-reset/reset-password', { resetToken, newPassword });
-        return response.data;
+        const response = await api.post<ApiResponse<{ message: string }>>('/password-reset/reset-password', { resetToken, newPassword });
+        return normalizeResponse(response);
     },
 };

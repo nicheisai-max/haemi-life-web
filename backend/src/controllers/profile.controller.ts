@@ -2,6 +2,12 @@ import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
+import { mapUserToResponse } from '../utils/user.mapper';
+import { UserEntity } from '../types/db.types';
+
+interface ProfileQueryResult extends UserEntity {
+    metadata: Record<string, unknown>;
+}
 
 /**
  * GET /api/profiles/me
@@ -22,12 +28,12 @@ export const getMe = async (req: Request, res: Response) => {
         }
 
         let query = '';
-        const params = [userId];
+        const params: (string | number | boolean | null)[] = [userId];
 
         // Role-based profile resolution strategy
         if (role === 'doctor') {
             query = `
-                SELECT u.id, u.email, u.phone_number, u.role, u.name as "fullName", u.initials, u.status, u.profile_image as avatar,
+                SELECT u.*,
                 json_build_object(
                     'specialization', dp.specialization,
                     'yearsOfExperience', dp.years_of_experience,
@@ -41,7 +47,7 @@ export const getMe = async (req: Request, res: Response) => {
             `;
         } else if (role === 'patient') {
             query = `
-                SELECT u.id, u.email, u.phone_number, u.role, u.name as "fullName", u.initials, u.status, u.profile_image as avatar,
+                SELECT u.*,
                 json_build_object(
                     'dateOfBirth', pp.date_of_birth,
                     'gender', pp.gender,
@@ -59,7 +65,7 @@ export const getMe = async (req: Request, res: Response) => {
             `;
         } else if (role === 'pharmacist') {
             query = `
-                SELECT u.id, u.email, u.phone_number, u.role, u.name as "fullName", u.initials, u.status, u.profile_image as avatar,
+                SELECT u.*,
                 json_build_object(
                     'licenseNumber', php.license_number,
                     'workplace', php.workplace_name,
@@ -73,14 +79,15 @@ export const getMe = async (req: Request, res: Response) => {
         } else {
             // Admin or other roles without specific profiles yet
             query = `
-                SELECT u.id, u.email, u.phone_number, u.role, u.name as "fullName", u.initials, u.status, u.profile_image as avatar,
+                SELECT u.*,
                 '{}'::json as metadata
                 FROM users u
                 WHERE u.id = $1
             `;
         }
 
-        const result = await pool.query(query, params);
+
+        const result = await pool.query<ProfileQueryResult>(query, params);
 
         if (result.rows.length === 0) {
             const duration = Date.now() - start;
@@ -99,16 +106,14 @@ export const getMe = async (req: Request, res: Response) => {
             duration: `${duration}ms`
         });
 
+        // Use mapUserToResponse for consistent contract
+        const normalized = mapUserToResponse(user);
+
         return sendResponse(res, 200, true, 'Profile fetched successfully', {
-            id: user.id,
-            email: user.email,
-            phone_number: user.phone_number,
-            role: user.role,
-            status: user.status,
-            initials: user.initials,
+            ...normalized,
             profile: {
-                fullName: user.fullName,
-                avatar: user.avatar,
+                fullName: user.name,
+                profileImage: user.profile_image,
                 metadata: user.metadata
             }
         });

@@ -2,33 +2,39 @@ import { Request, Response } from 'express';
 import { recordRepository } from '../repositories/record-repository';
 import { sendResponse, sendError } from '../utils/response';
 import { pool } from '../config/db';
+import { logger } from '../utils/logger';
+import { mapRecordToResponse } from '../utils/clinical.mapper';
 import * as fs from 'fs';
 import * as path from 'path';
 import crypto from 'crypto';
 
 // Get current patient's own medical records
 export const getMyRecords = async (req: Request, res: Response) => {
-    try {
-        const user = req.user;
-        if (!user) return sendError(res, 401, 'Unauthorized');
-        const patientId = user.id;
+    const userId = req.user?.id;
 
-        const records = await recordRepository.findByPatientId(patientId);
-        sendResponse(res, 200, true, 'Medical records fetched', records);
-    } catch (error) {
-        console.error('Error fetching medical records:', error);
-        sendError(res, 500, 'Error fetching medical records');
+    try {
+        if (!userId) return sendError(res, 401, 'Unauthorized');
+
+        const records = await recordRepository.findByPatientId(userId);
+        return sendResponse(res, 200, true, 'Medical records fetched', records.map(mapRecordToResponse));
+    } catch (error: unknown) {
+        logger.error('Error fetching medical records:', { 
+            error: error instanceof Error ? error.message : String(error), 
+            userId 
+        });
+        return sendError(res, 500, 'Error fetching medical records');
     }
 };
 
 // Get records for a specific patient (Doctor/Pharmacist oversight)
 export const getPatientRecords = async (req: Request, res: Response) => {
+    const user = req.user;
+    const { patientId } = req.params;
+
     try {
-        const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
         const userId = user.id;
         const role = user.role;
-        const { patientId } = req.params;
 
         if (role === 'patient' && userId !== patientId) {
             return sendError(res, 403, 'Cannot access other patients records');
@@ -36,8 +42,8 @@ export const getPatientRecords = async (req: Request, res: Response) => {
 
         // Institutional Hardening: Relationship check for clinical roles
         if (role === 'doctor' || role === 'pharmacist') {
-            const relationship = await pool.query(
-                `SELECT 1 FROM appointments 
+            const relationship = await pool.query<{ exists: number }>(
+                `SELECT 1 as exists FROM appointments 
                  WHERE doctor_id = $1 AND patient_id = $2 
                  LIMIT 1`,
                 [userId, patientId]
@@ -50,20 +56,25 @@ export const getPatientRecords = async (req: Request, res: Response) => {
 
         if (typeof patientId !== 'string') return sendError(res, 400, 'Invalid Patient ID');
         const records = await recordRepository.findByPatientId(patientId);
-        sendResponse(res, 200, true, 'Patient records fetched', records);
-    } catch (error) {
-        console.error('Error fetching patient records:', error);
-        sendError(res, 500, 'Error fetching patient records');
+        return sendResponse(res, 200, true, 'Patient records fetched', records.map(mapRecordToResponse));
+    } catch (error: unknown) {
+        logger.error('Error fetching patient records:', { 
+            error: error instanceof Error ? error.message : String(error), 
+            patientId,
+            userId: user?.id
+        });
+        return sendError(res, 500, 'Error fetching patient records');
     }
 };
 
 // Upload a new medical record (Patient only)
 export const uploadRecord = async (req: Request, res: Response) => {
+    const user = req.user;
+    const file = req.file;
+
     try {
-        const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
         const patientId = user.id;
-        const file = req.file;
 
         if (!file) {
             return sendError(res, 400, 'No file uploaded');
@@ -73,15 +84,15 @@ export const uploadRecord = async (req: Request, res: Response) => {
         const fileSize = (size / 1024).toFixed(2) + ' KB';
 
         // PRODUCTION HARDENING: Filesystem Offloading
-        // We store on disk to prevent DB bloat, but metadata stays in DB for transactional safety.
         const fileExt = path.extname(originalname);
         const uniqueFileName = `${crypto.randomUUID()}${fileExt}`;
         const relativePath = `uploads/medical_records/${uniqueFileName}`;
-        const fullPath = path.join(process.cwd(), relativePath);
+        const fullPath = path.join(path.resolve(__dirname, '../../'), relativePath);
 
         // Ensure directory exists (Defensive)
-        if (!fs.existsSync(path.dirname(fullPath))) {
-            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+        const dirPath = path.dirname(fullPath);
+        if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
         }
 
         // Write to filesystem
@@ -99,19 +110,23 @@ export const uploadRecord = async (req: Request, res: Response) => {
         });
 
         return sendResponse(res, 201, true, 'Medical record uploaded successfully', {
-            record: newRecord
+            record: mapRecordToResponse(newRecord)
         });
-    } catch (error) {
-        console.error('Error uploading medical record:', error);
+    } catch (error: unknown) {
+        logger.error('Error uploading medical record:', { 
+            error: error instanceof Error ? error.message : String(error), 
+            userId: user?.id 
+        });
         return sendError(res, 500, 'Error uploading medical record');
     }
 };
 
 // Get a medical record by ID (Role-based access)
 export const getRecordById = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const user = req.user;
+
     try {
-        const { id } = req.params;
-        const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
         const { id: userId, role } = user;
 
@@ -122,18 +137,23 @@ export const getRecordById = async (req: Request, res: Response) => {
             return sendError(res, 404, 'Record not found or access denied');
         }
 
-        sendResponse(res, 200, true, 'Medical record fetched', record);
-    } catch (error) {
-        console.error('Error fetching medical record by ID:', error);
-        sendError(res, 500, 'Error fetching medical record');
+        return sendResponse(res, 200, true, 'Medical record fetched', mapRecordToResponse(record));
+    } catch (error: unknown) {
+        logger.error('Error fetching medical record by ID:', { 
+            error: error instanceof Error ? error.message : String(error), 
+            recordId: id,
+            userId: user?.id 
+        });
+        return sendError(res, 500, 'Error fetching medical record');
     }
 };
 
 // Delete a medical record (Soft delete, Patient owner only)
 export const deleteRecord = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const user = req.user;
+
     try {
-        const { id } = req.params;
-        const user = req.user;
         if (!user) return sendError(res, 401, 'Unauthorized');
         const { id: userId, role } = user;
 
@@ -152,15 +172,19 @@ export const deleteRecord = async (req: Request, res: Response) => {
 
         // PRODUCTION HARDENING: Cleanup filesystem on delete
         if (record.file_path && record.file_path !== 'DB_ONLY') {
-            const fullPath = path.join(process.cwd(), record.file_path);
+            const fullPath = path.join(path.resolve(__dirname, '../../'), record.file_path);
             if (fs.existsSync(fullPath)) {
                 fs.unlinkSync(fullPath);
             }
         }
 
         return sendResponse(res, 200, true, 'Medical record deleted successfully');
-    } catch (error) {
-        console.error('Error deleting medical record:', error);
+    } catch (error: unknown) {
+        logger.error('Error deleting medical record:', { 
+            error: error instanceof Error ? error.message : String(error), 
+            recordId: id,
+            userId: user?.id 
+        });
         return sendError(res, 500, 'Error deleting medical record');
     }
 };

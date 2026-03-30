@@ -1,5 +1,6 @@
 import './env';
 import { Pool } from 'pg';
+import { logger } from '../utils/logger';
 
 export const pool = new Pool({
     user: process.env.DB_USER || 'postgres',
@@ -8,15 +9,18 @@ export const pool = new Pool({
     password: process.env.DB_PASSWORD || 'password',
     port: parseInt(process.env.DB_PORT || '5432'),
     // Production Hardening: Explicit Pool Constraints
-    max: 20, // Max concurrent connections
+    max: 50, // Increased for high-concurrency presence bursts
     idleTimeoutMillis: 30000, // Close idle clients after 30s
     connectionTimeoutMillis: 10000, // Increased for stability during setup
 });
 
 // Task 1: Pool Error Listener
 pool.on('error', (err) => {
-    console.error('[DB] Unexpected error on idle client:', err.message);
+    logger.error('[DB] Unexpected error on idle client:', { error: err.message });
 });
+
+
+
 
 /**
  * Verifies database connectivity.

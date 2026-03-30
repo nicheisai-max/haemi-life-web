@@ -17,7 +17,7 @@ export class SchemaIntegrityService {
       logger.info('🛡️ Starting Institutional Schema Integrity Check...');
 
       // 1. Verify audit_logs table alignment (Physical user_id vs Code user_id)
-      const auditLogsCheck = await pool.query(`
+      const auditLogsCheck = await pool.query<{ column_name: string; data_type: string }>(`
         SELECT column_name, data_type 
         FROM information_schema.columns 
         WHERE table_name = 'audit_logs' AND column_name = 'user_id'
@@ -28,7 +28,7 @@ export class SchemaIntegrityService {
       }
 
       // 2. Verify prescription_items medicine_id type (Physical Integer)
-      const piCheck = await pool.query(`
+      const piCheck = await pool.query<{ data_type: string }>(`
         SELECT data_type 
         FROM information_schema.columns 
         WHERE table_name = 'prescription_items' AND column_name = 'medicine_id'
@@ -39,7 +39,7 @@ export class SchemaIntegrityService {
       }
 
       // 3. Verify appointments id type (Physical Integer)
-      const appointmentsCheck = await pool.query(`
+      const appointmentsCheck = await pool.query<{ data_type: string }>(`
         SELECT data_type FROM information_schema.columns 
         WHERE table_name = 'appointments' AND column_name = 'id'
       `);
