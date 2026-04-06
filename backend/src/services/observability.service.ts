@@ -67,19 +67,23 @@ class ObservabilityService {
         const batch: ObservabilityBatch = {
             events: [...this.eventsBuffer],
             timestamp: new Date().toISOString(),
-            batch_id: crypto.randomUUID(),
+            batchId: crypto.randomUUID(),
         };
 
         try {
             const validated = ObservabilityBatchSchema.parse(batch);
 
-            socketIO?.to(this.ADMIN_ROOM).emit('observability_batch', validated);
+            // 🔒 Strict emission to admin observability room
+            socketIO?.to(this.ADMIN_ROOM).emit('observabilityBatch', validated);
 
             logger.info(
-                `[Observability] Flushed batch ${batch.batch_id} with ${batch.events.length} events`
+                `[Observability] Flushed batch ${batch.batchId} with ${batch.events.length} events`
             );
-        } catch (error) {
-            logger.error('[Observability] Failed to flush batch:', error);
+        } catch (error: unknown) {
+            logger.error('[Observability] Failed to flush batch:', {
+                error: error instanceof Error ? error.message : String(error),
+                batchId: batch.batchId
+            });
         } finally {
             this.eventsBuffer = [];
         }
@@ -94,8 +98,11 @@ class ObservabilityService {
                 const validated = LoginFailureEventSchema.parse(event);
                 this.addToBatch({ type: 'login_failure', data: validated });
             }
-        } catch (error) {
-            logger.error('[Observability] Failed to buffer login event:', error);
+        } catch (error: unknown) {
+            logger.error('[Observability] Failed to buffer login event:', {
+                error: error instanceof Error ? error.message : String(error),
+                userId: event.success ? event.userId : (event.userId || 'anonymous')
+            });
         }
     }
 
@@ -103,8 +110,11 @@ class ObservabilityService {
         try {
             const validated = SessionStartedEventSchema.parse(event);
             this.addToBatch({ type: 'session_started', data: validated });
-        } catch (error) {
-            logger.error('[Observability] Failed to buffer session start:', error);
+        } catch (error: unknown) {
+            logger.error('[Observability] Failed to buffer session start:', {
+                error: error instanceof Error ? error.message : String(error),
+                userId: event.session.userId
+            });
         }
     }
 
@@ -112,8 +122,11 @@ class ObservabilityService {
         try {
             const validated = SessionEndedEventSchema.parse(event);
             this.addToBatch({ type: 'session_ended', data: validated });
-        } catch (error) {
-            logger.error('[Observability] Failed to buffer session end:', error);
+        } catch (error: unknown) {
+            logger.error('[Observability] Failed to buffer session end:', {
+                error: error instanceof Error ? error.message : String(error),
+                userId: event.userId
+            });
         }
     }
 
@@ -121,8 +134,11 @@ class ObservabilityService {
         try {
             const validated = TokenRefreshedEventSchema.parse(event);
             this.addToBatch({ type: 'token_refreshed', data: validated });
-        } catch (error) {
-            logger.error('[Observability] Failed to buffer token refresh:', error);
+        } catch (error: unknown) {
+            logger.error('[Observability] Failed to buffer token refresh:', {
+                error: error instanceof Error ? error.message : String(error),
+                userId: event.userId
+            });
         }
     }
 }

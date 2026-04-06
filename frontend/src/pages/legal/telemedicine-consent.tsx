@@ -8,16 +8,57 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ShieldCheck, AlertTriangle, MonitorPlay, Wifi, Lock, CheckCircle2, X, ArrowLeft, Loader2 } from 'lucide-react';
 import { telemedicineConsentSchema, type TelemedicineConsentFormData } from '../../lib/validation/legal.schema';
-import { signConsent } from '@/services/consent.service';
 import { toast } from 'sonner';
 import { getErrorMessage } from '../../lib/error';
 
 import { SignaturePad } from '@/components/ui/signature-pad';
 import { cn } from '@/lib/utils';
 import { PATHS } from '@/routes/paths';
+import { useAuth } from '@/hooks/use-auth';
+import { Navigate } from 'react-router-dom';
+import * as consentService from '../../services/consent.service';
+import { MedicalLoader } from '@/components/ui/medical-loader';
 
 export const TelemedicineConsent: React.FC = () => {
     const navigate = useNavigate();
+    const { user, refreshUser } = useAuth();
+    
+    // 🛡️ ENTERPRISE SSOT: Strict Database Truth States
+    const [isVerifying, setIsVerifying] = React.useState<boolean>(true);
+    const [serverHasConsent, setServerHasConsent] = React.useState<boolean>(false);
+
+    React.useEffect(() => {
+        let isMounted = true;
+
+        const verifyConsentStatus = async () => {
+            try {
+                // 100% Single Source of Truth: Database via Network
+                const dbStatus = await consentService.getConsentStatus();
+                
+                if (isMounted) {
+                    setServerHasConsent(dbStatus.hasConsent);
+                    setIsVerifying(false);
+
+                    // If DB says false but App Context thinks true, heal the stale cache immediately.
+                    if (!dbStatus.hasConsent && user?.hasConsent) {
+                        refreshUser();
+                    }
+                }
+            } catch {
+                // On failure, fail securely to requesting consent
+                if (isMounted) {
+                    setServerHasConsent(false);
+                    setIsVerifying(false);
+                }
+            }
+        };
+
+        verifyConsentStatus();
+        
+        return () => {
+            isMounted = false;
+        };
+    }, [user?.hasConsent, refreshUser]);
 
     const form = useForm<TelemedicineConsentFormData>({
         resolver: zodResolver(telemedicineConsentSchema),
@@ -30,18 +71,36 @@ export const TelemedicineConsent: React.FC = () => {
     const accepted = useWatch({ control: form.control, name: 'accepted' });
     const signature = useWatch({ control: form.control, name: 'signature' });
 
+    // 🩺 GATED RENDER 1: Waiting for Absolute Truth (Fills the Right Panel smoothly)
+    if (isVerifying) {
+        return (
+            <div className="flex h-[80vh] items-center justify-center">
+                <MedicalLoader fullPage={false} message="Verifying institutional consent..." />
+            </div>
+        );
+    }
+
+    // 🩺 GATED RENDER 2: 100% DB confirmed consent -> Safely Redirect
+    if (!isVerifying && serverHasConsent) {
+        return <Navigate to={PATHS.TELEMEDICINE} replace />;
+    }
+
     const onSubmit = async (data: TelemedicineConsentFormData) => {
         if (data.accepted && data.signature) {
             try {
-                // Persist securely to PostgreSQL Local DB
-                await signConsent(data.signature);
+                // 🩺 HAEMI GLOBAL STATE SYNC
+                // 1. Persist the signature to the institutional record table
+                await consentService.signConsent(data.signature);
+
+                // 2. Refresh the user profile to ensure user.hasConsent is TRUE system-wide.
+                await refreshUser();
 
                 toast.success('Consent signed successfully!', {
                     description: 'Your telemedicine consent has been saved. You can now book video appointments.',
                 });
 
-                // Navigate to the Telemedicine Hub (reliable, predictable destination)
-                navigate(PATHS.TELEMEDICINE);
+                // Navigate to the Telemedicine Hub.
+                navigate(PATHS.TELEMEDICINE, { replace: true });
             } catch (error: unknown) {
                 toast.error('Failed to save consent', {
                     description: getErrorMessage(error, 'An error occurred while saving your signature. Please try again.'),

@@ -1,38 +1,37 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
+import { sendError } from '../utils/response';
+import { UserRole } from '../types/db.types';
 
 /**
  * Role-Based Access Control (RBAC) Middleware.
  * Standardized to authorize(...roles) and provides pre-configured guards.
  */
 
-export const authorize = (...roles: string[]) => {
+export const authorize = (...roles: UserRole[]) => {
     return (req: Request, res: Response, next: NextFunction) => {
         const user = req.user;
 
         if (!user) {
-            return res.status(401).json({
-                success: false,
-                error: 'Authentication required',
-                statusCode: 401,
-            });
+            return sendError(res, 401, 'Authentication required');
         }
 
-        if (!roles.includes(user.role)) {
+        if (!roles.includes(user.role as UserRole)) {
             // Log internally but never expose to client
-            console.warn(`[RBAC] Access denied: user ${user.id} (role: ${user.role}) → ${req.method} ${req.originalUrl}`);
-            return res.status(403).json({
-                success: false,
-                error: 'Access denied. Insufficient permissions.',
-                statusCode: 403,
+            logger.warn(`[RBAC] Access denied: user ${user.id} (role: ${user.role}) → ${req.method} ${req.originalUrl}`, {
+                userId: user.id,
+                role: user.role,
+                attemptedPath: req.originalUrl
             });
+            return sendError(res, 403, 'Access denied. Insufficient permissions.');
         }
 
-        next();
+        return next();
     };
 };
 
 // Backwards compatibility and convenience guards
-export const requireRole = (roles: string[]) => authorize(...roles);
+export const requireRole = (roles: UserRole[]) => authorize(...roles);
 
 export const requireDoctor = authorize('doctor');
 export const requirePatient = authorize('patient');

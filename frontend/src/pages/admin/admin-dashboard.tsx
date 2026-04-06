@@ -53,7 +53,7 @@ export const AdminDashboard: React.FC = () => {
                 setStats(sysStats);
                 setRevenueData(revStats);
                 setActiveSessions(sessions.length);
-                setSecurityAlerts(events.filter(e => e.is_suspicious).length);
+                setSecurityAlerts(events.filter(e => e.isSuspicious).length);
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
             } finally {
@@ -144,7 +144,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={Globe} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.total_users || "0"}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.totalUsers || "0"}
                             </div>
                             <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Total Users</div>
                         </div>
@@ -168,7 +168,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.pending_verifications || "0"}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.pendingVerifications || "0"}
                             </div>
                             <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Verification Queue</div>
                         </div>

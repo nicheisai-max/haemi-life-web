@@ -6,12 +6,12 @@ import { z } from "zod";
 export const profileUpdateSchema = z.object({
     name: z.string().min(2, { message: "Name must be at least 2 characters" }),
     email: z.string().email({ message: "Please enter a valid email address" }),
-    phone_number: z
+    phoneNumber: z
         .string()
         .min(8, { message: "Phone number must be at least 8 digits" })
         .max(15, { message: "Phone number cannot exceed 15 digits" })
         .regex(/^[0-9+\s()-]+$/, { message: "Please enter a valid phone number" }),
-    omang_id: z
+    omangId: z
         .string()
         .optional(),
 });

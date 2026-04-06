@@ -3,13 +3,13 @@ export interface JWTPayload {
     email: string;
     role: 'patient' | 'doctor' | 'pharmacist' | 'admin';
     name: string;
-    token_version?: number;
-    initials?: string;
-    profile_image?: string;
-    profile_image_mime?: string;
-    status?: string;
-    jti?: string;
-    session_id?: string;
+    tokenVersion?: number;
+    initials?: string | null;
+    profileImage?: string | null;
+    profileImageMime?: string | null;
+    status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+    jti: string;
+    sessionId: string;
     exp?: number;
     iat?: number;
 }

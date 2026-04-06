@@ -82,7 +82,7 @@ export const CommandCenter: React.FC = () => {
         <>
             <button
                 onClick={() => setOpen(true)}
-                className="hidden md:flex items-center gap-3 px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-all border border-transparent hover:border-primary/20 group w-64 lg:w-80 shadow-inner"
+                className="haemi-nav-action-capsule hidden md:flex items-center gap-3 group w-64 lg:w-80 shadow-inner overflow-hidden bg-slate-100 dark:bg-slate-800"
             >
                 <Search className="h-4 w-4 text-slate-500 group-hover:text-primary transition-colors" />
                 <span className="text-sm font-bold text-slate-500 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Search Hub...</span>

@@ -23,6 +23,7 @@ export const buttonVariants = cva(
                 sm: "h-9 rounded-md px-3 text-xs",
                 lg: "h-12 rounded-md px-8",
                 icon: "h-11 w-11",
+                navAction: "h-10 w-10 p-0 rounded-full active:scale-100 transition-none",
             },
         },
         defaultVariants: {

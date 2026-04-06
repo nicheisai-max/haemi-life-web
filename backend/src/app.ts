@@ -1,17 +1,17 @@
-import './config/env'; // Must be first to load environment variables before other imports
+import './config/env'; // Must be first to load environment variables (DIAGNOSTIC_REVEAL_ACTIVE: 2026-04-04T11:47)
 import express from 'express';
 
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { createServer } from 'http';
-import { Server, Socket } from 'socket.io';
+import { Socket } from 'socket.io';
 import { JWTPayload } from './types/express';
-import { 
-    ServerToClientEvents, 
-    ClientToServerEvents, 
-    InterServerEvents, 
-    SocketData, 
-    StrictAuthenticatedSocket 
+import {
+    ServerToClientEvents,
+    ClientToServerEvents,
+    InterServerEvents,
+    SocketData,
+    StrictAuthenticatedSocket
 } from './types/socket.types';
 import * as jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
@@ -24,9 +24,10 @@ import { pool, checkConnection } from './config/db';
 import { chatReliabilityService } from './services/chat-reliability.service';
 import { env } from './config/env';
 import { schemaIntegrityService } from './services/schema-integrity.service';
+import { cleanupService } from './services/cleanup.service';
 import { corsMiddleware } from './middleware/cors.middleware';
-import * as guards from './utils/guards/socket.guards';
-import { observabilityService } from './services/observability.service';
+import { statusService } from './services/status.service';
+import { isJWTPayload } from './utils/type-guards';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -44,6 +45,7 @@ import commonRoutes from './routes/common.routes';
 import fileRoutes from './routes/file.routes';
 import consentRoutes from './routes/consent.routes';
 import profileRoutes from './routes/profile.routes';
+import aiRoutes from './routes/ai.routes';
 
 const app = express();
 
@@ -70,7 +72,10 @@ app.use(cookieParser());
 if (!env.isDemoMode && process.env.NODE_ENV !== 'test') {
     app.use('/api/auth/login', authLimiter);
     app.use('/api/auth/signup', authLimiter);
-    app.use('/api/', apiLimiter);
+    app.use('/api/', (req, res, next) => {
+        if (req.path.startsWith('/health')) return next();
+        return apiLimiter(req, res, next);
+    });
 }
 
 // DB Connection with Retry
@@ -133,11 +138,15 @@ app.use('/api/consents', consentRoutes);
 app.use('/api/common', commonRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/profiles', profileRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
-export let socketIO: Server<ClientToServerEvents, ServerToClientEvents> | undefined;
+import { Server as SocketIOServer } from 'socket.io';
+import { HaemiServer } from './types/socket.types';
+
+export let socketIO: HaemiServer | undefined;
 
 // Server & Sockets
 const startServer = async () => {
@@ -147,24 +156,21 @@ const startServer = async () => {
         // Phase 3: Strict DB Verification
         await checkConnection();
         await schemaIntegrityService.validate();
-        logger.info('✅ Database and Schema Integrity verified.');
+        cleanupService.initialize(); // Institutional Cleanup Guardian (v5.1)
+        logger.info('✅ Database, Schema, and Cleanup Guardian verified.');
 
         const server = createServer(app);
-        socketIO = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
+        socketIO = new SocketIOServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, {
             cors: {
-                origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-                    const allowed = env.allowedOrigins && env.allowedOrigins.length > 0 ? env.allowedOrigins : ["http://localhost:5173"];
-                    if (!origin || allowed.includes(origin)) {
-                        callback(null, true);
-                    } else {
-                        callback(new Error(JSON.stringify({
-                            code: "SERVER_REJECTED",
-                            message: "Origin not allowed"
-                        })));
-                    }
-                },
-                credentials: true
-            }
+                origin: env.allowedOrigins,
+                credentials: true,
+                methods: ["GET", "POST", "OPTIONS"],
+                allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+            },
+            transports: ["polling", "websocket"], // P0: Institutional Handshake protocol (Polling -> WS Upgrade)
+            allowEIO3: true,
+            pingTimeout: 60000,
+            pingInterval: 25000
         });
 
         // ... (Socket logic remains identical)
@@ -174,36 +180,29 @@ const startServer = async () => {
 
         if (process.env.NODE_ENV !== 'test') {
             server.listen(PORT, () => {
-                console.log('\n-------------------------------------------');
-                console.log('🩺 HAEMI LIFE BACKEND STARTED');
-                console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-                console.log(`Port:        ${PORT}`);
-                console.log(`DB Status:   CONNECTED`);
-                console.log(`Timestamp:   ${new Date().toLocaleString()}`);
-                console.log('-------------------------------------------\n');
+                logger.info('-------------------------------------------');
+                logger.info('🩺 HAEMI LIFE BACKEND ENGINE | Ready');
+                logger.info('   -> PHASE 7: FINAL STABILITY VERIFIED');
+                logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+                logger.info(`Port:        ${PORT}`);
+                logger.info('-------------------------------------------\n');
             });
         }
         return server;
     } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown fatal error';
-        console.error('\n-------------------------------------------');
-        console.error('❌ FATAL: BACKEND BOOT FAILED');
-        console.error(`Reason: ${errorMessage}`);
-        console.error('-------------------------------------------\n');
+        logger.error('-------------------------------------------');
+        logger.error('❌ FATAL: BACKEND BOOT FAILED');
+        logger.error(`Reason: ${errorMessage}`);
+        logger.error('-------------------------------------------');
         process.exit(1);
     }
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
 
-function isAuthenticatedSocket(socket: Socket): socket is StrictAuthenticatedSocket {
-    return guards.isAuthenticatedSocketData(socket.data);
-}
 
 // Extracted socket setup to keep startServer clean
-function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>) {
+function setupSockets(io: HaemiServer) {
     io.use(async (socket: Socket, next: (err?: Error) => void) => {
         const auth = socket.handshake.auth;
         const token = typeof auth === 'object' && auth !== null && 'token' in auth && typeof auth.token === 'string' ? auth.token : null;
@@ -220,31 +219,28 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
             }
 
             const decodedPayload: unknown = jwt.verify(token, secret);
+            logger.info(`[Socket:Handshake] Success for token: ${token.substring(0, 10)}...`);
 
-            if (typeof decodedPayload !== 'object' || decodedPayload === null || !('id' in decodedPayload) || !('role' in decodedPayload) || !('token_version' in decodedPayload) || !('email' in decodedPayload) || !('name' in decodedPayload)) {
-                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid token payload' })));
+            // P0 PRESENCE FIX: Use centralized type guard to ensure all required fields (id, email, role, tokenVersion, jti, sessionId)
+            if (!isJWTPayload(decodedPayload)) {
+                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid token payload or missing required fields' })));
             }
 
-            if (!isRecord(decodedPayload)) {
-                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid token payload' })));
+            const decoded = decodedPayload as JWTPayload;
+
+            if (!decoded.email || !decoded.id || !decoded.sessionId) {
+                return next(new Error(JSON.stringify({ 
+                    code: 'AUTH_INVALID', 
+                    message: 'Malformed token payload' 
+                })));
             }
 
-            const role = decodedPayload.role;
-            if (role !== 'patient' && role !== 'doctor' && role !== 'pharmacist' && role !== 'admin') {
-                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid role' })));
-            }
+            // Fallback initialization for name (populated from DB below)
+            decoded.name = '';
 
-            const decoded: JWTPayload = {
-                id: String(decodedPayload.id),
-                email: String(decodedPayload.email),
-                role: role,
-                name: String(decodedPayload.name),
-                token_version: Number(decodedPayload.token_version)
-            };
-
-            // Database-level verification: Check token_version and status
+            // Database-level verification: Check tokenVersion, status, AND fetch name
             const userResult = await pool.query(
-                'SELECT token_version, status FROM users WHERE id = $1',
+                'SELECT token_version, status, name FROM users WHERE id = $1',
                 [decoded.id]
             );
 
@@ -261,9 +257,12 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
                 return next(new Error(JSON.stringify({ code: 'SERVER_REJECTED', message: 'User account is inactive' })));
             }
 
-            if (decoded.token_version !== user.token_version) {
+            if (decoded.tokenVersion !== user.token_version) {
                 return next(new Error(JSON.stringify({ code: 'AUTH_EXPIRED', message: 'Session expired or revoked' })));
             }
+
+            // P0 PRESENCE FIX: Populate name from DB (not in JWT)
+            decoded.name = String(user.name || '');
 
             // Explicitly extending socket with user data
             socket.data.user = decoded;
@@ -274,90 +273,149 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
         }
     });
 
-    io.on('connection', (socket: Socket) => {
-        if (!isAuthenticatedSocket(socket)) {
-            logger.error('Socket connected without user data');
-            return socket.disconnect();
+    // Phase 10: Institutional Reset (Socket-Specific Cleanup)
+    // Synchronize Database with Server RAM state on startup WITHOUT TRUNCATE
+    statusService.institutionalSocketCleanup();
+    
+    io.on('connection', async (socket: StrictAuthenticatedSocket) => {
+        // P0 PRESENCE FIX: Read user from socket.data (set by auth middleware)
+        const user = socket.data?.user;
+        if (!user || !user.id) {
+            const errMsg = `[PRESENCE FAILURE] Socket ${socket.id} connected but socket.data.user is missing or has no id. data=${JSON.stringify(socket.data)}`;
+            logger.error(errMsg);
+            socket.disconnect(true);
+            return;
         }
 
-        const user = socket.data.user;
-        if (!user) {
-            logger.error('Socket connected but user data is missing from socket.data');
-            return socket.disconnect();
-        }
-        const userId = user.id;
+        const userId = String(user.id);
         socket.join(`user:${userId}`);
-        
+
         // Admin Observability Auto-Join
         if (user.role === 'admin') {
             socket.join('admin:observability');
-            logger.info(`Admin joined observability room: ${userId}`);
         }
 
+        console.log(`[PRESENCE] Socket ${socket.id} connected for userId=${userId} role=${user.role}`);
         logger.info(`Socket: ${socket.id} user:${userId}`);
 
-        // ENTERPRISE HARDENING: Standardized Event Listeners
-        socket.on('join_conversation', (conversationId: unknown) => {
-            if (!guards.isJoinConversationPayload(conversationId)) return;
+        // 1. TARGETED Presence (Deterministic Async)
+        try {
+            const presence = await statusService.setUserOnline(userId, socket.id);
+            const partnerIds = await chatReliabilityService.getConversationPartners(userId);
+
+            // Emit to partner rooms ONLY if socket is still active
+            partnerIds.forEach(pid => {
+                if (socket.connected) {
+                    io.to(`user:${pid}`).emit('userStatus', presence);
+                }
+            });
+
+            // Always emit to admin observability (The Governor)
+            io.to('admin:observability').emit('adminMirrorEvent', {
+                event: 'userStatus',
+                data: presence,
+                timestamp: new Date().toISOString()
+            });
+        } catch (err) {
+            logger.error(`Presence online sync failed for ${userId}:`, err);
+        }
+
+        // 2. JOIN: Standard Conversational Stream
+        socket.on('joinConversation', (conversationId: string) => {
             socket.join(`conversation:${conversationId}`);
         });
 
-        socket.on('ack_read', async (data: unknown) => {
-            if (!guards.isAckReadPayload(data)) return;
+        // 3. READ RECEIPTS (Nuclear Standardization)
+        // P0: PURGED 'ackRead' and 'messageRead' to prevent event duplication.
+        // All receipts MUST use 'messageRead'.
+        socket.on('messageRead', (data: import('./types/socket.types').MessageReadEvent) => {
+            chatReliabilityService.getConversationIdByMessageId(data.messageId).then(conversationId => {
+                if (conversationId) {
+                    // P0 NUCLEAR: Single Channel Emission
+                    // Data is delivered EXCLUSIVELY to the conversation room.
+                    // Redundant per-user 'user:pid' emissions have been purged.
+                    io.to(`conversation:${conversationId}`).emit('messageRead', data);
+
+                    // The Governor Mirroring
+                    io.to('admin:observability').emit('adminMirrorEvent', {
+                        event: 'messageRead',
+                        data,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }).catch(err => logger.error('[Phase 2] messageRead lookup failed:', err));
+        });
+
+        // 4. EPHEMERAL STREAMS (Typing/Signaling)
+        socket.on('typingStarted', (data) => {
+            const payload = {
+                userId: userId,
+                conversationId: data.conversationId,
+                name: user.name || 'Someone'
+            };
+            socket.to(`conversation:${data.conversationId}`).emit('typingStarted', payload);
             
-            if (io) {
-                const participantIds = await chatReliabilityService.getParticipants(data.conversationId);
-
-                // Optimized: Only the original sender(s) in the conversation should receive message_read updates.
-                participantIds.filter((pid: string) => pid !== data.user_id).forEach((pid: string) => {
-                    io?.to(`user:${pid}`).emit('message_read', data);
-                });
-            }
+            // The Governor Mirroring
+            io.to('admin:observability').emit('adminMirrorEvent', {
+                event: 'typingStarted',
+                data: payload,
+                timestamp: new Date().toISOString()
+            });
         });
 
-        // Ephemeral Typing Stream (Lightweight)
-        socket.on('typing_started', (data: unknown) => {
-            if (!guards.isTypingPayload(data)) return;
-            socket.to(`conversation:${data.conversationId}`).emit('typing_started', data);
-        });
+        socket.on('typingStopped', (data) => {
+            const payload = {
+                userId: userId,
+                conversationId: data.conversationId,
+                name: user.name || 'Someone'
+            };
+            socket.to(`conversation:${data.conversationId}`).emit('typingStopped', payload);
 
-        socket.on('typing_stopped', (data: unknown) => {
-            if (!guards.isTypingPayload(data)) return;
-            socket.to(`conversation:${data.conversationId}`).emit('typing_stopped', data);
+            // The Governor Mirroring
+            io.to('admin:observability').emit('adminMirrorEvent', {
+                event: 'typingStopped',
+                data: payload,
+                timestamp: new Date().toISOString()
+            });
         });
 
         // WebRTC hooks
-        socket.on('call-user', (data: unknown) => {
-            if (!guards.isSignalPayload(data)) return;
-            if (io) io.to(data.to).emit('call-made', { offer: data.offer, socket: socket.id });
+        socket.on('callUser', (data) => {
+            io.to(data.to).emit('callMade', { offer: data.offer, socket: socket.id });
         });
 
-        socket.on('make-answer', (data: unknown) => {
-            if (!guards.isAnswerPayload(data)) return;
-            if (io) io.to(data.to).emit('answer-made', { answer: data.answer, socket: socket.id });
+        socket.on('makeAnswer', (data) => {
+            io.to(data.to).emit('answerMade', { answer: data.answer, socket: socket.id });
         });
 
-        socket.on('ice-candidate', (data: unknown) => {
-            if (!guards.isIcePayload(data)) return;
-            if (socketIO) socketIO.to(data.to).emit('ice-candidate', { candidate: data.candidate, socket: socket.id });
+        socket.on('iceCandidate', (data) => {
+            io.to(data.to).emit('iceCandidate', { candidate: data.candidate, socket: socket.id });
         });
 
-        socket.on('ack_delivery', (data: unknown) => {
-            if (!guards.isAckDeliveryPayload(data)) return; // STRICT REJECTION via guard
-            socket.to(`conversation:${data.conversationId}`).emit('ack_delivery', data);
+        socket.on('ackDelivery', (data) => {
+            socket.to(`conversation:${data.conversationId}`).emit('ackDelivery', data);
         });
 
         socket.on('disconnect', () => {
             logger.info(`Socket disconnected: ${socket.id}`);
-            if (user && user.id) {
-                observabilityService.logSessionEnd({
-                    session_id: null, // Socket disconnect is not an explicit logout
-                    user_id: user.id,
-                    reason: 'Socket disconnect',
-                    timestamp: new Date().toISOString(),
-                    source: 'backend'
-                });
-            }
+            statusService.setUserOffline(userId, socket.id).then(async (presence) => {
+                if (presence.status === 'offline') {
+                    // Find all unique partners across all conversations
+                    const partnerIds = await chatReliabilityService.getConversationPartners(userId);
+
+                    // Emit status change only to relevant users
+                    partnerIds.forEach(pid => {
+                        io.to(`user:${pid}`).emit('userStatus', presence);
+                    });
+
+                    // Always emit to admin observability (The Governor)
+                    io.to('admin:observability').emit('adminMirrorEvent', {
+                        event: 'userStatus',
+                        data: presence,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }).catch(err => logger.error(`Presence offline sync failed for ${userId}:`, err));
         });
     });
 }

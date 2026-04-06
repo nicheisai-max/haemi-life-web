@@ -7,17 +7,10 @@ import { Button } from '@/components/ui/button';
 import { PremiumAreaChart } from '@/components/charts/premium-area-chart';
 import { GradientMesh } from '@/components/ui/gradient-mesh';
 import { getGrowthStats, getClinicalPerformance } from '../../services/analytics.service';
-import type { GrowthStat } from '../../services/analytics.service';
+import type { GrowthStat, ClinicalPerformance, DiagnosisEntry } from '../../services/analytics.service';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { getErrorMessage } from '../../lib/error';
 import { secureDownload } from '../../services/file.service';
-
-interface DiagnosisEntry { name: string; count: number; percentage: number; }
-interface ClinicalPerformance {
-    retentionRate?: string | number;
-    patientSatisfaction?: string | number;
-    topDiagnoses?: DiagnosisEntry[];
-}
 
 const Reports: React.FC = () => {
     const [stats, setStats] = useState<GrowthStat[]>([]);
@@ -95,7 +88,7 @@ const Reports: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {[
                     { label: 'Total Volume', value: stats.reduce((acc, s) => acc + s.value, 0), icon: Users, variant: 'primary' as const },
-                    { label: 'New Patients', value: stats.reduce((acc, s) => acc + (s.new_users || 0), 0), icon: Calendar, variant: 'accent' as const },
+                    { label: 'New Patients', value: stats.reduce((acc, s) => acc + Number(s.newUsers || 0), 0), icon: Calendar, variant: 'accent' as const },
                     { label: 'Retention Rate', value: performance?.retentionRate || '94%', icon: TrendingUp, variant: 'success' as const },
                     { label: 'Satisfaction', value: performance?.patientSatisfaction || '88%', icon: BarChart3, variant: 'warning' as const },
                 ].map((stat, i) => (

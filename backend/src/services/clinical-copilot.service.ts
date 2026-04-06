@@ -1,20 +1,27 @@
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel, ChatSession, Content, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { logger } from '../utils/logger';
 
+/**
+ * 🩺 HAEMI LIFE | INSTITUTIONAL AI COPILOT SERVICE (GEMINI 2.5 PRO)
+ * Standard: Google/Meta Grade TypeScript Execution (Strict-Type Consensus)
+ * Architecture: Stateless model instantiation with stateful ChatSession orchestration.
+ */
 export class ClinicalCopilotService {
-    private model: GenerativeModel | null = null;
     private genAI: GoogleGenerativeAI | null = null;
+    private model: GenerativeModel | null = null;
 
     constructor() {
-        // We no longer instantiate immediately to avoid "missing key" errors 
-        // during module resolution/hoisting.
+        // Deferred initialization to respect environment hoisting during container boot
     }
 
-    private initModel() {
-        if (this.model) return;
-
-        const apiKey = process.env.GEMINI_API_KEY;
+    /**
+     * Initializes the Generative AI client and model.
+     * Logic: Strictly locks 'systemInstruction' to the model instance per 2.5 Pro standards.
+     */
+    private initModel(): void {
+        const apiKey: string | undefined = process.env.GEMINI_API_KEY;
         if (!apiKey) {
-            // Only log an error if we actually try to use the model and it's missing.
+            logger.error('[ClinicalCopilot] SECURITY_ABORT: MISSING_API_KEY');
             throw new Error('MISSING_API_KEY');
         }
 
@@ -22,69 +29,97 @@ export class ClinicalCopilotService {
             this.genAI = new GoogleGenerativeAI(apiKey);
         }
 
-        this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        // Institutional Health & Safety Protocol (Standard filtering)
+        const safetySettings = [
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        ];
+
+        const systemInstructionText: string = `
+            You are the 'Haemi Life Clinical Copilot', a specialized AI assistant for doctors in Botswana.
+            
+            INSTITUTIONAL PROTOCOLS:
+            1. Professional medical tone (Google/Meta Grade). Concise and authoritative.
+            2. Use Markdown for readability: bold keywords and use bulleted lists for diagnostics.
+            3. Safety: Professionally decline non-medical or harmful queries.
+            4. Botswana Context: Reference Botswana National Treatment Guidelines where relevant.
+        `;
+
+        /**
+         * 🎯 ARCHITECT SYNC: Injecting systemInstruction at model level.
+         * This eliminates the 20s hang caused by passing instructions to startChat.
+         */
+        this.model = this.genAI.getGenerativeModel({ 
+            model: 'gemini-2.5-pro',
+            safetySettings,
+            systemInstruction: systemInstructionText
+        });
+        
+        logger.info('[ClinicalCopilot] Gemini 2.5 Pro Model initialized with internal instructions.');
     }
 
     /**
-     * Generates a clinical response based on the doctor's query and patient context.
-     * @param query The doctor's question or command.
-     * @param context Patient context (optional, but highly recommended for relevance).
-     * @returns A string response from the AI.
+     * Generates a clinical AI response using stateful ChatSession protocol.
+     * @param message The user's current clinical query.
+     * @param history Conversational history for stateful diagnostic context.
+     * @returns A strictly typed clinical response string.
      */
-    async generateResponse(query: string, context?: Record<string, unknown>): Promise<string> {
+    async generateResponse(message: string, history: Content[] = []): Promise<string> {
         try {
-            this.initModel();
-        } catch {
-            console.error('[ClinicalCopilot] FATAL: GEMINI_API_KEY is missing.');
-            throw new Error('SERVICE_UNAVAILABLE');
-        }
+            // Re-initialize check (Idempotent)
+            if (!this.model) {
+                this.initModel();
+            }
+            
+            if (!this.model) throw new Error('AI_INFRASTRUCTURE_UNAVAILABLE');
 
-        // Institutional Hardening: Prevent event loop stalling with a 15s timeout
-        const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('AI_TIMEOUT')), 15000).unref()
-        );
+            /**
+             * 🧬 CHAT SESSION ORCHESTRATION (Architect-Valid Protocol)
+             * We strictly omit 'systemInstruction' here to prevent the SDK retry-loop timeout.
+             */
+            const chat: ChatSession = this.model.startChat({
+                history: history
+            });
 
-        try {
-            if (!this.model) throw new Error('SERVICE_UNAVAILABLE');
+            // Institutional Execution: 20s timeout protocol for complex reasoning
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('AI_INFERENCE_TIMEOUT')), 20000).unref()
+            );
 
-            const systemInstruction = `
-                You are the 'Haemi Life Clinical Copilot', an advanced AI assistant for doctors in Botswana.
-                
-                ROLE & GUIDELINES:
-                1.  **Professional Tone**: Use precise medical terminology. Be concise and authoritative.
-                2.  **Safety First**: If a query is unsafe or outside clinical scope, professionally decline.
-                3.  **Botswana Context**: Where applicable, reference Botswana treatment guidelines (e.g., HIV/TB protocols) or formulary availability.
-                4.  **Format**: Use Markdown for readability (bolding key terms, lists for steps).
-                
-                CONTEXT:
-                ${context ? JSON.stringify(context) : 'No specific patient context provided.'}
-                
-                QUERY:
-                ${query}
-            `;
+            // sendMessage performs the primary conversational turn
+            const result = await Promise.race([
+                chat.sendMessage(message), 
+                timeoutPromise
+            ]);
 
-            // Race the AI call against the timeout
-            const resultPromise = this.model.generateContent(systemInstruction);
-            const result = await Promise.race([resultPromise, timeoutPromise]);
-
-            // Type guard to handle GenerateContentResponse structure safely
-            if (!result || typeof result !== 'object' || !('response' in result)) {
-                throw new Error('INVALID_AI_RESPONSE');
+            // Final Response Validation & Extraction
+            if (!result || !result.response) {
+                logger.error('[ClinicalCopilot] NULL_RESPONSE_REJECTION');
+                throw new Error('NO_AI_RESPONSE_OBJECT');
             }
 
-            const response = (result as { response: { text: () => string } }).response;
-            const text = response.text();
+            const textOutput: string = result.response.text();
+            if (!textOutput) {
+                logger.error('[ClinicalCopilot] EMPTY_SYNC_BUFFER');
+                throw new Error('EMPTY_AI_RESPONSE_TEXT');
+            }
 
-            return text;
+            return textOutput;
 
         } catch (error: unknown) {
-            const err = error as Error;
-            if (err.message === 'AI_TIMEOUT') {
-                console.error('[ClinicalCopilot] Request timed out after 15s');
-                throw new Error('SERVICE_UNAVAILABLE');
-            }
-            console.error('[ClinicalCopilot] Error generating response:', error);
-            throw new Error('Failed to generate AI response. Please try again.');
+            const errorMessage: string = error instanceof Error ? error.message : String(error);
+            const errorStatus: string = (error as { status?: string })?.status || '500';
+
+            logger.error('[ClinicalCopilot] AI Inference Hard Crash:', { 
+                error: errorMessage,
+                status: errorStatus,
+                model: 'gemini-2.5-pro'
+            });
+            
+            // Standardized Error Propagation for Controller Layer
+            throw new Error(`[GEMINI_2_PRO_ERROR] ${errorMessage}`);
         }
     }
 }

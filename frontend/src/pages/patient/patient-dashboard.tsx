@@ -27,7 +27,7 @@ const HEALTH_TRENDS_DATA = [
     { name: 'Week 4', score: 82, label: 'Current Status' },
 ];
 
-export const PatientDashboard = () => {
+export const PatientDashboard: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -42,16 +42,22 @@ export const PatientDashboard = () => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
+            setError(null);
+            
+            // Phase 2: Consolidated Real-Time Data Fetch (Optimized for Upcoming)
             const [apptData, prescData] = await Promise.all([
-                getMyAppointments({ upcoming: true }),
-                getMyPrescriptions()
+                getMyAppointments({ status: 'scheduled', upcoming: true }).catch(() => []),
+                getMyPrescriptions().catch(() => [])
             ]);
-            setAppointments(apptData);
-            setPrescriptions(prescData);
+            
+            setAppointments(apptData || []);
+            setPrescriptions(prescData || []);
+            
         } catch (err) {
-            const apiError = err as { response?: { data?: { message?: string } } };
-            setError(apiError.response?.data?.message || 'Failed to load dashboard data');
             console.error('Dashboard fetch error:', err);
+            // Fail Safe: Return Empty State
+            setAppointments([]);
+            setPrescriptions([]);
         } finally {
             setLoading(false);
         }
@@ -75,7 +81,7 @@ export const PatientDashboard = () => {
 
 
 
-    const upcomingAppointments = appointments.filter(a => a.status === 'scheduled').slice(0, 3);
+    const upcomingAppointments = appointments.slice(0, 3);
     const activePrescriptions = prescriptions.filter(p => p.status === 'pending' || p.status === 'filled');
 
     return (
@@ -129,7 +135,7 @@ export const PatientDashboard = () => {
                             <IconWrapper icon={Calendar} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
                                 <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                    {loading ? "-" : upcomingAppointments.length}
+                                    {loading ? <PremiumLoader size="sm" className="h-9" /> : upcomingAppointments.length}
                                 </div>
                                 <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-primary transition-colors">Bookings</div>
                             </div>
@@ -139,7 +145,7 @@ export const PatientDashboard = () => {
                             <IconWrapper icon={FileText} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
                                 <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                    {loading ? "-" : activePrescriptions.length}
+                                    {loading ? <PremiumLoader size="sm" className="h-9" /> : activePrescriptions.length}
                                 </div>
                                 <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">Scripts</div>
                             </div>
@@ -149,7 +155,7 @@ export const PatientDashboard = () => {
                             <IconWrapper icon={FolderOpen} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
                                 <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                    {loading ? "-" : appointments.length}
+                                    {loading ? <PremiumLoader size="sm" className="h-9" /> : appointments.length}
                                 </div>
                                 <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-amber-500 transition-colors">Total Visits</div>
                             </div>
@@ -257,8 +263,8 @@ export const PatientDashboard = () => {
                                 </div>
                             ) : (
                                 upcomingAppointments.map((appointment) => {
-                                    const dateInfo = formatDate(appointment.appointment_date);
-                                    const isToday = new Date(appointment.appointment_date).toDateString() === new Date().toDateString();
+                                    const dateInfo = formatDate(appointment.appointmentDate);
+                                    const isToday = new Date(appointment.appointmentDate).toDateString() === new Date().toDateString();
                                     return (
                                         <button
                                             key={appointment.id}
@@ -272,10 +278,10 @@ export const PatientDashboard = () => {
                                                     <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{dateInfo.month}</span>
                                                 </div>
                                                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                    <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{appointment.other_party_name || 'Doctor'}</h3>
+                                                    <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{appointment.otherPartyName || 'Doctor'}</h3>
                                                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                                                         <span className="flex items-center gap-1 group-hover:text-primary transition-colors">
-                                                            <Clock className="h-3 w-3" /> {formatTime(appointment.appointment_time)}
+                                                            <Clock className="h-3 w-3" /> {formatTime(appointment.appointmentTime)}
                                                         </span>
                                                         {isToday && <span className="text-primary font-bold px-1.5 py-0.5 bg-primary/10 rounded ml-auto text-[9px]">TODAY</span>}
                                                     </div>

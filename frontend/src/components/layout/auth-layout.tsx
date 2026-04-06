@@ -25,7 +25,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
         <div className="auth-layout-root flex min-h-screen w-full bg-background relative">
             {/* Visual Section (Left) - Visible only on Desktop (LG+) via CSS hidden/block */}
             {/* This section contains MARKETING/BRANDING text only. It is NOT the auth header. */}
-            <div className="hidden lg:block lg:w-1/2 relative overflow-hidden border-r" style={{ backgroundColor: 'var(--color-login-bg)' }}>
+            <div className="hidden lg:block lg:w-1/2 relative overflow-hidden border-r auth-visual-section">
                 <img
                     src={image}
                     alt="Authentication Background"

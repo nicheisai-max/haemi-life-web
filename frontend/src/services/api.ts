@@ -1,14 +1,15 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios';
 import { logger, auditLogger, intrusionDetector } from '../utils/logger';
-import { NetworkError, AuthError, RefreshFailureError, FatalAuthError, isAuthError, isNetworkError, isFatalAuthError } from '../types/auth.types';
+import { NetworkError, AuthError, RefreshFailureError, FatalAuthError, isAuthError, isNetworkError } from '../types/auth.types';
 import type { AuthResponse, ApiResponse } from '../types/auth.types';
 import { isJWTPayload, safeParseJSON } from '../utils/type-guards';
 
-const API_BASE = import.meta.env.VITE_API_URL;
-if (!API_BASE) {
-    console.error('[API] WARNING: VITE_API_URL is missing. Falling back to relative path.');
+const BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/+$/, '') || '';
+const API_URL = BASE_URL ? `${BASE_URL}/api` : '/api';
+
+if (API_URL.includes('/api/api')) {
+  throw new Error('Invalid API base URL configuration');
 }
-const API_URL = (API_BASE || '') + '/api';
 
 // DEMO MODE FLAG
 const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
@@ -79,7 +80,7 @@ const api = axios.create({
         ...(IS_DEMO_MODE ? { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } : {}),
     },
     withCredentials: false,
-    timeout: 10000,
+    timeout: 30000, // Phase 1: Institutional Hardening — Increased to 30s to prevent historical load failure
 });
 
 // ─── Phase 10: Refresh Client (Dual Axios System) ──────────────────────────
@@ -93,9 +94,20 @@ const refreshClient = axios.create({
 });
 
 // ─── Centralized Response Normalization ────────────────────────────────────
-const normalizeResponse = <T>(
+export const normalizeResponse = <T>(
     response: AxiosResponse<ApiResponse<T>>
 ): T => {
+    // P0 FIX: Bypass normalization for BINARY (blob) or /files/ endpoints
+    const isBinary = response.config.responseType === 'blob' || 
+                     response.config.url?.includes('/files/');
+    
+    if (isBinary) {
+        if (!(response.data instanceof Blob) && response.config.responseType === 'blob') {
+            throw new Error('Expected Blob response for binary endpoint');
+        }
+        return response.data as T;
+    }
+
     if (
         typeof response.data !== 'object' ||
         response.data === null ||
@@ -114,9 +126,9 @@ if (typeof window !== 'undefined') {
         try {
             const res = await axios.get(`${API_URL}/health/ready`, { timeout: 2000 });
             return res.data?.status === 'ready' || res.data?.status === 'ok';
-        } catch (error) {
+        } catch (error: unknown) {
             auditLogger.log('UNHANDLED_ERROR', {
-                message: error instanceof Error ? error.message : 'Unknown error',
+                message: error instanceof Error ? error.message : String(error),
             });
             return false;
         }
@@ -139,36 +151,19 @@ if (typeof window !== 'undefined') {
     };
 
     const orchestrateStartup = async () => {
-        let backendReady = false;
-
-        // Fail-safe: Ensure queue flushes within 3.5 seconds even if polling stalls
-        const failSafe = setTimeout(() => {
-            if (!appInitialized) {
-                logger.warn('[API] Boot timeout. Forcing fail-safe queue flush.');
-                flushQueue();
+        try {
+            // Phase 1: Native single-shot check
+            const isBackendReady = await checkBackendReady();
+            if (isBackendReady) {
+                logger.info('[API] Backend confirmed ready. Flushing queue.');
+            } else {
+                logger.warn('[API] Backend unreachable or not ready. Proceeding to flush queue for offline state.');
             }
-        }, 3500);
-
-        // Phase 1: Wait for backend readiness (5 attempts, 1s apart)
-        let attempts = 0;
-        while (!backendReady && attempts < 5) {
-            logger.info(`[API] Checking backend readiness (Attempt ${attempts + 1})...`);
-            backendReady = await checkBackendReady();
-            if (!backendReady) {
-                attempts++;
-                await new Promise(r => setTimeout(r, 1000));
-            }
-        }
-
-        if (backendReady) {
-            logger.info('[API] Backend readiness confirmed. Flushing orchestration queue.');
-            flushQueue();
-        } else {
-            logger.warn('[API] Backend unreachable. Flushing queue anyway to allow offline UI state.');
-            appInitialized = true;
+        } catch (error: unknown) {
+            logger.error('[API] Orchestration call failed.', error instanceof Error ? error.message : String(error));
+        } finally {
             flushQueue();
         }
-        clearTimeout(failSafe);
     };
 
     orchestrateStartup();
@@ -200,10 +195,10 @@ function recordSuccess() {
     circuitState = 'CLOSED';
 }
 
-function recordFailure(error: AxiosError) {
-    const isNetworkError = !error.response || error.code === 'ECONNABORTED';
+function recordFailure(error: AxiosError<ApiResponse<unknown>>) {
+    const isNetErr = !error.response || error.code === 'ECONNABORTED';
     const isServerOverloaded = error.response && (error.response.status === 502 || error.response.status === 503);
-    if (!isNetworkError && !isServerOverloaded) return;
+    if (!isNetErr && !isServerOverloaded) return;
 
     // Phase 8: Exclude /auth/ from triggering circuit breaker
     const url = error.config?.url || '';
@@ -253,7 +248,7 @@ api.interceptors.request.use(
         }
         return config;
     },
-    (error) => Promise.reject(error)
+    (error: unknown) => Promise.reject(error instanceof Error ? error : new Error(String(error)))
 );
 
 // ─── Phase 2, 5 & 6: Refresh Engine & Safety Guards (Enterprise Mutex) ────────
@@ -296,8 +291,8 @@ const clearAuthSession = () => {
             const syncChannel = new BroadcastChannel('haemi_auth_sync');
             syncChannel.postMessage({ type: 'HARD_LOGOUT', payload: { version: sessionVersion } });
             syncChannel.close();
-        } catch (error) {
-            const errMessage = error instanceof Error ? error.message : 'Unknown error';
+        } catch (error: unknown) {
+            const errMessage = error instanceof Error ? error.message : String(error);
             auditLogger.log('UNHANDLED_ERROR', { message: errMessage });
             /* ignore */
         }
@@ -389,7 +384,7 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
         auditLogger.log('ERROR', { message: errMessage });
         // Type-Safe Error Narrowing
         const isNetworkErr = (axios.isAxiosError(error) && (!error.response || error.code === 'ECONNABORTED')) || isNetworkError(error);
-        const isAuthErr = (axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) || isAuthError(error);
+        const isAuthErr = (axios.isAxiosError(error) && error.response?.status === 401) || isAuthError(error); // 403 is NOT an auth failure, it is Forbidden
         
         // Network Failure Resilience (Exponential Backoff + Jitter)
         if (isNetworkErr && retryCount < 2 && sessionVersion === currentVersion) {
@@ -405,25 +400,22 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
 
         // Phase 6: Only clear session if we are still on the same session version
         if (sessionVersion === currentVersion) {
-            let forceLogout = false;
             if (isAuthErr) {
-                logger.info('[API] Session refresh unauthorized (Silent Failure Handling)');
+                logger.info('[API] Session refresh unauthorized (TERMINAL REJECTION)');
                 auditLogger.log('UNAUTHORIZED_EVENT', { reason: 'Refresh token rejected' });
-                forceLogout = intrusionDetector.trackFailure('unauthorized');
+                
+                // CRITICAL P0 FIX: If refresh token is explicitly rejected, we MUST clear the session
+                // to prevent infinite interceptor loops that DOS the backend connection pool.
+                clearAuthSession();
             } else {
                 logger.error('[API] Sync refresh failed permanently', error);
                 auditLogger.log('TOKEN_REFRESH_FAILURE', { reason: error instanceof Error ? error.message : 'Unknown' });
-                forceLogout = intrusionDetector.trackFailure('refresh');
+                intrusionDetector.trackFailure('refresh');
             }
             
             // Format strict error before rejecting queue
             const strictErr = error instanceof Error ? error : new RefreshFailureError('Unknown refresh failure');
             processQueue(strictErr, null);
-            
-            // Safe Kill-Switch Logout System triggers ONLY on Invalid Refresh or Fatal Threshold
-            if (isAuthErr || isFatalAuthError(strictErr) || forceLogout) {
-                clearAuthSession();
-            }
         }
         isRefreshing = false;
         return null;
@@ -432,19 +424,11 @@ export const performRefresh = async (retryCount = 0): Promise<string | null> => 
 
 api.interceptors.response.use(
     async (response) => {
-        try {
-            const unwrappedData = normalizeResponse(response);
-            response = { ...response, data: unwrappedData };
-        } catch (error) {
-            auditLogger.log('UNHANDLED_ERROR', {
-                message: error instanceof Error ? error.message : 'Unknown error',
-            });
-            // Keep raw response for routes like /health/ready that don't match the ApiResponse envelope
-        }
+        // Phase 11: Normalization shifted to individual services for safe contract migration.
         recordSuccess();
         return response;
     },
-    async (error: AxiosError) => {
+    async (error: AxiosError<ApiResponse<unknown>>) => {
         const originalRequest = error.config;
         recordFailure(error);
 
@@ -453,14 +437,15 @@ api.interceptors.response.use(
         // 1. Interceptor Loop Protection
         if (originalRequest.url?.includes('/auth/refresh-token')) {
             if (error.response?.status === 401) {
-                clearAuthSession();
+                // PHASE 1 FIX: Only reject — DO NOT logout here to prevent forced logout on hard refresh
+                return Promise.reject(new AuthError('Refresh token invalid', error.response?.status));
             }
             return Promise.reject(new AuthError('Refresh token invalid', error.response?.status));
         }
 
         // 2. Expected Auth Failures (Silent)
         const isExpectedAuthFailure = error.response && 
-            (error.response.status === 400 || error.response.status === 401 || error.response.status === 403) &&
+            (error.response.status === 400 || error.response.status === 401) &&
             originalRequest.url?.includes('/auth/');
 
         if (isExpectedAuthFailure && error.response) {
@@ -512,9 +497,14 @@ api.interceptors.response.use(
             if (!isRetryable) return Promise.reject(error);
         }
 
-        // 5. 502/503/429 Retry Logic
+        // 5. 502/503/429 Retry Logic (Excluding 429 from auto-retry)
+        if (error.response?.status === 429) {
+            logger.warn('[API] Rate limit reached. Rejecting without retry.');
+            return Promise.reject(error);
+        }
+
         if (originalRequest.__retryCount === undefined) originalRequest.__retryCount = 0;
-        const is500Retryable = error.response && (error.response.status === 502 || error.response.status === 503 || error.response.status === 429);
+        const is500Retryable = error.response && (error.response.status === 502 || error.response.status === 503);
 
         if (originalRequest.__retryCount < MAX_RETRIES && is500Retryable) {
             originalRequest.__retryCount += 1;
@@ -523,7 +513,7 @@ api.interceptors.response.use(
             return api(originalRequest);
         }
 
-        if (error.response?.status === 403 && !originalRequest.url?.includes('/auth/')) {
+        if (error.response?.status === 403 && originalRequest.url?.includes('/auth/login')) {
             clearAuthSession();
         }
 

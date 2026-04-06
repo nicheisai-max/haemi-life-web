@@ -1,28 +1,31 @@
-import api from './api';
+import api, { normalizeResponse } from './api';
+import type { ApiResponse } from '../types/auth.types';
 
 // =====================================================
 // APPOINTMENT API SERVICE
 // =====================================================
 
 export interface Appointment {
-    id: number; // Institutional Realignment: integer
-    patient_id: string;
-    doctor_id: string;
-    appointment_date: string;
-    appointment_time: string;
-    duration_minutes: number;
+    id: number;
+    patientId: string;
+    doctorId: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    durationMinutes: number;
     status: 'scheduled' | 'completed' | 'cancelled' | 'no-show';
-    reason: string;
-    notes?: string;
-    created_at: string;
-    updated_at: string;
+    consultationType: string;
+    reason: string | null;
+    notes: string | null;
+    createdAt: string;
+    updatedAt: string;
     // Populated fields
-    doctor_name?: string;
-    patient_name?: string;
-    patient_phone?: string;
+    doctorName?: string;
+    patientName?: string;
+    patientPhone?: string;
     specialization?: string;
-    other_party_name?: string;
-    user_role?: 'patient' | 'doctor';
+    otherPartyName?: string;
+    userRole?: 'patient' | 'doctor';
+    profileImage?: string | null;
 }
 
 export interface AvailableSlots {
@@ -32,52 +35,52 @@ export interface AvailableSlots {
 
 // Book a new appointment (Patient only)
 export const bookAppointment = async (data: {
-    doctor_id: string;
-    appointment_date: string;
-    appointment_time: string;
-    consultation_type: string;
+    doctorId: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    consultationType: string;
     reason: string;
-}) => {
-    const response = await api.post('/appointments', data);
-    return response.data;
+}): Promise<Appointment> => {
+    const response = await api.post<ApiResponse<Appointment>>('/appointments', data);
+    return normalizeResponse(response);
 };
 
 // Get user's appointments
-export const getMyAppointments = async (params?: { status?: string; upcoming?: boolean }) => {
-    const response = await api.get('/appointments/my-appointments', { params });
-    return response.data as Appointment[];
+export const getMyAppointments = async (params?: { status?: string; upcoming?: boolean }): Promise<Appointment[]> => {
+    const response = await api.get<ApiResponse<Appointment[]>>('/appointments/my-appointments', { params });
+    return normalizeResponse(response);
 };
 
 // Get appointment by ID
-export const getAppointmentById = async (id: number) => {
-    const response = await api.get(`/appointments/${id}`);
-    return response.data as Appointment;
+export const getAppointmentById = async (id: number): Promise<Appointment> => {
+    const response = await api.get<ApiResponse<Appointment>>(`/appointments/${id}`);
+    return normalizeResponse(response);
 };
 
 // Update appointment status (Doctor only)
-export const updateAppointmentStatus = async (id: number, status: string, notes?: string) => {
-    const response = await api.put(`/appointments/${id}/status`, { status, notes });
-    return response.data;
+export const updateAppointmentStatus = async (id: number, status: string, notes?: string): Promise<Appointment> => {
+    const response = await api.put<ApiResponse<Appointment>>(`/appointments/${id}/status`, { status, notes });
+    return normalizeResponse(response);
 };
 
 // Cancel appointment (soft-cancel — sets status to 'cancelled')
 export const cancelAppointment = async (id: number) => {
-    const response = await api.delete(`/appointments/${id}`);
-    return response.data;
+    const response = await api.delete<ApiResponse<Appointment>>(`/appointments/${id}`);
+    return normalizeResponse(response);
 };
 
 // Permanently delete a past/completed/cancelled appointment (Patient only)
 export const deleteAppointment = async (id: number) => {
-    const response = await api.delete(`/appointments/${id}/permanent`);
-    return response.data;
+    const response = await api.delete<ApiResponse<void>>(`/appointments/${id}/permanent`);
+    return normalizeResponse(response);
 };
 
 // Get available time slots
-export const getAvailableSlots = async (doctor_id: string, date: string) => {
-    const response = await api.get('/appointments/available-slots', {
-        params: { doctor_id, date }
+export const getAvailableSlots = async (doctorId: string, date: string): Promise<AvailableSlots> => {
+    const response = await api.get<ApiResponse<AvailableSlots>>('/appointments/available-slots', {
+        params: { doctorId: doctorId, date }
     });
-    return response.data as AvailableSlots;
+    return normalizeResponse(response);
 };
 
 export default {

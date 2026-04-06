@@ -15,6 +15,7 @@ import type { UserProfile } from '../../services/user.service';
 import { profileUpdateSchema, type ProfileUpdateFormData } from '../../lib/validation/profile.schema';
 import { useAuth } from '@/hooks/use-auth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getInitials } from '@/utils/avatar.resolver';
 
 
 export const Profile: React.FC = () => {
@@ -33,7 +34,7 @@ export const Profile: React.FC = () => {
         defaultValues: {
             name: '',
             email: '',
-            phone_number: ''
+            phoneNumber: ''
         },
     });
 
@@ -45,7 +46,7 @@ export const Profile: React.FC = () => {
             form.reset({
                 name: data.name,
                 email: data.email,
-                phone_number: data.phone_number
+                phoneNumber: data.phoneNumber
             });
         } catch (err: unknown) {
             const apiErr = err as { response?: { data?: { message?: string } } };
@@ -101,7 +102,7 @@ export const Profile: React.FC = () => {
         form.reset({
             name: profile?.name || '',
             email: profile?.email || '',
-            phone_number: profile?.phone_number || ''
+            phoneNumber: profile?.phoneNumber || ''
         });
         setEditing(false);
         setGeneralError(null);
@@ -147,11 +148,11 @@ export const Profile: React.FC = () => {
                         <div className="relative group">
                             <Avatar className="h-24 w-24 ring-4 ring-background shadow-lg border">
                                 <AvatarImage
-                                    src={profile?.id ? `${import.meta.env.VITE_API_URL || ''}/api/files/profile/${profile.id}?v=${imageVersion}` : ''}
+                                    src={profile?.profileImage ? (profile.profileImage.startsWith('http') ? profile.profileImage : `/api/files/profile/${profile.id}?v=${imageVersion}`) : ''}
                                     alt={profile?.name}
                                 />
                                 <AvatarFallback className="bg-primary/5 text-primary text-2xl font-bold">
-                                    {profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || <User />}
+                                    {profile?.name ? getInitials(profile.name) : <User />}
                                 </AvatarFallback>
                             </Avatar>
                             <label
@@ -234,7 +235,7 @@ export const Profile: React.FC = () => {
 
                             <FormField
                                 control={form.control}
-                                name="phone_number"
+                                name="phoneNumber"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Phone Number</FormLabel>
@@ -305,7 +306,7 @@ export const Profile: React.FC = () => {
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Member Since</div>
                                 <div className="font-medium">
-                                    {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', {
+                                    {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('en-US', {
                                         year: 'numeric',
                                         month: 'long',
                                         day: 'numeric'
@@ -320,9 +321,9 @@ export const Profile: React.FC = () => {
                             </div>
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Account Status</div>
-                                <div className={`font-medium ${profile?.is_active ? 'text-green-600 dark:text-green-400' : 'text-destructive'} flex items-center gap-2`}>
-                                    <span>{profile?.is_active ? 'Active' : 'Inactive'}</span>
-                                    <span className={`h-2 w-2 rounded-full ${profile?.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                                <div className={`font-medium ${profile?.status?.toLowerCase() === 'active' ? 'text-green-600 dark:text-green-400' : 'text-destructive'} flex items-center gap-2`}>
+                                    <span>{profile?.status?.toLowerCase() === 'active' ? 'Active' : 'Inactive'}</span>
+                                    <span className={`h-2 w-2 rounded-full ${profile?.status?.toLowerCase() === 'active' ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
                                 </div>
                             </div>
                         </div>

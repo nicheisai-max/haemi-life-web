@@ -1,87 +1,91 @@
-import api from './api';
+import api, { normalizeResponse } from './api';
+import type { ApiResponse } from '../types/auth.types';
 
 // =====================================================
 // PRESCRIPTION API SERVICE
 // =====================================================
 
+/**
+ * 🩺 HAEMI LIFE — Prescription Item Contract
+ * Strictly aligned with backend MedicalRecordRow and ClinicalMapper.
+ */
 export interface PrescriptionItem {
-    id: number; // Institutional Realignment: integer
-    prescription_id: number; // Institutional Realignment: integer
-    medicine_id: number; // Institutional Realignment: integer
-    medicine_name?: string;
+    id: number;
+    prescriptionId: number;
+    medicineId: number;
+    medicineName?: string;
     category?: string;
     strength?: string;
     dosage: string;
     frequency: string;
-    duration_days?: number;
-    quantity?: number;
-    instructions?: string;
+    durationDays: number | null;
+    quantity: number | null;
+    instructions: string | null;
+    createdAt?: string;
 }
 
 export interface Prescription {
-    id: number; // Institutional Realignment: integer
-    patient_id: string; // Institutional Realignment: uuid
-    doctor_id: string; // Institutional Realignment: uuid
-    appointment_id?: number; // Institutional Realignment: integer
-    prescription_date: string;
+    id: number;
+    patientId: string;
+    doctorId: string;
+    appointmentId: number | null;
+    prescriptionDate: string;
     status: 'pending' | 'filled' | 'cancelled';
-    notes?: string;
-    created_at: string;
-    updated_at: string;
+    notes: string | null;
+    createdAt: string;
+    updatedAt: string;
     // Populated fields
-    patient_name?: string;
-    doctor_name?: string;
-    patient_phone?: string;
-    specialization?: string;
-    medication_count?: number;
+    patientName?: string;
+    doctorName?: string;
+    medicationCount?: number;
     items?: PrescriptionItem[];
 }
 
 export const createPrescription = async (data: {
-    patient_id: string;
-    appointment_id?: string;
+    patientId: string;
+    appointmentId?: string;
     notes?: string;
     medications: Array<{
-        medicine_id: number;
+        medicineId: number;
         dosage: string;
         frequency: string;
-        duration_days?: number;
+        durationDays?: number;
         quantity?: number;
         instructions?: string;
     }>;
 }) => {
-    const response = await api.post('/prescriptions', data);
-    return response.data;
+    const response = await api.post<ApiResponse<Prescription>>('/prescriptions', data);
+    return normalizeResponse(response);
 };
 
 // Get user's prescriptions (Patient/Doctor)
 export const getMyPrescriptions = async () => {
-    const response = await api.get('/prescriptions/my-prescriptions');
-    return response.data as Prescription[];
+    const response = await api.get<ApiResponse<Prescription[]>>('/prescriptions/my-prescriptions');
+    return normalizeResponse(response);
 };
 
 // Get prescription by ID with items
 export const getPrescriptionById = async (id: number) => {
-    const response = await api.get(`/prescriptions/${id}`);
-    return response.data as Prescription;
+    const response = await api.get<ApiResponse<Prescription>>(`/prescriptions/${id}`);
+    return normalizeResponse(response);
 };
 
 // Update prescription status (Pharmacist)
 export const updatePrescriptionStatus = async (id: number, status: string) => {
-    const response = await api.put(`/prescriptions/${id}/status`, { status });
-    return response.data;
+    const response = await api.put<ApiResponse<Prescription>>(`/prescriptions/${id}/status`, { status });
+    return normalizeResponse(response);
 };
 
 // Get pending prescriptions (Pharmacist)
 export const getPendingPrescriptions = async () => {
-    const response = await api.get('/prescriptions/pending/list');
-    return response.data as Prescription[];
+    const response = await api.get<ApiResponse<Prescription[]>>('/prescriptions/pending/list');
+    return normalizeResponse(response);
 };
 
 // Get ALL prescriptions — uses dedicated route, returns all statuses for pharmacist
 export const getAllPrescriptions = async () => {
-    const response = await api.get('/prescriptions/pending/list');
-    return response.data as Prescription[];
+    const response = await api.get<ApiResponse<Prescription[]>>('/prescriptions/pending/list');
+    return normalizeResponse(response);
 };
 
 export default {

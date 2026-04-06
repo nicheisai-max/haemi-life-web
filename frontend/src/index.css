@@ -93,7 +93,26 @@
   /* Gray-600 */
 
   --accent: #F1F5F9;
-  --accent-foreground: #0F172A;
+  --font-h3: 1.5rem;
+  /* 24px */
+
+  /* -------------------------------------------------- */
+  /* INSTITUTIONAL LAYOUT TOKENS (Single Source of Truth) */
+  /* -------------------------------------------------- */
+  --layout-sidebar-width: 16.25rem; /* Exactly 260px (Google Standard) */
+  --layout-header-height: 4.5rem;   /* Exactly 72px */
+  --layout-max-width: 120rem;      /* Exactly 1920px (Ultra-Wide Lock) */
+  
+  /* Horizontal Rhythm Tokens */
+  --layout-px-mobile: 1rem;        /* 16px */
+  --layout-px-tablet: 1.5rem;      /* 24px */
+  --layout-px-desktop: 2.5rem;     /* 40px (Institutional Breathing Space) */
+
+  /* Nav Action System (Google/Meta Grade) */
+  --nav-action-height: 2.5rem;     /* Precisely 40px */
+  --nav-action-radius: 0.75rem;    /* Institutional Soft Capsule */
+  --nav-action-bg: var(--bg-surface-hover);
+  --nav-action-border: rgba(0, 0, 0, 0.05);
 
   --destructive: #DC2626;
   --destructive-foreground: #FFFFFF;
@@ -119,7 +138,7 @@
 
   /* Typography Scale - Premium Institutional Standard (GLOBAL) - FLUID Implementation */
   /* Formula: clamp(min-size, responsive-formula, max-size) */
-  /* Recalibrated: ~30% total reduction — 100% zoom matches previous 90%-zoom visual density */
+  /* Recalibrated: ~30% total reduction ΓÇö 100% zoom matches previous 90%-zoom visual density */
   --font-h1: clamp(1.45rem, 3.6vw, 2.15rem);
   /* ~23px to ~34px */
   --font-h2: clamp(1.12rem, 2.9vw, 1.8rem);
@@ -194,8 +213,15 @@
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+  /* Targeted Border/Outline Defaults: Purged star (*) selector to allow instant Theme Toggles in DevTools. */
+  *, ::before, ::after {
+    border-color: var(--border);
+    outline-color: var(--ring);
+  }
+
+  /* Core layout elements */
+  html, body {
+    @apply border-border;
   }
 
   button,
@@ -204,11 +230,9 @@
     cursor: pointer !important;
   }
 
-  /* NUCLEAR BORDER-RADIUS LOCKDOWN V2
-     Forces 0.35rem on ALL application components regardless of Tailwind utility classes.
-     Exceptions: rounded-full (circles), premium-counter-btn (circular UI), avatars.
+  /* NUCLEAR BORDER-RADIUS LOCKDOWN V2 (Optimized)
+     CPU-Killing wildcard selector [class*="rounded-"] has been purged to allow instant Theme Toggles.
   */
-  [class*="rounded-"]:not(.rounded-full):not(.premium-counter-btn):not([class*="rounded-none"]):not(.chat-unread-badge):not(.conv-unread-pill),
   button:not(.rounded-full):not(.premium-counter-btn):not(.chat-unread-badge):not(.conv-unread-pill),
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not(.premium-counter-input),
   textarea,
@@ -793,15 +817,16 @@
   /* ====================================================
      HAEMI LIFE | ENTERPRISE TABLE UX SYSTEM v1.0
      - Premium product-grade table styling
-     - Smart pagination (auto-hides at ≤ 10 rows)
+     - Smart pagination (auto-hides at Γëñ 10 rows)
      - Full light + dark theme compatibility
      - Uses existing CSS variables only, rem units only
   ==================================================== */
 
-    /* --- Clinical Action Buttons (Pharmacist Queue) --- */
+  /* --- Clinical Action Buttons (Pharmacist Queue) --- */
   .clinical-action-primary {
     @apply premium-cta flex items-center justify-center gap-2;
-    height: 2.75rem !important; /* matches h-11 default */
+    height: 2.75rem !important;
+    /* matches h-11 default */
     font-weight: 600 !important;
     letter-spacing: 0.015em;
   }
@@ -810,7 +835,8 @@
     @apply flex items-center justify-center gap-2 transition-all duration-200;
     border: 1.5px solid var(--border) !important;
     background-color: transparent !important;
-    height: 2.75rem !important; /* matches h-11 default */
+    height: 2.75rem !important;
+    /* matches h-11 default */
     color: var(--muted-foreground) !important;
     font-weight: 500 !important;
   }
@@ -834,7 +860,7 @@
     @apply outline-none ring-2 ring-destructive/30 ring-offset-2 ring-offset-background;
   }
 
-/* --- Table Container --- */
+  /* --- Table Container --- */
   .hl-table-container {
     width: 100%;
     overflow-x: auto;
@@ -1028,4 +1054,403 @@
     color: var(--primary-foreground);
     border-color: var(--primary);
   }
+
+  /* --- Institutional Image Loading States (Sleek Theme-Aware) --- */
+  .preparing-file-container {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: var(--muted) !important;
+    gap: 0.5rem !important;
+    transition: opacity 0.3s ease-in-out !important;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+  }
+
+  .preparing-file-text {
+    font-size: 0.625rem !important;
+    font-weight: 500 !important;
+    color: var(--muted-foreground) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    user-select: none;
+  }
+
+  .preparing-file-icon {
+    height: 1.25rem !important;
+    width: 1.25rem !important;
+    opacity: 0.4 !important;
+    color: var(--primary) !important;
+  }
+
+  .authenticated-image-terminal-error {
+    @apply flex flex-col items-center justify-center gap-1 opacity-60;
+    background-color: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  /* --- Institutional Avatar Standard (Standardized at #015e6f) --- */
+  .premium-avatar-fallback {
+    background-color: #015e6f;
+    color: #ffffff;
+    border: none !important;
+  }
+
+  /* Target: Header Avatar Only (Strict instruction: #03a48c) */
+  .premium-header-avatar-fallback .premium-avatar-fallback {
+    background-color: #03a48c !important;
+  }
+
+  /* Premium Skeleton & Loader Overlays (Institutional) */
+  .premium-loader-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(1, 94, 111, 0.1);
+    /* Subtle Teal tint */
+    backdrop-filter: blur(2px);
+    z-index: 10;
+  }
+
+  .premium-loader-bubble-white {
+    background-color: #ffffff !important;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+  }
+
+  /* Scalable Avatar Sizing (No hardcoded pixels) */
+  .avatar-xs {
+    height: 1.5rem;
+    width: 1.5rem;
+    font-size: 0.6rem;
+  }
+
+  .avatar-sm {
+    height: 2rem;
+    width: 2rem;
+    font-size: 0.75rem;
+  }
+
+  .avatar-md {
+    height: 2.5rem;
+    width: 2.5rem;
+    font-size: 0.875rem;
+  }
+
+  .avatar-lg {
+    height: 3rem;
+    width: 3rem;
+    font-size: 1rem;
+  }
+
+  .avatar-xl {
+    height: 4rem;
+    width: 4rem;
+    font-size: 1.25rem;
+  }
+
+  /* HAEMI PREMIUM TOAST SYSTEM (Institutional Mode)
+     Google-grade readability + Glassmorphism + Left-Accent Design
+  */
+  .haemi-toast {
+    @apply transition-all duration-300;
+    border-left: 4px solid var(--primary-700) !important;
+    padding: 1rem 1.25rem !important;
+    border-radius: var(--dashboard-card-radius) !important;
+  }
+
+  .dark .haemi-toast {
+    /* 🔭 ELEVATION FIX: Using an elevated brand surface to pop above cards */
+    background-color: rgba(27, 46, 51, 0.98) !important;
+    /* Adding a faint teal frame to distinguish edges from the dashboard background */
+    border: 1px solid rgba(63, 194, 181, 0.2) !important;
+    border-left: 6px solid var(--primary-300) !important; /* 6px for extra institutional weight */
+    
+    /* Branded High-Depth Shadow: Creates a floating 3D effect */
+    box-shadow: 
+      0 20px 40px -20px rgba(0, 0, 0, 0.8), 
+      0 0 25px -10px var(--primary-400) !important;
+      
+    backdrop-filter: blur(12px) !important;
+  }
+
+  /* Specific message styles for high contrast */
+  .toast [data-title] {
+    @apply font-semibold tracking-tight;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+
+  .toast [data-description] {
+    @apply leading-relaxed opacity-90;
+    margin-top: 0.25rem !important;
+  }
+
+  /* HAEMI INSTITUTIONAL FOOTER SYSTEM 
+     Google/Meta Grade Design Standards: Zero-Pixels, Zero-!important, Relative Units
+  */
+  .haemi-footer-root {
+    width: 100%;
+    background-color: var(--background);
+    border-top: 1px solid var(--border);
+    padding: 1.5rem 0;
+    margin-top: 3.5rem; /* Institutional Vertical Rhythm (56px) */
+    transition: all var(--duration-hover) var(--ease-premium);
+  }
+
+  /* Google-Grade Attached Alignment: Ensures footer feels part of the content flow */
+  .footer-attached {
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    background-color: transparent; /* Seamless blend with dashboard surface */
+  }
+
+  .dark .footer-attached {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: transparent;
+  }
+
+  .haemi-footer-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: var(--layout-max-width);
+    padding: 0 var(--layout-px-mobile);
+  }
+
+  @media (min-width: 40rem) { /* sm */
+    .haemi-footer-container {
+      padding: 0 var(--layout-px-tablet);
+    }
+  }
+
+  @media (min-width: 64rem) { /* lg */
+    .haemi-footer-container {
+      flex-direction: row;
+      padding: 0 var(--layout-px-desktop);
+    }
+  }
+
+  .haemi-footer-copyright {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem; /* ~11px */
+    color: var(--muted-foreground);
+    letter-spacing: 0.025em;
+  }
+
+  .haemi-footer-brand {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .haemi-footer-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.6875rem; /* ~11px */
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  .haemi-footer-link {
+    transition: color var(--duration-hover) var(--ease-premium);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .haemi-footer-link:hover {
+    color: var(--primary);
+  }
+
+  .haemi-footer-badge {
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-family: inherit;
+    font-size: 0.625rem; /* ~10px */
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .dark .haemi-footer-badge {
+    background-color: rgba(16, 185, 129, 0.05);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.15);
+  }
+
+  /* HAEMI OFFICIAL LOGO SYSTEM (Institutional Scale) */
+  .official-logo-sm { height: 1.75rem; }
+  .official-logo-md { height: 2rem; }
+  .official-logo-nav { height: 3rem; }
+  .official-logo-auth { height: 3.75rem; }
+  .official-logo-lg { height: 4rem; }
+  .official-logo-xl { height: 6rem; }
+  .official-logo-xxl { height: 8rem; }
+
+  /* HAEMI INSTITUTIONAL AUTH SURFACES */
+  .auth-visual-section {
+    background-color: var(--color-login-bg);
+  }
+
+  /* HAEMI INSTITUTIONAL ERROR RECOVERY (Zero-Pixel) */
+  .error-boundary-root {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-body);
+    padding: 2rem;
+  }
+
+  .error-boundary-card {
+    max-width: 25rem; /* ~400px */
+    text-align: center;
+    padding: 2rem;
+  }
+
+  .error-boundary-title {
+    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--foreground);
+  }
+
+  .error-boundary-text {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+  }
+
+  .error-boundary-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .error-boundary-btn {
+    width: 8.75rem; /* ~140px */
+  }
+
+  .error-boundary-dev-details {
+    margin-top: 2rem;
+    text-align: left;
+    font-size: 0.8rem;
+  }
+
+  /* HAEMI INSTITUTIONAL NAV-SYSTEM (Military Grade / Google Standard) */
+  .haemi-nav-container {
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin: 0 auto;
+    padding: 0 1rem; /* 16px Sidebar Baseline (Matches 'M') */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+  }
+
+  .haemi-nav-action-circle {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 2.5rem !important; /* System Locked 40px */
+    width: 2.5rem !important;  /* System Locked 40px */
+    min-width: 2.5rem !important;
+    max-width: 2.5rem !important;
+    max-height: 2.5rem !important;
+    aspect-ratio: 1 / 1 !important;
+    border-radius: 9999px !important; /* Force Absolute Circle */
+    background-color: transparent !important;
+    transition: none !important; /* Zero-Shake Policy */
+    transform: none !important;  /* Zero-Shake Policy */
+    flex-shrink: 0 !important;
+    padding: 0 !important; /* FORCE-ZERO PADDING Protocol */
+    overflow: hidden !important;
+    border: none !important;
+  }
+
+  /* Synchronized Horizon: Prevent 48px Atmospheric Drift */
+  .haemi-nav-action-sync {
+    height: 2.5rem !important; /* Hard 40px Lock */
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  /* Negative-Gutter Precision Protocol */
+  .haemi-nav-logo-offset-fix {
+    margin-left: -0.875rem !important; /* Pulls hamburger visual-edge to 16px line */
+  }
+
+  .haemi-nav-action-capsule {
+    display: flex;
+    align-items: center;
+    height: 2.5rem; /* System Locked 40px */
+    min-height: 2.5rem;
+    border-radius: 0.75rem; /* Institutional Soft Capsule */
+    padding: 0 1rem;
+    background-color: var(--nav-action-bg);
+    border: 1px solid var(--nav-action-border);
+    transition: all var(--duration-hover) var(--ease-premium);
+    flex-shrink: 0;
+    box-sizing: border-box;
+  }
+
+  .haemi-avatar-full-bleed {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 9999px !important;
+    object-fit: cover !important;
+    display: block !important;
+    transform: none !important;
+    border: 0.09375rem solid #A7E6DB; /* Institutional Border (Primary-300) */
+  }
+
+  .dark .haemi-avatar-full-bleed {
+    border-color: rgba(63, 194, 181, 0.4); /* Primary-Dark-Glow definition */
+  }
+
+  .haemi-nav-action-circle:hover {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .dark .haemi-nav-action-circle:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .haemi-nav-action-capsule:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.12);
+  }
+
+  .dark .haemi-nav-action-capsule:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Responsive Search Shield (Prevents Overlap) */
+  .haemi-nav-search-shield {
+    @apply hidden md:flex flex-1 items-center justify-center min-w-0;
+    max-width: 42rem; /* ~672px */
+    padding: 0 0.5rem;
+  }
+
+  @media (min-width: 80rem) { /* xl */
+    .haemi-nav-search-shield {
+      padding: 0 2rem;
+    }
+  }
+
 }

@@ -10,14 +10,14 @@ export const SourceEnum = z.enum(['backend', 'socket', 'system']);
 export type Source = z.infer<typeof SourceEnum>;
 
 export const SessionMetadataSchema = z.object({
-    session_id: z.string().uuid(),
-    user_id: z.string().uuid(),
+    sessionId: z.string().uuid(),
+    userId: z.string().uuid(),
     role: UserRoleSchema,
-    login_time: z.string().datetime(),
-    last_activity: z.string().datetime(),
+    loginTime: z.string().datetime(),
+    lastActivity: z.string().datetime(),
     status: SessionStatusSchema,
-    ip_address: z.string().optional(),
-    user_agent: z.string().optional(),
+    ipAddress: z.string().optional(),
+    userAgent: z.string().optional(),
 });
 
 export type SessionMetadata = z.infer<typeof SessionMetadataSchema>;
@@ -29,8 +29,8 @@ export const SessionStartedEventSchema = z.object({
 });
 
 export const SessionEndedEventSchema = z.object({
-    session_id: z.string().uuid().nullable(),
-    user_id: z.string().uuid(),
+    sessionId: z.string().uuid().nullable(),
+    userId: z.string().uuid(),
     reason: z.string().optional(),
     timestamp: z.string().datetime(),
     source: SourceEnum.default('backend'),
@@ -38,24 +38,24 @@ export const SessionEndedEventSchema = z.object({
 
 export const LoginSuccessEventSchema = z.object({
     success: z.literal(true),
-    user_id: z.string().uuid(),
+    userId: z.string().uuid(),
     role: UserRoleSchema,
     identifier: z.string(),
     timestamp: z.string().datetime(),
-    ip_address: z.string().optional(),
-    user_agent: z.string().optional(),
+    ipAddress: z.string().optional(),
+    userAgent: z.string().optional(),
     source: SourceEnum.default('backend'),
 });
 
 export const LoginFailureEventSchema = z.object({
     success: z.literal(false),
-    user_id: z.string().uuid().optional(),
+    userId: z.string().uuid().optional(),
     role: UserRoleSchema.optional(),
     identifier: z.string(),
     reason: z.string(),
     timestamp: z.string().datetime(),
-    ip_address: z.string().optional(),
-    user_agent: z.string().optional(),
+    ipAddress: z.string().optional(),
+    userAgent: z.string().optional(),
     source: SourceEnum.default('backend'),
 });
 
@@ -65,8 +65,8 @@ export const LoginEventSchema = z.discriminatedUnion('success', [
 ]);
 
 export const TokenRefreshedEventSchema = z.object({
-    session_id: z.string().uuid(),
-    user_id: z.string().uuid(),
+    sessionId: z.string().uuid(),
+    userId: z.string().uuid(),
     timestamp: z.string().datetime(),
     source: SourceEnum.default('backend'),
 });
@@ -82,7 +82,7 @@ export const ObservabilityBatchSchema = z.object({
         z.object({ type: z.literal('token_refreshed'), data: TokenRefreshedEventSchema }),
     ])),
     timestamp: z.string().datetime(),
-    batch_id: z.string().uuid(),
+    batchId: z.string().uuid(),
 });
 
 export type ObservabilityBatch = z.infer<typeof ObservabilityBatchSchema>;

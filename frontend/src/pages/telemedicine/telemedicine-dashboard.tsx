@@ -6,29 +6,46 @@ import { Button } from '@/components/ui/button';
 import { getConsentStatus } from '@/services/consent.service';
 import { PATHS } from '@/routes/paths';
 import { MedicalLoader } from '@/components/ui/medical-loader';
+import { logger } from '@/utils/logger';
 import { motion } from 'framer-motion';
 
 export const TelemedicineDashboard: React.FC = () => {
     const navigate = useNavigate();
-    const [checking, setChecking] = useState(true);
+    const [checking, setChecking] = useState<boolean>(true);
 
     useEffect(() => {
+        let isMounted = true;
+
         const checkAndGate = async () => {
             try {
                 const data = await getConsentStatus();
+                if (!isMounted) return;
+
                 if (!data.hasConsent) {
-                    // Gate: redirect to consent form if not yet signed
+                    // 🛡️ ENTERPRISE FIX: Intentionally 'leak' the verifying state (checking=true)
+                    // This ensures the <MedicalLoader> stays permanently mounted while React Router
+                    // <Suspense> lazily downloads the next JS chunk, eliminating the "Ghost UI" flash.
                     navigate(PATHS.CONSENT, { replace: true });
                     return;
                 }
-            } catch {
-                // On error, redirect to consent as a safe fallback
-                navigate(PATHS.CONSENT, { replace: true });
-            } finally {
+                
+                // ONLY unlock the dashboard UI once explicitly authorized
                 setChecking(false);
+            } catch (error: unknown) {
+                if (!isMounted) return;
+                
+                logger.error('[Telemedicine-Dashboard] Verification failure:', error);
+                
+                // Safe Fallback: Protect the user and maintain the checking state lock
+                navigate(PATHS.CONSENT, { replace: true });
             }
         };
+
         checkAndGate();
+        
+        return () => {
+            isMounted = false;
+        };
     }, [navigate]);
 
     if (checking) {

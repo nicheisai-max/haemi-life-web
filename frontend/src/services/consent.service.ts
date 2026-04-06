@@ -1,17 +1,18 @@
-import api from './api';
+import api, { normalizeResponse } from './api';
+import type { ApiResponse } from '../types/auth.types';
 
 export interface ConsentRecord {
     id: string;
-    agreed_at: string;
+    agreedAt: string;
     version: string;
 }
 
 export const getConsentStatus = async (): Promise<{ hasConsent: boolean }> => {
-    const response = await api.get('/consents/status');
-    return response.data;
+    const response = await api.get<ApiResponse<{ hasConsent: boolean }>>('/consents/status');
+    return normalizeResponse(response);
 };
 
 export const signConsent = async (signature: string): Promise<{ message: string; record: ConsentRecord }> => {
-    const response = await api.post('/consents', { signature });
-    return response.data;
+    const response = await api.post<ApiResponse<{ message: string; record: ConsentRecord }>>('/consents', { signature });
+    return normalizeResponse(response);
 };

@@ -37,7 +37,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [authState, setAuthState] = useState<AuthState>(() => {
         const initialUserJson = sessionStorage.getItem('user');
         const initialToken = sessionStorage.getItem('token');
-        const initialUser = initialUserJson ? safeParseJSON(initialUserJson, isUser) : null;
+        const user = initialUserJson ? safeParseJSON(initialUserJson, isUser) : null;
+        
+        // 🩺 HAEMI RESILIENCE: Handle legacy session data missing hasConsent
+        const initialUser = user ? { ...user, hasConsent: user.hasConsent ?? false } : null;
+
         return {
             user: initialUser,
             token: initialToken,
@@ -67,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // ─── Phase 5, 6 & 7 Hardening: Silent Proactive Refresh (Singleton & Multi-Event)
     const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const isRefreshingRef = useRef<boolean>(false);
-    const lastActivityRef = useRef<number>(Date.now());
+    const lastInteractionRef = useRef<number>(Date.now());
 
     useEffect(() => {
         const cleanup = () => {
@@ -110,7 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const timeoutMinutes = authStateRef.current.sessionTimeout;
             if (timeoutMinutes) {
                 const idleLimitMs = timeoutMinutes * 60 * 1000;
-                const timeIdle = Date.now() - lastActivityRef.current;
+                const timeIdle = Date.now() - lastInteractionRef.current;
                 const timeRemaining = idleLimitMs - timeIdle;
 
                 // Trigger popup 2 minutes before absolute timeout
@@ -123,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         const updateActivity = () => {
-            lastActivityRef.current = Date.now();
+            lastInteractionRef.current = Date.now();
         };
 
         // Phase 7: Activity Listeners
@@ -333,10 +337,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         verifyResult.sessionTimeout
                     );
                 } else {
-                    // INVALID TOKEN PURGE (Refresh logic failed / denied)
-                    setAccessToken(null);
-                    sessionStorage.removeItem('token');
-                    sessionStorage.removeItem('refreshToken');
+                    // PHASE 2 FIX: Graceful Fallback
+                    // Only set to unauthenticated, do NOT purge tokens if they exist in session
                     commitAuthState(null, null, 'unauthenticated');
                 }
                 
@@ -346,10 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } catch (error: unknown) {
                 logger.error('[Boot] Initialization failure', error);
                 
-                // INVALID TOKEN PURGE (Full Crash Protection via Try Reloading)
-                setAccessToken(null);
-                sessionStorage.removeItem('token');
-                sessionStorage.removeItem('refreshToken');
+                // PHASE 2 FIX: Only set status, avoid destructive purge in the boot catch block
                 commitAuthState(null, null, 'unauthenticated');
                 
                 setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
@@ -389,8 +388,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const logout = useCallback(async () => {
         const currentUserId = authStateRef.current.user?.id;
-        commitAuthState(null, null, 'unauthenticated');
+        
+        // Phase 1: Call logout API FIRST before stripping credentials
+        // Use dynamic import for axios to keep bootstrap light
+        try {
+            await authService.logout();
+            logger.info('[Auth] Remote session invalidated successfully');
+        } catch (error: unknown) {
+            // Enterprise Resilience: Handle 401 gracefully during logout
+            const isAxiosError = (err: unknown): err is { isAxiosError: boolean; response?: { status: number } } => {
+                return (
+                    typeof err === 'object' &&
+                    err !== null &&
+                    'isAxiosError' in err &&
+                    (err as { isAxiosError: unknown }).isAxiosError === true
+                );
+            };
 
+            if (isAxiosError(error)) {
+                if (error.response?.status === 401) {
+                    logger.warn('[Auth] Logout: Remote session already void or expired (Idempotent success)');
+                } else {
+                    logger.error('[Auth] Remote logout failed', { status: error.response?.status });
+                }
+            } else {
+                logger.error('[Auth] Unknown error during remote logout', error);
+            }
+        }
+
+
+        // Phase 2: Broadcast to other tabs
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
         if (!IS_DEMO_MODE && currentUserId) {
             try {
@@ -398,28 +425,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
                 authChannel.close();
             } catch (err) {
-                logger.error('[AuthSync] Logout broadcast channel crash insulated', err);
+                logger.error('[AuthSync] Logout broadcast failure insulated', err);
             }
         }
 
-        try {
-            await authService.logout();
-        } catch (e) {
-            logger.error('Logout failed', e);
-        }
+        // Phase 3: Final local state purge
+        commitAuthState(null, null, 'unauthenticated');
     }, [commitAuthState]);
 
     const refreshUser = useCallback(async () => {
         try {
+            // Refetch current user profile + consent status
             const { user: verifiedUser } = await authService.verifySession();
+            
             setAuthState(prev => ({
                 ...prev,
                 user: verifiedUser,
                 profileImageVersion: Date.now()
             }));
+
+            // Sync with session storage for persistence across reloads
             sessionStorage.setItem('user', JSON.stringify(verifiedUser));
+            
+            logger.info(`[Auth] User profile refreshed (Consent: ${verifiedUser.hasConsent})`);
         } catch (error) {
-            logger.error('[Auth] Failed to refresh user:', error);
+            logger.error('[Auth] Failed to refresh user profile:', error);
         }
     }, []);
 

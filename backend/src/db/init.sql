@@ -1,6 +1,8 @@
 -- =====================================================
--- HAEMI LIFE DATABASE INITIALIZATION (v2.0)
+-- HAEMI LIFE DATABASE INITIALIZATION (v4.0)
 -- "Gateway to Persistence"
+-- Synchronized with Platinum Institutional Sync (v10.5)
+-- Last updated: 2026-04-06 (Institutional Column Hardening)
 -- =====================================================
 
 BEGIN;
@@ -46,11 +48,12 @@ CREATE TABLE IF NOT EXISTS users (
     profile_image VARCHAR(255),
     profile_image_data BYTEA,                          -- Binary storage for uploaded profile pictures
     profile_image_mime VARCHAR(100),                   -- MIME type for profile picture (e.g. image/jpeg)
-    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
+    "lastActivity" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
     phone_blind_index VARCHAR(64),                     -- Searchable hash for encrypted phone
     id_blind_index VARCHAR(64),                        -- Searchable hash for encrypted ID
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ -- ISO 27001 soft-delete support
 );
 
 -- User Presence & Session Management (Sliding Window Infrastructure)
@@ -63,24 +66,24 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     refresh_token_jti VARCHAR,
     previous_refresh_token_jti VARCHAR,
     previous_access_token_jti VARCHAR,
-    jti_rotated_at TIMESTAMP WITH TIME ZONE,
-    expires_at TIMESTAMP WITH TIME ZONE,
+    jti_rotated_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
     ip_address INET,
     user_agent TEXT,
     device_type VARCHAR,
     browser_name VARCHAR,
     os_name VARCHAR,
     login_method VARCHAR,
-    login_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    logout_time TIMESTAMP WITH TIME ZONE,
+    login_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "lastActivity" TIMESTAMPTZ DEFAULT NOW(),
+    logout_time TIMESTAMPTZ,
     is_active BOOLEAN DEFAULT TRUE,
     revoked BOOLEAN DEFAULT FALSE,
-    revoked_at TIMESTAMP WITH TIME ZONE,
+    revoked_at TIMESTAMPTZ,
     logout_reason VARCHAR,
     tab_identifier VARCHAR,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS index_user_sessions_user_id ON user_sessions(user_id);
@@ -88,51 +91,13 @@ CREATE INDEX IF NOT EXISTS index_user_sessions_session_id ON user_sessions(sessi
 CREATE INDEX IF NOT EXISTS index_user_sessions_is_active ON user_sessions(is_active) WHERE is_active = TRUE;
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at) WHERE revoked = FALSE;
 
--- Idempotent Migration: User Table Enhancements
-DO $$
-BEGIN
-    -- PII Blind Indexing
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='phone_blind_index') THEN
-        ALTER TABLE users ADD COLUMN phone_blind_index VARCHAR(64);
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='id_blind_index') THEN
-        ALTER TABLE users ADD COLUMN id_blind_index VARCHAR(64);
-    END IF;
-    
-    -- Profile Image Infrastructure
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image') THEN
-        ALTER TABLE users ADD COLUMN profile_image VARCHAR(255);
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image_data') THEN
-        ALTER TABLE users ADD COLUMN profile_image_data BYTEA;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='profile_image_mime') THEN
-        ALTER TABLE users ADD COLUMN profile_image_mime VARCHAR(100);
-    END IF;
-
-    -- Enforce Professional Constraints on existing columns
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='doctor_profiles') THEN
-        ALTER TABLE doctor_profiles DROP CONSTRAINT IF EXISTS doc_fee_check;
-        ALTER TABLE doctor_profiles ADD CONSTRAINT doc_fee_check CHECK (consultation_fee >= 0);
-    END IF;
-    
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='medicines') THEN
-        ALTER TABLE medicines DROP CONSTRAINT IF EXISTS med_price_check;
-        ALTER TABLE medicines ADD CONSTRAINT med_price_check CHECK (price_per_unit >= 0);
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='appointments') THEN
-        ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appt_duration_check;
-        ALTER TABLE appointments ADD CONSTRAINT appt_duration_check CHECK (duration_minutes > 0);
-    END IF;
-END $$;
-
 -- PII Blind Indexing for High-Performance Search
 CREATE INDEX IF NOT EXISTS idx_users_phone_blind ON users(phone_blind_index);
 CREATE INDEX IF NOT EXISTS idx_users_id_blind ON users(id_blind_index);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status);
-CREATE INDEX IF NOT EXISTS idx_users_last_activity ON users(last_activity);
+CREATE INDEX IF NOT EXISTS idx_users_lastActivity ON users("lastActivity");
+CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
 
 -- 3. Audit Logs (Aligned with Admin & Audit Services)
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -145,17 +110,61 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     details JSONB, -- Previously metadata
     ip_address VARCHAR(45),
     user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-
-    -- Identity Model: user_id is the canonical identifier.
-    -- Legacy identifiers (actor_id, actor_user_id) are permanently deprecated.
-END $$;
 
 -- Audit Performance Indices
 CREATE INDEX IF NOT EXISTS idx_audit_user_action ON audit_logs(user_id, action);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+
+-- Security Events (Forensic Observability — migration 011)
+CREATE TABLE IF NOT EXISTS security_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID,
+    user_role VARCHAR,
+    event_type VARCHAR NOT NULL,
+    event_category VARCHAR,
+    event_severity VARCHAR,
+    ip_address INET,
+    user_agent TEXT,
+    device_fingerprint VARCHAR,
+    session_id VARCHAR,
+    request_path VARCHAR,
+    request_method VARCHAR,
+    http_status_code INTEGER,
+    event_metadata JSONB,
+    is_suspicious BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS index_security_events_user_id ON security_events(user_id);
+CREATE INDEX IF NOT EXISTS index_security_events_event_type ON security_events(event_type);
+CREATE INDEX IF NOT EXISTS index_security_events_created_at ON security_events(created_at);
+
+-- Append-Only Immutability (migration 012 — Enterprise Security Violation Guard)
+CREATE OR REPLACE FUNCTION enforce_append_only()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'Enterprise Security Violation: % operations are strictly forbidden on audit and security tables.', TG_OP;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_audit_logs_modification ON audit_logs;
+CREATE TRIGGER trg_prevent_audit_logs_modification
+BEFORE UPDATE OR DELETE ON audit_logs FOR EACH ROW EXECUTE FUNCTION enforce_append_only();
+
+DROP TRIGGER IF EXISTS trg_prevent_audit_logs_truncate ON audit_logs;
+CREATE TRIGGER trg_prevent_audit_logs_truncate
+BEFORE TRUNCATE ON audit_logs FOR EACH STATEMENT EXECUTE FUNCTION enforce_append_only();
+
+DROP TRIGGER IF EXISTS trg_prevent_security_events_modification ON security_events;
+CREATE TRIGGER trg_prevent_security_events_modification
+BEFORE UPDATE OR DELETE ON security_events FOR EACH ROW EXECUTE FUNCTION enforce_append_only();
+
+DROP TRIGGER IF EXISTS trg_prevent_security_events_truncate ON security_events;
+CREATE TRIGGER trg_prevent_security_events_truncate
+BEFORE TRUNCATE ON security_events FOR EACH STATEMENT EXECUTE FUNCTION enforce_append_only();
 
 -- Doctor Profiles
 CREATE TABLE IF NOT EXISTS doctor_profiles (
@@ -168,14 +177,14 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
     consultation_fee DECIMAL(10,2) CHECK (consultation_fee >= 0),
     is_verified BOOLEAN DEFAULT false,
     profile_image VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_doctor_profiles_user_id ON doctor_profiles(user_id);
 
 -- Patient Profiles
 CREATE TABLE IF NOT EXISTS patient_profiles (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
     date_of_birth DATE,
     gender VARCHAR(20),
@@ -184,8 +193,8 @@ CREATE TABLE IF NOT EXISTS patient_profiles (
     emergency_contact_phone VARCHAR(50),
     allergies TEXT,
     medical_conditions TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_patient_profiles_user_id ON patient_profiles(user_id);
 
@@ -197,8 +206,8 @@ CREATE TABLE IF NOT EXISTS pharmacist_profiles (
     workplace_name VARCHAR(255),
     years_of_experience INTEGER,
     bio TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_pharmacist_profiles_user_id ON pharmacist_profiles(user_id);
 
@@ -210,7 +219,7 @@ CREATE TABLE IF NOT EXISTS doctor_schedules (
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     is_available BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Medications (Master List)
@@ -222,7 +231,7 @@ CREATE TABLE IF NOT EXISTS medicines (
     category VARCHAR(100),
     common_uses TEXT,
     price_per_unit DECIMAL(10,2) CHECK (price_per_unit >= 0),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Pharmacies
@@ -232,7 +241,7 @@ CREATE TABLE IF NOT EXISTS locations (
     district VARCHAR(100),
     gps_latitude DECIMAL(10,8),
     gps_longitude DECIMAL(11,8),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS pharmacies (
@@ -242,7 +251,7 @@ CREATE TABLE IF NOT EXISTS pharmacies (
     address TEXT,
     phone_number VARCHAR(50),
     email VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Appointments
@@ -257,21 +266,22 @@ CREATE TABLE IF NOT EXISTS appointments (
     consultation_type VARCHAR(50), -- 'video', 'in-person'
     reason TEXT,
     notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP -- Soft delete support
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ -- Soft delete support
 );
 
 -- Appointment Performance Indices
 CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
 CREATE INDEX IF NOT EXISTS idx_appointments_doctor_date ON appointments(doctor_id, appointment_date);
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+CREATE INDEX IF NOT EXISTS idx_appointments_deleted_at ON appointments(deleted_at);
 
 -- Idempotent Migration: Appointments deleted_at
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='appointments' AND column_name='deleted_at') THEN
-        ALTER TABLE appointments ADD COLUMN deleted_at TIMESTAMP;
+        ALTER TABLE appointments ADD COLUMN deleted_at TIMESTAMPTZ;
     END IF;
 END $$;
 
@@ -284,23 +294,38 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     prescription_date DATE NOT NULL DEFAULT CURRENT_DATE,
     status VARCHAR(20) DEFAULT 'pending',
     notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP -- Soft delete support
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ -- Soft delete support
 );
 
 -- Prescription Performance Indices
 CREATE INDEX IF NOT EXISTS idx_prescriptions_patient ON prescriptions(patient_id);
 CREATE INDEX IF NOT EXISTS idx_prescriptions_status ON prescriptions(status);
 CREATE INDEX IF NOT EXISTS idx_prescriptions_date ON prescriptions(prescription_date DESC);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_deleted_at ON prescriptions(deleted_at);
 
 -- Idempotent Migration: Prescriptions deleted_at
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescriptions' AND column_name='deleted_at') THEN
-        ALTER TABLE prescriptions ADD COLUMN deleted_at TIMESTAMP;
+        ALTER TABLE prescriptions ADD COLUMN deleted_at TIMESTAMPTZ;
     END IF;
 END $$;
+
+-- Prescription Files (Clinical Artifacts)
+CREATE TABLE IF NOT EXISTS prescription_files (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    prescription_id INTEGER REFERENCES prescriptions(id) ON DELETE CASCADE,
+    file_path TEXT NOT NULL,
+    file_mime TEXT,
+    file_name TEXT,
+    file_size VARCHAR(50), -- Audit Requirement: NIST-compliant metadata
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_presc_files_presc ON prescription_files(prescription_id);
+CREATE INDEX IF NOT EXISTS idx_prescription_files_deleted_at ON prescription_files(deleted_at);
 
 -- Prescription Items
 CREATE TABLE IF NOT EXISTS prescription_items (
@@ -312,30 +337,27 @@ CREATE TABLE IF NOT EXISTS prescription_items (
     duration_days INTEGER,
     quantity INTEGER,
     instructions TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP -- Soft delete support
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ -- Soft delete support
 );
+CREATE INDEX IF NOT EXISTS idx_prescription_items_deleted_at ON prescription_items(deleted_at);
 
--- Idempotent Migration: Prescription Items deleted_at
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescription_items' AND column_name='deleted_at') THEN
-        ALTER TABLE prescription_items ADD COLUMN deleted_at TIMESTAMP;
-    END IF;
-END $$;
+-- (prescription_items.deleted_at already defined in CREATE TABLE above)
 
 -- Chat System
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    participants_hash VARCHAR(64) UNIQUE, -- Deterministic de-duplication lock
+    is_redundant BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    last_message_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS conversation_participants (
     conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (conversation_id, user_id)
 );
 
@@ -343,30 +365,32 @@ CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
     sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    sender_role VARCHAR(50),
     content TEXT,
     message_type VARCHAR(50) DEFAULT 'text', -- 'text', 'image', 'document'
-    attachment_url VARCHAR(255),
+    status VARCHAR(20) DEFAULT 'sent',
+    preview_text TEXT,
+    sequence_number BIGINT,
     attachment_type VARCHAR(50), 
     attachment_data BYTEA,         -- Secure binary storage for small attachments
     attachment_mime VARCHAR(100),
     attachment_name VARCHAR(255),
+    file_path TEXT,                -- Institutional Path SSOT
     reply_to_id UUID REFERENCES messages(id),
     is_read BOOLEAN DEFAULT false,
     is_deleted BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    delivered_at TIMESTAMPTZ,
+    read_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ -- Institutional soft-delete
 );
 
 -- Message Threading Indices
 CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(conversation_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_deleted_at ON messages(deleted_at);
 
--- Idempotent Migration: Messages is_read
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='messages' AND column_name='is_read') THEN
-        ALTER TABLE messages ADD COLUMN is_read BOOLEAN DEFAULT false;
-    END IF;
-END $$;
+-- (messages.is_read already defined in CREATE TABLE above)
 
 CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(conversation_id) WHERE is_read = false;
 
@@ -375,24 +399,42 @@ CREATE TABLE IF NOT EXISTS message_reactions (
     message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     reaction_type VARCHAR(20) NOT NULL, -- 'like', 'love', etc.
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (message_id, user_id, reaction_type)
 );
 
 CREATE TABLE IF NOT EXISTS deleted_messages (
     message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (message_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS temp_attachments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    data BYTEA NOT NULL,
+    data BYTEA, -- Staging buffer (Nullable for Filesystem-first pipeline)
     mime VARCHAR(100),
     name VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ
 );
+
+-- Message Attachments (Institutional File Vault — migration 022: file_url removed as SSOT is file_path)
+CREATE TABLE IF NOT EXISTS message_attachments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    file_path TEXT NOT NULL,
+    file_type VARCHAR(100),
+    file_size BIGINT,
+    file_name VARCHAR(255),
+    file_extension VARCHAR(20),
+    file_category VARCHAR(50) DEFAULT 'other',
+    deleted_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_active ON message_attachments(message_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_message_attachments_deleted_at ON message_attachments(deleted_at);
 
 -- Notifications (Role-Based System)
 CREATE TABLE IF NOT EXISTS notifications (
@@ -402,8 +444,18 @@ CREATE TABLE IF NOT EXISTS notifications (
     description TEXT NOT NULL,
     type VARCHAR(20) NOT NULL CHECK (type IN ('success', 'warning', 'info', 'error')),
     is_read BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    -- v10.0: Entity Links (migration 023)
+    message_id UUID,
+    conversation_id UUID,
+    metadata JSONB DEFAULT '{}',
+    received_at TIMESTAMPTZ
 );
+-- v10.0: Performance Indexes for notification tray
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read_created ON notifications(user_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_message_id ON notifications(message_id) WHERE message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_notifications_conversation_id ON notifications(conversation_id) WHERE conversation_id IS NOT NULL;
 
 -- Analytics: Daily Visits (Apple Health Style Data)
 CREATE TABLE IF NOT EXISTS analytics_daily_visits (
@@ -411,7 +463,7 @@ CREATE TABLE IF NOT EXISTS analytics_daily_visits (
     date DATE NOT NULL UNIQUE,
     visits INT NOT NULL,
     new_users INT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Analytics: Revenue Stats
@@ -420,7 +472,7 @@ CREATE TABLE IF NOT EXISTS revenue_stats (
     month VARCHAR(20) NOT NULL, -- e.g., 'Jan 2026'
     revenue DECIMAL(10, 2) NOT NULL,
     expenses DECIMAL(10, 2) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Medical Records (Documents)
@@ -439,26 +491,35 @@ CREATE TABLE IF NOT EXISTS medical_records (
     file_mime VARCHAR(100),
     file_type VARCHAR(100), -- Legacy column
     file_size VARCHAR(50),
-    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ
 );
 
--- Idempotent Migration for Medical Records
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_records' AND column_name='file_data') THEN
-        ALTER TABLE medical_records ADD COLUMN file_data BYTEA;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_records' AND column_name='file_mime') THEN
-        ALTER TABLE medical_records ADD COLUMN file_mime VARCHAR(100);
-    END IF;
-END $$;
+-- Medical Record Files (Separated Document Pipeline — Platinum v4.0)
+CREATE TABLE IF NOT EXISTS medical_record_files (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  record_id UUID NOT NULL REFERENCES medical_records(id) ON DELETE CASCADE,
+  file_path TEXT NOT NULL,
+  file_mime TEXT,
+  file_name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP WITH TIME ZONE
+);
+CREATE INDEX IF NOT EXISTS idx_rec_att_rid ON medical_record_files(record_id);
+CREATE INDEX IF NOT EXISTS idx_medical_record_files_deleted_at ON medical_record_files(deleted_at);
+
+-- High-Performance Clinical Performance Indices
+CREATE INDEX IF NOT EXISTS idx_clinical_patient_date ON medical_records(patient_id, uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_patient_date ON prescriptions(patient_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_medical_records_deleted_at ON medical_records(deleted_at);
+
+-- (medical_records.file_data and file_mime already defined in CREATE TABLE above)
 
 -- Telemedicine Consents
 CREATE TABLE IF NOT EXISTS telemedicine_consents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     patient_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-    agreed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    agreed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     ip_address VARCHAR(45),
     user_agent TEXT,
     version VARCHAR(20) DEFAULT 'v1.0'
@@ -829,7 +890,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     id SERIAL PRIMARY KEY,
     key VARCHAR(255) UNIQUE NOT NULL,
     value VARCHAR(255) NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Seed default session timeout (1440 minutes = 24 hours)
@@ -844,23 +905,9 @@ ON CONFLICT (key) DO NOTHING;
 CREATE TABLE IF NOT EXISTS telemedicine_consents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     patient_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-    agreed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ip_address VARCHAR(45),
-    user_agent TEXT,
-    version VARCHAR(20) DEFAULT 'v1.0',
-    signature_data TEXT
+    signature_data TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-
--- Idempotent migration: add signature_data if missing (handles pre-existing DBs)
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name='telemedicine_consents' AND column_name='signature_data'
-    ) THEN
-        ALTER TABLE telemedicine_consents ADD COLUMN signature_data TEXT;
-    END IF;
-END $$;
 
 -- Final Seed Execution
 -- Seeding is now managed by setup-db.ts to ensure dynamic hashing of DEMO_PASSWORD
@@ -873,5 +920,24 @@ CREATE INDEX IF NOT EXISTS idx_appointments_doctor_id ON appointments(doctor_id)
 CREATE INDEX IF NOT EXISTS idx_prescriptions_doctor_id ON prescriptions(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_prescriptions_patient_id ON prescriptions(patient_id);
 CREATE INDEX IF NOT EXISTS idx_medical_records_patient_id ON medical_records(patient_id);
+
+-- 📚 INSTITUTIONAL ALIGNMENT (MASTERSTROKE — ADDITIVE ONLY)
+-- Policy: Zero-Drift baseline for new environments.
+
+-- 1. Real-time Presence Infrastructure
+CREATE TABLE IF NOT EXISTS active_connections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    socket_id VARCHAR(255) NOT NULL,
+    connected_at TIMESTAMPTZ DEFAULT NOW(),
+    "lastActivity" TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_active_connections_user_id ON active_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_active_connections_socket_id ON active_connections(socket_id);
+
+-- 4. Unique Active Thread Index
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_conversation 
+ON conversations (participants_hash) 
+WHERE (is_redundant = false AND participants_hash IS NOT NULL);
 
 COMMIT;

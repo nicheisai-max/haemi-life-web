@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,14 +22,25 @@ export const Signup: React.FC = () => {
     const [step, setStep] = useState<'role' | 'form'>('role');
     const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
     const [generalError, setGeneralError] = useState<string>('');
+    const { isAuthenticated, user } = useAuth();
+
+    // PRODUCTION UX: Redirect to the role-specific dashboard URL once authenticated.
+    // Ensure all authenticated flows (Signup/Login) land on the correct landing zone.
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            // Role-based routing: Admin users land on /admin, all others /dashboard
+            const target = user.role === 'admin' ? '/admin' : '/dashboard';
+            navigate(target, { replace: true });
+        }
+    }, [isAuthenticated, user, navigate]);
 
     const form = useForm<SignupFormData>({
         resolver: zodResolver(signupSchema),
         defaultValues: {
             name: '',
             email: '',
-            phone_number: '',
-            omang_id: '',
+            phoneNumber: '',
+            idNumber: '',
             password: '',
             confirmPassword: '',
             role: 'patient',
@@ -48,11 +59,11 @@ export const Signup: React.FC = () => {
         try {
             await signup({
                 name: data.name,
-                phone_number: data.phone_number,
+                phoneNumber: `+267${data.phoneNumber}`,
                 email: data.email || undefined,
                 password: data.password,
                 role: data.role,
-                id_number: data.omang_id || undefined,
+                idNumber: data.idNumber || undefined,
             });
 
             // Navigation is now handled by the AuthContext state change effect
@@ -140,6 +151,7 @@ export const Signup: React.FC = () => {
                                                 placeholder="Enter your full name"
                                                 className="pl-10"
                                                 {...field}
+                                                autoComplete="name"
                                             />
                                         </div>
                                     </FormControl>
@@ -150,7 +162,7 @@ export const Signup: React.FC = () => {
 
                         <FormField
                             control={form.control}
-                            name="phone_number"
+                            name="phoneNumber"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Phone Number</FormLabel>
@@ -164,6 +176,7 @@ export const Signup: React.FC = () => {
                                                 placeholder="71 234 567"
                                                 className="pl-14"
                                                 {...field}
+                                                autoComplete="tel"
                                                 onChange={(e) => {
                                                     const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
                                                     field.onChange(value);
@@ -192,6 +205,7 @@ export const Signup: React.FC = () => {
                                             placeholder="your.email@example.com"
                                             className="h-11 pl-10"
                                             {...field}
+                                            autoComplete="email"
                                         />
                                     </div>
                                 </FormControl>
@@ -203,7 +217,7 @@ export const Signup: React.FC = () => {
                     {selectedRole === 'patient' && (
                         <FormField
                             control={form.control}
-                            name="omang_id"
+                            name="idNumber"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Omang ID (Optional)</FormLabel>
@@ -211,6 +225,7 @@ export const Signup: React.FC = () => {
                                         <Input
                                             placeholder="Enter your Omang ID"
                                             {...field}
+                                            autoComplete="username"
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -230,6 +245,7 @@ export const Signup: React.FC = () => {
                                         <PasswordInput
                                             placeholder="Create a strong password"
                                             leftIcon={<Lock className="h-4 w-4" />}
+                                            autoComplete="new-password"
                                             {...field}
                                         />
                                     </FormControl>
@@ -248,6 +264,7 @@ export const Signup: React.FC = () => {
                                         <PasswordInput
                                             placeholder="Re-enter your password"
                                             leftIcon={<ShieldCheck className="h-4 w-4" />}
+                                            autoComplete="new-password"
                                             {...field}
                                         />
                                     </FormControl>

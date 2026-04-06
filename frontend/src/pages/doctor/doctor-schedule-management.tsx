@@ -24,10 +24,10 @@ export const DoctorScheduleManagement: React.FC = () => {
         resolver: zodResolver(doctorScheduleSchema),
         defaultValues: {
             schedule: DAYS_OF_WEEK.map((_, index) => ({
-                day_of_week: index,
-                start_time: '09:00',
-                end_time: '17:00',
-                is_available: false,
+                dayOfWeek: index,
+                startTime: '09:00',
+                endTime: '17:00',
+                isAvailable: false,
             })),
         },
     });
@@ -48,17 +48,17 @@ export const DoctorScheduleManagement: React.FC = () => {
 
             // Map data to ensure all days are present
             const fullSchedule = DAYS_OF_WEEK.map((_, index) => {
-                const existing = data.find(s => s.day_of_week === index);
+                const existing = data.find(s => s.dayOfWeek === index);
                 return existing ? {
-                    day_of_week: existing.day_of_week,
-                    start_time: existing.start_time.substring(0, 5), // Ensure HH:mm format
-                    end_time: existing.end_time.substring(0, 5),
-                    is_available: existing.is_available
+                    dayOfWeek: existing.dayOfWeek,
+                    startTime: existing.startTime.substring(0, 5), // Ensure HH:mm format
+                    endTime: existing.endTime.substring(0, 5),
+                    isAvailable: existing.isAvailable
                 } : {
-                    day_of_week: index,
-                    start_time: '09:00',
-                    end_time: '17:00',
-                    is_available: false
+                    dayOfWeek: index,
+                    startTime: '09:00',
+                    endTime: '17:00',
+                    isAvailable: false
                 };
             });
 
@@ -145,7 +145,7 @@ export const DoctorScheduleManagement: React.FC = () => {
                 <Card className="p-6">
                     <div className="space-y-4">
                         {fields.map((field, index) => {
-                            const isAvailable = form.watch(`schedule.${index}.is_available`);
+                            const isAvailable = form.watch(`schedule.${index}.isAvailable`);
 
                             return (
                                 <div
@@ -158,7 +158,7 @@ export const DoctorScheduleManagement: React.FC = () => {
                                     <div className="flex items-center gap-4 w-full md:w-48 mb-4 md:mb-0">
                                         <FormField
                                             control={form.control}
-                                            name={`schedule.${index}.is_available`}
+                                            name={`schedule.${index}.isAvailable`}
                                             render={({ field }) => (
                                                 <FormItem className="flex items-center space-x-3 space-y-0">
                                                     <FormControl>
@@ -180,7 +180,7 @@ export const DoctorScheduleManagement: React.FC = () => {
                                             <div className="grid grid-cols-2 gap-3 w-full md:w-auto md:flex md:items-center">
                                                 <FormField
                                                     control={form.control}
-                                                    name={`schedule.${index}.start_time`}
+                                                    name={`schedule.${index}.startTime`}
                                                     render={({ field }) => (
                                                         <FormItem className="space-y-1">
                                                             <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">Start</FormLabel>
@@ -202,7 +202,7 @@ export const DoctorScheduleManagement: React.FC = () => {
 
                                                 <FormField
                                                     control={form.control}
-                                                    name={`schedule.${index}.end_time`}
+                                                    name={`schedule.${index}.endTime`}
                                                     render={({ field }) => (
                                                         <FormItem className="space-y-1">
                                                             <FormLabel className="text-xs text-muted-foreground font-medium md:hidden">End</FormLabel>

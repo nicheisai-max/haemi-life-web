@@ -19,12 +19,12 @@ function getFiles(dir: string): string[] {
     if (!fs.existsSync(dir)) return results;
     const list = fs.readdirSync(dir);
     list.forEach(file => {
-        const filePath = path.join(dir, file);
-        const stat = fs.statSync(filePath);
+        const file_path = path.join(dir, file);
+        const stat = fs.statSync(file_path);
         if (stat && stat.isDirectory()) {
-            results = results.concat(getFiles(filePath));
+            results = results.concat(getFiles(file_path));
         } else if (file.match(/\.(tsx|ts|css)$/)) {
-            results.push(filePath);
+            results.push(file_path);
         }
     });
     return results;

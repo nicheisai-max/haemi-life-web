@@ -12,12 +12,46 @@ import crypto from 'crypto';
 import { isRefreshJWTPayload } from '../utils/type-guards';
 import { observabilityService } from '../services/observability.service';
 import { UserRoleSchema } from '../../../shared/schemas/observability.schema';
+import { mapUserToResponse } from '../utils/user.mapper';
+import { UserEntity, UserSessionEntity } from '../types/db.types';
+import { JWTPayload } from '../types/express';
+import { statusService } from '../services/status.service';
+
+interface SignupRequest {
+    email: string;
+    password: string;
+    role: 'patient' | 'doctor' | 'pharmacist' | 'admin';
+    name: string;
+    phoneNumber: string;
+    idNumber?: string;
+}
+
+interface LoginRequest {
+    identifier: string;
+    password: string;
+}
+
+interface UpdateProfileRequest {
+    name: string;
+    email: string;
+    phoneNumber: string;
+}
+
+interface ChangePasswordRequest {
+    currentPassword: string;
+    newPassword: string;
+}
+
+interface RefreshTokenRequest {
+    refreshToken: string;
+}
+
 
 const getJwtSecret = (): string => {
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       logger.error('CRITICAL: JWT_SECRET is not configured in environment variables');
-      return 'UNSET_SECRET_INTERNAL_FAILSAFE';
+      return 'HAEMI_LIFE_INTEGRITY_FAILSAFE';
     }
     return secret;
 };
@@ -59,16 +93,17 @@ const checkRefreshRateLimit = (sessionId: string): boolean => {
 };
 
 export const signup = async (req: Request, res: Response) => {
-    const { email, password, role, name, phone_number, id_number } = req.body;
+    const { email, password, role, name, phoneNumber, idNumber } = req.body as SignupRequest;
+
 
     // Institutional Hardening: Input Validation
-    if (!email || !password || !role || !name || !phone_number) {
-        return sendError(res, 400, 'Missing required fields (name, email, phone, password, role)', 'MISSING_FIELDS');
+    if (!email || !password || !role || !name || !phoneNumber) {
+        return sendError(res, 400, 'Missing required fields (name, email, phoneNumber, password, role)', 'MISSING_FIELDS');
     }
 
     try {
         // Check if user exists (by phone or email if provided)
-        const userCheck = await userRepository.findByPhoneOrEmail(phone_number, email);
+        const userCheck = await userRepository.findByPhoneOrEmail(phoneNumber, email);
         if (userCheck) {
             return sendError(res, 400, 'User already exists with this phone number or email', 'USER_EXISTS');
         }
@@ -83,11 +118,11 @@ export const signup = async (req: Request, res: Response) => {
 
             const newUser = await userRepository.create({
                 name,
-                phone_number,
+                phoneNumber,
                 email,
                 password: hashedPassword,
                 role,
-                id_number: id_number || null
+                idNumber: idNumber || null
             }, client);
 
             await client.query('COMMIT');
@@ -103,7 +138,7 @@ export const signup = async (req: Request, res: Response) => {
             await pool.query(
                 `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, browser_name, os_name, device_type)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip, userAgent, browser, os, device]
+                [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip || null, userAgent, browser, os, device]
             );
 
             // Generate Access Token (15m)
@@ -112,9 +147,9 @@ export const signup = async (req: Request, res: Response) => {
                     id: newUser.id,
                     email: newUser.email,
                     role: newUser.role,
-                    token_version: newUser.token_version,
+                    tokenVersion: newUser.token_version,
                     jti: accessJti,
-                    session_id: sessionId
+                    sessionId: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
@@ -124,9 +159,9 @@ export const signup = async (req: Request, res: Response) => {
             const refreshToken = jwt.sign(
                 {
                     id: newUser.id,
-                    token_version: newUser.token_version,
+                    tokenVersion: newUser.token_version,
                     jti: refreshJti,
-                    session_id: sessionId
+                    sessionId: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }
@@ -134,25 +169,25 @@ export const signup = async (req: Request, res: Response) => {
 
             // Audit
             await auditService.log({
-                user_id: newUser.id,
-                action_type: 'SIGNUP_SUCCESS',
-                ip_address: req.ip,
-                user_agent: userAgent,
-                session_id: sessionId,
-                access_token_jti: accessJti,
-                refresh_token_jti: refreshJti
+                userId: newUser.id,
+                action: 'SIGNUP_SUCCESS',
+                ipAddress: req.ip,
+                userAgent: userAgent,
+                sessionId: sessionId,
+                accessTokenJti: accessJti,
+                refreshTokenJti: refreshJti
             });
 
             observabilityService.logSessionStart({
                 session: {
-                    session_id: sessionId,
-                    user_id: newUser.id,
+                    sessionId: sessionId,
+                    userId: newUser.id,
                     role: UserRoleSchema.parse(newUser.role),
-                    login_time: new Date().toISOString(),
-                    last_activity: new Date().toISOString(),
+                    loginTime: new Date().toISOString(),
+                    lastActivity: new Date().toISOString(),
                     status: 'active',
-                    ip_address: req.ip,
-                    user_agent: userAgent
+                    ipAddress: req.ip,
+                    userAgent: userAgent
                 },
                 timestamp: new Date().toISOString(),
                 source: 'backend'
@@ -170,36 +205,37 @@ export const signup = async (req: Request, res: Response) => {
             //     maxAge: 7 * 24 * 60 * 60 * 1000
             // });
 
-            await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [newUser.id]);
+            await pool.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [newUser.id]);
 
             return sendResponse(res, 201, true, 'User created successfully', {
                 token: accessToken,
                 refreshToken: refreshToken,
-                user: {
-                    id: newUser.id,
-                    email: newUser.email,
-                    role: newUser.role,
-                    name: newUser.name,
-                    status: newUser.status,
-                    initials: newUser.initials,
-                    profile_image: newUser.profile_image
-                }
+                user: mapUserToResponse(newUser)
             });
-        } catch (e: unknown) {
+        } catch (error: unknown) {
             await client.query('ROLLBACK');
-            logger.error('Signup transaction failed', e);
-            throw e;
+            logger.error('Signup transaction failed', {
+                error: error instanceof Error ? error.message : String(error),
+                email
+            });
+            throw error;
         } finally {
             client.release();
         }
     } catch (error: unknown) {
-        logger.error('Error creating user', { error, email, phone_number, role });
+        logger.error('Error creating user', { 
+            error: error instanceof Error ? error.message : String(error), 
+            email, 
+            phoneNumber, 
+            role 
+        });
         return sendError(res, 500, 'Error creating user');
     }
 };
 
 export const login = async (req: Request, res: Response) => {
-    const { identifier, password } = req.body;
+    const { identifier, password } = req.body as LoginRequest;
+
 
     try {
         // Unified query: Check if identifier matches email OR phone_number
@@ -208,11 +244,11 @@ export const login = async (req: Request, res: Response) => {
         if (!user) {
             // Audit failed attempt (unknown user)
             await auditService.log({
-                user_id: SYSTEM_ANONYMOUS_ID,
-                action_type: 'LOGIN_FAILED',
+                userId: SYSTEM_ANONYMOUS_ID,
+                action: 'LOGIN_FAILED',
                 metadata: { reason: 'User not found', identifier },
-                ip_address: req.ip,
-                user_agent: req.headers['user-agent']
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent']
             });
 
             observabilityService.logLogin({
@@ -220,8 +256,8 @@ export const login = async (req: Request, res: Response) => {
                 identifier,
                 reason: 'User not found',
                 timestamp: new Date().toISOString(),
-                ip_address: req.ip,
-                user_agent: getUA(req),
+                ipAddress: req.ip,
+                userAgent: getUA(req),
                 source: 'backend'
             });
 
@@ -231,23 +267,23 @@ export const login = async (req: Request, res: Response) => {
         // STRICT STATUS CHECK
         if (user.status !== 'ACTIVE') {
             await auditService.log({
-                user_id: user.id,
-                actor_role: user.role,
-                action_type: 'LOGIN_DENIED',
+                userId: user.id,
+                actorRole: user.role,
+                action: 'LOGIN_DENIED',
                 metadata: { reason: `User status is ${user.status}` },
-                ip_address: req.ip,
-                user_agent: req.headers['user-agent']
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent']
             });
 
             observabilityService.logLogin({
                 success: false,
-                user_id: user.id,
+                userId: user.id,
                 role: UserRoleSchema.parse(user.role),
                 identifier,
                 reason: `Account status: ${user.status}`,
                 timestamp: new Date().toISOString(),
-                ip_address: req.ip,
-                user_agent: getUA(req),
+                ipAddress: req.ip,
+                userAgent: getUA(req),
                 source: 'backend'
             });
 
@@ -258,23 +294,23 @@ export const login = async (req: Request, res: Response) => {
 
         if (!validPassword) {
             await auditService.log({
-                user_id: user.id,
-                actor_role: user.role,
-                action_type: 'LOGIN_FAILED',
+                userId: user.id,
+                actorRole: user.role,
+                action: 'LOGIN_FAILED',
                 metadata: { reason: 'Invalid password' },
-                ip_address: req.ip,
-                user_agent: req.headers['user-agent']
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent']
             });
 
             observabilityService.logLogin({
                 success: false,
-                user_id: user.id,
+                userId: user.id,
                 role: UserRoleSchema.parse(user.role),
                 identifier,
                 reason: 'Invalid password',
                 timestamp: new Date().toISOString(),
-                ip_address: req.ip,
-                user_agent: getUA(req),
+                ipAddress: req.ip,
+                userAgent: getUA(req),
                 source: 'backend'
             });
 
@@ -282,8 +318,8 @@ export const login = async (req: Request, res: Response) => {
             return sendError(res, 400, 'Invalid credentials', 'INVALID_CREDENTIALS');
         }
 
-        // Update last_activity directly so the middleware doesn't instantly invalidate the new session
-        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        // Update lastActivity directly so the middleware doesn't instantly invalidate the new session
+        await pool.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
         // Generate Session Identity
         const sessionId = crypto.randomUUID();
@@ -302,37 +338,37 @@ export const login = async (req: Request, res: Response) => {
 
         // Audit Successful Login
         await auditService.log({
-            user_id: user.id,
-            actor_role: user.role,
-            action_type: 'LOGIN_SUCCESS',
-            ip_address: req.ip,
-            user_agent: userAgent,
-            session_id: sessionId,
-            access_token_jti: accessJti,
-            refresh_token_jti: refreshJti
+            userId: user.id,
+            actorRole: user.role,
+            action: 'LOGIN_SUCCESS',
+            ipAddress: req.ip,
+            userAgent: userAgent,
+            sessionId: sessionId,
+            accessTokenJti: accessJti,
+            refreshTokenJti: refreshJti
         });
 
         observabilityService.logLogin({
             success: true,
-            user_id: user.id,
+            userId: user.id,
             role: UserRoleSchema.parse(user.role),
             identifier,
             timestamp: new Date().toISOString(),
-            ip_address: req.ip,
-            user_agent: userAgent,
+            ipAddress: req.ip,
+            userAgent: userAgent,
             source: 'backend'
         });
 
         observabilityService.logSessionStart({
             session: {
-                session_id: sessionId,
-                user_id: user.id,
+                sessionId: sessionId,
+                userId: user.id,
                 role: UserRoleSchema.parse(user.role),
-                login_time: new Date().toISOString(),
-                last_activity: new Date().toISOString(),
+                loginTime: new Date().toISOString(),
+                lastActivity: new Date().toISOString(),
                 status: 'active',
-                ip_address: req.ip,
-                user_agent: userAgent
+                ipAddress: req.ip,
+                userAgent: userAgent
             },
             timestamp: new Date().toISOString(),
             source: 'backend'
@@ -347,9 +383,9 @@ export const login = async (req: Request, res: Response) => {
                 id: user.id,
                 email: user.email,
                 role: user.role,
-                token_version: user.token_version,
+                tokenVersion: user.token_version,
                 jti: accessJti,
-                session_id: sessionId
+                sessionId: sessionId
             },
             getJwtSecret(),
             { expiresIn: await getJwtAccessExpiry() }
@@ -359,9 +395,9 @@ export const login = async (req: Request, res: Response) => {
         const refreshToken = jwt.sign(
             {
                 id: user.id,
-                token_version: user.token_version,
+                tokenVersion: user.token_version,
                 jti: refreshJti,
-                session_id: sessionId
+                sessionId: sessionId
             },
             getJwtSecret(),
             { expiresIn: await getJwtRefreshExpiry() }
@@ -374,13 +410,8 @@ export const login = async (req: Request, res: Response) => {
         // res.cookie('refreshToken', refreshToken, {
         //     httpOnly: true,
         //     secure: process.env.NODE_ENV === 'production',
-        //     sameSite: 'strict',
-        //     path: '/',
-        //     maxAge: 7 * 24 * 60 * 60 * 1000
-        // });
-
-        // Update activity heartbeat on login
-        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        // Update activity heartbeat on login with explicit UTC SSOT
+        await pool.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
         const timeoutMinutes = await getSessionTimeoutMinutes();
 
@@ -389,19 +420,14 @@ export const login = async (req: Request, res: Response) => {
             refreshToken: refreshToken,
             serverTime: new Date().toISOString(),
             sessionTimeout: timeoutMinutes,
-            user: {
-                id: user.id,
-                email: user.email,
-                role: user.role,
-                name: user.name,
-                status: user.status,
-                initials: user.initials,
-                profile_image: user.profile_image
-            }
+            user: mapUserToResponse(user)
         });
     } catch (error: unknown) {
-        logger.error('Login server error', { error, identifier });
-        return sendError(res, 500, 'Server error', 'SERVER_ERROR', error);
+        logger.error('Login server error', { 
+            error: error instanceof Error ? error.message : String(error), 
+            identifier 
+        });
+        return sendError(res, 500, 'Server error', 'SERVER_ERROR');
     }
 };
 
@@ -411,13 +437,13 @@ export const getProfile = async (req: Request, res: Response) => {
         if (!userId) return sendError(res, 401, 'Unauthorized');
         const user = await userRepository.findById(userId);
 
-        if (!user) {
-            return sendError(res, 404, 'User not found');
-        }
-
-        return sendResponse(res, 200, true, 'Profile fetched', user);
+        if (!user) return sendError(res, 404, 'User not found');
+        return sendResponse(res, 200, true, 'Profile fetched', mapUserToResponse(user));
     } catch (error: unknown) {
-        logger.error('Error fetching profile:', error);
+        logger.error('Error fetching profile:', {
+            error: error instanceof Error ? error.message : String(error),
+            userId: req.user?.id
+        });
         return sendError(res, 500, 'Server error');
     }
 };
@@ -426,17 +452,21 @@ export const updateProfile = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.id;
         if (!userId) return sendError(res, 401, 'Unauthorized');
-        const { name, email, phone_number } = req.body;
+        const { name, email, phoneNumber } = req.body as UpdateProfileRequest;
 
-        const updatedUser = await userRepository.updateProfile(userId, { name, email, phone_number });
+
+        const updatedUser = await userRepository.updateProfile(userId, { name, email, phoneNumber });
 
         if (!updatedUser) {
             return sendError(res, 404, 'User not found');
         }
 
-        return sendResponse(res, 200, true, 'Profile updated', updatedUser);
+        return sendResponse(res, 200, true, 'Profile updated', mapUserToResponse(updatedUser));
     } catch (error: unknown) {
-        logger.error('Error updating profile:', error);
+        logger.error('Error updating profile:', {
+            error: error instanceof Error ? error.message : String(error),
+            userId: req.user?.id
+        });
         return sendError(res, 500, 'Server error');
     }
 };
@@ -444,7 +474,7 @@ export const updateProfile = async (req: Request, res: Response) => {
 export const uploadProfileImage = async (req: Request, res: Response) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded' });
+            return sendError(res, 400, 'No file uploaded');
         }
 
         const userId = req.user?.id;
@@ -460,13 +490,13 @@ export const uploadProfileImage = async (req: Request, res: Response) => {
         }
 
         return sendResponse(res, 200, true, 'Profile image updated successfully', {
-            user: {
-                ...updatedUser,
-                profile_image: updatedUser.profile_image
-            }
+            user: mapUserToResponse(updatedUser)
         });
     } catch (error: unknown) {
-        logger.error('Error uploading profile image', { userId: req.user?.id, error });
+        logger.error('Error uploading profile image', { 
+            userId: req.user?.id, 
+            error: error instanceof Error ? error.message : String(error)
+        });
         return sendError(res, 500, 'Server error during upload process');
     }
 };
@@ -475,7 +505,8 @@ export const changePassword = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.id;
         if (!userId) return sendError(res, 401, 'Unauthorized');
-        const { current_password, new_password } = req.body;
+        const { currentPassword, newPassword } = req.body as ChangePasswordRequest;
+
 
         // Get current password hash
         const passwordHash = await userRepository.getPasswordHash(userId);
@@ -483,77 +514,84 @@ export const changePassword = async (req: Request, res: Response) => {
             return sendError(res, 404, 'User not found');
         }
 
-        const validPassword = await bcrypt.compare(current_password, passwordHash);
+        const validPassword = await bcrypt.compare(currentPassword, passwordHash);
 
         if (!validPassword) {
             return sendError(res, 400, 'Invalid current password');
         }
 
-        const hashedPassword = await bcrypt.hash(new_password, 10);
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
 
         await userRepository.updatePassword(userId, hashedPassword);
 
         return sendResponse(res, 200, true, 'Password updated successfully');
     } catch (error: unknown) {
-        logger.error('Error changing password:', error);
+        logger.error('Error changing password:', {
+            error: error instanceof Error ? error.message : String(error),
+            userId: req.user?.id
+        });
         return sendError(res, 500, 'Server error');
     }
 };
 
 export const refreshToken = async (req: Request, res: Response) => {
-    const refreshTokenHeader = req.body.refreshToken;
+    const { refreshToken: refreshTokenHeader } = req.body as RefreshTokenRequest;
+
 
     if (!refreshTokenHeader) {
         return sendResponse(res, 200, false, 'No active session');
     }
 
     const client = await pool.connect();
+    let decoded: JWTPayload | null = null;
     try {
         await client.query('BEGIN');
 
         // 1. Verify token signature and basic expiration
-        const decoded = jwt.verify(refreshTokenHeader, getJwtSecret());
+        decoded = jwt.verify(refreshTokenHeader, getJwtSecret()) as JWTPayload;
         if (!isRefreshJWTPayload(decoded)) {
             await client.query('ROLLBACK');
             return sendError(res, 401, 'Invalid session structure');
         }
 
-        // 2. Fetch User and Session state with row-level locking
-        const userRes = await client.query(
-            'SELECT id, status, token_version, email, role FROM users WHERE id = $1 FOR UPDATE',
-            [decoded.id]
-        );
-        const user = userRes.rows[0];
+        const decodedPayload = decoded as JWTPayload;
+        const { id: userId, sessionId: sessionId, tokenVersion: tokenVersion } = decodedPayload;
 
-        if (!user || user.status !== 'ACTIVE') {
-            await client.query('ROLLBACK');
-            return sendError(res, 401, 'Invalid session');
-        }
-
-        const sessionId = decoded.session_id;
-
-        if (!sessionId) {
-            logger.error('[Security] Refresh token missing session_id', { userId: decoded.id });
+        if (!sessionId || !userId) {
+            logger.error('[Security] Refresh token missing critical fields', { userId, sessionId });
             await client.query('ROLLBACK');
             return sendResponse(res, 401, false, 'Invalid token structure');
         }
 
         // Phase 7: Apply Rate Limiting
         if (!checkRefreshRateLimit(sessionId)) {
-            logger.warn('[Security] Refresh rate limit exceeded', { sessionId, userId: decoded.id });
+            logger.warn('[Security] Refresh rate limit exceeded', { sessionId, userId });
             await client.query('ROLLBACK');
             return sendError(res, 429, 'Too many refresh attempts. Please try again in a minute.');
         }
 
+        // 2. Fetch User and Session state
+        const userRes = await client.query(
+            'SELECT id, status, token_version, email, role, "lastActivity" FROM users WHERE id = $1',
+            [userId]
+        );
+        const user = userRes.rows[0] as UserEntity | undefined;
+
+        if (!user || user.status !== 'ACTIVE') {
+            await client.query('ROLLBACK');
+            return sendError(res, 401, 'Invalid session');
+        }
+
         const sessionRes = await client.query(
-            `SELECT refresh_token_jti, previous_refresh_token_jti, jti_rotated_at, 
-             access_token_jti, revoked, expires_at FROM user_sessions WHERE session_id = $1 FOR UPDATE`,
+            `SELECT refresh_token_jti, previous_refresh_token_jti, jti_rotated_at, "lastActivity",
+             access_token_jti, revoked, expires_at FROM user_sessions WHERE session_id = $1`,
             [sessionId]
         );
-        const session = sessionRes.rows[0];
+        const session = sessionRes.rows[0] as UserSessionEntity | undefined;
+
 
         // 3. Security Check: Token Rotation & Versioning
-        const isVersionMismatch = decoded.token_version !== undefined && decoded.token_version !== user.token_version;
+        const isVersionMismatch = tokenVersion !== undefined && tokenVersion !== user.token_version;
         
         // GRACE WINDOW LOGIC (Google/Meta Grade)
         const currentJti = session?.refresh_token_jti;
@@ -617,7 +655,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                      refresh_token_jti = $1, 
                      access_token_jti = $2,
                      jti_rotated_at = CURRENT_TIMESTAMP,
-                     last_activity = CURRENT_TIMESTAMP,
+                     "lastActivity" = CURRENT_TIMESTAMP,
                      expires_at = $3
                  WHERE session_id = $4`,
                 [newRefreshJti, newAccessJti, expiresAt, sessionId]
@@ -628,9 +666,9 @@ export const refreshToken = async (req: Request, res: Response) => {
                     id: user.id,
                     email: user.email,
                     role: user.role,
-                    token_version: user.token_version,
+                    tokenVersion: user.token_version,
                     jti: newAccessJti,
-                    session_id: sessionId
+                    sessionId: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
@@ -639,27 +677,27 @@ export const refreshToken = async (req: Request, res: Response) => {
             newRefreshToken = jwt.sign(
                 {
                     id: user.id,
-                    token_version: user.token_version,
+                    tokenVersion: user.token_version,
                     jti: newRefreshJti,
-                    session_id: sessionId
+                    sessionId: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }
             );
 
             await auditService.log({
-                user_id: user.id,
-                action_type: 'TOKEN_REFRESH',
-                ip_address: req.ip,
-                user_agent: getUA(req),
-                session_id: sessionId,
-                access_token_jti: newAccessJti,
-                refresh_token_jti: newRefreshJti
+                userId: user.id,
+                action: 'TOKEN_REFRESH',
+                ipAddress: req.ip,
+                userAgent: getUA(req),
+                sessionId: sessionId,
+                accessTokenJti: newAccessJti,
+                refreshTokenJti: newRefreshJti
             });
 
             observabilityService.logTokenRefresh({
-                session_id: sessionId,
-                user_id: user.id,
+                sessionId: sessionId,
+                userId: user.id,
                 timestamp: new Date().toISOString(),
                 source: 'backend'
             });
@@ -674,9 +712,9 @@ export const refreshToken = async (req: Request, res: Response) => {
                     id: user.id,
                     email: user.email,
                     role: user.role,
-                    token_version: user.token_version,
+                    tokenVersion: user.token_version,
                     jti: session.access_token_jti,
-                    session_id: sessionId
+                    sessionId: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtAccessExpiry() }
@@ -685,16 +723,16 @@ export const refreshToken = async (req: Request, res: Response) => {
             newRefreshToken = jwt.sign(
                 {
                     id: user.id,
-                    token_version: user.token_version,
+                    tokenVersion: user.token_version,
                     jti: session.refresh_token_jti,
-                    session_id: sessionId
+                    sessionId: sessionId
                 },
                 getJwtSecret(),
                 { expiresIn: await getJwtRefreshExpiry() }
             );
         }
 
-        await client.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        await client.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
         await client.query('COMMIT');
 
         const timeoutMinutes = await getSessionTimeoutMinutes();
@@ -708,10 +746,14 @@ export const refreshToken = async (req: Request, res: Response) => {
 
     } catch (err: unknown) {
         await client.query('ROLLBACK');
-        if (err instanceof Error && err.name === 'TokenExpiredError') {
+        const errorMessage = err instanceof Error ? err.name : 'UnknownError';
+        if (errorMessage === 'TokenExpiredError') {
             return sendResponse(res, 401, false, 'Session expired. Please log in again.');
         }
-        logger.error('Refresh operation failed', err);
+        logger.error('Refresh operation failed', {
+            error: err instanceof Error ? err.message : String(err),
+            userId: decoded?.id || 'unknown'
+        });
         return sendResponse(res, 401, false, 'Invalid session');
     } finally {
         client.release();
@@ -720,51 +762,51 @@ export const refreshToken = async (req: Request, res: Response) => {
 
 export const logout = async (req: Request, res: Response) => {
     try {
+        const user = req.user as JWTPayload;
+        
         // CRITICAL: Increment token_version in DB to invalidate ALL outstanding refresh tokens
-        if (req.user?.id) {
+        if (user?.id) {
             // Revoke current session in user_sessions
-            if (req.user.session_id) {
+            if (user.sessionId) {
                 await pool.query(
-                    'UPDATE user_sessions SET revoked = TRUE, logout_time = NOW() WHERE session_id = $1',
-                    [req.user.session_id]
+                    'UPDATE user_sessions SET revoked = TRUE, logout_time = CURRENT_TIMESTAMP WHERE session_id = $1',
+                    [user.sessionId]
                 );
             }
 
             // Fallback: Increment token_version for radical invalidation
             await pool.query(
-                'UPDATE users SET token_version = token_version + 1, last_activity = CURRENT_TIMESTAMP WHERE id = $1',
-                [req.user.id]
+                'UPDATE users SET token_version = token_version + 1, "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1',
+                [user.id]
             );
 
             await auditService.log({
-                user_id: req.user.id,
-                action_type: 'LOGOUT',
-                ip_address: req.ip,
-                user_agent: getUA(req),
-                session_id: req.user.session_id
+                userId: user.id,
+                action: 'LOGOUT',
+                ipAddress: req.ip,
+                userAgent: getUA(req),
+                sessionId: user.sessionId
             });
 
             observabilityService.logSessionEnd({
-                session_id: req.user.session_id || null,
-                user_id: req.user.id,
+                sessionId: user.sessionId || null,
+                userId: user.id,
                 timestamp: new Date().toISOString(),
                 source: 'backend'
             });
+
+            // P0 NUCLEAR: Atomic Presence Purge on Logout
+            // This ensures the user is marked offline in the DB truth source immediately
+            await statusService.purgeUserConnections(user.id);
         }
     } catch (dbError: unknown) {
-        // Log but do not block logout
-        logger.error('[Auth] Failed to increment token_version on logout:', dbError);
+        // Log but do not block logout (Enterpise Resilience)
+        logger.error('[Auth] Idempotent logout DB failure (Graceful skip):', {
+            error: dbError instanceof Error ? dbError.message : String(dbError),
+            userId: req.user?.id
+        });
     }
 
-    /* 
-       PATCH: No longer clearing cookie on logout as we use body-based storage.
-    */
-    // res.clearCookie('refreshToken', {
-    //     httpOnly: true,
-    //     secure: process.env.NODE_ENV === 'production',
-    //     sameSite: 'strict',
-    //     path: '/'
-    // });
     return sendResponse(res, 200, true, 'Logged out successfully');
 };
 
@@ -778,27 +820,43 @@ export const heartbeat = async (req: Request, res: Response) => {
 
 export const verifySession = async (req: Request, res: Response) => {
     try {
-        const user = req.user;
+        const user = req.user as JWTPayload;
         const timeoutMinutes = await getSessionTimeoutMinutes();
+        
+        // Fetch fresh user data to ensure mapUserToResponse integrity
+        const dbUser = await userRepository.findById(user.id);
+        if (!dbUser) return sendError(res, 401, 'User not found');
+
         return sendResponse(res, 200, true, 'Session valid', { 
-            user,
+            user: mapUserToResponse(dbUser),
             serverTime: new Date().toISOString(),
             sessionTimeout: timeoutMinutes
         });
     } catch (err: unknown) {
-        logger.error('Session verification failed', err);
+        logger.error('Session verification failed', {
+            error: err instanceof Error ? err.message : String(err),
+            userId: req.user?.id
+        });
         return sendError(res, 500, 'Server error');
     }
 };
 
 export const getMe = async (req: Request, res: Response) => {
     try {
+        const user = req.user as JWTPayload;
+        if (!user) return sendResponse(res, 200, true, 'User not authenticated', { authenticated: false, user: null });
+        
+        const dbUser = await userRepository.findById(user.id);
+        
         return sendResponse(res, 200, true, 'User data fetched', {
-            authenticated: !!req.user,
-            user: req.user || null
+            authenticated: !!user,
+            user: dbUser ? mapUserToResponse(dbUser) : null
         });
     } catch (err: unknown) {
-        logger.error('Get profile failed', err);
+        logger.error('Get profile failed', {
+            error: err instanceof Error ? err.message : String(err),
+            userId: req.user?.id
+        });
         return sendError(res, 500, 'Server error');
     }
 };

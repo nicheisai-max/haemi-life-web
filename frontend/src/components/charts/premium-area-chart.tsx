@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import {
     AreaChart,
     Area,
@@ -58,6 +59,14 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
     valuePrefix = '',
     valueSuffix = ''
 }) => {
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        // Small delay to ensure parent container (and animations) are ready
+        const timer = setTimeout(() => setIsMounted(true), 300);
+        return () => clearTimeout(timer);
+    }, []);
+
     return (
         <Card className="hover:shadow-md transition-shadow duration-300 overflow-hidden border-border/60">
             <CardHeader className="pb-2">
@@ -65,8 +74,10 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
                 {description && <CardDescription>{description}</CardDescription>}
             </CardHeader>
             <CardContent>
-                <div style={{ width: '100%', height: height, minHeight: '300px' }}>
-                    <ResponsiveContainer width="100%" height="100%">
+                <div style={{ width: '100%', height: height, minHeight: `${height}px`, position: 'relative' }}>
+                    {/* Fixed ResizeObserver crash by gating render until parent is ready */}
+                    {isMounted ? (
+                        <ResponsiveContainer width="100%" height="100%">
 
                         <AreaChart
                             data={data}
@@ -112,6 +123,11 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
                             />
                         </AreaChart>
                     </ResponsiveContainer>
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/10 animate-pulse rounded-lg">
+                            <span className="text-xs text-slate-400 font-medium tracking-widest uppercase">Calculating Metrics...</span>
+                        </div>
+                    )}
                 </div>
             </CardContent>
         </Card>

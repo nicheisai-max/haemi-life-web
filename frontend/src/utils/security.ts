@@ -10,10 +10,15 @@ const ENCRYPTED_PREFIX = 'enc:';
 const GCM_PREFIX = 'gcm:';
 const SALT = 'haemi_salt';
 
+const keyCache = new Map<string, CryptoKey>();
+
 /**
  * Derives a cryptographic key from the password using PBKDF2.
+ * Phase 5: Cached to prevent redundant compute-heavy iterations.
  */
 async function deriveKey(algorithm: string): Promise<CryptoKey> {
+    if (keyCache.has(algorithm)) return keyCache.get(algorithm)!;
+    
     const encoder = new TextEncoder();
 
     // CRITICAL: Handle the hex key from .env correctly.
@@ -46,7 +51,7 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
         ['deriveKey']
     );
 
-    return await window.crypto.subtle.deriveKey(
+    const derivedKey = await window.crypto.subtle.deriveKey(
         {
             name: 'PBKDF2',
             salt: saltData,
@@ -58,15 +63,24 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
         false,
         ['encrypt', 'decrypt']
     );
+
+    keyCache.set(algorithm, derivedKey);
+    return derivedKey;
 }
 
+const decryptionCache = new Map<string, string>();
+
 /**
- * Dual-Mode Decryption (GCM + Legacy CBC)
+ * Dual-Mode Decryption (GCM + Legacy CBC) with Performance Caching
  */
 export const decrypt = async (text: string): Promise<string> => {
     if (!text || !text.startsWith(ENCRYPTED_PREFIX)) return text;
+    
+    // Phase 5: Decrypt Performance Fix (Single-pass decryption)
+    if (decryptionCache.has(text)) return decryptionCache.get(text)!;
 
     const data = text.slice(ENCRYPTED_PREFIX.length);
+    let result = text;
 
     try {
         // Mode A: AES-256-GCM
@@ -85,23 +99,27 @@ export const decrypt = async (text: string): Promise<string> => {
             const encryptedData = new Uint8Array(combinedHex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
 
             const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_GCM, iv }, key, encryptedData);
-            return new TextDecoder().decode(buffer);
+            result = new TextDecoder().decode(buffer);
+        } else {
+            // Mode B: Legacy AES-256-CBC
+            const key = await deriveKey(ALGORITHM_CBC);
+            const parts = data.split(':');
+            if (parts.length < 2) return text;
+
+            const iv = new Uint8Array(parts[0].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+            const encryptedData = new Uint8Array(parts[1].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+
+            const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_CBC, iv }, key, encryptedData);
+            result = new TextDecoder().decode(buffer);
         }
+        
+        decryptionCache.set(text, result);
+        return result;
 
-        // Mode B: Legacy AES-256-CBC
-        const key = await deriveKey(ALGORITHM_CBC);
-        const parts = data.split(':');
-        if (parts.length < 2) return text;
-
-        const iv = new Uint8Array(parts[0].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
-        const encryptedData = new Uint8Array(parts[1].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
-
-        const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_CBC, iv }, key, encryptedData);
-        return new TextDecoder().decode(buffer);
-
-    } catch {
-        // Silently return original text if decryption fails (likely legacy/corrupted data)
-        return text;
+    } catch (error) {
+        console.error('[Security] Decryption failed:', error);
+        // Institutional Hardening: Return sanitized placeholder for corrupted/legacy records
+        return '[Encrypted Message]';
     }
 };
 

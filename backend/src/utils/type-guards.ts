@@ -2,9 +2,9 @@ import { JWTPayload } from '../types/express';
 
 export interface RefreshJWTPayload {
     id: string;
-    token_version: number;
+    tokenVersion: number;
     jti: string;
-    session_id: string;
+    sessionId: string;
 }
 
 /**
@@ -18,6 +18,8 @@ export function isJWTPayload(payload: unknown): payload is JWTPayload {
         'id' in payload && typeof (payload as { id: unknown }).id === 'string' &&
         'email' in payload && typeof (payload as { email: unknown }).email === 'string' &&
         'role' in payload && typeof (payload as { role: unknown }).role === 'string' &&
+        'sessionId' in payload && typeof (payload as { sessionId: unknown }).sessionId === 'string' &&
+        'jti' in payload && typeof (payload as { jti: unknown }).jti === 'string' &&
         ['patient', 'doctor', 'pharmacist', 'admin'].includes((payload as { role: string }).role)
     );
 }
@@ -28,10 +30,12 @@ export function isJWTPayloadStrict(payload: unknown): payload is JWTPayload {
     const p = payload as Record<string, unknown>;
     const hasId = 'id' in p && typeof p.id === 'string';
     const hasEmail = 'email' in p && typeof p.email === 'string';
+    const hasSessionId = 'sessionId' in p && typeof p.sessionId === 'string';
+    const hasJti = 'jti' in p && typeof p.jti === 'string';
     const validRoles = ['patient', 'doctor', 'pharmacist', 'admin'];
     const hasRole = 'role' in p && typeof p.role === 'string' && validRoles.includes(p.role as string);
     
-    return hasId && hasEmail && hasRole;
+    return hasId && hasEmail && hasRole && hasSessionId && hasJti;
 }
 
 export function isRefreshJWTPayload(payload: unknown): payload is RefreshJWTPayload {
@@ -40,8 +44,8 @@ export function isRefreshJWTPayload(payload: unknown): payload is RefreshJWTPayl
     const p = payload as Record<string, unknown>;
     const hasId = 'id' in p && typeof p.id === 'string';
     const hasJti = 'jti' in p && typeof p.jti === 'string';
-    const hasSessionId = 'session_id' in p && typeof p.session_id === 'string';
-    const hasTokenVersion = 'token_version' in p && typeof p.token_version === 'number';
+    const hasSessionId = 'sessionId' in p && typeof p.sessionId === 'string';
+    const hasTokenVersion = 'tokenVersion' in p && typeof p.tokenVersion === 'number';
     
     return hasId && hasJti && hasSessionId && hasTokenVersion;
 }

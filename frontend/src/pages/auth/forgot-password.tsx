@@ -184,6 +184,7 @@ export const ForgotPassword: React.FC = () => {
                                                     placeholder="Enter your email"
                                                     className="pl-10 bg-background h-11"
                                                     {...field}
+                                                    autoComplete="email"
                                                 />
                                             </div>
                                         </FormControl>
@@ -229,6 +230,7 @@ export const ForgotPassword: React.FC = () => {
                                                     maxLength={6}
                                                     className="text-center text-sm font-bold tracking-[1em] h-11 w-full max-w-[300px] bg-background"
                                                     {...field}
+                                                    autoComplete="one-time-code"
                                                     onChange={(e) => {
                                                         const value = e.target.value.replace(/\D/g, '');
                                                         field.onChange(value);
@@ -284,6 +286,7 @@ export const ForgotPassword: React.FC = () => {
                                                 placeholder="Create new password"
                                                 leftIcon={<KeyRound className="h-4 w-4" />}
                                                 {...field}
+                                                autoComplete="new-password"
                                             />
                                         </FormControl>
                                         <FormMessage />
@@ -302,6 +305,7 @@ export const ForgotPassword: React.FC = () => {
                                                 placeholder="Confirm new password"
                                                 leftIcon={<ShieldCheck className="h-4 w-4" />}
                                                 {...field}
+                                                autoComplete="new-password"
                                             />
                                         </FormControl>
                                         <FormMessage />

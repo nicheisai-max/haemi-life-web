@@ -86,6 +86,7 @@ export const Login: React.FC = () => {
                                             placeholder="user@example.com"
                                             className="pl-10"
                                             {...field}
+                                            autoComplete="username"
                                         />
                                     </div>
                                 </FormControl>
@@ -113,6 +114,7 @@ export const Login: React.FC = () => {
                                         placeholder="Enter your password"
                                         leftIcon={<Lock className="h-4 w-4" />}
                                         {...field}
+                                        autoComplete="current-password"
                                     />
                                 </FormControl>
                                 <FormMessage />

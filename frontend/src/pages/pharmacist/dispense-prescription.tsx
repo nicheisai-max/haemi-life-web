@@ -140,13 +140,12 @@ const DispensePrescription: React.FC = () => {
                                             <User className="h-6 w-6" />
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-lg">{prescription.patient_name}</h3>
-                                            <p className="text-xs text-muted-foreground font-mono">ID: {prescription.patient_phone}</p>
+                                            <h3 className="font-bold text-lg">{prescription.patientName}</h3>
                                         </div>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xs font-bold uppercase text-muted-foreground">RX DATE</div>
-                                        <div className="text-sm font-mono">{new Date(prescription.prescription_date).toLocaleDateString()}</div>
+                                        <div className="text-sm font-mono">{new Date(prescription.prescriptionDate).toLocaleDateString()}</div>
                                     </div>
                                 </div>
 
@@ -159,7 +158,7 @@ const DispensePrescription: React.FC = () => {
                                         {prescription.items?.map((item, i) => (
                                             <div key={i} className="p-4 rounded-xl border bg-slate-50/50 dark:bg-slate-900/50">
                                                 <div className="flex justify-between font-bold text-sm">
-                                                    <span>{item.medicine_name}</span>
+                                                    <span>{item.medicineName}</span>
                                                     <span className="text-teal-600">{item.dosage}</span>
                                                 </div>
                                                 <div className="text-xs text-muted-foreground mt-1">

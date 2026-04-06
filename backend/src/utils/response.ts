@@ -29,6 +29,7 @@ export const sendError = (
         success: false,
         code,
         message,
+        data: null, // Ensure 'data' field exists for frontend envelope validation
         details: process.env.NODE_ENV === 'development' ? error : undefined,
         statusCode
     });

@@ -38,36 +38,29 @@ export class ErrorBoundary extends Component<Props, State> {
     public render() {
         if (this.state.hasError) {
             return (
-                <div style={{
-                    height: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'var(--bg-body)',
-                    padding: '2rem'
-                }}>
-                    <Card style={{ maxWidth: '400px', textAlign: 'center', padding: '2rem' }}>
+                <div className="error-boundary-root">
+                    <Card className="error-boundary-card">
                         <Logo size="lg" className="mb-4 mx-auto" />
-                        <h1 style={{ marginBottom: '0.5rem', fontSize: '1.5rem', fontWeight: 'bold' }}>Something went wrong</h1>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+                        <h1 className="error-boundary-title">Something went wrong</h1>
+                        <p className="error-boundary-text">
                             We've encountered an unexpected error. Don't worry, your data is safe.
                         </p>
-                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                            <Button variant="default" onClick={this.handleReset} className="w-[140px]">
+                        <div className="error-boundary-actions">
+                            <Button variant="default" onClick={this.handleReset} className="error-boundary-btn">
                                 Back to Safety
                             </Button>
                             <Button variant="outline" onClick={() => {
                                 sessionStorage.clear();
                                 localStorage.removeItem('token'); 
                                 window.location.reload();
-                            }} className="w-[140px]">
+                            }} className="error-boundary-btn">
                                 Try Reloading
                             </Button>
                         </div>
                         {process.env.NODE_ENV === 'development' && (
-                            <details style={{ marginTop: '2rem', textAlign: 'left', fontSize: '0.8rem' }}>
+                            <details className="error-boundary-dev-details">
                                 <summary>Error Details (Dev Only)</summary>
-                                <pre style={{ overflow: 'auto', marginTop: '1rem', color: 'var(--color-error)' }}>
+                                <pre className="error-boundary-pre">
                                     {this.state.error?.toString()}
                                 </pre>
                             </details>

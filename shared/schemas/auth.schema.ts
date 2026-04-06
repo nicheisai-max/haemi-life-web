@@ -9,10 +9,10 @@ export const LoginRequestSchema = z.object({
 export const SignupRequestSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     email: z.string().email('Invalid email address'),
-    phone_number: z.string().min(1, 'Phone number is required'),
+    phoneNumber: z.string().min(1, 'Phone number is required'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     role: UserRoleSchema,
-    id_number: z.string().optional(),
+    idNumber: z.string().optional(),
 });
 
 export const AuthResponseSchema = z.object({
@@ -25,7 +25,7 @@ export const AuthResponseSchema = z.object({
         name: z.string(),
         status: z.string(),
         initials: z.string().optional(),
-        profile_image: z.string().nullable().optional(),
+        profileImage: z.string().nullable().optional(),
     }),
     serverTime: z.string().optional(),
     sessionTimeout: z.number().optional(),

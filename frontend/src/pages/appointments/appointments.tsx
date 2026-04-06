@@ -29,13 +29,13 @@ export const Appointments: React.FC = () => {
 
         if (filter === 'upcoming') {
             filtered = appointments.filter(apt => {
-                const aptDate = new Date(apt.appointment_date);
+                const aptDate = new Date(apt.appointmentDate);
                 aptDate.setHours(0, 0, 0, 0);
                 return aptDate >= now && apt.status !== 'cancelled';
             });
         } else if (filter === 'past') {
             filtered = appointments.filter(apt => {
-                const aptDate = new Date(apt.appointment_date);
+                const aptDate = new Date(apt.appointmentDate);
                 aptDate.setHours(0, 0, 0, 0);
                 return aptDate < now || apt.status === 'completed' || apt.status === 'cancelled';
             });
@@ -111,7 +111,7 @@ export const Appointments: React.FC = () => {
     };
 
     const isPastAppointment = (apt: Appointment) => {
-        const aptDate = new Date(apt.appointment_date);
+        const aptDate = new Date(apt.appointmentDate);
         aptDate.setHours(0, 0, 0, 0);
         const now = new Date();
         now.setHours(0, 0, 0, 0);
@@ -178,7 +178,7 @@ export const Appointments: React.FC = () => {
                         }`}
                     onClick={() => setFilter('upcoming')}
                 >
-                    Upcoming ({appointments.filter(a => new Date(a.appointment_date) >= new Date() && a.status !== 'cancelled').length})
+                    Upcoming ({appointments.filter(a => new Date(a.appointmentDate) >= new Date() && a.status !== 'cancelled').length})
                 </button>
                 <button
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'past'
@@ -187,7 +187,7 @@ export const Appointments: React.FC = () => {
                         }`}
                     onClick={() => setFilter('past')}
                 >
-                    Past ({appointments.filter(a => new Date(a.appointment_date) < new Date() || a.status === 'completed' || a.status === 'cancelled').length})
+                    Past ({appointments.filter(a => new Date(a.appointmentDate) < new Date() || a.status === 'completed' || a.status === 'cancelled').length})
                 </button>
             </TransitionItem>
 
@@ -214,10 +214,10 @@ export const Appointments: React.FC = () => {
                                 {/* Date Badge */}
                                 <div className="flex-shrink-0 w-16 h-16 bg-primary/10 rounded-xl flex flex-col items-center justify-center text-primary border border-primary/20">
                                     <span className="text-2xl font-bold leading-none">
-                                        {new Date(appointment.appointment_date).getDate()}
+                                        {new Date(appointment.appointmentDate).getDate()}
                                     </span>
                                     <span className="text-xs font-semibold uppercase mt-1">
-                                        {new Date(appointment.appointment_date).toLocaleDateString('en-US', { month: 'short' })}
+                                        {new Date(appointment.appointmentDate).toLocaleDateString('en-US', { month: 'short' })}
                                     </span>
                                 </div>
 
@@ -226,7 +226,7 @@ export const Appointments: React.FC = () => {
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         <div className="space-y-1">
                                             <h3 className="font-semibold text-lg flex items-center gap-3">
-                                                {user?.role === 'doctor' ? appointment.other_party_name || 'Patient' : appointment.other_party_name || 'Doctor'}
+                                                {user?.role === 'doctor' ? appointment.otherPartyName || 'Patient' : appointment.otherPartyName || 'Doctor'}
                                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getStatusColor(appointment.status)}`}>
                                                     {appointment.status}
                                                 </span>
@@ -287,7 +287,7 @@ export const Appointments: React.FC = () => {
                                     <div className="flex flex-wrap gap-6 text-sm text-muted-foreground pt-2 border-t border-border/50">
                                         <div className="flex items-center gap-2">
                                             <Clock className="h-4 w-4 text-primary/60" />
-                                            <span>{new Date(`2000-01-01T${appointment.appointment_time}`).toLocaleTimeString('en-US', {
+                                            <span>{new Date(`2000-01-01T${appointment.appointmentTime}`).toLocaleTimeString('en-US', {
                                                 hour: 'numeric',
                                                 minute: '2-digit',
                                                 hour12: true
@@ -295,7 +295,7 @@ export const Appointments: React.FC = () => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Calendar className="h-4 w-4 text-primary/60" />
-                                            <span>{new Date(appointment.appointment_date).toLocaleDateString('en-US', {
+                                            <span>{new Date(appointment.appointmentDate).toLocaleDateString('en-US', {
                                                 weekday: 'long',
                                                 month: 'long',
                                                 day: 'numeric',

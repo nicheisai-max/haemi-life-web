@@ -4,15 +4,32 @@ import { Request } from 'express';
 const storage = multer.memoryStorage();
 
 const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const allowedTypes = [
-        'image/jpeg', 'image/png', 'image/jpg', 'image/webp',
-        'application/pdf', 'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    const mimetype = file.mimetype.toLowerCase();
+
+    // 🔒 BLOCK: Executable / Dangerous types (Institutional Standard)
+    const blockedTypes = [
+        'application/x-msdownload', // .exe, .dll
+        'application/x-sh',         // .sh
+        'application/x-bat',        // .bat
+        'application/octet-stream'  // Generic binary (use with caution)
     ];
-    if (allowedTypes.includes(file.mimetype)) {
+
+    if (blockedTypes.includes(mimetype)) {
+        return cb(new Error('Institutional Security: Unsupported or dangerous file type blocked.'));
+    }
+
+    // 🩺 ALLOW: Medical Images/Documents/Structured Data
+    if (
+        mimetype.startsWith('image/') ||
+        mimetype.startsWith('application/pdf') ||
+        mimetype.startsWith('application/msword') ||
+        mimetype.indexOf('officedocument') !== -1 ||
+        mimetype.startsWith('text/csv') ||
+        mimetype.startsWith('text/plain')
+    ) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Only images and documents are allowed.'));
+        cb(new Error('Invalid file type. Only diagnostic images and clinical documents are allowed.'));
     }
 };
 

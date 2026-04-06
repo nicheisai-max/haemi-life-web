@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticateToken, requireRole } from '../middleware/auth.middleware';
-import { getMyRecords, uploadRecord, deleteRecord, getRecordById, getPatientRecords } from '../controllers/record.controller';
+import { getMyRecords, uploadRecord, deleteRecord, getRecordById, getPatientRecords, checkFileExistence } from '../controllers/record.controller';
 
 const router = Router();
 
@@ -17,6 +17,7 @@ router.use(authenticateToken);
 
 // GET is allowed for all authenticated clinical roles (access logic in controller/repo)
 router.get('/', getMyRecords);
+router.get('/exists', checkFileExistence); // 🔍 Forensic existence check
 router.get('/patient/:patientId', getPatientRecords);
 router.get('/:id', getRecordById);
 

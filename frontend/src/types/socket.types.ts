@@ -5,25 +5,25 @@ import type { SignalData } from 'simple-peer';
  */
 export interface ChatMessageEvent {
     id: string;
-    conversation_id: string;
-    sender_id: string;
-    sender_name: string;
+    conversationId: string;
+    senderId: string;
+    senderName: string;
     content: string;
-    message_type: 'text' | 'image' | 'document';
+    messageType: 'text' | 'image' | 'document';
     status: 'sent' | 'delivered' | 'read';
-    created_at: string;
-    attachment_url?: string;
-    attachment_type?: string;
+    createdAt: string;
+    attachmentUrl?: string;
+    attachmentType?: string;
     attachments: Array<{
         url: string;
         type: string;
         size: number;
         name: string;
     }>;
-    reply_to?: {
+    replyTo?: {
         id: string;
         content: string;
-        sender_name: string;
+        senderName: string;
     };
 }
 

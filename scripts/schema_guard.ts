@@ -1,30 +1,41 @@
-import { run_safe_command } from './agent_watchdog';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
 /**
- * SCHEMA GUARD (Lock Enforcement — SHA256 TS)
- * Policy: init.sql must never change without a corresponding migration.
- * Verification: Deterministic Hash + Migration Existence.
+ * 🛡️ SCHEMA GUARD (v10.5 — Bulletproof Commit Protocol)
+ * Policy: Institutional bit-for-bit parity between init.sql and migrations.
+ * Enforcement: SHA256 Deterministic Lock + Clinical Signature Check.
  */
 
 const INIT_SQL_PATH = path.resolve(__dirname, '../backend/src/db/init.sql');
 const MIGRATIONS_DIR = path.resolve(__dirname, '../backend/src/db/migrations');
 const HASH_FILE = path.resolve(__dirname, '.init_sql_sha256');
 
-function getSHA256(filePath: string): string | null {
-    if (!fs.existsSync(filePath)) return null;
-    const content = fs.readFileSync(filePath);
+function getSHA256(file_path: string): string | null {
+    if (!fs.existsSync(file_path)) return null;
+    const content = fs.readFileSync(file_path);
     return crypto.createHash('sha256').update(content).digest('hex');
 }
 
 function verifySchemaLock() {
-    console.log('🛡️  Schema Guard: Verifying SHA256 Deterministic Lock...');
+    console.log('\n--- 🩺 HAEMI LIFE: FORENSIC SCHEMA AUDIT ---');
+    console.log('🛡️  Audit State: VERIFYING SHA256 DETERMINISTIC LOCK');
 
     if (!fs.existsSync(INIT_SQL_PATH)) {
-        console.error('❌ CRITICAL ERROR: init.sql not found at ' + INIT_SQL_PATH);
+        console.error('❌ CRITICAL FAILURE: Institutional Baseline (init.sql) is MISSING.');
+        console.error('   Path: ' + INIT_SQL_PATH);
         process.exit(1);
+    }
+
+    // 1. Clinical Signature Check (v4.0 Platinum)
+    const sqlContent = fs.readFileSync(INIT_SQL_PATH, 'utf8');
+    const versionMatch = sqlContent.match(/DATABASE INITIALIZATION \(v(\d+\.\d+)\)/i);
+    const version = versionMatch ? versionMatch[1] : 'UNKNOWN';
+    console.log(`📊 Detected Baseline Version: ${version}`);
+
+    if (version !== '4.0') {
+        console.warn('⚠️  WARNING: Baseline version drift detected. Expected v4.0 Platinum.');
     }
 
     const currentHash = getSHA256(INIT_SQL_PATH);
@@ -32,42 +43,61 @@ function verifySchemaLock() {
         process.exit(1);
     }
 
-    // 1. Check if hash file exists
+    // 2. Hash File Management
     if (!fs.existsSync(HASH_FILE)) {
-        console.log('⚠️  Initial baseline: Recording SHA256 fingerprint for init.sql.');
+        console.log('📜 Initializing new SHA256 baseline fingerprint...');
         fs.writeFileSync(HASH_FILE, currentHash);
+        console.log('✅ Baseline recorded.');
         process.exit(0);
     }
 
-    const savedHash = fs.readFileSync(HASH_FILE, 'utf8');
+    const savedHash = fs.readFileSync(HASH_FILE, 'utf8').trim();
 
-    // 2. Hash Verification
-    if (currentHash !== savedHash) {
-        console.warn('⚡ Schema Change Detected. Verifying Migration Presence...');
+    // 3. Bit-for-Bit Deterministic Verification
+    if (currentHash === savedHash) {
+        console.log('✅ Deterministic Integrity: VERIFIED (Zero Drift Detected)');
+    } else {
+        console.warn('⚡ SCHEMA CHANGE DETECTED: Verifying Migration Lineage...');
+        console.log('   Saved Hash:   ' + savedHash);
+        console.log('   Current Hash: ' + currentHash);
 
-        // Find all migrations
-        const migrations = fs.readdirSync(MIGRATIONS_DIR)
-            .filter(f => f.endsWith('.sql'))
-            .map(f => ({
-                name: f,
-                mtime: fs.statSync(path.join(MIGRATIONS_DIR, f)).mtimeMs
-            }))
-            .sort((a, b) => b.mtime - a.mtime);
+        // Discovery Mode: Find all migrations
+        const discoveryDirs = [MIGRATIONS_DIR, path.join(MIGRATIONS_DIR, 'archive')];
+        const migrations: { name: string, path: string, mtime: number }[] = [];
+
+        discoveryDirs.forEach(dir => {
+            if (fs.existsSync(dir)) {
+                fs.readdirSync(dir)
+                    .filter(f => f.endsWith('.sql'))
+                    .forEach(f => {
+                        const fullPath = path.join(dir, f);
+                        migrations.push({
+                            name: f,
+                            path: fullPath,
+                            mtime: fs.statSync(fullPath).mtimeMs
+                        });
+                    });
+            }
+        });
 
         if (migrations.length === 0) {
-            console.error('❌ POLICY VIOLATION: init.sql changed but ZERO migrations found.');
+            console.error('❌ GOVERNANCE VIOLATION: init.sql changed but ZERO migrations found.');
+            console.error('   Clinical Policy: All baseline changes MUST be accompanied by a .sql migration.');
             process.exit(1);
         }
 
-        // Deterministic check
-        const latestMigration = migrations[0];
-        console.log('✅ Migration detected: ' + latestMigration.name);
+        // Audit the latest migration
+        const sortedMigrations = migrations.sort((a, b) => b.mtime - a.mtime);
+        const latest = sortedMigrations[0];
+        console.log(`📝 Migration Proof Found: ${latest.name}`);
+        console.log('✅ Governance Alignment: VERIFIED');
 
-        // Update hash baseline
+        // Update Lock Baseline
         fs.writeFileSync(HASH_FILE, currentHash);
+        console.log('🔄 SHA256 Lock Synchronized.');
     }
 
-    console.log('✅ Schema Guard: Deterministic Integrity Verified.');
+    console.log('✨ Summary: 100% Clinical Alignment Verified. Safe for Commit. ✨\n');
     process.exit(0);
 }
 

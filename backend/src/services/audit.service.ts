@@ -5,58 +5,74 @@ import { logger } from '../utils/logger';
 export const SYSTEM_ANONYMOUS_ID = '00000000-0000-0000-0000-000000000000';
 
 export interface AuditLogEntry {
-    user_id: string; // Mandatory per Zero-Trust Identity Policy
-    actor_role?: string;
-    action_type: string;
-    target_id?: string;
-    entity_id?: string;
-    action?: string;
+    userId: string; // Mandatory per Zero-Trust Identity Policy
+    actorRole?: string;
+    
+    // Canonical Audit Identifiers (Google-Grade Standard)
+    action: string; 
+    entityId?: string | null;
+    entityType?: string;
+    
+    location?: string;
     details?: string;
     metadata?: Record<string, unknown>;
-    ip_address?: string;
-    user_agent?: string;
-    session_id?: string;
-    access_token_jti?: string;
-    refresh_token_jti?: string;
-    device_type?: string;
+    ipAddress?: string;
+    userAgent?: string;
+    sessionId?: string;
+    accessTokenJti?: string;
+    refreshTokenJti?: string;
+    deviceType?: string;
 }
 
 export const auditService = {
-    log: async (entry: Partial<AuditLogEntry> & Record<string, unknown>) => {
+    log: async (entry: AuditLogEntry) => {
         try {
             // ZERO-TRUST CANONICAL IDENTITY ENFORCEMENT
-            if (!entry.user_id) {
-                throw new Error("Identity policy violation: user_id required");
+            if (!entry.userId) {
+                throw new Error("Identity policy violation: userId required");
             }
 
-            const user_id = entry.user_id;
-            const action = entry.action || entry.action_type || 'UNKNOWN_ACTION';
-            const entity_id = entry.entity_id || entry.target_id || null;
+            const userId = entry.userId;
+            
+            // 🩺 HAEMI CANONICAL RESOLUTION (Strict Alignment)
+            const action = entry.action || 'UNKNOWN_ACTION';
+            const entityId = entry.entityId || null;
+            const entityType = entry.entityType || 'UNKNOWN';
+            
+            // Institutional Data Normalization: Coalesce metadata/details
             const details = entry.details || 
                 (entry.metadata ? JSON.stringify(entry.metadata) : null) || 
                 '{}';
-            const ip_address = entry.ip_address || null;
-            const user_agent = entry.user_agent || null;
+                
+            const ipAddress = entry.ipAddress || null;
+            const userAgent = entry.userAgent || null;
             
             if (!action || action === 'UNKNOWN_ACTION') return;
 
             await pool.query(
                 `INSERT INTO audit_logs (
-                    user_id, action, entity_id, details, 
+                    user_id, action, entity_id, entity_type, details, 
                     ip_address, user_agent, created_at
                 )
-                 VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
                 [
-                    user_id,
+                    userId,
                     action,
-                    entity_id,
+                    entityId,
+                    entityType,
                     details,
-                    ip_address,
-                    user_agent
+                    ipAddress,
+                    userAgent
                 ]
             );
-        } catch (error) {
-            logger.error('Failed to write audit log', { error, entry });
+        } catch (error: unknown) {
+            logger.error('Failed to write audit log', { 
+                error: error instanceof Error ? error.message : String(error),
+                userId: entry.userId,
+                action: entry.action
+            });
         }
     }
 };
+
+

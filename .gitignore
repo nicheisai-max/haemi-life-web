@@ -1,7 +1,7 @@
 # =============================================================================
 # HAEMI LIFE — ENTERPRISE .GITIGNORE
 # Policy: Zero-tolerance for secrets, build artifacts, temp files, and logs.
-# Last updated: 2026-03-18
+# Last updated: 2026-04-06 (Institutional Lockdown v10.6)
 # =============================================================================
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,14 +86,18 @@ coverage/
 .nuxt/
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DATABASE ARTIFACTS (Rule 5 — no backups committed)
+# DATABASE & UPLOAD ARTIFACTS (Rule 5 — Zero-User Data Policy)
 # ─────────────────────────────────────────────────────────────────────────────
 *.sql
 *.dump
 /backups/
 /backend/backups/
 /database_backups/
-backend/uploads/
+*.backup.sql
+/backend/uploads/
+/backend/data/
+/backend/temp/
+/common/uploads/
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LARGE / BINARY FILES (Rule 9)
@@ -139,24 +143,37 @@ frontend_backup/
 !backend/scripts/
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ADDITIONAL ZERO-TRUST HARDENING
+# HAEMI LIFE: AUTOMATIC LOCKDOWN (v10.6)
 # ─────────────────────────────────────────────────────────────────────────────
-# Test artifacts
-e2e/playwright-report/
+# Test Artifacts (Screenshots, Videos, Reports)
 e2e/test-results/
+e2e/playwright-report/
+playwright-report/
+test-results/
+
+# Institutional Reports & Scaffolding
+tmp/
+temp/
+backend/*.txt
+frontend/*.txt
+*.txt
+!*.md
+!LICENSE
+
+# Force ignore all uploads and diagnostic scripts
+backend/uploads/**/*
+backend/uploads/temp/**/*
+backend/*.ts
+!backend/src/**/*.ts
+backend/*.js
+!backend/src/**/*.js
+*.tsbuildinfo
+**/temp_attachments/**/*
+**/_quarantine/**/*
 
 # Logs
-backend/full_lint_errors.txt
-backend/lint_failures.txt
-backend/lint_output.txt
-frontend/tsc_errors.txt
-frontend/lint_errors.txt
-*.txt
-
-# Media artifacts
-*.png
-*.webm
-*.mp4
-
-# Temp
-temp/
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
