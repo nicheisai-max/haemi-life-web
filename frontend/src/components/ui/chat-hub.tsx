@@ -291,7 +291,11 @@ export const ChatHub: React.FC = () => {
         } else {
             // P0: WhatsApp-Grade Lazy Creation
             // We pass the doctor metadata to create a local virtual conversation
-            await startNewConversation(doctor.id, doctor);
+            await startNewConversation(doctor.id, {
+                name: doctor.name,
+                specialization: doctor.specialization,
+                profileImage: doctor.profileImage || undefined
+            });
             setView('conversation'); 
         }
     };

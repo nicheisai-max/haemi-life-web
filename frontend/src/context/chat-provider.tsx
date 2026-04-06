@@ -13,7 +13,8 @@ import {
     PresenceApiResponse,
     RawParticipant,
     normalizeParticipant,
-    ChatApiResponse
+    ChatApiResponse,
+    ParticipantMetadata
 } from '../types/chat';
 import { logger } from '../utils/logger';
 import { storageService } from '../services/storage.service';
@@ -651,7 +652,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (otherIds.length > 0) fetchPresence(otherIds);
     };
 
-    const startNewConversation = async (participantId: string, _meta?: Record<string, unknown>) => {
+    const startNewConversation = async (participantId: string, _meta?: ParticipantMetadata) => {
         try {
             const res = await api.post<{ data: { conversationId: string } }>('/chat/conversations', { participantId });
             if (!res.data || typeof res.data !== 'object' || !res.data.data?.conversationId) {

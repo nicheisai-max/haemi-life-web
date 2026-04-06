@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { Conversation, Message, Attachment, AttachmentDTO, PresenceRecord } from '../types/chat';
+import type { Conversation, Message, Attachment, AttachmentDTO, PresenceRecord, ParticipantMetadata } from '../types/chat';
 
 export interface ChatContextType {
     conversations: Conversation[];
@@ -19,7 +19,7 @@ export interface ChatContextType {
         attachmentName?: string,
         attachments?: Attachment[]
     ) => Promise<void>;
-    startNewConversation: (participantId: string, meta?: Record<string, unknown>) => Promise<void>;
+    startNewConversation: (participantId: string, meta?: ParticipantMetadata) => Promise<void>;
     emitTyping: (conversationId: string, isTyping: boolean) => void;
     uploadAttachment: (file: File) => Promise<AttachmentDTO | null>;
     deleteMessage: (messageId: string, forEveryone: boolean) => Promise<void>;

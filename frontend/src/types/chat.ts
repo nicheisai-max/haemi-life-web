@@ -62,6 +62,13 @@ export interface ChatParticipant {
     initials?: string;
 }
 
+/** Explicit metadata handover for starting new conversations (Google/Meta Standard) */
+export interface ParticipantMetadata {
+    name: string;
+    specialization: string;
+    profileImage?: string | null;
+}
+
 // --- Messages ---
 
 export type MessageType = 'text' | 'image' | 'document';
