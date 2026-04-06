@@ -56,7 +56,7 @@ describe('Session Isolation (Phase 2)', () => {
 
             // 1. Create a "stale" refresh token (version 0)
             const staleToken = jwt.sign(
-                { id: userId, token_version: 0, session_id: 's1', jti: 'j1' },
+                { id: userId, tokenVersion: 0, sessionId: 's1', jti: 'j1' },
                 jwtSecret,
                 { expiresIn: '7d' }
             );
@@ -105,7 +105,7 @@ describe('Session Isolation (Phase 2)', () => {
 
             // 1. Create a "valid" refresh token (version 1)
             const validToken = jwt.sign(
-                { id: userId, token_version: 1, session_id: 's2', jti: 'j2' },
+                { id: userId, tokenVersion: 1, sessionId: 's2', jti: 'j2' },
                 jwtSecret,
                 { expiresIn: '7d' }
             );
@@ -160,7 +160,7 @@ describe('Session Isolation (Phase 2)', () => {
 
             // Mock token for auth middleware
             const token = jwt.sign(
-                { id: userId, role: 'patient', token_version: 1 },
+                { id: userId, role: 'patient', tokenVersion: 1 },
                 jwtSecret,
                 { expiresIn: '1h' }
             );
