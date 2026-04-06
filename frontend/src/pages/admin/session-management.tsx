@@ -108,7 +108,7 @@ export const SessionManagement: React.FC = () => {
                                     <th>User Identity</th>
                                     <th>Role</th>
                                     <th>Device / IP</th>
-                                    <th>Last Activity</th>
+                                    <th>Last Seen</th>
                                     <th className="text-right">Actions</th>
                                 </tr>
                             </thead>

@@ -69,6 +69,7 @@ describe('AuthContext Lifecycle', () => {
                 initials: 'DT',
                 profileImage: null,
                 isVerified: true,
+                hasConsent: false,
                 status: 'ACTIVE',
                 createdAt: new Date().toISOString()
             },

@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ThemeContext, type Theme } from './theme-context-def';
 
@@ -23,7 +23,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
 
-    useLayoutEffect(() => {
+    useEffect(() => {
         const root = window.document.documentElement;
 
         // If it's an auth page, FORCE 'light' regardless of 'theme' state
@@ -39,13 +39,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     }, [theme, location.pathname]);
 
-    const toggleTheme = () => {
+    const toggleTheme = useCallback(() => {
         if (isAuthPage(location.pathname)) return; // Prevent toggling on auth pages
         setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
-    };
+    }, [location.pathname]);
+
+    const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        <ThemeContext.Provider value={value}>
             {children}
         </ThemeContext.Provider>
     );

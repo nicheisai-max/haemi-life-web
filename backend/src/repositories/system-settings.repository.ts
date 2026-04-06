@@ -36,9 +36,9 @@ export class SystemSettingsRepository {
         try {
             await this.db.query(
                 `INSERT INTO system_settings (key, value, updated_at) 
-                 VALUES ($1, $2, NOW())
+                 VALUES ($1, $2, CURRENT_TIMESTAMP)
                  ON CONFLICT (key) DO 
-                 UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+                 UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
                 [key, value]
             );
         } catch (error: unknown) {

@@ -1,5 +1,4 @@
 import { JoinedDoctorRow } from '../types/db.types';
-import { decrypt } from './security';
 
 export interface DoctorResponse {
     id: string;
@@ -14,6 +13,7 @@ export interface DoctorResponse {
     bio?: string | null;
     consultationFee?: number | null;
     isVerified?: boolean;
+    createdAt?: string;
 }
 
 export const mapDoctorToResponse = (data: JoinedDoctorRow): DoctorResponse => {
@@ -21,7 +21,7 @@ export const mapDoctorToResponse = (data: JoinedDoctorRow): DoctorResponse => {
         id: data.id,
         name: data.name,
         email: data.email || null,
-        phoneNumber: data.phone_number ? decrypt(data.phone_number) : null,
+        phoneNumber: data.phone_number,
         role: data.role || 'doctor',
         initials: data.initials,
         profileImage: data.profile_image || null,
@@ -29,7 +29,8 @@ export const mapDoctorToResponse = (data: JoinedDoctorRow): DoctorResponse => {
         yearsOfExperience: data.years_of_experience,
         bio: data.bio,
         consultationFee: data.consultation_fee ? Number(data.consultation_fee) : null,
-        isVerified: !!data.is_verified
+        isVerified: !!data.is_verified,
+        createdAt: data.created_at?.toISOString()
     };
 };
 

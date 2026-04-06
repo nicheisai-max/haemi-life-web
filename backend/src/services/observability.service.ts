@@ -14,7 +14,6 @@ import {
     ObservabilityBatch,
     ObservabilityBatchSchema
 } from '../../../shared/schemas/observability.schema';
-import { HaemiServer } from '../types/socket.types';
 
 // 🔒 Exact event union from schema
 type ObservabilityEvent = ObservabilityBatch['events'][number];
@@ -74,9 +73,8 @@ class ObservabilityService {
         try {
             const validated = ObservabilityBatchSchema.parse(batch);
 
-            // 🔒 Strict type-cast to HaemiServer to break circular dependency type-decay
-            const server = socketIO as HaemiServer | undefined;
-            server?.to(this.ADMIN_ROOM).emit('observabilityBatch', validated);
+            // 🔒 Strict emission to admin observability room
+            socketIO?.to(this.ADMIN_ROOM).emit('observabilityBatch', validated);
 
             logger.info(
                 `[Observability] Flushed batch ${batch.batchId} with ${batch.events.length} events`
@@ -95,10 +93,10 @@ class ObservabilityService {
         try {
             if (event.success) {
                 const validated = LoginSuccessEventSchema.parse(event);
-                this.addToBatch({ type: 'loginSuccess', data: validated });
+                this.addToBatch({ type: 'login_success', data: validated });
             } else {
                 const validated = LoginFailureEventSchema.parse(event);
-                this.addToBatch({ type: 'loginFailure', data: validated });
+                this.addToBatch({ type: 'login_failure', data: validated });
             }
         } catch (error: unknown) {
             logger.error('[Observability] Failed to buffer login event:', {
@@ -111,7 +109,7 @@ class ObservabilityService {
     public logSessionStart(event: SessionStartedEvent) {
         try {
             const validated = SessionStartedEventSchema.parse(event);
-            this.addToBatch({ type: 'sessionStarted', data: validated });
+            this.addToBatch({ type: 'session_started', data: validated });
         } catch (error: unknown) {
             logger.error('[Observability] Failed to buffer session start:', {
                 error: error instanceof Error ? error.message : String(error),
@@ -123,7 +121,7 @@ class ObservabilityService {
     public logSessionEnd(event: SessionEndedEvent) {
         try {
             const validated = SessionEndedEventSchema.parse(event);
-            this.addToBatch({ type: 'sessionEnded', data: validated });
+            this.addToBatch({ type: 'session_ended', data: validated });
         } catch (error: unknown) {
             logger.error('[Observability] Failed to buffer session end:', {
                 error: error instanceof Error ? error.message : String(error),
@@ -135,7 +133,7 @@ class ObservabilityService {
     public logTokenRefresh(event: TokenRefreshedEvent) {
         try {
             const validated = TokenRefreshedEventSchema.parse(event);
-            this.addToBatch({ type: 'tokenRefreshed', data: validated });
+            this.addToBatch({ type: 'token_refreshed', data: validated });
         } catch (error: unknown) {
             logger.error('[Observability] Failed to buffer token refresh:', {
                 error: error instanceof Error ? error.message : String(error),

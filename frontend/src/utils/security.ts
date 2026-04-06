@@ -116,9 +116,10 @@ export const decrypt = async (text: string): Promise<string> => {
         decryptionCache.set(text, result);
         return result;
 
-    } catch {
-        // Silently return original text if decryption fails (likely legacy/corrupted data)
-        return text;
+    } catch (error) {
+        console.error('[Security] Decryption failed:', error);
+        // Institutional Hardening: Return sanitized placeholder for corrupted/legacy records
+        return '[Encrypted Message]';
     }
 };
 

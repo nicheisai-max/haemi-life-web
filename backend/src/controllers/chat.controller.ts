@@ -2,23 +2,32 @@
 // DO NOT MODIFY WITHOUT EXPLICIT USER APPROVAL
 // SINGLE SOURCE: message_attachments ONLY
 // FALLBACKS FORBIDDEN
-// TYPESCRIPT STRICT MODE ENFORCED
+// TYPESCRIPT STRICT MODE ENFORCED (GOOGLE/META GRADE)
 
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
 import { socketIO as io } from '../app';
 import { chatReliabilityService } from '../services/chat-reliability.service';
-import multer from 'multer';
 import * as path from 'path';
-import { promises as fs } from 'fs';
+import { fileService } from '../services/file.service';
+import { upload as commonUpload } from '../middleware/upload.middleware';
 import { encrypt, decrypt } from '../utils/security';
 import { sendResponse, sendError } from '../utils/response';
 import { notificationService } from '../services/notification.service';
 import { mapMessageToResponse, mapConversationToResponse } from '../utils/chat.mapper';
 import crypto from 'crypto';
 import { statusService } from '../services/status.service';
-import { getAbsolutePath } from '../utils/path.util';
+import { 
+    DbMessage, 
+    DbConversation, 
+    ChatParticipant, 
+    DbAttachment, 
+    DbReaction, 
+    ConversationResponse 
+} from '../types/chat.types';
+import { ChatMessage } from '../types/socket.types';
+import { JWTPayload } from '../types/express';
 
 // 🔒 STRICT UUID VALIDATION (RFC 4122)
 const isUUID = (id: string | undefined | null): id is string => {
@@ -26,41 +35,9 @@ const isUUID = (id: string | undefined | null): id is string => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(id);
 };
-// Configure Multer Storage (Centralized Memory Storage preferred for Bytea)
-const storage = multer.memoryStorage();
 
-export const upload = multer({
-    storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-    fileFilter: (_req, file, cb) => {
-        const mimetype = file.mimetype.toLowerCase();
-
-        // BLOCK: Executable / Dangerous types
-        const blockedTypes = [
-            'application/x-msdownload', // .exe, .dll, .bat
-            'application/x-sh',          // .sh
-            'application/x-bat'         // .bat
-        ];
-
-        if (blockedTypes.includes(mimetype)) {
-            return cb(new Error('Unsupported file type'));
-        }
-
-        // ALLOW: Scalable Image/Application/Text support
-        if (
-            mimetype.startsWith('image/') ||
-            mimetype.startsWith('application/') ||
-            mimetype.startsWith('text/')
-        ) {
-            cb(null, true);
-        } else {
-            cb(new Error('Unsupported file type'));
-        }
-    }
-});
-
-import { DbMessage, DbConversation, ChatParticipant } from '../types/chat.types';
-import { ChatMessage } from '../types/socket.types';
+// Legacy: redirecting the internal export to the common middleware for route compatibility
+export const upload = commonUpload;
 
 // Upload Attachment Endpoint
 export const uploadAttachment = async (req: Request, res: Response) => {
@@ -70,23 +47,11 @@ export const uploadAttachment = async (req: Request, res: Response) => {
 
     try {
         const { originalname, mimetype, buffer } = req.file;
-        const fileExt = path.extname(originalname);
-        const uniqueFileName = `${crypto.randomUUID()}${fileExt}`;
-        const relativePath = `uploads/chat/temp/${uniqueFileName}`;
-        const fullPath = getAbsolutePath(relativePath);
+        
+        // Institutional Save: Non-blocking async write via FileService
+        const relativePath = await fileService.saveFileFromBuffer(buffer, 'chat/temp', originalname);
 
-        // Ensure directory exists
-        const dirPath = path.dirname(fullPath);
-        try {
-            await fs.access(dirPath);
-        } catch {
-            await fs.mkdir(dirPath, { recursive: true });
-        }
-
-        // Write to filesystem
-        await fs.writeFile(fullPath, buffer);
-
-        // P0 FIX: Storing BOTH relative path and originalName in the 'name' column
+        // P0 FIX: Storing BOTH relative path and originalName as metadata
         const stagingMetadata = `${relativePath}|${originalname}`;
 
         const result = await pool.query(
@@ -95,7 +60,7 @@ export const uploadAttachment = async (req: Request, res: Response) => {
         );
 
         const tempId = result.rows[0].id;
-        const virtualUrl = `/files/temp/${tempId}`;
+        const virtualUrl = `/api/files/temp/${tempId}`;
 
         return sendResponse(res, 200, true, 'Attachment staged successfully', {
             url: virtualUrl,
@@ -112,10 +77,9 @@ export const uploadAttachment = async (req: Request, res: Response) => {
     }
 };
 
-
 // Get all conversations for the current user (Phase 4: Batch Processed)
 export const getConversations = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id;
 
@@ -124,16 +88,22 @@ export const getConversations = async (req: Request, res: Response) => {
     }
 
     try {
-        // 1. Fetch Base Conversations (Hard Gate: Message existence required)
-        // P0 PROTOCOL: We join with messages to ensure zero ghost leakage.
-        const convResult = await pool.query<{ id: string, updated_at: string, last_message_at: string, participants_hash: string, last_message_id: string }>(
+        const convResult = await pool.query<{ 
+            id: string, 
+            updated_at: string | Date, 
+            last_message_at: string | Date | null, 
+            participants_hash: string, 
+            last_message_id: string | null 
+        }>(
             `SELECT DISTINCT ON (c.id) 
-                c.id, c.updated_at, m.created_at as last_message_at, c.participants_hash, m.id as last_message_id
+                c.id, c.updated_at, 
+                COALESCE(m.created_at, c.last_message_at, c.updated_at) as last_message_at, 
+                c.participants_hash, m.id as last_message_id
              FROM conversations c
              JOIN conversation_participants cp ON c.id = cp.conversation_id
-             INNER JOIN messages m ON c.id = m.conversation_id
+             LEFT JOIN messages m ON c.id = m.conversation_id
              WHERE cp.user_id = $1
-             ORDER BY c.id, m.created_at DESC`,
+             ORDER BY c.id, m.created_at DESC NULLS LAST`,
             [userId]
         );
 
@@ -141,15 +111,15 @@ export const getConversations = async (req: Request, res: Response) => {
             return sendResponse(res, 200, true, 'No conversations found', []);
         }
 
-        // Sort by message time (DISTINCT ON required sorting by id first)
-        const sortedConvs = convResult.rows.sort((a, b) =>
-            new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-        );
+        const sortedConvs = convResult.rows.sort((a, b) => {
+            const timeA = new Date(a.last_message_at || a.updated_at).getTime();
+            const timeB = new Date(b.last_message_at || b.updated_at).getTime();
+            return timeB - timeA;
+        });
 
         const convIds = sortedConvs.map(c => c.id);
 
-        // 2. Batch Fetch Latest Message Previews
-        const msgResult = await pool.query<{ conversation_id: string, preview_text: string }>(
+        const msgResult = await pool.query<{ conversation_id: string, preview_text: string | null }>(
             `SELECT DISTINCT ON (conversation_id) conversation_id, preview_text
              FROM messages
              WHERE conversation_id = ANY($1)
@@ -157,9 +127,8 @@ export const getConversations = async (req: Request, res: Response) => {
              ORDER BY conversation_id, created_at DESC`,
             [convIds, userId]
         );
-        const lastMsgMap = new Map(msgResult.rows.map(r => [r.conversation_id, r.preview_text]));
+        const lastMsgMap = new Map<string, string | null>(msgResult.rows.map(r => [r.conversation_id, r.preview_text]));
 
-        // 3. Batch Fetch Unread Counts
         const unreadResult = await pool.query<{ conversation_id: string, count: string }>(
             `SELECT m.conversation_id, COUNT(*) as count
              FROM messages m
@@ -169,10 +138,16 @@ export const getConversations = async (req: Request, res: Response) => {
              GROUP BY m.conversation_id`,
             [convIds, userId]
         );
-        const unreadMap = new Map(unreadResult.rows.map(r => [r.conversation_id, parseInt(r.count)]));
+        const unreadMap = new Map<string, number>(unreadResult.rows.map(r => [r.conversation_id, parseInt(r.count)]));
 
-        // 4. Batch Fetch Participants (Excluding Self)
-        const partResult = await pool.query<{ conversation_id: string, id: string, name: string, role: string, initials: string, profile_image: string | null }>(
+        const partResult = await pool.query<{ 
+            conversation_id: string, 
+            id: string, 
+            name: string, 
+            role: string, 
+            initials: string, 
+            profile_image: string | null 
+        }>(
             `SELECT cp.conversation_id, u.id, u.name, u.role, u.initials, u.profile_image
              FROM conversation_participants cp
              JOIN users u ON cp.user_id = u.id
@@ -188,22 +163,22 @@ export const getConversations = async (req: Request, res: Response) => {
             });
         });
 
-        // 5. Final Merge (Deterministic)
-        const conversations = sortedConvs.map(row => {
+        const conversations: ConversationResponse[] = sortedConvs.map(row => {
             const dbConv: DbConversation = {
                 id: row.id,
                 updated_at: row.updated_at,
-                last_message_at: row.last_message_at,
+                last_message_at: row.last_message_at || row.updated_at,
                 participants_hash: row.participants_hash,
                 last_message: lastMsgMap.get(row.id) || undefined,
-                last_message_id: row.last_message_id,
+                last_message_id: row.last_message_id || undefined,
                 participants: partMap.get(row.id) || [],
                 unread_count: unreadMap.get(row.id) || 0,
                 message_count: 0,
                 sequence_counter: 0
             };
-            return mapConversationToResponse(dbConv);
-        }).filter(Boolean);
+            const mapped = mapConversationToResponse(dbConv);
+            return mapped;
+        }).filter((c): c is ConversationResponse => c !== null);
 
         return sendResponse(res, 200, true, 'Conversations fetched (Batch Mode)', conversations);
     } catch (error: unknown) {
@@ -215,14 +190,12 @@ export const getConversations = async (req: Request, res: Response) => {
     }
 };
 
-// Get messages for a specific conversation
 export const getMessages = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id;
     const { conversationId } = req.params as { conversationId: string };
 
-    // 🔴 FIX 2 & 3: FAIL FAST GUARD & STRICT VALIDATION
     if (!isUUID(conversationId)) {
         return sendError(res, 400, 'Invalid or missing conversationId (UUID expected)');
     }
@@ -231,7 +204,6 @@ export const getMessages = async (req: Request, res: Response) => {
     }
 
     try {
-        // 1. Parallelize membership and initial message fetch (O(1) pool usage)
         const [membershipCheck, result] = await Promise.all([
             pool.query(
                 'SELECT 1 FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2',
@@ -267,22 +239,21 @@ export const getMessages = async (req: Request, res: Response) => {
         }
 
         const messageIds = result.rows.map(m => m.id);
-        const replyToIds = result.rows.map(m => m.reply_to_id).filter(id => id);
+        const replyToIds = result.rows.map(m => m.reply_to_id).filter((id): id is string => !!id);
 
-        // 2. Batch fetch attachments, reactions, AND reply_to metadata in parallel
         const [attachmentsRes, reactionsRes, repliesRes] = await Promise.all([
-            pool.query(
-                `SELECT message_id, file_url as url, file_type as type, file_size as size, file_name as name 
+            pool.query<DbAttachment>(
+                `SELECT id, message_id, file_path, file_type, file_size, file_name, file_extension, file_category, created_at
                  FROM message_attachments WHERE message_id = ANY($1)`,
                 [messageIds]
             ),
-            pool.query(
-                `SELECT message_id, reaction_type as type, user_id as "userId" 
+            pool.query<DbReaction>(
+                `SELECT message_id, reaction_type as reaction_type, user_id as "userId" 
                  FROM message_reactions WHERE message_id = ANY($1)`,
                 [messageIds]
             ),
             replyToIds.length > 0 ?
-                pool.query(
+                pool.query<{ id: string, content: string, sender_name: string }>(
                     `SELECT m.id, m.content, u.name as sender_name
                      FROM messages m LEFT JOIN users u ON m.sender_id = u.id
                      WHERE m.id = ANY($1)`,
@@ -291,42 +262,35 @@ export const getMessages = async (req: Request, res: Response) => {
                 Promise.resolve({ rows: [] })
         ]);
 
-        interface AttachmentsMap { [key: string]: Array<{ url: string, type: string, size: number, name: string }> }
-        interface ReactionsMap { [key: string]: Array<{ type: string, userId: string }> }
-        interface RepliesMap { [key: string]: { id: string, content: string, sender_name: string } }
-
-        const attachmentsMap = attachmentsRes.rows.reduce((acc: AttachmentsMap, att) => {
+        const attachmentsMap: Record<string, DbAttachment[]> = attachmentsRes.rows.reduce((acc: Record<string, DbAttachment[]>, att) => {
             if (!acc[att.message_id]) acc[att.message_id] = [];
             acc[att.message_id].push(att);
             return acc;
         }, {});
 
-        const reactionsMap = reactionsRes.rows.reduce((acc: ReactionsMap, reac) => {
-            if (!acc[reac.message_id]) acc[reac.message_id] = [];
-            acc[reac.message_id].push(reac);
+        const reactionsMap: Record<string, DbReaction[]> = reactionsRes.rows.reduce((acc: Record<string, DbReaction[]>, rx) => {
+            if (!acc[rx.message_id]) acc[rx.message_id] = [];
+            acc[rx.message_id].push(rx);
             return acc;
         }, {});
 
-        const repliesMap = repliesRes.rows.reduce((acc: RepliesMap, rep) => {
-            acc[rep.id] = rep;
+        const repliesMap: Record<string, { id: string, content: string, sender_name: string }> = repliesRes.rows.reduce((acc: Record<string, { id: string, content: string, sender_name: string }>, row) => {
+            acc[row.id] = row;
             return acc;
         }, {});
 
-        // 3. Optimized Combine Loop
-        const messages = result.rows.map(msg => {
-            msg.attachments = attachmentsMap[msg.id] || [];
-            msg.reactions = reactionsMap[msg.id] || [];
-
-            // Map reply metadata if exists
-            if (msg.reply_to_id && repliesMap[msg.reply_to_id]) {
-                msg.reply_to = repliesMap[msg.reply_to_id];
-            }
-
-            const normalized = mapMessageToResponse(msg);
+        const messages: ChatMessage[] = result.rows.map(row => {
+            const dbMsg: DbMessage = {
+                ...row,
+                attachments: attachmentsMap[row.id] || [],
+                reactions: reactionsMap[row.id] || [],
+                reply_to: row.reply_to_id ? repliesMap[row.reply_to_id] : undefined
+            };
+            const normalized = mapMessageToResponse(dbMsg);
             if (normalized) {
-                normalized.content = msg.content ? decrypt(msg.content) : msg.content;
-                if (normalized.replyTo && msg.reply_to) {
-                    normalized.replyTo.content = msg.reply_to.content ? decrypt(msg.reply_to.content) : msg.reply_to.content;
+                normalized.content = row.content ? decrypt(row.content) : row.content;
+                if (normalized.replyTo && dbMsg.reply_to) {
+                    normalized.replyTo.content = dbMsg.reply_to.content ? decrypt(dbMsg.reply_to.content) : dbMsg.reply_to.content;
                 }
             }
             return normalized;
@@ -343,47 +307,92 @@ export const getMessages = async (req: Request, res: Response) => {
     }
 };
 
-// Send a message (and optionally start a conversation if ID not provided - logic for frontend to handle ID creation is better, but here we assume ID exists or is created via another endpoint. For simplicity, we assume conversation exists or we can create ad-hoc)
-// For this refactor, we'll assume conversation creation happens via a separate 'startConversation' or checked here.
 export const sendMessage = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const senderId = user.id;
-    const { conversationId, content, messageType = 'text', attachment } = req.body;
+    const { participantId, content, messageType = 'text', attachment, tempId, attachments } = req.body;
+    let { conversationId } = req.body;
 
-    // 🔴 FIX 2 & 3: FAIL FAST GUARD & STRICT VALIDATION
-    if (!isUUID(conversationId)) {
-        return sendError(res, 400, 'Invalid or missing conversationId (UUID expected)');
-    }
     if (!isUUID(senderId)) {
         return sendError(res, 400, 'Invalid or missing senderId (UUID expected)');
+    }
+
+    // P0: Institutional Hub Routing - Allow Atomic Creation via participantId
+    if (!conversationId && participantId) {
+        if (!isUUID(participantId)) {
+            return sendError(res, 400, 'Invalid participantId (UUID expected)');
+        }
+        if (participantId.toLowerCase() === senderId.toLowerCase()) {
+            return sendError(res, 400, 'Self-messaging is currently not permitted');
+        }
+    } else if (!isUUID(conversationId)) {
+        return sendError(res, 400, 'Invalid or missing conversationId (UUID expected)');
+    }
+
+    // P0 HARDENING: Institutional Mult-File Constraint (Max 5)
+    // We check both legacy 'attachment' and modern 'attachments' array
+    const attachmentPool = Array.isArray(attachments) ? attachments : (attachment ? [attachment] : []);
+    if (attachmentPool.length > 5) {
+        return sendError(res, 400, 'Institutional Limit Exceeded: Maximum 5 attachments per message permitted');
     }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Verify membership
-        const membershipCheck = await client.query(
-            'SELECT 1 FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2',
-            [conversationId, senderId]
-        );
+        // P0: Atomic Conversation Upsert (Phase 1)
+        if (!conversationId && participantId) {
+            const sortedIds = [senderId.toLowerCase(), participantId.toLowerCase()].sort();
+            const hashBase = sortedIds.join(':');
+            const participantsHash = crypto.createHash('sha256').update(hashBase).digest('hex');
 
-        if (membershipCheck.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return sendError(res, 403, 'Not authorized to send to this conversation');
+            const insertResult = await client.query(
+                `INSERT INTO conversations (participants_hash, last_message_at) 
+                 VALUES ($1, NOW()) 
+                 ON CONFLICT (participants_hash) DO NOTHING 
+                 RETURNING id`,
+                [participantsHash]
+            );
+
+            if (insertResult.rows.length > 0) {
+                conversationId = insertResult.rows[0].id;
+                // Atomic participant linking
+                await client.query(
+                    `INSERT INTO conversation_participants (conversation_id, user_id) 
+                     SELECT $1, u.id FROM users u WHERE u.id IN ($2, $3)
+                     ON CONFLICT DO NOTHING`,
+                    [conversationId, senderId, participantId]
+                );
+                logger.info('[ChatController] New atomic conversation created via sendMessage', { conversationId, participants: [senderId, participantId] });
+            } else {
+                const existing = await client.query(
+                    'SELECT id FROM conversations WHERE participants_hash = $1',
+                    [participantsHash]
+                );
+                if (existing.rows.length === 0) {
+                    throw new Error('Consistency fracture: Hash exists but conversation not found during atomic send');
+                }
+                conversationId = existing.rows[0].id;
+            }
+        } else {
+            const membershipCheck = await client.query(
+                'SELECT 1 FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2',
+                [conversationId, senderId]
+            );
+
+            if (membershipCheck.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return sendError(res, 403, 'Not authorized to send to this conversation');
+            }
         }
 
-        // E2EE: Only encrypt if not already encrypted by the client
         const encryptedContent = (content && !content.startsWith('enc:')) ? encrypt(content) : content;
-
-        // PHASE 3: Plaintext preview for UI (Meta-style)
-        // If content is already encrypted (starts with enc:), we decrypt once to get preview
         const decodedPreview = (content && content.startsWith('enc:')) ? await decrypt(content) : content;
 
         const sequenceNumber = await chatReliabilityService.getNextSequence(conversationId);
 
-        const msgResult = await client.query(
+        const msgResult = await client.query<DbMessage>(
             `
             INSERT INTO messages (conversation_id, sender_id, sender_role, content, preview_text, message_type, reply_to_id, status, sequence_number)
             VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', $8)
@@ -394,7 +403,7 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         const newMessage = msgResult.rows[0];
 
-        // Fetch reply_to metadata for the broadcast/response
+
         if (req.body.replyToId) {
             const replyResult = await client.query(
                 `
@@ -414,80 +423,62 @@ export const sendMessage = async (req: Request, res: Response) => {
             }
         }
 
-        let attachmentName = attachment?.originalName || 'attachment';
-        if (attachment && attachment.url) {
-            // Check if it's a temp virtual URL (Handle both /api/files/temp/ and /files/temp/ variants)
-            if (attachment.url.includes('/files/temp/')) {
-                const tempId = attachment.url.split('/').pop();
-                const tempResult = await client.query(
-                    'SELECT data, mime, name FROM temp_attachments WHERE id = $1',
-                    [tempId]
-                );
-                if (tempResult.rows.length > 0) {
-                    const stagingMetadata = tempResult.rows[0].name;
-                    const [tempFilePath, originalName] = stagingMetadata.split('|');
+        const finalAttachments: { id?: string; url: string; type: string; size: number; name: string; filePath?: string }[] = [];
 
-                    // P0 FIX: Use the preserved originalName from staging instead of basename(uuid)
-                    attachmentName = originalName || path.basename(tempFilePath);
-
-                    // Move from temp to permanent chat storage
-                    const permanentPath = tempFilePath.replace('/temp/', '/');
-                    const fullTempPath = getAbsolutePath(tempFilePath);
-                    const fullPermanentPath = getAbsolutePath(permanentPath);
-
-                    try {
-                        await fs.access(fullTempPath);
-                        const permDir = path.dirname(fullPermanentPath);
-                        try {
-                            await fs.access(permDir);
-                        } catch {
-                            await fs.mkdir(permDir, { recursive: true });
-                        }
-                        await fs.rename(fullTempPath, fullPermanentPath);
-                        
-                        // NUCLEAR FIX: Calculate REAL file size from filesystem
-                        const stats = await fs.stat(fullPermanentPath);
-                        const fileSize = stats.size;
-                        
-                        // FINAL HARDENING: Extension derivation REMOVED. MIME is the only truth.
-                        let fileCat = 'other';
-                        if (attachment.type.startsWith('image/')) {
-                            fileCat = 'image';
-                        } else if (
-                            attachment.type.startsWith('application/') ||
-                            attachment.type.startsWith('text/')
-                        ) {
-                            fileCat = 'document';
-                        }
-                        
-                        attachment.url = permanentPath;
-
-                        // P0 NUCLEAR: Atomic write to message_attachments ONLY
-                        const attResult = await client.query(
-                            `INSERT INTO message_attachments (message_id, file_url, file_type, file_name, file_size, file_extension, file_category) 
-                             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-                            [newMessage.id, attachment.url, attachment.type, attachmentName, fileSize, null, fileCat]
-                        );
-
-                        const attachmentId = attResult.rows[0].id;
-
-                        // Set the correct public URL for emission
-                        attachment.url = `/files/message/${attachmentId}`;
-                        attachment.name = attachmentName;
-                        attachment.size = fileSize;
-                    } catch (err) {
-                        logger.error('[Phase 5] Attachment move failed - NO ATTACHMENT RECORDED', { fullTempPath, err });
-                    }
-
-                    // Clean up temp record
-                    await client.query('DELETE FROM temp_attachments WHERE id = $1', [tempId]);
+        // Process all attachments in the pool (Google/Meta Grade Multi-File)
+        for (const att of attachmentPool) {
+            if (att.url && att.url.includes('/files/temp/')) {
+                const innerTempId = att.url.split('/').pop();
+                
+                // Institutional Move: Atomic staging-to-vault promotion via FileService
+                const metadata = await fileService.moveStagedFile(innerTempId, 'chat');
+                
+                if (!metadata) {
+                    logger.warn('[ChatController] Staged attachment promotion failed/missing', { innerTempId, messageId: newMessage.id });
+                    continue; // P0 FIX: Skip missing staged files but continue message flow
                 }
+
+                let fileCat = 'other';
+                if (metadata.mimeType.startsWith('image/')) fileCat = 'image';
+                else if (metadata.mimeType.startsWith('application/') || metadata.mimeType.startsWith('text/')) fileCat = 'document';
+
+                const attResult = await client.query(
+                    `INSERT INTO message_attachments (message_id, file_path, file_type, file_name, file_size, file_extension, file_category) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+                    [newMessage.id, metadata.filePath, metadata.mimeType, metadata.fileName, metadata.fileSize, path.extname(metadata.fileName), fileCat]
+                );
+
+                finalAttachments.push({
+                    id: attResult.rows[0].id, // P0 FIX: Store actual DB ID
+                    url: `/api/files/message/${attResult.rows[0].id}`,
+                    type: metadata.mimeType || 'document',
+                    size: metadata.fileSize,
+                    name: metadata.fileName,
+                    filePath: metadata.filePath // Keep physical path for internal use
+                });
+
+                // Cleanup temp record after successful physical move
+                await client.query('DELETE FROM temp_attachments WHERE id = $1', [innerTempId]);
             }
         }
 
         newMessage.reactions = [];
+        
+        // P0 FIX: Institutional Attachment Normalization for Socket Payload
+        const normalizedAttachments: DbAttachment[] = finalAttachments.map(fa => ({
+            id: fa.id || crypto.randomUUID(), // Use actual DB ID
+            message_id: newMessage.id,
+            file_path: fa.filePath || fa.url, 
+            file_type: fa.type,
+            file_size: fa.size,
+            file_name: fa.name,
+            file_extension: path.extname(fa.name),
+            file_category: fa.type.startsWith('image/') ? 'image' : 'document',
+            created_at: new Date()
+        }));
 
-        // Update conversation last_message_at
+        newMessage.attachments = normalizedAttachments;
+
         await client.query(
             'UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1',
             [conversationId]
@@ -495,65 +486,45 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         await client.query('COMMIT');
 
-        // Decrypt content for response and socket emission
-        // We stored encrypted, so decrypt it back for the user/socket
-        newMessage.content = content; // Optimistic: we know what we sent
-
         const senderName = user.name || 'Someone';
-
-        // Emit socket event to room (conversationId) for active UI sync
-        // AND emit to each participant's personal room for global widget/badge sync
-        // ENTERPRISE HARDENING: Standardized Event Emission from message_attachments
-        const attachmentsArr = (attachment && attachment.url && !attachment.url.includes('/uploads/')) ? [
-            {
-                url: attachment.url,
-                type: attachment.type || 'document',
-                size: attachment.size || 0,
-                name: attachmentName
-            }
-        ] : [];
-
-        // Attach to the message object for REST response and socket emission
-        newMessage.attachments = attachmentsArr;
-
-        const socketPayload: ChatMessage | null = mapMessageToResponse({
+        const socketPayload = mapMessageToResponse({
             ...newMessage,
             sender_name: senderName,
             sender_role: user.role,
-            attachments: attachmentsArr
+            attachments: normalizedAttachments
         });
 
-        // Standardized Enterprise Event: messageReceived
-        // Emitted once to the conversation room for real-time delivery
-        if (io && socketPayload) {
-            io.to(`conversation:${conversationId}`).emit('messageReceived', socketPayload);
-            logger.info('[ChatController] Message emitted to room', { conversationId, messageId: newMessage.id });
+        if (socketPayload && tempId) {
+            socketPayload.tempId = tempId;
         }
 
-        // 4. NON-BLOCKING: Emit real-time notifications to other participants
-        // P0 NUCLEAR: Unique user emission only. notificationService handles persistence + socket.
+        if (io && socketPayload) {
+            io.to(`conversation:${conversationId}`).emit('messageReceived', socketPayload);
+            
+            // The Governor Mirroring
+            io.to('admin:observability').emit('adminMirrorEvent', {
+                event: 'messageReceived',
+                data: socketPayload,
+                timestamp: new Date().toISOString()
+            });
+        }
+
         chatReliabilityService.getParticipants(conversationId).then(participants => {
-            const uniqueParticipants = [...new Set(participants)];
-            const others = uniqueParticipants.filter(pid => pid !== senderId);
-            let previewText = '📎 Attachment';
+            const others = participants.filter(pid => pid !== senderId);
+            let previewText = finalAttachments.length > 0 ? '📎 Attachment' : 'New message';
             if (content) {
-                const dec = (decodedPreview.length > 100) ? decodedPreview.substring(0, 100) + '...' : decodedPreview;
-                previewText = dec;
+                previewText = (decodedPreview.length > 100) ? decodedPreview.substring(0, 100) + '...' : decodedPreview;
             }
 
             others.forEach(pid => {
-                notificationService.create(
-                    pid,
-                    `New message from ${senderName}`,
-                    previewText,
-                    'info'
-                ).catch(err => logger.error('[Phase 3] Background notification failed:', err));
+                notificationService.create(pid, `New message from ${senderName}`, previewText, 'info')
+                    .catch(e => logger.error('Notification failed:', e));
             });
-        }).catch(err => logger.error('[Phase 3] Participant lookup failed:', err));
+        }).catch(e => logger.error('Participant lookup failed:', e));
 
         return sendResponse(res, 201, true, 'Message sent', socketPayload);
     } catch (error: unknown) {
-        await client.query('ROLLBACK');
+        if (client) await client.query('ROLLBACK');
         logger.error('[Phase 5] sendMessage error:', {
             error: error instanceof Error ? error.message : String(error),
             conversationId,
@@ -561,29 +532,43 @@ export const sendMessage = async (req: Request, res: Response) => {
         });
         return sendError(res, 500, 'Server error sending message');
     } finally {
-        client.release();
+        if (client) client.release();
     }
 };
 
-// Start a new conversation
 export const startConversation = async (req: Request, res: Response) => {
     const user = req.user;
-    if (!user) return sendError(res, 401, 'Unauthorized');
+    if (!user || !user.id) return sendError(res, 401, 'Unauthorized');
     const userId = user.id;
     const { participantId } = req.body;
 
-    if (!participantId) return sendError(res, 400, 'Participant ID required');
+    // Forensic Validation: Ensure participantId is a valid UUID and not self
+    if (!participantId) {
+        logger.warn('[ChatController] startConversation: Missing participantId', { userId });
+        return sendError(res, 400, 'Participant ID required');
+    }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(participantId)) {
+        logger.error('[ChatController] startConversation: Invalid UUID format', { userId, participantId });
+        return sendError(res, 400, 'Invalid Participant ID (UUID expected)');
+    }
+
+    if (participantId.toLowerCase() === userId.toLowerCase()) {
+        logger.warn('[ChatController] startConversation: Attempted self-messaging', { userId });
+        return sendError(res, 400, 'Self-messaging is currently not permitted');
+    }
 
     try {
-        // P0 PROTOCOL: Atomic Uniqueness Check via participants_hash
-        const sortedIds = [userId, participantId].sort();
+        // Deterministic Hash Generation (Institutional Grade)
+        const sortedIds = [userId.toLowerCase(), participantId.toLowerCase()].sort();
         const hashBase = sortedIds.join(':');
         const participantsHash = crypto.createHash('sha256').update(hashBase).digest('hex');
 
-        // 1. Try to INSERT (Atomic check)
+        // ON CONFLICT requires the UNIQUE constraint added in init.sql v4.0
         const insertResult = await pool.query(
-            `INSERT INTO conversations (participants_hash) 
-             VALUES ($1) 
+            `INSERT INTO conversations (participants_hash, last_message_at) 
+             VALUES ($1, NOW()) 
              ON CONFLICT (participants_hash) DO NOTHING 
              RETURNING id`,
             [participantsHash]
@@ -593,36 +578,39 @@ export const startConversation = async (req: Request, res: Response) => {
 
         if (insertResult.rows.length > 0) {
             conversationId = insertResult.rows[0].id;
-            // 2. Add participants ONLY for new conversation
+            // Atomic participant linking
             await pool.query(
-                'INSERT INTO conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)',
+                `INSERT INTO conversation_participants (conversation_id, user_id) 
+                 SELECT $1, u.id FROM users u WHERE u.id IN ($2, $3)
+                 ON CONFLICT DO NOTHING`,
                 [conversationId, userId, participantId]
             );
-            logger.info('[ChatController] Created new conversation', { conversationId, participantsHash });
+            logger.info('[ChatController] New conversation created', { conversationId, participants: [userId, participantId] });
         } else {
-            // 3. Fetch existing ID if conflict occurred
             const existing = await pool.query(
                 'SELECT id FROM conversations WHERE participants_hash = $1',
                 [participantsHash]
             );
+            if (existing.rows.length === 0) {
+                // This state should be unreachable with the UNIQUE constraint, but we handle it safely
+                throw new Error('Consistency fracture: Hash exists but conversation not found');
+            }
             conversationId = existing.rows[0].id;
-            logger.info('[ChatController] Found existing conversation', { conversationId });
         }
 
-        return sendResponse(res, 201, true, 'Conversation started', { conversationId });
+        return sendResponse(res, 201, true, 'Conversation established', { conversationId });
     } catch (error: unknown) {
-        logger.error('[ChatController] startConversation error:', {
+        logger.error('[ChatController] startConversation forensic failure:', {
             error: error instanceof Error ? error.message : String(error),
             userId,
             participantId
         });
-        return sendError(res, 500, 'Server error during conversation creation');
+        return sendError(res, 500, 'Institutional server error during conversation establishment');
     }
 };
 
-// Mark messages as delivered
 export const markAsDelivered = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id;
     const { conversationId } = req.params as { conversationId: string };
@@ -636,11 +624,13 @@ export const markAsDelivered = async (req: Request, res: Response) => {
             `,
             [conversationId, userId]
         );
-        // P0 NUCLEAR: REMOVED controller-side emission to eliminate redundant events.
-        // Delivery receipts are now handled exclusively via conversational room broadcast.
-
-
-        sendResponse(res, 200, true, 'Messages marked as delivered');
+        if (io) {
+            io.to(`conversation:${conversationId}`).emit('messageDelivered', { 
+                conversationId, 
+                messageIds: [] 
+            });
+        }
+        return sendResponse(res, 200, true, 'Messages marked as delivered');
     } catch (error: unknown) {
         logger.error('Error marking delivered:', {
             error: error instanceof Error ? error.message : String(error),
@@ -651,9 +641,8 @@ export const markAsDelivered = async (req: Request, res: Response) => {
     }
 };
 
-// Mark messages as read
 export const markAsRead = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id;
     const { conversationId } = req.params as { conversationId: string };
@@ -667,11 +656,7 @@ export const markAsRead = async (req: Request, res: Response) => {
             `,
             [conversationId, userId]
         );
-        // P0 NUCLEAR: REMOVED controller-side emission to eliminate redundant events.
-        // Read receipts are handled exclusively via the socket 'message:read' listener.
-
-
-        sendResponse(res, 200, true, 'Messages marked as read');
+        return sendResponse(res, 200, true, 'Messages marked as read');
     } catch (error: unknown) {
         logger.error('Error marking read:', {
             error: error instanceof Error ? error.message : String(error),
@@ -682,17 +667,23 @@ export const markAsRead = async (req: Request, res: Response) => {
     }
 };
 
-// React to a Message
 export const reactToMessage = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id;
     const { messageId } = req.params as { messageId: string };
-    const { reactionType } = req.body; // e.g. 'like', 'love'
+    const { reactionType } = req.body;
 
+    if (!reactionType || typeof reactionType !== 'string') {
+        return sendError(res, 400, 'Invalid reaction type');
+    }
+
+    const client = await pool.connect();
     try {
-        // Find conversation ID and verify participation
-        const msgResult = await pool.query(
+        await client.query('BEGIN');
+
+        // 1. Authorization & Existence Check (Internal to Transaction)
+        const msgResult = await client.query<{ conversation_id: string }>(
             `SELECT m.conversation_id FROM messages m 
              JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id 
              WHERE m.id = $1 AND cp.user_id = $2`,
@@ -700,75 +691,74 @@ export const reactToMessage = async (req: Request, res: Response) => {
         );
 
         if (msgResult.rows.length === 0) {
+            await client.query('ROLLBACK');
             return sendError(res, 403, 'Not authorized or message not found');
         }
 
         const conversationId = msgResult.rows[0].conversation_id;
 
-        // Check if user already has THIS reaction
-        const existing = await pool.query(
+        // 2. Deterministic Toggle Logic
+        const existing = await client.query(
             'SELECT 1 FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND reaction_type = $3',
             [messageId, userId, reactionType]
         );
 
+        let action: 'added' | 'removed';
+
         if (existing.rows.length > 0) {
-            // TOGGLE: Remove reaction
-            await pool.query(
+            // Already reacted with the SAME type -> Remove it (Toggle off)
+            await client.query(
                 'DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND reaction_type = $3',
                 [messageId, userId, reactionType]
             );
-            if (io) {
-                const payload = {
-                    messageId: messageId as string,
-                    userId,
-                    reactionType: reactionType as string,
-                    action: 'removed' as const
-                };
-                // P0 NUCLEAR: Reactions MUST go ONLY to the conversation room.
-                io.to(`conversation:${conversationId}`).emit('messageReaction', payload);
-            }
+            action = 'removed';
         } else {
-            // TOGGLE: Add or update (one reaction per user per message - if they want to switch, we delete all then add)
-            // But requirement says "Allow user to change reaction", let's clear existing and add new
-            await pool.query('DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2', [messageId, userId]);
-            await pool.query(
+            // New reaction or DIFFERENT type -> Purge others then set new (Single reaction policy)
+            await client.query('DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2', [messageId, userId]);
+            await client.query(
                 'INSERT INTO message_reactions (message_id, user_id, reaction_type) VALUES ($1, $2, $3)',
                 [messageId, userId, reactionType]
             );
-            if (io) {
-                const payload = {
-                    messageId: messageId as string,
-                    userId,
-                    reactionType: reactionType as string,
-                    action: 'added' as const
-                };
-                // P0 NUCLEAR: Reactions MUST go ONLY to the conversation room.
-                io.to(`conversation:${conversationId}`).emit('messageReaction', payload);
-            }
+            action = 'added';
         }
 
-        sendResponse(res, 200, true, 'Reaction updated');
+        await client.query('COMMIT');
+
+        // 3. Institutional Emission after Success
+        if (io) {
+            const reactionData = { messageId, userId, reactionType, action };
+            io.to(`conversation:${conversationId}`).emit('messageReaction', reactionData);
+
+            // The Governor Mirroring
+            io.to('admin:observability').emit('adminMirrorEvent', {
+                event: 'messageReaction',
+                data: reactionData,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        return sendResponse(res, 200, true, 'Reaction updated successfully');
     } catch (error: unknown) {
-        logger.error('Error reacting to message:', {
+        await client.query('ROLLBACK');
+        logger.error('[ChatController] Atomic reaction update failed:', {
             error: error instanceof Error ? error.message : String(error),
-            messageId,
-            userId
+            messageId, userId, reactionType
         });
-        return sendError(res, 500, 'Server error');
+        return sendError(res, 500, 'Internal server error during reaction update');
+    } finally {
+        client.release();
     }
 };
 
-// Delete Message
 export const deleteMessage = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id;
     const { messageId } = req.params as { messageId: string };
     const { forEveryone } = req.body;
 
     try {
-        // Verify participation
-        const msgCheck = await pool.query(
+        const msgCheck = await pool.query<DbMessage>(
             `SELECT m.* FROM messages m 
              JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id 
              WHERE m.id = $1 AND cp.user_id = $2`,
@@ -787,58 +777,85 @@ export const deleteMessage = async (req: Request, res: Response) => {
                 return sendError(res, 403, 'Only sender can delete for everyone');
             }
 
-            // Hard delete attachments strictly via message_attachments
-            try {
-                const attachments = await pool.query<{ file_url: string }>('SELECT file_url FROM message_attachments WHERE message_id = $1', [messageId]);
-                for (const att of attachments.rows) {
-                    if (att.file_url) {
-                        const filePath = getAbsolutePath(att.file_url);
-                        try {
-                            await fs.access(filePath);
-                            await fs.unlink(filePath);
-                        } catch {
-                            // File doesn't exist, skip
-                        }
-                    }
+            // P0 FIX: Fetch metadata BEFORE updating DB
+            const attachments = await pool.query<DbAttachment>(
+                'SELECT file_path FROM message_attachments WHERE message_id = $1 AND deleted_at IS NULL', 
+                [messageId]
+            );
+
+            // P0 FIX: Institutional Sequence - Soft Delete DB first, then quarantine physical assets
+            const deleteTime = new Date().toISOString();
+            
+            await pool.query(
+                'UPDATE message_attachments SET deleted_at = $1 WHERE message_id = $2', 
+                [deleteTime, messageId]
+            );
+            
+            await pool.query(
+                'UPDATE messages SET deleted_at = $1 WHERE id = $2', 
+                [deleteTime, messageId]
+            );
+
+            for (const att of attachments.rows) {
+                if (att.file_path) {
+                    // Background task: Move to quarantine after DB confirms soft-delete
+                    fileService.quarantineFile(att.file_path).catch(e => 
+                        logger.error('[Forensic-Cleanup] File quarantine failed after soft-delete:', { 
+                            path: att.file_path, 
+                            error: e.message 
+                        })
+                    );
                 }
-            } catch (err) {
-                logger.error('[ChatController] Attachment cleanup failed:', err);
             }
-
-            // Update database: hard delete message (which removes BYTEA data atomically)
-            await pool.query('DELETE FROM messages WHERE id = $1', [messageId]);
-
 
             if (io) {
-                const payload = {
-                    messageId: messageId as string,
-                    conversationId: conversationId as string,
-                    forEveryone: true
-                };
-                // P0 NUCLEAR: Standardized prefix 'conversation:' to ensure delivery
-                io.to(`conversation:${conversationId}`).emit('message:deleted', payload);
-                logger.info('[ChatController] Message deleted (Broadcast)', { conversationId, messageId });
+                const deleteData = { messageId, conversationId };
+                io.to(`conversation:${conversationId}`).emit('messageDeleted', deleteData);
+
+                // The Governor Mirroring
+                io.to('admin:observability').emit('adminMirrorEvent', {
+                    event: 'messageDeleted',
+                    data: deleteData,
+                    timestamp: new Date().toISOString()
+                });
             }
+
+            // P0 RECALL: Atomic removal of notifications for this message
+            notificationService.recall(messageId).catch(e => 
+                logger.error('[Recall-Failure] Automated notification recall failed:', { messageId, error: e.message })
+            );
         } else {
-            // Delete for me
+            // P0 INSTITUTIONAL FIX: Private Sync for Multi-tab "Delete for Me"
             await pool.query(
                 `INSERT INTO deleted_messages (message_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
                 [messageId, userId]
             );
-        }
 
+            if (io) {
+                // Scoped emission to only the acting user's private room/sessions
+                const localDeleteData = { messageId, conversationId };
+                io.to(`user:${userId}`).emit('localMessageDeleted', localDeleteData);
+
+                // The Governor Mirroring
+                io.to('admin:observability').emit('adminMirrorEvent', {
+                    event: 'localMessageDeleted',
+                    data: { ...localDeleteData, userId },
+                    timestamp: new Date().toISOString()
+                });
+                
+                logger.info('[ChatController] Private deletion sync emitted.', { userId, messageId });
+            }
+        }
         return sendResponse(res, 200, true, 'Message deleted');
     } catch (error: unknown) {
         logger.error('[ChatController] Error deleting message:', {
             error: error instanceof Error ? error.message : String(error),
-            messageId,
-            userId
+            messageId, userId
         });
         return sendError(res, 500, 'Server error during deletion');
     }
 };
 
-// Get presence status for a batch of users
 export const getPresence = async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) return sendError(res, 401, 'Unauthorized');
@@ -850,7 +867,6 @@ export const getPresence = async (req: Request, res: Response) => {
 
     try {
         const ids = userIds.split(',').filter(id => id.length > 0);
-        // P0 PROTOCOL: EXACT ID MATCHING (NO NORMALIZATION)
         const presence = await statusService.getPresenceBatch(ids);
         return sendResponse(res, 200, true, 'Presence fetched', presence);
     } catch (error: unknown) {
@@ -862,11 +878,10 @@ export const getPresence = async (req: Request, res: Response) => {
     }
 };
 
-// Sync Chat (Offline Recovery)
 export const syncChat = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user) return res.status(401).json({ message: 'Unauthorized' });
-    const since = req.query.since as string; // ISO timestamp
+    const since = req.query.since as string;
 
     try {
         if (!since) return sendError(res, 400, 'Since timestamp required');
@@ -884,10 +899,8 @@ export const syncChat = async (req: Request, res: Response) => {
             ORDER BY m.created_at ASC
         `;
 
-        const result = await pool.query(syncQuery, [user.id, since]);
-
-        const formatted = result.rows.map(mapMessageToResponse);
-
+        const result = await pool.query<DbMessage>(syncQuery, [user.id, since]);
+        const formatted = result.rows.map(row => mapMessageToResponse(row)).filter(m => m !== null);
         return sendResponse(res, 200, true, 'Chat synced', formatted);
     } catch (error: unknown) {
         logger.error('[ChatController] Error syncing chat:', {

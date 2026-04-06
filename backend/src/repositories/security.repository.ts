@@ -25,7 +25,7 @@ export interface UserSession {
     osName: string | null;
     deviceType: string | null;
     createdAt: Date;
-    lastActivity: Date | null;
+    lastActivity: Date | string | null;
     revoked: boolean;
 }
 
@@ -52,7 +52,7 @@ interface UserSessionRow {
     os_name: string | null;
     device_type: string | null;
     created_at: Date;
-    last_activity: Date | null;
+    lastActivity: Date | null;
     revoked: boolean;
     user_name: string;
     user_email: string;
@@ -99,13 +99,13 @@ export const securityRepository = {
         try {
             const result = await pool.query<UserSessionRow>(
                 `SELECT us.id, us.user_id, us.user_role, us.session_id, us.ip_address, 
-                 us.user_agent, us.browser_name, us.os_name, us.device_type, 
-                 us.created_at, us.last_activity, us.revoked,
+                 us.ip_address, us.user_agent, us.browser_name, us.os_name, us.device_type,
+                 us.created_at, us."lastActivity", us.revoked,
                  u.name as user_name, u.email as user_email 
                  FROM user_sessions us
                  JOIN users u ON us.user_id = u.id
                  WHERE us.revoked = FALSE
-                 ORDER BY us.last_activity DESC NULLS LAST
+                 ORDER BY us."lastActivity" DESC NULLS LAST
                  LIMIT $1 OFFSET $2`,
                 [limit, offset]
             );
@@ -120,7 +120,7 @@ export const securityRepository = {
                 osName: row.os_name,
                 deviceType: row.device_type,
                 createdAt: row.created_at,
-                lastActivity: row.last_activity,
+                lastActivity: row.lastActivity,
                 revoked: row.revoked
             }));
         } catch (error: unknown) {

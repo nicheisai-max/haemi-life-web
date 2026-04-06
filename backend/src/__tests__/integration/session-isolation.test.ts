@@ -45,7 +45,7 @@ describe('Session Isolation (Phase 2)', () => {
                     if (sql.includes('JWT_REFRESH_EXPIRY_DAYS')) return { rows: [{ value: '7' }] };
                     return { rows: [] };
                 }
-                if (sql.includes('UPDATE users SET last_activity')) return { rows: [] };
+                if (sql.includes('UPDATE users SET "lastActivity"')) return { rows: [] };
                 if (sql.includes('UPDATE users SET token_version')) return { rows: [] };
                 return { rows: [] };
             });
@@ -174,10 +174,11 @@ describe('Session Isolation (Phase 2)', () => {
                     status: 'ACTIVE',
                     role: 'patient',
                     token_version: 1,
+                    lastActivity: new Date(),
                     minutes_since_activity: 5
                 }]
             });
-            // 2. UPDATE last_activity (for authenticateToken)
+            // 2. UPDATE "lastActivity" (for authenticateToken)
             mockQuery.mockResolvedValueOnce({ rows: [] });
 
             // Mock the UPDATE query in logout

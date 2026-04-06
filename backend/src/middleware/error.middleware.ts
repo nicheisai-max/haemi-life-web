@@ -22,9 +22,9 @@ export const errorHandler = (err: HttpError, req: Request, res: Response, _next:
     let statusCode = err.statusCode || err.status || 500;
 
     // Handle Multer specific errors
-    if (err.name === 'MulterError') {
+    if (err.name === 'MulterError' || err.message === 'Unsupported file type') {
         statusCode = 400;
-        if (err.code === 'LIMIT_FILE_SIZE') {
+        if (err.name === 'MulterError' && err.code === 'LIMIT_FILE_SIZE') {
             err.message = 'File too large. Maximum size allowed is 10MB.';
         }
     }

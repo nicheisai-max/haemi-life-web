@@ -15,14 +15,27 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
         setToasts(prev => prev.filter(toast => toast.id !== id));
     }, []);
 
-    const showToast = React.useCallback((message: string, type: ToastType = 'info', duration: number = 4000) => {
-        const id = `toast-${Date.now()}-${Math.random()}`;
-        const newToast: Toast = { id, message, type, duration };
+    // 🔒 INSTITUTIONAL UX LOCK: Minimum 5s visibility for all messages
+    const MIN_TOAST_DURATION = 5000;
+
+    const showToast = React.useCallback((message: string, type: ToastType = 'info', duration?: number) => {
+        const finalDuration =
+            typeof duration === 'number' && duration > MIN_TOAST_DURATION
+                ? duration
+                : MIN_TOAST_DURATION;
+
+        const id = crypto.randomUUID();
+        const newToast: Toast = { id, message, type, duration: finalDuration };
 
         setToasts(prev => [...prev, newToast]);
 
-        if (duration > 0) {
-            setTimeout(() => removeToast(id), duration);
+        if (finalDuration > 0) {
+            const timeoutId = window.setTimeout(() => {
+                removeToast(id);
+            }, finalDuration);
+
+            // optional cleanup safety
+            return () => window.clearTimeout(timeoutId);
         }
     }, [removeToast]);
 
@@ -80,7 +93,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
         <ToastContext.Provider value={{ showToast, success, error, warning, info }}>
             {children}
             <div className="fixed top-24 right-4 z-[100] flex flex-col gap-3 w-full max-w-[400px] pointer-events-none sm:right-4 sm:left-auto max-sm:left-2 max-sm:right-2 max-sm:w-auto">
-                <AnimatePresence mode="popLayout">
+                <AnimatePresence>
                     {toasts.map(toast => (
                         <motion.div
                             key={toast.id}

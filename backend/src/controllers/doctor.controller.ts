@@ -8,9 +8,9 @@ import { JoinedDoctorRow, UserEntity } from '../types/db.types';
 
 interface UpdateDoctorProfileRequest {
     specialization?: string;
-    years_of_experience?: number;
+    yearsOfExperience?: number;
     bio?: string;
-    consultation_fee?: number;
+    consultationFee?: number;
 }
 
 interface ScheduleSlotDTO {
@@ -18,11 +18,6 @@ interface ScheduleSlotDTO {
     startTime: string;
     endTime: string;
     isAvailable?: boolean;
-    // legacy support
-    day_of_week?: number;
-    start_time?: string;
-    end_time?: string;
-    is_available?: boolean;
 }
 
 interface UpdateDoctorScheduleRequest {
@@ -40,7 +35,7 @@ export const listDoctors = async (req: Request, res: Response) => {
                 dp.specialization, dp.years_of_experience, dp.bio, dp.consultation_fee
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
-            WHERE u.role = 'doctor' AND dp.is_verified = true AND u.status = 'ACTIVE'
+            WHERE u.role = 'doctor' AND u.status = 'ACTIVE'
         `;
 
         const params: (string | number | boolean | null)[] = [];
@@ -102,7 +97,7 @@ export const getSpecializations = async (req: Request, res: Response) => {
         const result = await pool.query<{ specialization: string }>(`
             SELECT DISTINCT specialization 
             FROM doctor_profiles 
-            WHERE specialization IS NOT NULL AND is_verified = true
+            WHERE specialization IS NOT NULL
             ORDER BY specialization ASC
         `);
 
@@ -118,7 +113,7 @@ export const getSpecializations = async (req: Request, res: Response) => {
 // Update doctor's own profile (Doctor only)
 export const updateDoctorProfile = async (req: Request, res: Response) => {
     const doctorId = req.user?.id;
-    const { specialization, years_of_experience, bio, consultation_fee } = req.body as UpdateDoctorProfileRequest;
+    const { specialization, yearsOfExperience, bio, consultationFee } = req.body as UpdateDoctorProfileRequest;
 
     try {
         if (!doctorId) return sendError(res, 401, 'Unauthorized');
@@ -133,13 +128,13 @@ export const updateDoctorProfile = async (req: Request, res: Response) => {
                 updated_at = CURRENT_TIMESTAMP
             WHERE user_id = $5
             RETURNING *
-        `, [specialization || null, years_of_experience || null, bio || null, consultation_fee || null, doctorId]);
+        `, [specialization || null, yearsOfExperience || null, bio || null, consultationFee || null, doctorId]);
 
         if (result.rows.length === 0) {
             return sendError(res, 404, 'Doctor profile not found');
         }
 
-        return sendResponse(res, 200, true, 'Profile updated successfully', result.rows[0]);
+        return sendResponse(res, 200, true, 'Profile updated successfully', mapDoctorToResponse(result.rows[0]));
     } catch (error: unknown) {
         logger.error('Error updating doctor profile:', {
             error: error instanceof Error ? error.message : String(error),
@@ -209,15 +204,12 @@ export const updateDoctorSchedule = async (req: Request, res: Response) => {
             // Insert new schedule with explicit mapping (CamelCase -> Snake_case)
             if (schedule && Array.isArray(schedule)) {
                 for (const rawSlot of schedule) {
-                    const day_of_week = rawSlot.dayOfWeek !== undefined ? rawSlot.dayOfWeek : rawSlot.day_of_week;
-                    const start_time = rawSlot.startTime || rawSlot.start_time;
-                    const end_time = rawSlot.endTime || rawSlot.end_time;
-                    const is_available = rawSlot.isAvailable !== undefined ? rawSlot.isAvailable : (rawSlot.is_available !== undefined ? rawSlot.is_available : true);
+                    const { dayOfWeek, startTime, endTime, isAvailable = true } = rawSlot;
 
                     await client.query(`
                         INSERT INTO doctor_schedules (doctor_id, day_of_week, start_time, end_time, is_available)
                         VALUES ($1, $2, $3, $4, $5)
-                    `, [doctorId, day_of_week, start_time, end_time, is_available]);
+                    `, [doctorId, dayOfWeek, startTime, endTime, isAvailable]);
                 }
             }
 

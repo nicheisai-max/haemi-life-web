@@ -11,6 +11,7 @@ export interface ChatMessage {
     id: string;
     conversationId: string;
     senderId: string;
+    tempId?: string;
     senderName?: string;
     senderRole?: UserRole;
     content: string;
@@ -47,6 +48,10 @@ export interface HaemiNotification {
     type: 'success' | 'info' | 'warning' | 'error';
     createdAt: string;
     isRead: boolean;
+    messageId?: string;
+    conversationId?: string;
+    metadata?: Record<string, unknown>;
+    receivedAt?: string;
 }
 
 export type UserRole = 'patient' | 'doctor' | 'pharmacist' | 'admin';
@@ -62,13 +67,12 @@ export interface MessageReactionPayload {
 
 export interface MessageDeletedPayload {
     messageId: string;
-    forEveryone: boolean;
+    conversationId: string;
 }
 
 export interface TypingStartedPayload {
     userId: string;
     conversationId: string;
-    name: string;
 }
 
 export interface MessageDeliveredPayload {
@@ -114,8 +118,8 @@ export interface TypingStartedPushPayload {
 
 export interface UserPresencePayload {
     userId: string;
-    isOnline: boolean;
-    lastSeen: string;
+    status: 'online' | 'offline';
+    lastActivity: string; // FIXED: renamed from last_activity (camelCase standard)
 }
 
 /* ---------------- OBSERVABILITY PAYLOADS ---------------- */
@@ -146,6 +150,12 @@ export interface MessageReadEvent {
     userId: string;
 }
 
+export interface AdminMirrorPayload {
+    event: string;
+    data: unknown; // FIXED: replaced `any` with `unknown` for type safety
+    timestamp: string;
+}
+
 export interface ServerToClientEvents {
     // Standard Events
     "connect": () => void;
@@ -156,35 +166,45 @@ export interface ServerToClientEvents {
     "reconnect": () => void;
 
     // Video Consultation Events
-    "participant-joined": (participantId: string) => void;
-    "call-made": (data: { offer: SignalData; socket: string }) => void;
-    "answer-made": (data: { answer: SignalData; socket: string }) => void;
-    "ice-candidate": (data: { candidate: SignalData; socket: string }) => void;
+    participantJoined: (participantId: string) => void;
+    callMade: (data: { offer: SignalData; socket: string }) => void;
+    answerMade: (data: { answer: SignalData; socket: string }) => void;
+    iceCandidate: (data: { candidate: SignalData; socket: string }) => void;
 
-    // Chat Events
-    "messageReaction": (data: MessageReactionPayload) => void;
-    "message:deleted": (data: { messageId: string; conversationId: string; forEveryone: boolean }) => void;
-    "messageReceived": (message: ChatMessage) => void; 
-    "messageDelivered": (data: MessageDeliveredPayload) => void;
-    "message:read": (data: MessageReadEvent) => void; 
-    "ackDelivery": (data: AckDeliveryPayload) => void;
-    "typingStarted": (data: TypingStartedPayload) => void;
-    "typingStopped": (data: TypingStartedPayload) => void;
-    "notification:new": (notification: HaemiNotification) => void; 
-    "userStatus": (data: UserPresencePayload) => void;
-    "observabilityBatch": (data: ObservabilityBatch) => void;
+    // Chat & Notification Events
+    messageReaction: (data: MessageReactionPayload) => void;
+    messageDeleted: (data: MessageDeletedPayload) => void;
+    messageReceived: (message: ChatMessage) => void; 
+    messageDelivered: (data: MessageDeliveredPayload) => void;
+    messageRead: (data: MessageReadEvent) => void; 
+    ackDelivery: (data: AckDeliveryPayload) => void;
+    typingStarted: (data: { userId: string; conversationId: string; name: string }) => void;
+    typingStopped: (data: { userId: string; conversationId: string; name: string }) => void;
+    
+    // Notification Sync
+    notificationNew: (notification: HaemiNotification) => void; 
+    notificationRead: (data: { id: string }) => void;
+    notificationDelete: (data: { id: string; messageId?: string }) => void;
+    notificationReadAll: () => void;
+
+    userStatus: (data: UserPresencePayload) => void;
+    observabilityBatch: (data: ObservabilityBatch) => void;
+    localMessageDeleted: (data: MessageDeletedPayload) => void;
+
+    // The Governor: Observability Mirroring
+    adminMirrorEvent: (payload: AdminMirrorPayload) => void;
 }
 
 export interface ClientToServerEvents {
-    "join-consultation": (appointmentId: string) => void;
-    "call-user": (data: CallUserPayload) => void;
-    "make-answer": (data: MakeAnswerPayload) => void;
-    "ice-candidate": (data: IceCandidatePayload) => void;
-    "ackDelivery": (data: AckDeliveryPayload) => void;
-    "joinConversation": (conversationId: string) => void;
-    "message:read": (data: MessageReadEvent) => void; // New client emission
-    "typingStarted": (data: TypingStartedPushPayload) => void;
-    "typingStopped": (data: TypingStartedPushPayload) => void;
+    joinConsultation: (appointmentId: string) => void;
+    callUser: (data: CallUserPayload) => void;
+    makeAnswer: (data: MakeAnswerPayload) => void;
+    iceCandidate: (data: IceCandidatePayload) => void;
+    ackDelivery: (data: AckDeliveryPayload) => void;
+    joinConversation: (conversationId: string) => void;
+    messageRead: (data: MessageReadEvent) => void; 
+    typingStarted: (data: TypingStartedPushPayload) => void;
+    typingStopped: (data: TypingStartedPushPayload) => void;
 }
 
 export interface InterServerEvents {

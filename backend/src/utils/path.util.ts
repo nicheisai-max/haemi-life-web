@@ -16,7 +16,7 @@ export const UPLOADS_ROOT = path.resolve(__dirname, '../../uploads');
  */
 export const getAbsolutePath = (relativePath: string): string => {
     // Normalization: Remove leading slashes and redundant 'uploads/' prefix
-    const cleanPath = relativePath.replace(/^\/+/, '').replace(/^uploads\//, '');
+    const cleanPath = relativePath.replace(/^[\\/]+/, '').replace(/^uploads[\\/]/i, '');
     const absolutePath = path.join(UPLOADS_ROOT, cleanPath);
     
     if (!absolutePath.startsWith(UPLOADS_ROOT)) {

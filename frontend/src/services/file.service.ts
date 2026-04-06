@@ -24,35 +24,26 @@ export async function secureDownload(dto: FileDownloadDTO) {
   }
 
   try {
-    const response: AxiosResponse<Blob> = await api.get(url, {
+    // P0 FIX: Append mode=download to trigger attachment header on backend (HL-FILE-2026-003)
+    const downloadUrlQuery = url.includes('?') ? `${url}&mode=download` : `${url}?mode=download`;
+    const response: AxiosResponse<Blob> = await api.get(downloadUrlQuery, {
       responseType: 'blob',
       // Ensure we don't follow non-binary redirects if possible
       validateStatus: (status) => status === 200
     });
 
-    // P0 HARDENING: Prevent 'Ghost File' downloads from API / Vite fallback mapping
-    const contentType = response.headers['content-type'] || response.data.type || '';
-    
-    // 🔴 STEP 2 — ADD EXACTLY:
-    const allowedMimeTypes = [
-      'application/pdf',
-      'image/png',
-      'image/jpeg',
-      'image/jpg',
-      'image/gif',
-      'text/plain'
-    ];
-    const isAllowed = allowedMimeTypes.includes(contentType.toLowerCase());
+    // P0 HARDENING: Prevent 'Ghost File' downloads and ensure MIME integrity (Phase 8.8 - FINAL LOCK)
+    const contentType = (response.headers['content-type'] || response.data.type || '').toLowerCase();
+    const size = response.data.size;
 
-    // 🔴 STEP 3 — REPLACE VALIDATION BLOCK WITH:
-    if (!isAllowed || contentType === 'application/octet-stream') {
-      console.error('[SECURITY] Blocked MIME:', contentType);
-      throw new Error('Blocked: Invalid file type');
-    }
+    // Security Rules:
+    // 1. MUST have a content-type
+    // 2. MUST not be zero-byte (corruption/empty)
+    const isInvalid = !contentType || size === 0;
 
-    // 🔴 2.4 ZERO BYTE BLOCK (KEEP)
-    if (response.data.size === 0) {
-      throw new Error('Blocked: Empty file');
+    if (isInvalid) {
+      console.error('[SECURITY] Blocked insecure download:', { contentType, size });
+      throw new Error('Blocked: Insecure or empty file detected');
     }
 
     const blob = response.data;

@@ -98,20 +98,11 @@ export const decrypt = (text: string): string => {
         }
 
         return result;
-    } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : 'Unknown decryption error';
-        console.error('[Security] Decryption failed (Mode mismatch or key error):', errorMsg);
-
-        // STRICT MODE: Return informative placeholder instead of silent fail
-        if (errorMsg.includes('auth tag')) {
-            return `[DECRYPTION_ERROR: AUTH_TAG_MISMATCH]`;
+        } catch (error) {
+            console.error('[Security] Decryption failed:', error);
+            // Institutional Hardening: Return sanitized placeholder for corrupted/legacy records
+            return '[Encrypted Message]';
         }
-        if (errorMsg.includes('bad decrypt')) {
-            return `[DECRYPTION_ERROR: BAD_DECRYPT]`;
-        }
-
-        return `[DECRYPTION_FAILED: ${errorMsg}]`;
-    }
 };
 
 // Blind Index helper (Deterministic HMAC for searchable PII)

@@ -3,23 +3,24 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MedicalLoader } from '../../components/ui/medical-loader';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { getMyPrescriptions, type Prescription } from '../../services/prescription.service';
-import { getMyRecords, uploadRecord, deleteRecord, type MedicalRecord } from '../../services/record.service';
-import { useConfirm } from '@/hooks/use-confirm';
-import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, UploadCloud, Trash2, Download, Image as ImageIcon, File } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { getMyPrescriptions, getPrescriptionById, type Prescription } from '../../services/prescription.service';
+import { getMyRecords, type MedicalRecord } from '../../services/record.service';
+import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, UploadCloud, Trash2, Download, Image as ImageIcon, File, Clock, FolderOpen } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { secureDownload } from '../../services/file.service';
-
 import { TransitionItem } from '../../components/layout/page-transition';
+import { ClinicalRecordType } from '../../../../shared/clinical-types';
+import { useFileActionHandler } from '@/hooks/use-file-action-handler';
 
 export const Prescriptions: React.FC = () => {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [uploadedRecords, setUploadedRecords] = useState<MedicalRecord[]>([]);
     const [loading, setLoading] = useState(true);
-    const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
-    const { confirm } = useConfirm();
+    const [fetchingDetails, setFetchingDetails] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchAllData();
@@ -30,7 +31,7 @@ export const Prescriptions: React.FC = () => {
             setLoading(true);
             const [prescriptionsData, recordsData] = await Promise.all([
                 getMyPrescriptions(),
-                getMyRecords()
+                getMyRecords(ClinicalRecordType.Prescription)
             ]);
             setPrescriptions(prescriptionsData);
             setUploadedRecords(recordsData);
@@ -42,66 +43,28 @@ export const Prescriptions: React.FC = () => {
         }
     };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 🛡️ UNIFIED FILE HUB: Surgical Hook Injection (v4.0)
+    const { handleBatchUpload, handleDelete, isProcessing } = useFileActionHandler({
+        onSuccess: (newRecord: MedicalRecord) => setUploadedRecords(prev => [newRecord, ...prev]),
+        onDeleteSuccess: (id: string) => setUploadedRecords(prev => prev.filter(r => r.id !== id)),
+        onError: (err: unknown) => {
+            const uploadErr = err as { message?: string };
+            setError(uploadErr.message || 'File operation failed');
+        }
+    });
+
+    const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        setUploading(true);
         try {
-            for (const file of Array.from(files)) {
-                // P1 FIX: Duplicate File UX Integrity
-                const existing = uploadedRecords.find(r => r.name === file.name);
-                if (existing) {
-                    const shouldReplace = await confirm({
-                        title: 'Replace existing prescription?',
-                        message: `File '${file.name}' already exists. Do you want to replace it?`,
-                        type: 'warning',
-                        confirmText: 'Replace',
-                        cancelText: 'Cancel'
-                    });
-
-                    if (!shouldReplace) continue;
-
-                    // Execute replacement: Delete existing then upload new
-                    await deleteRecord(existing.id);
-                    setUploadedRecords(prev => prev.filter(r => r.id !== existing.id));
-                }
-
-                // Ideally, we might want to tag this as a prescription if the backend supported it.
-                // For now, we upload it as a generic record which is displayed here.
-                const newRecord = await uploadRecord(file);
-                setUploadedRecords(prev => [newRecord, ...prev]);
-            }
-        } catch (err: unknown) {
-            const uploadErr = err as { message?: string };
-            console.error('Error uploading file:', err);
-            setError(uploadErr.message || 'Failed to upload file');
+            setError(null); // Clear previous errors before batch upload
+            await handleBatchUpload(files, ClinicalRecordType.Prescription);
         } finally {
-            setUploading(false);
-            if (e.target) e.target.value = ''; // P1 FIX: Prevent stale input state
+            // 🔄 SURGICAL SYNC: Always re-fetch to ensure UI parity with Database
+            await fetchAllData();
+            if (e.target) e.target.value = '';
         }
-    };
-
-    const handleDeleteRecord = async (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-
-        await confirm({
-            title: 'Delete Prescription File',
-            message: 'Are you sure you want to delete this uploaded prescription file? This action cannot be undone.',
-            type: 'error',
-            confirmText: 'Delete File',
-            cancelText: 'Cancel',
-            onAsyncConfirm: async () => {
-                try {
-                    await deleteRecord(id);
-                    setUploadedRecords(prev => prev.filter(r => r.id !== id));
-                } catch (err: unknown) {
-                    const delErr = err as { message?: string };
-                    console.error('Error deleting record:', err);
-                    setError(delErr.message || 'Failed to delete file');
-                }
-            }
-        });
     };
 
     const getStatusStyles = (status: string) => {
@@ -120,18 +83,33 @@ export const Prescriptions: React.FC = () => {
         return <File className="h-5 w-5" />;
     };
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const handleUploadClick = () => {
-        fileInputRef.current?.click();
+    const handleDownload = async (record: MedicalRecord) => {
+        try {
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+            await secureDownload({
+                url: `${baseUrl}/api/files/record/${record.id}`,
+                fileName: record.name || `prescription-${record.id}`
+            });
+        } catch {
+            setError('Failed to download the clinical document. Please try again later.');
+        }
     };
 
-    const handleDownload = async (record: MedicalRecord) => {
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-        await secureDownload({
-            url: `${baseUrl}/api/files/record/${record.id}`,
-            fileName: record.name || `prescription-${record.id}`
-        });
+    const handlePrescriptionClick = async (prescription: Prescription) => {
+        setSelectedPrescription(prescription);
+        
+        if (!prescription.items || prescription.items.length === 0) {
+            try {
+                setFetchingDetails(true);
+                const fullData = await getPrescriptionById(prescription.id);
+                setSelectedPrescription(fullData);
+                setPrescriptions(prev => prev.map(p => p.id === prescription.id ? { ...p, ...fullData } : p));
+            } catch (err) {
+                console.error('[PRESCRIPTION] Detail fetch failure:', err);
+            } finally {
+                setFetchingDetails(false);
+            }
+        }
     };
 
     if (loading) {
@@ -152,12 +130,12 @@ export const Prescriptions: React.FC = () => {
                 <div>
                     <Button
                         variant="default"
-                        disabled={uploading}
+                        disabled={isProcessing}
                         className="gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
-                        onClick={handleUploadClick}
+                        onClick={() => fileInputRef.current?.click()}
                     >
-                        {uploading ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
-                        {uploading ? 'Uploading...' : 'Upload Prescription'}
+                        {isProcessing ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2 inline-block" />}
+                        {isProcessing ? 'Uploading...' : 'Upload Prescription'}
                     </Button>
                     <input
                         ref={fileInputRef}
@@ -165,9 +143,9 @@ export const Prescriptions: React.FC = () => {
                         type="file"
                         multiple
                         accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                        onChange={handleFileUpload}
+                        onChange={onFileChange}
                         className="hidden"
-                        disabled={uploading}
+                        disabled={isProcessing}
                     />
                 </div>
             </TransitionItem>
@@ -186,7 +164,6 @@ export const Prescriptions: React.FC = () => {
             <TransitionItem>
                 <div className={`grid grid-cols-1 ${selectedPrescription ? 'lg:grid-cols-[1fr_24rem]' : ''} gap-8 transition-all duration-300`}>
                     <div className="space-y-8">
-                        {/* Digital Prescriptions Section */}
                         <div className="space-y-4">
                             <h2 className="text-xl font-semibold flex items-center gap-2">
                                 <Pill className="h-5 w-5 text-primary" />
@@ -203,7 +180,7 @@ export const Prescriptions: React.FC = () => {
                                         <Card
                                             key={prescription.id}
                                             className={`group p-0 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md border-2 ${selectedPrescription?.id === prescription.id ? 'border-primary ring-1 ring-primary/20' : 'border-transparent hover:border-border'}`}
-                                            onClick={() => setSelectedPrescription(prescription)}
+                                            onClick={() => handlePrescriptionClick(prescription)}
                                         >
                                             <div className="p-5 flex gap-5 items-start">
                                                 <div className="shrink-0 w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300">
@@ -240,46 +217,79 @@ export const Prescriptions: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Uploaded Prescriptions Section */}
                         <div className="space-y-4">
-                            <h2 className="text-xl font-semibold flex items-center gap-2">
+                            <h2 className="text-xl font-semibold flex items-center gap-2 text-foreground">
                                 <UploadCloud className="h-5 w-5 text-primary" />
                                 Uploaded Prescriptions
                             </h2>
                             {uploadedRecords.length === 0 ? (
-                                <Card className="p-8 text-center flex flex-col items-center justify-center text-muted-foreground bg-muted/5 border-dashed">
-                                    <UploadCloud className="h-12 w-12 opacity-30 mb-3" />
-                                    <p>No uploaded prescription files</p>
+                                <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-80 border-dashed rounded-xl bg-muted/5">
+                                    <div className="bg-muted/30 p-6 rounded-full mb-6">
+                                        <UploadCloud className="h-12 w-12 opacity-30" />
+                                    </div>
+                                    <h3 className="text-xl font-semibold mb-2">No uploaded prescriptions</h3>
+                                    <p className="max-w-md mx-auto">Your uploaded prescription files will appear here for easy access.</p>
                                 </Card>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="flex flex-col gap-4">
                                     {uploadedRecords.map((record) => (
-                                        <Card key={record.id} className="group p-4 flex items-start gap-4 transition-all hover:shadow-md hover:border-primary/50">
-                                            <div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                                {getFileIcon(record.fileMime)}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="font-semibold truncate mb-1 text-sm" title={record.name}>{record.name}</h4>
-                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <span>{record.fileSize}</span>
-                                                    <span className="w-1 h-1 rounded-full bg-muted-foreground/40"></span>
-                                                    <span>{new Date(record.uploadedAt).toLocaleDateString()}</span>
+                                        <Card key={record.id} className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full rounded-xl bg-card">
+                                            <div className="w-full md:w-1.5 h-1.5 md:h-auto bg-blue-500 shrink-0" />
+
+                                            <div className="flex-1 p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
+                                                <div className="shrink-0">
+                                                    <div className="w-12 h-12 rounded-xl bg-muted/30 flex items-center justify-center text-foreground border shadow-sm">
+                                                        {getFileIcon(record.fileMime)}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                                    onClick={() => handleDownload(record)}
-                                                >
-                                                    <Download className="h-4 w-4" />
-                                                    <span className="sr-only">Download</span>
-                                                </Button>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={(e) => handleDeleteRecord(e, record.id)}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                    <span className="sr-only">Delete</span>
-                                                </Button>
+
+                                                <div className="flex-1 min-w-0 space-y-1 text-left">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <Badge variant="outline" className="text-xs font-normal gap-1 bg-muted/30">
+                                                            <UploadCloud className="h-3.5 w-3.5" />
+                                                            Patient Upload
+                                                        </Badge>
+                                                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border bg-emerald-100/10 text-emerald-600 border-emerald-600/20">
+                                                            FINAL
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="font-bold text-lg text-foreground truncate">{record.name}</h3>
+                                                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-1">
+                                                        <div className="flex items-center gap-1.5 font-medium">
+                                                            <Calendar className="h-4 w-4 text-primary/70" />
+                                                            <span>{new Date(record.uploadedAt).toLocaleDateString()}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 font-medium">
+                                                            <FolderOpen className="h-4 w-4 text-primary/70" />
+                                                            <span>{record.fileSize}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-row items-center gap-3 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-border/50">
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="flex gap-2 h-9 px-4 font-medium transition-all"
+                                                        onClick={() => handleDownload(record)}
+                                                    >
+                                                        <Download className="h-4 w-4" />
+                                                        <span>Download</span>
+                                                    </Button>
+                                                    
+                                                    <Button 
+                                                        variant="destructive" 
+                                                        size="sm" 
+                                                        className="flex gap-2 h-9 px-4 font-medium shadow-sm transition-all hover:brightness-110 active:scale-95" 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDelete({ id: record.id.toString(), name: record.name });
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4 text-white" />
+                                                        <span className="text-white">Delete</span>
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </Card>
                                     ))}
@@ -288,14 +298,11 @@ export const Prescriptions: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Details Panel for Digital Prescriptions */}
                     {selectedPrescription && (
                         <div className="relative">
                             <div className="lg:sticky lg:top-24 h-fit bg-background lg:bg-transparent">
-                                {/* Mobile Overlay Background (Fixed) */}
                                 <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSelectedPrescription(null)} />
 
-                                {/* Panel Content */}
                                 <Card className="fixed inset-x-0 bottom-0 z-50 rounded-t-xl border-t shadow-2xl lg:shadow-sm lg:border lg:rounded-xl lg:relative lg:inset-auto max-h-[85vh] lg:max-h-[calc(100vh-8rem)] flex flex-col overflow-hidden animate-in slide-in-from-bottom-full lg:slide-in-from-bottom-0 lg:fade-in duration-300">
                                     <div className="p-4 border-b flex items-center justify-between shrink-0 bg-muted/30">
                                         <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -352,22 +359,40 @@ export const Prescriptions: React.FC = () => {
                                                 <Pill className="h-3.5 w-3.5" />
                                                 Medications
                                             </h3>
-                                            {selectedPrescription.medicationCount && selectedPrescription.medicationCount > 0 ? (
-                                                <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 flex gap-3 items-start">
-                                                    <div className="shrink-0 w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary mt-0.5">
-                                                        <Building2 className="h-4 w-4" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-medium text-foreground">
-                                                            {selectedPrescription.medicationCount} medication{(selectedPrescription.medicationCount || 0) !== 1 ? 's' : ''} prescribed
+                                            
+                                            {fetchingDetails ? (
+                                                <div className="flex flex-col items-center justify-center py-10 bg-muted/20 rounded-lg border border-dashed">
+                                                    <PremiumLoader size="sm" />
+                                                    <span className="text-[10px] text-muted-foreground mt-2 uppercase tracking-widest font-bold">Synchronizing Clinical Data...</span>
+                                                </div>
+                                            ) : (selectedPrescription.items && selectedPrescription.items.length > 0) ? (
+                                                <div className="space-y-3">
+                                                    {selectedPrescription.items.map((item) => (
+                                                        <div key={item.id} className="bg-primary/5 border border-primary/10 rounded-lg p-3 hover:bg-primary/10 transition-colors duration-200">
+                                                            <div className="flex justify-between items-start mb-1">
+                                                                <div className="text-sm font-bold text-foreground">{item.medicineName || 'Medication'}</div>
+                                                                <div className="text-[10px] font-bold px-2 py-0.5 bg-primary/20 text-primary rounded-full">{item.strength || 'N/A'}</div>
+                                                            </div>
+                                                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                                <span className="flex items-center gap-1"><Pill className="h-2.5 w-2.5" /> {item.dosage}</span>
+                                                                <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" /> {item.frequency}</span>
+                                                            </div>
+                                                            {item.instructions && (
+                                                                <div className="mt-2 pt-2 border-t border-primary/5 text-[11px] italic text-muted-foreground leading-snug">
+                                                                    "{item.instructions}"
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div className="text-xs text-muted-foreground mt-1">
-                                                            Full formulation details available at pharmacy
-                                                        </div>
+                                                    ))}
+                                                    <div className="text-[10px] text-center text-muted-foreground italic mt-2">
+                                                        Total: {selectedPrescription.items.length} medication{(selectedPrescription.items.length !== 1 ? 's' : '')} prescribed
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <p className="text-sm text-muted-foreground italic">No medication details available</p>
+                                                <div className="bg-muted/30 border border-dashed rounded-lg p-6 text-center">
+                                                    <Pill className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                                                    <p className="text-sm text-muted-foreground italic">No medication details available</p>
+                                                </div>
                                             )}
                                         </div>
                                     </div>

@@ -27,7 +27,7 @@ const HEALTH_TRENDS_DATA = [
     { name: 'Week 4', score: 82, label: 'Current Status' },
 ];
 
-export const PatientDashboard = () => {
+export const PatientDashboard: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -135,7 +135,7 @@ export const PatientDashboard = () => {
                             <IconWrapper icon={Calendar} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
                                 <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                    {loading ? "-" : upcomingAppointments.length}
+                                    {loading ? <PremiumLoader size="sm" className="h-9" /> : upcomingAppointments.length}
                                 </div>
                                 <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-primary transition-colors">Bookings</div>
                             </div>
@@ -145,7 +145,7 @@ export const PatientDashboard = () => {
                             <IconWrapper icon={FileText} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
                                 <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                    {loading ? "-" : activePrescriptions.length}
+                                    {loading ? <PremiumLoader size="sm" className="h-9" /> : activePrescriptions.length}
                                 </div>
                                 <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">Scripts</div>
                             </div>
@@ -155,7 +155,7 @@ export const PatientDashboard = () => {
                             <IconWrapper icon={FolderOpen} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                             <div className="flex flex-col items-center gap-1.5">
                                 <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                    {loading ? "-" : appointments.length}
+                                    {loading ? <PremiumLoader size="sm" className="h-9" /> : appointments.length}
                                 </div>
                                 <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-amber-500 transition-colors">Total Visits</div>
                             </div>

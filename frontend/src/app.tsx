@@ -20,6 +20,7 @@ import { MedicalLoader } from './components/ui/medical-loader';
 import { RoleRoute } from './components/auth/role-route';
 import { FirstVisitGuard } from './components/guards/first-visit-guard';
 
+
 // Lazy loaded pages
 // Eagerly loaded Auth/Public pages for zero-jerks and instantaneous navigation
 import { Login } from './pages/public/login';

@@ -30,35 +30,40 @@ export interface ServerToClientEvents {
     reconnect_attempt: (attempt: number) => void;
     reconnect_failed: () => void;
     reconnect: () => void;
-    'participant-joined': (participantId: string) => void;
-    'call-made': (data: { offer: SignalData; socket: string }) => void;
-    'answer-made': (data: { answer: SignalData; socket: string }) => void;
-    'ice-candidate': (data: { candidate: SignalData; socket: string }) => void;
+    participantJoined: (participantId: string) => void;
+    callMade: (data: { offer: SignalData; socket: string }) => void;
+    answerMade: (data: { answer: SignalData; socket: string }) => void;
+    iceCandidate: (data: { candidate: SignalData; socket: string }) => void;
     messageReaction: (data: {
         messageId: string;
         userId: string;
         reactionType: string;
         action: 'added' | 'removed';
     }) => void | Promise<void>;
-    messageDeleted: (data: { messageId: string; forEveryone: boolean }) => void | Promise<void>;
+    messageDeleted: (data: { messageId: string; conversationId: string }) => void | Promise<void>;
     typingStarted: (data: { userId: string; conversationId: string; name: string }) => void | Promise<void>;
     typingStopped: (data: { userId: string; conversationId: string; name: string }) => void | Promise<void>;
     messageDelivered: (data: { conversationId: string; messageIds: string[] }) => void | Promise<void>;
-    'message:read': (data: MessageReadEvent) => void | Promise<void>; // Standardized per-message event
+    messageRead: (data: MessageReadEvent) => void | Promise<void>;
     messageReceived: (message: Message) => void | Promise<void>;
-    'notification:new': (notification: HaemiNotification) => void | Promise<void>;
-    userStatus: (data: { userId: string; isOnline: boolean; lastSeen: string }) => void | Promise<void>;
+    notificationNew: (notification: HaemiNotification) => void | Promise<void>;
+    notificationRead: (data: { id: string }) => void | Promise<void>;
+    notificationDelete: (data: { id: string; messageId?: string }) => void | Promise<void>;
+    notificationReadAll: () => void | Promise<void>;
+    userStatus: (data: { userId: string; isOnline: boolean; lastActivity: string }) => void | Promise<void>;
     ackDelivery: (data: { conversationId: string; messageId: string }) => void | Promise<void>;
+    localMessageDeleted: (data: { messageId: string }) => void | Promise<void>;
+    adminMirrorEvent: (payload: { event: string; data: unknown; timestamp: string }) => void | Promise<void>;
 }
 
 export interface ClientToServerEvents {
-    'join-consultation': (appointmentId: string) => void;
-    'call-user': (data: { offer: SignalData; to: string }) => void;
-    'make-answer': (data: { answer: SignalData; to: string }) => void;
-    'ice-candidate': (data: { candidate: SignalData; to: string }) => void;
+    joinConsultation: (appointmentId: string) => void;
+    callUser: (data: { offer: SignalData; to: string }) => void;
+    makeAnswer: (data: { answer: SignalData; to: string }) => void;
+    iceCandidate: (data: { candidate: SignalData; to: string }) => void;
     ackDelivery: (data: { conversationId: string; messageId: string }) => void;
     joinConversation: (conversationId: string) => void;
-    'message:read': (data: MessageReadEvent) => void; // Standardized client emission
+    messageRead: (data: MessageReadEvent) => void;
     typingStarted: (data: { conversationId: string; name: string }) => void;
     typingStopped: (data: { conversationId: string; name: string }) => void;
 }
@@ -101,7 +106,7 @@ class SocketService {
                 // Convert to unknown first to allow cross-type casting without 'any'
                 socket.on(
                     event as keyof ServerToClientEvents, 
-                    cb as unknown as Parameters<SocketInstance['on']>[1]
+                    cb as never
                 ); 
             });
         });
@@ -115,9 +120,11 @@ class SocketService {
             const socket = io(SOCKET_URL, {
                 auth: { token },
                 withCredentials: true,
-                transports: ['websocket'], // P0: Strict websocket only
+                transports: ['polling', 'websocket'], // P0: Institutional Handshake (Polling → WS Upgrade)
                 reconnection: true,
                 reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                timeout: 20000,
             });
 
             this.socket?.disconnect();
@@ -173,7 +180,7 @@ class SocketService {
         if (this.socket) {
             this.socket.on(
                 event as keyof ServerToClientEvents, 
-                cb as unknown as Parameters<SocketInstance['on']>[1]
+                cb as never
             );
         }
     }

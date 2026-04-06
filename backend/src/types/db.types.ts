@@ -21,7 +21,8 @@ export interface UserEntity {
     profile_image: string | null;
     profile_image_mime?: string | null;
     id_number: string | null;
-    last_activity: Date;
+    has_consent: boolean;
+    lastActivity: Date | string | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -77,7 +78,7 @@ export interface UserSessionEntity {
     jti_rotated_at: Date | string | null;
     ip_address: string | null;
     user_agent: string | null;
-    last_activity: Date;
+    lastActivity: Date | string | null;
     revoked: boolean;
     expires_at: Date | null;
 }

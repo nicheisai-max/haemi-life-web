@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useConfirm } from '@/hooks/use-confirm';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,8 +11,13 @@ import {
 
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { MedicalLoader } from '../../components/ui/medical-loader';
-import { getMyRecords, uploadRecord, deleteRecord } from '../../services/record.service';
+import { getMyRecords } from '../../services/record.service';
+import { getMyPrescriptions } from '../../services/prescription.service';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
 import type { MedicalRecord } from '../../services/record.service';
+import { ClinicalRecordType } from '../../../../shared/clinical-types';
+import { useFileActionHandler } from '@/hooks/use-file-action-handler';
 
 import { TransitionItem } from '../../components/layout/page-transition';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,9 +28,9 @@ export const MedicalRecords: React.FC = () => {
     const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedType, setSelectedType] = useState('all');
-    const [uploading, setUploading] = useState(false);
     const [loading, setLoading] = useState(true);
-    const { confirm } = useConfirm();
+    const [error, setError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchRecords();
@@ -37,11 +41,11 @@ export const MedicalRecords: React.FC = () => {
 
         if (selectedType !== 'all') {
             result = result.filter(r =>
-                selectedType === 'lab' ? r.recordType === 'Lab Result' :
-                    selectedType === 'radiology' ? r.recordType === 'Radiology' :
-                        selectedType === 'prescription' ? r.recordType === 'Prescription' :
-                            selectedType === 'notes' ? ['Clinical Note', 'Specialist Report'].includes(r.recordType || '') :
-                                selectedType === 'other' ? !['Lab Result', 'Radiology', 'Prescription', 'Clinical Note', 'Specialist Report'].includes(r.recordType || '') :
+                selectedType === 'lab' ? r.recordType === ClinicalRecordType.LabResult :
+                    selectedType === 'radiology' ? r.recordType === ClinicalRecordType.Radiology :
+                        selectedType === 'prescription' ? r.recordType === ClinicalRecordType.Prescription :
+                            selectedType === 'notes' ? [ClinicalRecordType.ClinicalNote, ClinicalRecordType.SpecialistReport].includes(r.recordType as ClinicalRecordType) :
+                                selectedType === 'other' ? ![ClinicalRecordType.LabResult, ClinicalRecordType.Radiology, ClinicalRecordType.Prescription, ClinicalRecordType.ClinicalNote, ClinicalRecordType.SpecialistReport].includes(r.recordType as ClinicalRecordType) :
                                     true
             );
         }
@@ -50,9 +54,9 @@ export const MedicalRecords: React.FC = () => {
             const lowerTerm = searchTerm.toLowerCase();
             result = result.filter(r =>
                 r.name.toLowerCase().includes(lowerTerm) ||
-                r.doctorName?.toLowerCase().includes(lowerTerm) ||
-                r.facilityName?.toLowerCase().includes(lowerTerm) ||
-                r.notes?.toLowerCase().includes(lowerTerm)
+                (r.doctorName || '').toLowerCase().includes(lowerTerm) ||
+                (r.facilityName || '').toLowerCase().includes(lowerTerm) ||
+                (r.notes || '').toLowerCase().includes(lowerTerm)
             );
         }
 
@@ -62,8 +66,33 @@ export const MedicalRecords: React.FC = () => {
     const fetchRecords = async () => {
         try {
             setLoading(true);
-            const data = await getMyRecords();
-            setRecords(data);
+            
+            const [uploadedData, digitalData] = await Promise.all([
+                getMyRecords(),
+                getMyPrescriptions()
+            ]);
+
+            const mappedDigital: MedicalRecord[] = digitalData.map(p => ({
+                id: `digital-${p.id}`,
+                patientId: p.patientId,
+                name: `Prescription from ${p.doctorName || 'Doctor'}`,
+                url: '#',
+                fileMime: 'application/json',
+                fileSize: `${p.medicationCount || 0} med${(p.medicationCount || 0) !== 1 ? 's' : ''}`,
+                uploadedAt: p.createdAt,
+                recordType: ClinicalRecordType.Prescription,
+                status: p.status,
+                notes: p.notes || 'Digital prescription',
+                doctorName: p.doctorName,
+                facilityName: 'Digital Clinical Hub',
+                dateOfService: p.createdAt
+            }));
+
+            const combined = [...uploadedData, ...mappedDigital].sort((a, b) => 
+                new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+            );
+
+            setRecords(combined);
         } catch (error) {
             console.error('Error fetching records:', error);
         } finally {
@@ -71,61 +100,26 @@ export const MedicalRecords: React.FC = () => {
         }
     };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 🛡️ UNIFIED FILE HUB: Surgical Hook Injection (v4.0)
+    const { handleBatchUpload, handleDelete, isProcessing } = useFileActionHandler({
+        onSuccess: (newRecord: MedicalRecord) => setRecords(prev => [newRecord, ...prev]),
+        onDeleteSuccess: (id: string) => setRecords(prev => prev.filter(r => r.id !== id)),
+        onError: (err: unknown) => {
+            const uploadErr = err as { message?: string };
+            setError(uploadErr.message || 'File operation failed');
+        }
+    });
+
+    const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        setUploading(true);
         try {
-            for (const file of Array.from(files)) {
-                // P1 FIX: Duplicate File UX Integrity
-                const existing = records.find(r => r.name === file.name);
-                if (existing) {
-                    const shouldReplace = await confirm({
-                        title: 'Replace existing file?',
-                        message: `File '${file.name}' already exists. Do you want to replace it?`,
-                        type: 'warning',
-                        confirmText: 'Replace',
-                        cancelText: 'Cancel'
-                    });
-
-                    if (!shouldReplace) continue;
-
-                    // Execute replacement: Delete existing then upload new
-                    await deleteRecord(existing.id);
-                    setRecords(prev => prev.filter(r => r.id !== existing.id));
-                }
-
-                const newRecord = await uploadRecord(file);
-                setRecords(prev => [newRecord, ...prev]);
-            }
-        } catch (error) {
-            console.error('Error uploading file:', error);
+            setError(null);
+            await handleBatchUpload(files, ClinicalRecordType.GeneralRecord);
         } finally {
-            setUploading(false);
-            if (e.target) e.target.value = ''; // P1 FIX: Prevent stale input state
+            if (e.target) e.target.value = '';
         }
-    };
-
-    const handleDeleteRecord = async (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-
-        await confirm({
-            title: 'Delete Record',
-            message: 'Are you sure you want to delete this medical record? This action cannot be undone and may affect your clinical history.',
-            type: 'error',
-            confirmText: 'Delete Record',
-            cancelText: 'Cancel',
-            onAsyncConfirm: async () => {
-                try {
-                    await deleteRecord(id);
-                    setRecords(prev => prev.filter(r => r.id !== id));
-                } catch (error) {
-                    console.error('Error deleting record:', error);
-                    // Could add toast/error state here
-                }
-            }
-        });
     };
 
     const getFileIcon = (type: string | null | undefined) => {
@@ -135,12 +129,12 @@ export const MedicalRecords: React.FC = () => {
         return <File className="h-5 w-5" />;
     };
 
-    const getTypeIcon = (type: string) => {
+    const getTypeIcon = (type: ClinicalRecordType) => {
         switch (type) {
-            case 'Lab Result': return <Activity className="h-4 w-4" />;
-            case 'Radiology': return <ImageIcon className="h-4 w-4" />;
-            case 'Prescription': return <Pill className="h-4 w-4" />;
-            case 'Immunization': return <ShieldCheck className="h-4 w-4" />;
+            case ClinicalRecordType.LabResult: return <Activity className="h-4 w-4" />;
+            case ClinicalRecordType.Radiology: return <ImageIcon className="h-4 w-4" />;
+            case ClinicalRecordType.Prescription: return <Pill className="h-4 w-4" />;
+            case ClinicalRecordType.Immunization: return <ShieldCheck className="h-4 w-4" />;
             default: return <FileText className="h-4 w-4" />;
         }
     };
@@ -155,18 +149,16 @@ export const MedicalRecords: React.FC = () => {
         }
     };
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const handleUploadClick = () => {
-        fileInputRef.current?.click();
-    };
-
     const handleDownload = async (record: MedicalRecord) => {
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-        await secureDownload({
-            url: `${baseUrl}/api/files/record/${record.id}`,
-            fileName: record.name || `record-${record.id}`
-        });
+        try {
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+            await secureDownload({
+                url: `${baseUrl}/api/files/record/${record.id}`,
+                fileName: record.name || `record-${record.id}`
+            });
+        } catch {
+            setError('Failed to download the clinical document. Please try again later.');
+        }
     };
 
     return (
@@ -179,12 +171,12 @@ export const MedicalRecords: React.FC = () => {
                 <div className="flex gap-2">
                     <Button
                         variant="default"
-                        disabled={uploading}
+                        disabled={isProcessing}
                         className="gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
-                        onClick={handleUploadClick}
+                        onClick={() => fileInputRef.current?.click()}
                     >
-                        {uploading ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2" />}
-                        {uploading ? 'Uploading...' : 'Upload Record'}
+                        {isProcessing ? <PremiumLoader size="xs" /> : <UploadCloud className="h-4 w-4 mr-2" />}
+                        {isProcessing ? 'Uploading...' : 'Upload Record'}
                     </Button>
                     <input
                         ref={fileInputRef}
@@ -192,12 +184,23 @@ export const MedicalRecords: React.FC = () => {
                         type="file"
                         multiple
                         accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                        onChange={handleFileUpload}
+                        onChange={onFileChange}
                         className="hidden"
-                        disabled={uploading}
+                        disabled={isProcessing}
                     />
                 </div>
             </TransitionItem>
+
+            {error && (
+                <TransitionItem>
+                    <Alert variant="destructive" className="mb-6">
+                        <div className="flex-shrink-0 flex items-center justify-center">
+                            <AlertCircle className="h-4 w-4" />
+                        </div>
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                </TransitionItem>
+            )}
 
             <TransitionItem>
                 <Card className="p-4 bg-background/50 backdrop-blur-sm border shadow-sm">
@@ -254,22 +257,19 @@ export const MedicalRecords: React.FC = () => {
                                     layout
                                 >
                                     <Card className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full rounded-card">
-                                        {/* Left Accent Strip */}
-                                        <div className={`w-full md:w-1.5 h-1.5 md:h-auto ${record.recordType === 'Lab Result' ? 'bg-purple-500' :
-                                            record.recordType === 'Radiology' ? 'bg-blue-500' :
-                                                record.recordType === 'Immunization' ? 'bg-emerald-500' :
+                                        <div className={`w-full md:w-1.5 h-1.5 md:h-auto ${record.recordType === ClinicalRecordType.LabResult ? 'bg-purple-500' :
+                                            record.recordType === ClinicalRecordType.Radiology ? 'bg-blue-500' :
+                                                record.recordType === ClinicalRecordType.Immunization ? 'bg-emerald-500' :
                                                     'bg-slate-400'
                                             }`} />
 
                                         <div className="flex-1 p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
-                                            {/* Icon */}
                                             <div className="shrink-0">
                                                 <div className="w-12 h-12 rounded-xl bg-muted/30 flex items-center justify-center text-foreground border shadow-sm">
                                                     {getFileIcon(record.fileMime)}
                                                 </div>
                                             </div>
 
-                                            {/* Main Info */}
                                             <div className="flex-1 min-w-0 space-y-1">
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <Badge variant="outline" className="text-xs font-normal gap-1 bg-muted/30">
@@ -308,30 +308,29 @@ export const MedicalRecords: React.FC = () => {
                                                 )}
                                             </div>
 
-                                            {/* Actions */}
-                                            <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-border/50">
+                                            <div className="flex flex-row items-center gap-3 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-border/50">
                                                 <Button 
                                                     variant="outline" 
                                                     size="sm" 
-                                                    className="hidden md:flex gap-2"
+                                                    className="flex gap-2 h-9 px-4 font-medium transition-all"
                                                     onClick={() => handleDownload(record)}
                                                 >
                                                     <Download className="h-4 w-4" />
-                                                    Download
-                                                </Button>
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="icon" 
-                                                    className="md:hidden h-9 w-9"
-                                                    onClick={() => handleDownload(record)}
-                                                >
-                                                    <Download className="h-4 w-4" />
+                                                    <span>Download</span>
                                                 </Button>
 
-
-                                                {record.recordType === 'Patient Upload' && (
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={(e) => handleDeleteRecord(e, record.id)}>
-                                                        <Trash2 className="h-4 w-4" />
+                                                {!record.id.toString().startsWith('digital-') && (
+                                                    <Button 
+                                                        variant="destructive" 
+                                                        size="sm" 
+                                                        className="flex gap-2 h-9 px-4 font-medium shadow-sm transition-all hover:brightness-110 active:scale-95"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDelete({ id: record.id.toString(), name: record.name });
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4 text-white" />
+                                                        <span className="text-white">Delete</span>
                                                     </Button>
                                                 )}
                                             </div>
@@ -346,4 +345,3 @@ export const MedicalRecords: React.FC = () => {
         </div>
     );
 };
-

@@ -1,4 +1,4 @@
-import React, { type ReactNode } from 'react';
+import React, { type ReactNode, useState, useEffect, Suspense } from 'react';
 import { Navbar } from './navbar';
 import { NotificationSimulator } from '../utils/notification-simulator.deprecated';
 
@@ -12,11 +12,32 @@ const ClinicalCopilot = React.lazy(() => import('../ui/clinical-copilot').then(m
 import { Footer } from './footer';
 import { Sidebar } from './sidebar';
 import { useAuth } from '@/hooks/use-auth';
-import { Suspense } from 'react';
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
+    const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+
+    // COORDINATION: Global Orchestration for AI Copilot
+    useEffect(() => {
+        const handleOpen = () => {
+            if (!isCopilotOpen) {
+                // Mutual Exclusion: Close others when opening copilot
+                window.dispatchEvent(new CustomEvent('haemi-close-chathub'));
+                window.dispatchEvent(new CustomEvent('haemi-close-notifications'));
+                setIsCopilotOpen(true);
+            }
+        };
+        const handleClose = () => setIsCopilotOpen(false);
+
+        window.addEventListener('haemi-open-copilot', handleOpen);
+        window.addEventListener('haemi-close-copilot', handleClose);
+
+        return () => {
+            window.removeEventListener('haemi-open-copilot', handleOpen);
+            window.removeEventListener('haemi-close-copilot', handleClose);
+        };
+    }, [isCopilotOpen]);
 
     // MASTER LAYOUT ARCHITECTURE
     // 1. Navbar: Fixed Top (72px)
@@ -24,29 +45,26 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
     // 3. Main: Fluid with Max Width 1800px
 
     return (
-        <div className="portal-layout-root min-h-screen bg-background text-foreground flex flex-col transition-colors duration-300">
+        <div className="portal-layout-root min-h-screen bg-background text-foreground flex flex-col">
             {/* Top Navigation - Fixed */}
             <Navbar />
 
             <NotificationSimulator />
 
             {/* App Shell w/ Sidebar Offset */}
-            <div className="flex flex-1 pt-[72px]">
+            <div className="flex flex-1 pt-[var(--layout-header-height)]">
                 {/* Fixed Sidebar */}
                 <Sidebar />
 
                 {/* Main Content Area */}
-                <main className="flex-1 w-full min-w-0 lg:pl-[260px] flex flex-col min-h-[calc(100vh-72px)] bg-muted/5 dark:bg-background">
-                    <div className="flex-1 w-full max-w-[1800px] mx-auto px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8 transition-all duration-300">
+                <main className="flex-1 w-full min-w-0 lg:pl-[var(--layout-sidebar-width)] flex flex-col min-h-[calc(100vh-var(--layout-header-height))] bg-muted/5 dark:bg-background overflow-x-hidden">
+                    {/* Content Wrapper: Standardized Mirror-Symmetry Logic */}
+                    <div className="flex-1 w-full max-w-[var(--layout-max-width)] px-4 sm:px-6 lg:px-10 pt-6 md:pt-8 transition-all duration-300">
                         {children}
                     </div>
 
-                    {/* Footer behaves within the content flow or strictly at bottom? 
-                        Keeping it consistent with flow for now, but usually footers in dashboards are at end of content.
-                    */}
-                    <div className="w-full max-w-[1800px] mx-auto px-6 pb-6 md:px-8 md:pb-8">
-                        <Footer />
-                    </div>
+                    {/* Institutional Footer System: mt-auto ensures bottom stickiness */}
+                    <Footer />
                 </main>
             </div>
 
@@ -56,7 +74,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                         <ChatHub />
                     </Suspense>
                     <Suspense fallback={null}>
-                        <ClinicalCopilot isOpen={false} onClose={() => { }} />
+                        <ClinicalCopilot 
+                            isOpen={isCopilotOpen} 
+                            onClose={() => setIsCopilotOpen(false)} 
+                        />
                     </Suspense>
                 </>
             )}

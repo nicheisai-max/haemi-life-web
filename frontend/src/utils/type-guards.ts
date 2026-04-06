@@ -53,22 +53,26 @@ export function isSocketErrorPayload(value: unknown): value is SocketErrorPayloa
 
 export function isUser(value: unknown): value is User {
     if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
     return (
-        'id' in value && typeof value.id === 'string' &&
-        'email' in value && typeof value.email === 'string' &&
-        'name' in value && typeof value.name === 'string' &&
-        'role' in value && (value.role === 'patient' || value.role === 'doctor' || value.role === 'pharmacist' || value.role === 'admin')
+        'id' in v && typeof v.id === 'string' &&
+        'email' in v && typeof v.email === 'string' &&
+        'name' in v && typeof v.name === 'string' &&
+        'role' in v && (v.role === 'patient' || v.role === 'doctor' || v.role === 'pharmacist' || v.role === 'admin')
     );
 }
 
 export function isJWTPayload(value: unknown): value is JWTPayload {
     if (!isObject(value)) return false;
-    const { id, role, tokenVersion } = value;
+    const { id, email, role, tokenVersion, sessionId, jti } = value;
     return (
         isString(id) &&
+        isString(email) &&
         isString(role) &&
         (role === 'patient' || role === 'doctor' || role === 'pharmacist' || role === 'admin') &&
-        isNumber(tokenVersion)
+        isNumber(tokenVersion) &&
+        isString(sessionId) &&
+        isString(jti)
     );
 }
 

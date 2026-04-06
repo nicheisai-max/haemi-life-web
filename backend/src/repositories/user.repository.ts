@@ -28,7 +28,10 @@ export class UserRepository {
         try {
             const blindIndex = getBlindIndex(identifier);
             const result = await this.db.query<UserRow>(
-                'SELECT * FROM users WHERE email = $1 OR phone_blind_index = $2 OR phone_number = $1',
+                `SELECT u.*, (tc.id IS NOT NULL) as has_consent 
+                 FROM users u 
+                 LEFT JOIN telemedicine_consents tc ON u.id = tc.patient_id 
+                 WHERE u.email = $1 OR u.phone_blind_index = $2 OR u.phone_number = $1`,
                 [identifier, blindIndex]
             );
             const user = result.rows[0];
@@ -64,7 +67,10 @@ export class UserRepository {
     async findById(id: string): Promise<User | null> {
         try {
             const result = await this.db.query<UserRow>(
-                'SELECT * FROM users WHERE id = $1',
+                `SELECT u.*, (tc.id IS NOT NULL) as has_consent 
+                 FROM users u 
+                 LEFT JOIN telemedicine_consents tc ON u.id = tc.patient_id 
+                 WHERE u.id = $1`,
                 [id]
             );
             const user = result.rows[0];
@@ -92,8 +98,8 @@ export class UserRepository {
             const result = await db.query<UserRow>(
                 `INSERT INTO users (
                     name, phone_number, email, password, role, id_number, phone_blind_index, id_blind_index, created_at, updated_at, status
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), 'ACTIVE') 
-                RETURNING id, name, phone_number, email, role, id_number, status, initials, is_active, is_verified, token_version, profile_image, last_activity, created_at, updated_at`,
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'ACTIVE') 
+                RETURNING id, name, phone_number, email, role, id_number, status, initials, is_active, is_verified, token_version, profile_image, "lastActivity", created_at, updated_at, FALSE as has_consent`,
                 [name, encryptedPhone, email || null, password, role, encryptedID, phoneBlindIndex, idBlindIndex]
             );
             return this.decryptUser(result.rows[0]);
@@ -112,7 +118,7 @@ export class UserRepository {
             const phoneBlindIndex = getBlindIndex(data.phoneNumber);
 
             const result = await this.db.query<UserRow>(
-                'UPDATE users SET name = $1, email = $2, phone_number = $3, phone_blind_index = $4, updated_at = NOW() WHERE id = $5 RETURNING *',
+                'UPDATE users SET name = $1, email = $2, phone_number = $3, phone_blind_index = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *',
                 [data.name, data.email, encryptedPhone, phoneBlindIndex, userId]
             );
             return this.decryptUser(result.rows[0]);
@@ -154,7 +160,7 @@ export class UserRepository {
             fs.writeFileSync(fullPath, imageBuffer);
 
             const result = await this.db.query<UserRow>(
-                'UPDATE users SET profile_image = $1, profile_image_mime = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+                'UPDATE users SET profile_image = $1, profile_image_mime = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
                 [relativePath, mimeType, userId]
             );
             return this.decryptUser(result.rows[0]);
@@ -171,7 +177,7 @@ export class UserRepository {
     async updatePassword(userId: string, hashedPassword: string): Promise<void> {
         try {
             await this.db.query(
-                'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+                'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
                 [hashedPassword, userId]
             );
         } catch (error: unknown) {

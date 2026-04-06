@@ -78,7 +78,7 @@ export const deleteAppointment = async (id: number) => {
 // Get available time slots
 export const getAvailableSlots = async (doctorId: string, date: string): Promise<AvailableSlots> => {
     const response = await api.get<ApiResponse<AvailableSlots>>('/appointments/available-slots', {
-        params: { doctor_id: doctorId, date }
+        params: { doctorId: doctorId, date }
     });
     return normalizeResponse(response);
 };

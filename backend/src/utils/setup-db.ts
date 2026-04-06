@@ -26,7 +26,7 @@ async function setupDatabase() {
             CREATE TABLE IF NOT EXISTS schema_migrations (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) UNIQUE NOT NULL,
-                applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                applied_at TIMESTAMPTZ DEFAULT NOW()
             );
         `);
 

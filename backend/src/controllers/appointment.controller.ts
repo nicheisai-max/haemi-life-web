@@ -102,11 +102,12 @@ export const bookAppointment = async (req: Request, res: Response) => {
 
 // Get user's appointments
 export const getMyAppointments = async (req: Request, res: Response) => {
-    const userId = req.user?.id;
+    const user = req.user;
     const { status, upcoming } = req.query;
 
     try {
-        if (!userId) return sendError(res, 401, 'Unauthorized');
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = user.id;
 
         const appointments = await appointmentRepository.findByUserId(
             userId,
@@ -117,7 +118,7 @@ export const getMyAppointments = async (req: Request, res: Response) => {
     } catch (error: unknown) {
         logger.error('Error fetching appointments:', { 
             error: error instanceof Error ? error.message : String(error), 
-            userId 
+            userId: user?.id
         });
         return sendError(res, 500, 'Error fetching appointments');
     }
@@ -126,10 +127,11 @@ export const getMyAppointments = async (req: Request, res: Response) => {
 // Get appointment by ID
 export const getAppointmentById = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const userId = req.user?.id;
+    const user = req.user;
 
     try {
-        if (!userId) return sendError(res, 401, 'Unauthorized');
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = user.id;
 
         const appointment = await appointmentRepository.findByIdWithDetails(Number(id), userId);
 
@@ -151,10 +153,11 @@ export const getAppointmentById = async (req: Request, res: Response) => {
 export const updateAppointmentStatus = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status, notes } = req.body as UpdateAppointmentRequest;
-    const userId = req.user?.id;
+    const user = req.user;
 
     try {
-        if (!userId) return sendError(res, 401, 'Unauthorized');
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = user.id;
 
         const appointment = await appointmentRepository.updateStatus(
             Number(id), 
@@ -180,10 +183,11 @@ export const updateAppointmentStatus = async (req: Request, res: Response) => {
 // Cancel appointment
 export const cancelAppointment = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const userId = req.user?.id;
+    const user = req.user;
 
     try {
-        if (!userId) return sendError(res, 401, 'Unauthorized');
+        if (!user) return sendError(res, 401, 'Unauthorized');
+        const userId = user.id;
 
         const appointment = await appointmentRepository.cancel(Number(id), userId);
 
@@ -231,11 +235,11 @@ export const deleteAppointment = async (req: Request, res: Response) => {
 
 // Get available time slots for a doctor
 export const getAvailableSlots = async (req: Request, res: Response) => {
-    const { doctor_id, date } = req.query;
+    const { doctorId, date } = req.query;
 
     try {
-        if (typeof doctor_id !== 'string' || typeof date !== 'string') {
-            return res.status(400).json({ message: 'doctor_id and date are required' });
+        if (typeof doctorId !== 'string' || typeof date !== 'string') {
+            return res.status(400).json({ message: 'doctorId and date are required' });
         }
         
         // Get day of week from date using UTC-safe local parsing
@@ -244,14 +248,14 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
         const dayOfWeek = dateObj.getDay(); // 0 is Sunday, 6 is Saturday
 
         // Get doctor's schedule for that day (passing integer as defined in init.sql)
-        const schedule = await appointmentRepository.getDoctorSchedule(doctor_id, dayOfWeek);
+        const schedule = await appointmentRepository.getDoctorSchedule(doctorId, dayOfWeek);
 
         if (schedule.length === 0) {
             return sendResponse(res, 200, true, 'No slots available', { date, slots: [] });
         }
 
         // Get booked appointments
-        const bookedTimes = await appointmentRepository.getBookedTimes(doctor_id, date);
+        const bookedTimes = await appointmentRepository.getBookedTimes(doctorId, date);
 
         const slots: string[] = [];
         for (const row of schedule) {
@@ -271,7 +275,7 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
     } catch (error: unknown) {
         logger.error('Error fetching available slots:', { 
             error: error instanceof Error ? error.message : String(error), 
-            doctorId: doctor_id,
+            doctorId,
             date
         });
         return sendError(res, 500, 'Error fetching available slots');

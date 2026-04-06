@@ -64,7 +64,8 @@ export const VideoConsultation: React.FC = () => {
                 // Initialize Socket with Auth - ZERO UI DAMAGE
                 const token = getAccessToken();
                 const newSocket = io(SOCKET_URL, {
-                    auth: { token }
+                    auth: { token },
+                    transports: ['websocket']
                 });
 
                 if (newSocket) {

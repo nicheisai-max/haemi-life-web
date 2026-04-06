@@ -139,7 +139,8 @@ export class PrescriptionRepository {
                     u_patient.name as patient_name,
                     u_patient.phone_number as patient_phone,
                     u_doctor.name as doctor_name,
-                    dp.specialization
+                    dp.specialization,
+                    (SELECT COUNT(*) FROM prescription_items WHERE prescription_id = p.id) as medication_count
                 FROM prescriptions p
                 JOIN users u_patient ON p.patient_id = u_patient.id
                 JOIN users u_doctor ON p.doctor_id = u_doctor.id

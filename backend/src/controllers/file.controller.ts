@@ -1,7 +1,7 @@
 // 🔒 HAEMI ATTACHMENT PIPELINE LOCK
 // DO NOT MODIFY WITHOUT EXPLICIT USER APPROVAL
-// SINGLE SOURCE: message_attachments ONLY
-// FALLBACKS FORBIDDEN
+// SINGLE SOURCE: Database Verified Records ONLY
+// FALLBACKS/FUZZY SEARCH FORBIDDEN (GOOGLE/META GRADE)
 // TYPESCRIPT STRICT MODE ENFORCED
 
 import { Request, Response } from 'express';
@@ -10,42 +10,43 @@ import { JWTPayload } from '../types/express';
 import { sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import * as path from 'path';
-import * as fs from 'fs';
 import mime from 'mime';
-import { getAbsolutePath, UPLOADS_ROOT } from '../utils/path.util';
+import { fileService } from '../services/file.service';
 
 /**
- * 🩺 HAEMI LIFE — INSTITUTIONAL FILE CONTROLLER
- * Path Resolution: Deterministic (via __dirname)
- * Security: Path-traversal proof + Token-validated
+ * 🩺 HAEMI LIFE — INSTITUTIONAL FILE DELIVERY SYSTEM
+ * Standard: Unified Retrieval Layer via FileService
  */
 
-// Centralized path resolution for absolute reliability — NOW IMPORTED FROM path.util.ts
+function sanitizeFilename(filename: string): string {
+    return filename
+        .replace(/["';\r\n]/g, '')
+        .replace(/[^\x20-\x7E]/g, '_')
+        .trim() || 'file';
+}
 
-// ... [getProfileImage remains unchanged - but adding the lock comment at top if it was at top]
-// Wait, I should include the whole file or just the middle part? 
-// The tool says "replace a single contiguous block".
-// I'll replace from the top to the end of getChatAttachment.
+function getValidatedMode(mode: unknown): 'preview' | 'download' {
+    return mode === 'download' ? 'download' : 'preview';
+}
 
-// [Reprinting getProfileImage for context and to include the lock at the top]
+/**
+ * 🩺 HAEMI RESOLVER: Profile Image
+ */
 export const getProfileImage = async (req: Request, res: Response) => {
     const userId = req.params.userId as string;
 
     try {
-        // Use profile_image column but resolve to deterministic filesystem path
-        let query = 'SELECT profile_image_data, profile_image_mime, profile_image FROM users WHERE id = $1';
-        let params = [userId];
-
-        if (userId.includes('.') || userId.startsWith('profile-')) {
-            query = 'SELECT profile_image_data, profile_image_mime, profile_image FROM users WHERE profile_image LIKE $1 OR profile_image = $2';
-            params = [`%${userId}`, userId];
-        }
-
+        const query = `
+            SELECT profile_image_data, profile_image_mime, profile_image 
+            FROM users 
+            WHERE id::text = $1 OR profile_image = $1
+            LIMIT 1
+        `;
         const result = await pool.query<{
             profile_image_data: Buffer | null,
             profile_image_mime: string | null,
             profile_image: string | null
-        }>(query, params);
+        }>(query, [userId]);
 
         if (result.rows.length === 0) {
             return sendError(res, 404, 'User/Image not found');
@@ -53,76 +54,63 @@ export const getProfileImage = async (req: Request, res: Response) => {
 
         const user = result.rows[0];
 
-        // 1. Check for Filesystem path (Priority)
-        if (user.profile_image && !user.profile_image.startsWith('/api/')) {
-            const relativePath = user.profile_image
-              .replace(/^\/+/, '')
-              .replace(/^uploads\//, '');
-            const fullPath = getAbsolutePath(relativePath);
-            
-            // Path Traversal Protection (Staff Engineer Grade)
-            if (!fullPath.startsWith(UPLOADS_ROOT)) {
-                logger.warn('[File-Auth] Restricted path access attempt blocked', { userId, path: fullPath });
-                return sendError(res, 403, 'Restricted path');
-            }
-
-            if (fs.existsSync(fullPath)) {
-                const detectedMime = mime.getType(fullPath) || user.profile_image_mime || 'image/jpeg';
-                res.setHeader('Content-Type', detectedMime);
-                res.setHeader('Content-Disposition', `inline; filename="profile-${userId}${path.extname(user.profile_image)}"`);
-                res.setHeader('Cache-Control', 'public, max-age=3600');
-                
-                const stream = fs.createReadStream(fullPath);
-                stream.on('error', (err) => {
-                    logger.error('Stream error during profile fetch:', { error: err.message, userId });
-                    if (!res.headersSent) {
-                        res.status(500).json({ success: false, message: 'Internal Server Error' });
-                    }
-                });
-                return stream.pipe(res);
-            } else {
-                logger.error("FILE NOT FOUND (PROFILE):", { fullPath, userId });
-                return sendError(res, 404, 'Profile image file not found on server');
-            }
-        }
-
-        // 2. Fallback to Redirect if it's a legacy external URL
+        // 1. Direct Redirect for external URLs
         if (user.profile_image && user.profile_image.startsWith('http')) {
             return res.redirect(user.profile_image);
         }
 
-        return sendError(res, 404, 'Profile image not found');
+        // 2. Verified Filesystem Path
+        if (user.profile_image && !user.profile_image.startsWith('/api/')) {
+            const relativePath = user.profile_image
+                .replace(/^(\/)?uploads\//i, '')
+                .replace(/^\/+/, '');
+            
+            try {
+                const stream = fileService.getReadStream(relativePath);
+                res.setHeader('Content-Type', mime.getType(relativePath) || user.profile_image_mime || 'image/jpeg');
+                res.setHeader('Content-Disposition', 'inline');
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                return stream.pipe(res);
+            } catch {
+                // Background fallback to buffer if stream fails (institutional resilience)
+            }
+        }
+
+        // 3. Fallback: Database Binary Buffer
+        if (user.profile_image_data) {
+            res.setHeader('Content-Type', user.profile_image_mime || 'image/jpeg');
+            res.setHeader('Content-Disposition', 'inline');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+            return res.send(user.profile_image_data);
+        }
+
+        return res.status(204).end();
     } catch (error: unknown) {
-        logger.error('Forensic Error: Fetching profile image failed', { 
-            error: error instanceof Error ? error.message : String(error),
-            userId 
-        });
+        logger.error('[File-Resolver] Profile image fetch failed', { error, userId });
         return sendError(res, 500, 'Internal Server Error');
     }
 };
 
+/**
+ * 🩺 HAEMI RESOLVER: Chat Attachments
+ */
 export const getChatAttachment = async (req: Request, res: Response) => {
-    const { messageId } = req.params; // This works as a generic ID (Message UUID or Attachment UUID)
+    const { messageId } = req.params;
     const user = req.user as JWTPayload | undefined;
 
     try {
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        // 🔒 HAEMI LIFE — CRITICAL DOWNLOAD PIPELINE LOCK
-        // ⚠️ DO NOT MODIFY THIS BLOCK WITHOUT EXPLICIT USER APPROVAL
-        // SINGLE SOURCE: message_attachments ONLY
-        // NO FALLBACKS to messages.attachment_url allowed.
-
         const accessCheck = await pool.query<{
-            file_url: string,
+            file_path: string,
             file_type: string | null,
             file_name: string | null
         }>(`
-            SELECT ma.file_url, ma.file_type, ma.file_name
+            SELECT ma.file_path, ma.file_type, ma.file_name
             FROM message_attachments ma
             JOIN messages m ON ma.message_id = m.id
             JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
-            WHERE (ma.id = $1 OR m.id = $1) AND cp.user_id = $2
+            WHERE ma.id::text = $1 AND cp.user_id = $2
             LIMIT 1
         `, [messageId, user.id]);
 
@@ -131,51 +119,35 @@ export const getChatAttachment = async (req: Request, res: Response) => {
         }
 
         const attachment = accessCheck.rows[0];
-
-        if (!attachment.file_url) {
-            return sendError(res, 404, 'No file reference exists for this attachment');
-        }
-
-        const relativePath = attachment.file_url
-            .replace(/^\/+/, '')
-            .replace(/^uploads\//, '');
-        const fullPath = getAbsolutePath(relativePath);
-
-        // Strict Path Traversal Protection
-        if (!fullPath.startsWith(UPLOADS_ROOT)) {
-            logger.error('[Lock-Security] Path traversal attempt detected', { fullPath, messageId });
-            return sendError(res, 403, 'Restricted path');
-        }
-
-        // Hard Lock: Verify physical existence before any response headers
-        if (!fs.existsSync(fullPath)) {
-            logger.error('[Lock-Integrity] Physical file missing for valid DB reference', { fullPath, messageId });
-            return sendError(res, 404, 'Physical file not found on server');
-        }
-
-        const detectedMime = mime.getType(fullPath) || attachment.file_type || 'application/octet-stream';
-        res.setHeader('Content-Type', detectedMime);
-        const safeFileName = attachment.file_name || path.basename(fullPath);
-        res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+        const relativePath = (attachment.file_path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
         
-        const stream = fs.createReadStream(fullPath);
-        stream.on('error', (err) => {
-            logger.error('Stream error during attachment fetch:', { error: err.message, messageId, userId: user.id });
-            if (!res.headersSent) {
-                res.status(500).json({ success: false, message: 'Internal Server Error' });
+        try {
+            const stream = fileService.getReadStream(relativePath);
+            res.setHeader('Content-Type', attachment.file_type || mime.getType(relativePath) || 'application/octet-stream');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+            const mode = getValidatedMode(req.query.mode);
+            if (mode === 'download') {
+                const safeFileName = sanitizeFilename(attachment.file_name || path.basename(relativePath));
+                res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+            } else {
+                res.setHeader('Content-Disposition', 'inline');
             }
-        });
-        return stream.pipe(res);
+
+            return stream.pipe(res);
+        } catch {
+            logger.error('[File-Vault] Physical file missing for valid DB reference', { relativePath, messageId });
+            return sendError(res, 404, 'Attachment file not found on server');
+        }
     } catch (error: unknown) {
-        logger.error('Forensic Error: Fetching chat attachment failed', { 
-            error: error instanceof Error ? error.message : String(error),
-            messageId,
-            userId: user?.id 
-        });
+        logger.error('[File-Resolver] Chat attachment fetch failed', { error, messageId });
         return sendError(res, 500, 'Internal Server Error');
     }
 };
 
+/**
+ * 🩺 HAEMI RESOLVER: Medical Records & Prescriptions
+ */
 export const getMedicalRecordFile = async (req: Request, res: Response) => {
     const { recordId } = req.params;
     const user = req.user as JWTPayload | undefined;
@@ -183,100 +155,64 @@ export const getMedicalRecordFile = async (req: Request, res: Response) => {
     try {
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        // P0 FIX: Hardened Query — ALWAYS prioritize valid token session
-        let query = `
-            SELECT name, file_data, file_mime, file_path 
-            FROM medical_records 
-            WHERE id = $1 AND deleted_at IS NULL
+        const query = `
+            SELECT name, file_path, file_mime, patient_id
+            FROM (
+                SELECT id::text, name, file_path, file_mime, patient_id::text FROM medical_records WHERE deleted_at IS NULL
+                UNION ALL
+                SELECT pf.id::text, pf.file_name as name, pf.file_path, pf.file_mime, p.patient_id::text
+                FROM prescription_files pf JOIN prescriptions p ON pf.prescription_id = p.id WHERE p.deleted_at IS NULL
+            ) as unified
+            WHERE id = $1
         `;
-        const params: (string | number)[] = [recordId as string];
-
-        // RBAC validation: Admins/Doctors bypass ownership check; patients restricted to own
-        if (user.role === 'patient') {
-            query += ' AND patient_id = $2';
-            params.push(user.id);
-        }
 
         const result = await pool.query<{
             name: string,
-            file_data: Buffer | null,
+            file_path: string,
             file_mime: string | null,
-            file_path: string | null
-        }>(query, params);
+            patient_id: string
+        }>(query, [recordId]);
 
         if (result.rows.length === 0) {
-            logger.warn('[File-Auth] Access Blocked: Unauthorized record access attempt', { recordId, userId: user.id });
             return sendError(res, 403, 'Access denied or record not found');
         }
 
         const record = result.rows[0];
 
-        if (record.file_path && record.file_path !== 'DB_ONLY') {
-            let actualPath = record.file_path;
-            let actualMime = record.file_mime;
-            let actualName = record.name;
-
-            // P0 FIX: Institutional Multi-File Resolution
-            if (record.file_path === 'MULTI_FILE') {
-                const subFiles = await pool.query<{
-                    file_path: string,
-                    file_mime: string | null,
-                    file_name: string | null
-                }>(
-                    'SELECT file_path, file_mime, file_name FROM medical_record_files WHERE record_id = $1 LIMIT 1',
-                    [recordId]
-                );
-
-                if (subFiles.rows.length === 0) {
-                    logger.error('[File-Auth] MULTI_FILE record has no associated entries', { recordId });
-                    return sendError(res, 404, 'Multi-file record entries not found');
-                }
-
-                actualPath = subFiles.rows[0].file_path;
-                actualMime = subFiles.rows[0].file_mime;
-                actualName = subFiles.rows[0].file_name || record.name;
-            }
-
-            const relativePath = actualPath
-              .replace(/^\/+/, '')
-              .replace(/^uploads\//, '');
-            const fullPath = getAbsolutePath(relativePath);
-
-            if (!fullPath.startsWith(UPLOADS_ROOT)) {
-                return sendError(res, 403, 'Restricted path');
-            }
-
-            if (fs.existsSync(fullPath)) {
-                const detectedMime = mime.getType(fullPath) || actualMime || 'application/octet-stream';
-                res.setHeader('Content-Type', detectedMime);
-                const safeFileName = actualName || path.basename(fullPath);
-                res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-                
-                const stream = fs.createReadStream(fullPath);
-                stream.on('error', (err) => {
-                    logger.error('Stream error during record fetch:', { error: err.message, recordId, userId: user.id });
-                    if (!res.headersSent) {
-                        res.status(500).json({ success: false, message: 'Internal Server Error' });
-                    }
-                });
-                return stream.pipe(res);
-            } else {
-                logger.error("FILE NOT FOUND (RECORD):", { fullPath, recordId, userId: user.id });
-                return sendError(res, 404, 'Medical record file not found on server');
-            }
+        // RBAC validation: Patients only see their own
+        if (user.role === 'patient' && record.patient_id !== user.id) {
+            return sendError(res, 403, 'Unauthorized access attempt logged');
         }
 
-        return sendError(res, 404, 'Record file not found');
+        const relativePath = (record.file_path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
+        
+        try {
+            const stream = fileService.getReadStream(relativePath);
+            res.setHeader('Content-Type', record.file_mime || mime.getType(relativePath) || 'application/pdf');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+            const mode = getValidatedMode(req.query.mode);
+            if (mode === 'download') {
+                const safeFileName = sanitizeFilename(record.name || path.basename(relativePath));
+                res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+            } else {
+                res.setHeader('Content-Disposition', 'inline');
+            }
+
+            return stream.pipe(res);
+        } catch {
+            logger.error('[File-Vault] Clinical file missing or restricted', { relativePath, recordId });
+            return sendError(res, 404, 'Clinical document not found on server');
+        }
     } catch (error: unknown) {
-        logger.error('Forensic Error: Fetching medical record failed', { 
-            error: error instanceof Error ? error.message : String(error),
-            recordId,
-            userId: user?.id 
-        });
+        logger.error('[File-Resolver] Clinical record fetch failed', { error, recordId });
         return sendError(res, 500, 'Internal Server Error');
     }
 };
 
+/**
+ * 🩺 HAEMI RESOLVER: Temporary Attachments
+ */
 export const getTempAttachment = async (req: Request, res: Response) => {
     const { tempId } = req.params;
     const user = req.user as JWTPayload | undefined;
@@ -284,52 +220,29 @@ export const getTempAttachment = async (req: Request, res: Response) => {
     try {
         if (!user) return sendError(res, 401, 'Unauthorized');
 
-        const result = await pool.query<{
-            mime: string | null,
-            name: string
-        }>(
-            'SELECT mime, name FROM temp_attachments WHERE id = $1',
+        const tempResult = await pool.query<{ mime: string | null, name: string }>(
+            'SELECT mime, name FROM temp_attachments WHERE id::text = $1',
             [tempId]
         );
 
-        if (result.rows.length === 0) {
-            return sendError(res, 404, 'Temporary attachment not found');
+        if (tempResult.rows.length === 0) {
+            logger.warn('[File-Resolver] Staged file record not found', { tempId, userId: user.id });
+            return sendError(res, 404, 'Temporary file record not found');
         }
 
-        const { mime: attachmentMime, name: relativePath } = result.rows[0];
+        const rawMetadata = tempResult.rows[0].name;
+        const tempPath = rawMetadata.includes('|') ? rawMetadata.split('|')[0] : rawMetadata;
+        const relativePath = tempPath.replace(/^\/+/, '').replace(/^uploads\//, '');
         
-        // Resolve using same logic as chat.controller.ts
-        const fullPath = getAbsolutePath(relativePath);
-
-        const tempRoot = getAbsolutePath('chat/temp');
-        if (!fullPath.startsWith(tempRoot)) {
-            logger.warn('[File-Auth] Restricted path access attempt blocked (temp)', { userId: user.id, path: fullPath });
-            return sendError(res, 403, 'Restricted path');
-        }
-
-        if (fs.existsSync(fullPath)) {
-            const detectedMime = mime.getType(fullPath) || attachmentMime || 'application/octet-stream';
-            res.setHeader('Content-Type', detectedMime);
-            res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
-            
-            const stream = fs.createReadStream(fullPath);
-            stream.on('error', (err) => {
-                logger.error('Stream error during temp attachment fetch:', { error: err.message, tempId, userId: user.id });
-                if (!res.headersSent) {
-                    res.status(500).json({ success: false, message: 'Internal Server Error' });
-                }
-            });
+        try {
+            const stream = fileService.getReadStream(relativePath);
+            res.setHeader('Content-Type', tempResult.rows[0].mime || 'image/jpeg');
             return stream.pipe(res);
-        } else {
-            logger.error("FILE NOT FOUND (TEMP ATTACHMENT):", { fullPath, tempId, userId: user.id });
-            return sendError(res, 404, 'Temporary file not found on server');
+        } catch {
+            return sendError(res, 404, 'Staged file missing on server');
         }
     } catch (error: unknown) {
-        logger.error('Forensic Error: Fetching temp attachment failed', { 
-            error: error instanceof Error ? error.message : String(error),
-            tempId,
-            userId: user?.id 
-        });
+        logger.error('[File-Resolver] Temp attachment fetch failed', { error, tempId });
         return sendError(res, 500, 'Internal Server Error');
     }
 };

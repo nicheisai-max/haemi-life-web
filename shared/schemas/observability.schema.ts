@@ -75,11 +75,11 @@ export const TokenRefreshedEventSchema = z.object({
 
 export const ObservabilityBatchSchema = z.object({
     events: z.array(z.discriminatedUnion('type', [
-        z.object({ type: z.literal('sessionStarted'), data: SessionStartedEventSchema }),
-        z.object({ type: z.literal('sessionEnded'), data: SessionEndedEventSchema }),
-        z.object({ type: z.literal('loginSuccess'), data: LoginSuccessEventSchema }),
-        z.object({ type: z.literal('loginFailure'), data: LoginFailureEventSchema }),
-        z.object({ type: z.literal('tokenRefreshed'), data: TokenRefreshedEventSchema }),
+        z.object({ type: z.literal('session_started'), data: SessionStartedEventSchema }),
+        z.object({ type: z.literal('session_ended'), data: SessionEndedEventSchema }),
+        z.object({ type: z.literal('login_success'), data: LoginSuccessEventSchema }),
+        z.object({ type: z.literal('login_failure'), data: LoginFailureEventSchema }),
+        z.object({ type: z.literal('token_refreshed'), data: TokenRefreshedEventSchema }),
     ])),
     timestamp: z.string().datetime(),
     batchId: z.string().uuid(),

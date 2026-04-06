@@ -6,6 +6,24 @@ export interface ChatParticipant {
     profileImage: string | null;
 }
 
+export interface DbAttachment {
+    id: string;
+    message_id: string;
+    file_path: string;
+    file_type: string;
+    file_size: number | string;
+    file_name: string;
+    file_extension: string | null;
+    file_category: string | null;
+    created_at: Date | string;
+}
+
+export interface DbReaction {
+    message_id: string;
+    reaction_type: string;
+    userId: string; // From SQL alias: user_id as "userId"
+}
+
 export interface DbMessage {
     id: string;
     conversation_id: string;
@@ -16,23 +34,21 @@ export interface DbMessage {
     message_type: string;
     status: string;
     is_read: boolean;
+    temp_id?: string;
     preview_text?: string;
     sequence_number?: number | string;
-    delivered_at?: string | Date;
-    read_at?: string | Date;
+    delivered_at?: string | Date | null;
+    read_at?: string | Date | null;
     created_at: string | Date;
+    updated_at?: string | Date;
     reply_to_id?: string;
     reply_to?: {
         id: string;
         content: string;
         sender_name: string;
     };
-    attachment_url?: string;
-    attachment_name?: string;
-    attachment_type?: string;
-    attachments?: Array<{ url: string; type: string; size: number; name?: string }>;
-    reactions?: Array<{ type: string; userId: string }>;
-    sequence_number_int?: number;
+    attachments?: DbAttachment[];
+    reactions?: DbReaction[];
 }
 
 export interface DbConversation {
@@ -43,17 +59,17 @@ export interface DbConversation {
     last_message?: string;
     last_message_id?: string;
     participants?: ChatParticipant[];
-    unread_count: number;
-    message_count: number;
-    sequence_counter: number;
+    unread_count: number | string;
+    message_count: number | string;
+    sequence_counter: number | string;
     participants_hash?: string;
 }
 
 export interface ConversationResponse {
     id: string;
     name?: string;
-    updatedAt: string | Date;
-    lastMessageAt: string | Date;
+    updatedAt: string;
+    lastMessageAt: string;
     lastMessage?: string | null;
     lastMessageId?: string | null;
     participants: ChatParticipant[];

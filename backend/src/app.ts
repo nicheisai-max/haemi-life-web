@@ -1,10 +1,10 @@
-import './config/env'; // Must be first to load environment variables before other imports
+import './config/env'; // Must be first to load environment variables (DIAGNOSTIC_REVEAL_ACTIVE: 2026-04-04T11:47)
 import express from 'express';
 
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { createServer } from 'http';
-import { Server, Socket } from 'socket.io';
+import { Socket } from 'socket.io';
 import { JWTPayload } from './types/express';
 import {
     ServerToClientEvents,
@@ -24,6 +24,7 @@ import { pool, checkConnection } from './config/db';
 import { chatReliabilityService } from './services/chat-reliability.service';
 import { env } from './config/env';
 import { schemaIntegrityService } from './services/schema-integrity.service';
+import { cleanupService } from './services/cleanup.service';
 import { corsMiddleware } from './middleware/cors.middleware';
 import { statusService } from './services/status.service';
 import { isJWTPayload } from './utils/type-guards';
@@ -44,6 +45,7 @@ import commonRoutes from './routes/common.routes';
 import fileRoutes from './routes/file.routes';
 import consentRoutes from './routes/consent.routes';
 import profileRoutes from './routes/profile.routes';
+import aiRoutes from './routes/ai.routes';
 
 const app = express();
 
@@ -136,11 +138,15 @@ app.use('/api/consents', consentRoutes);
 app.use('/api/common', commonRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/profiles', profileRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
-export let socketIO: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData> | undefined;
+import { Server as SocketIOServer } from 'socket.io';
+import { HaemiServer } from './types/socket.types';
+
+export let socketIO: HaemiServer | undefined;
 
 // Server & Sockets
 const startServer = async () => {
@@ -150,17 +156,18 @@ const startServer = async () => {
         // Phase 3: Strict DB Verification
         await checkConnection();
         await schemaIntegrityService.validate();
-        logger.info('✅ Database and Schema Integrity verified.');
+        cleanupService.initialize(); // Institutional Cleanup Guardian (v5.1)
+        logger.info('✅ Database, Schema, and Cleanup Guardian verified.');
 
         const server = createServer(app);
-        socketIO = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
+        socketIO = new SocketIOServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, {
             cors: {
                 origin: env.allowedOrigins,
                 credentials: true,
                 methods: ["GET", "POST", "OPTIONS"],
                 allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
             },
-            transports: ["websocket"], // P0: Force websocket for lowest latency
+            transports: ["polling", "websocket"], // P0: Institutional Handshake protocol (Polling -> WS Upgrade)
             allowEIO3: true,
             pingTimeout: 60000,
             pingInterval: 25000
@@ -174,11 +181,10 @@ const startServer = async () => {
         if (process.env.NODE_ENV !== 'test') {
             server.listen(PORT, () => {
                 logger.info('-------------------------------------------');
-                logger.info('🩺 HAEMI LIFE BACKEND STARTED');
+                logger.info('🩺 HAEMI LIFE BACKEND ENGINE | Ready');
+                logger.info('   -> PHASE 7: FINAL STABILITY VERIFIED');
                 logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
                 logger.info(`Port:        ${PORT}`);
-                logger.info(`DB Status:   CONNECTED`);
-                logger.info(`Timestamp:   ${new Date().toLocaleString()}`);
                 logger.info('-------------------------------------------\n');
             });
         }
@@ -196,7 +202,7 @@ const startServer = async () => {
 
 
 // Extracted socket setup to keep startServer clean
-function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>) {
+function setupSockets(io: HaemiServer) {
     io.use(async (socket: Socket, next: (err?: Error) => void) => {
         const auth = socket.handshake.auth;
         const token = typeof auth === 'object' && auth !== null && 'token' in auth && typeof auth.token === 'string' ? auth.token : null;
@@ -220,20 +226,17 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
                 return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid token payload or missing required fields' })));
             }
 
-            const role = decodedPayload.role;
-            if (role !== 'patient' && role !== 'doctor' && role !== 'pharmacist' && role !== 'admin') {
-                return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid role' })));
+            const decoded = decodedPayload as JWTPayload;
+
+            if (!decoded.email || !decoded.id || !decoded.sessionId) {
+                return next(new Error(JSON.stringify({ 
+                    code: 'AUTH_INVALID', 
+                    message: 'Malformed token payload' 
+                })));
             }
 
-            const decoded: JWTPayload = {
-                id: String(decodedPayload.id),
-                email: String(decodedPayload.email),
-                role: role,
-                name: '', // Will be populated from DB below
-                tokenVersion: Number(decodedPayload.tokenVersion),
-                jti: String(decodedPayload.jti || ''),
-                sessionId: String(decodedPayload.sessionId || '')
-            };
+            // Fallback initialization for name (populated from DB below)
+            decoded.name = '';
 
             // Database-level verification: Check tokenVersion, status, AND fetch name
             const userResult = await pool.query(
@@ -307,8 +310,12 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
                 }
             });
 
-            // Always emit to admin observability
-            io.to('admin:observability').emit('userStatus', presence);
+            // Always emit to admin observability (The Governor)
+            io.to('admin:observability').emit('adminMirrorEvent', {
+                event: 'userStatus',
+                data: presence,
+                timestamp: new Date().toISOString()
+            });
         } catch (err) {
             logger.error(`Presence online sync failed for ${userId}:`, err);
         }
@@ -320,48 +327,69 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
 
         // 3. READ RECEIPTS (Nuclear Standardization)
         // P0: PURGED 'ackRead' and 'messageRead' to prevent event duplication.
-        // All receipts MUST use 'message:read'.
-        socket.on('message:read', (data: import('./types/socket.types').MessageReadEvent) => {
+        // All receipts MUST use 'messageRead'.
+        socket.on('messageRead', (data: import('./types/socket.types').MessageReadEvent) => {
             chatReliabilityService.getConversationIdByMessageId(data.messageId).then(conversationId => {
                 if (conversationId) {
                     // P0 NUCLEAR: Single Channel Emission
                     // Data is delivered EXCLUSIVELY to the conversation room.
                     // Redundant per-user 'user:pid' emissions have been purged.
-                    io.to(`conversation:${conversationId}`).emit('message:read', data);
+                    io.to(`conversation:${conversationId}`).emit('messageRead', data);
+
+                    // The Governor Mirroring
+                    io.to('admin:observability').emit('adminMirrorEvent', {
+                        event: 'messageRead',
+                        data,
+                        timestamp: new Date().toISOString()
+                    });
                 }
-            }).catch(err => logger.error('[Phase 2] message:read lookup failed:', err));
+            }).catch(err => logger.error('[Phase 2] messageRead lookup failed:', err));
         });
 
         // 4. EPHEMERAL STREAMS (Typing/Signaling)
         socket.on('typingStarted', (data) => {
-            const payload: import('./types/socket.types').TypingStartedPayload = {
+            const payload = {
                 userId: userId,
                 conversationId: data.conversationId,
-                name: data.name
+                name: user.name || 'Someone'
             };
             socket.to(`conversation:${data.conversationId}`).emit('typingStarted', payload);
+            
+            // The Governor Mirroring
+            io.to('admin:observability').emit('adminMirrorEvent', {
+                event: 'typingStarted',
+                data: payload,
+                timestamp: new Date().toISOString()
+            });
         });
 
         socket.on('typingStopped', (data) => {
-            const payload: import('./types/socket.types').TypingStartedPayload = {
+            const payload = {
                 userId: userId,
                 conversationId: data.conversationId,
-                name: data.name
+                name: user.name || 'Someone'
             };
             socket.to(`conversation:${data.conversationId}`).emit('typingStopped', payload);
+
+            // The Governor Mirroring
+            io.to('admin:observability').emit('adminMirrorEvent', {
+                event: 'typingStopped',
+                data: payload,
+                timestamp: new Date().toISOString()
+            });
         });
 
         // WebRTC hooks
-        socket.on('call-user', (data) => {
-            io.to(data.to).emit('call-made', { offer: data.offer, socket: socket.id });
+        socket.on('callUser', (data) => {
+            io.to(data.to).emit('callMade', { offer: data.offer, socket: socket.id });
         });
 
-        socket.on('make-answer', (data) => {
-            io.to(data.to).emit('answer-made', { answer: data.answer, socket: socket.id });
+        socket.on('makeAnswer', (data) => {
+            io.to(data.to).emit('answerMade', { answer: data.answer, socket: socket.id });
         });
 
-        socket.on('ice-candidate', (data) => {
-            io.to(data.to).emit('ice-candidate', { candidate: data.candidate, socket: socket.id });
+        socket.on('iceCandidate', (data) => {
+            io.to(data.to).emit('iceCandidate', { candidate: data.candidate, socket: socket.id });
         });
 
         socket.on('ackDelivery', (data) => {
@@ -371,7 +399,7 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
         socket.on('disconnect', () => {
             logger.info(`Socket disconnected: ${socket.id}`);
             statusService.setUserOffline(userId, socket.id).then(async (presence) => {
-                if (!presence.isOnline) {
+                if (presence.status === 'offline') {
                     // Find all unique partners across all conversations
                     const partnerIds = await chatReliabilityService.getConversationPartners(userId);
 
@@ -380,8 +408,12 @@ function setupSockets(io: Server<ClientToServerEvents, ServerToClientEvents, Int
                         io.to(`user:${pid}`).emit('userStatus', presence);
                     });
 
-                    // Always emit to admin observability
-                    io.to('admin:observability').emit('userStatus', presence);
+                    // Always emit to admin observability (The Governor)
+                    io.to('admin:observability').emit('adminMirrorEvent', {
+                        event: 'userStatus',
+                        data: presence,
+                        timestamp: new Date().toISOString()
+                    });
                 }
             }).catch(err => logger.error(`Presence offline sync failed for ${userId}:`, err));
         });

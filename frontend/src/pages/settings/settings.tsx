@@ -190,7 +190,19 @@ export const Settings: React.FC = () => {
                     </div>
 
                     <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmitPassword)} className="space-y-4 flex-1">
+                        <form onSubmit={form.handleSubmit(onSubmitPassword)} className="space-y-4 flex-1" noValidate>
+                            {/* 🩺 HAEMI ACCESSIBILITY HARDENING (W3C/Google Standard) */}
+                            {/* Hidden username field allows password managers to correctly associate new-password changes with the user account. */}
+                            <input 
+                                type="text"
+                                name="username"
+                                value={user?.email || ''}
+                                readOnly
+                                autoComplete="username"
+                                style={{ display: 'none' }}
+                                aria-hidden="true"
+                            />
+
                             <FormField
                                 control={form.control}
                                 name="currentPassword"
@@ -202,6 +214,7 @@ export const Settings: React.FC = () => {
                                                 type="password"
                                                 placeholder="Enter current password"
                                                 {...field}
+                                                autoComplete="current-password"
                                                 className="bg-background"
                                             />
                                         </FormControl>
@@ -221,6 +234,7 @@ export const Settings: React.FC = () => {
                                                 type="password"
                                                 placeholder="Enter new password"
                                                 {...field}
+                                                autoComplete="new-password"
                                                 className="bg-background"
                                             />
                                         </FormControl>
@@ -241,6 +255,7 @@ export const Settings: React.FC = () => {
                                                 type="password"
                                                 placeholder="Confirm new password"
                                                 {...field}
+                                                autoComplete="new-password"
                                                 className="bg-background"
                                             />
                                         </FormControl>
@@ -271,7 +286,7 @@ export const Settings: React.FC = () => {
                     </div>
 
                     <Form {...prefForm}>
-                        <form onSubmit={prefForm.handleSubmit(onPrefSubmit)} className="space-y-6">
+                        <form onSubmit={prefForm.handleSubmit(onPrefSubmit)} className="space-y-6" noValidate>
                             <FormField
                                 control={prefForm.control}
                                 name="emailNotifications"

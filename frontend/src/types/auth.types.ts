@@ -10,6 +10,7 @@ export interface User {
     initials: string;
     profileImage: string | null;
     isVerified: boolean;
+    hasConsent: boolean;
     status: string;
     createdAt: string;
 }

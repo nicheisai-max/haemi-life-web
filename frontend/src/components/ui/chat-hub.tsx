@@ -1,4 +1,4 @@
-// 🔒 HAEMI ATTACHMENT PIPELINE LOCK
+// ≡ƒöÆ HAEMI ATTACHMENT PIPELINE LOCK
 // DO NOT MODIFY WITHOUT EXPLICIT USER APPROVAL
 // SINGLE SOURCE: message_attachments ONLY
 // FALLBACKS FORBIDDEN
@@ -10,10 +10,11 @@ import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckChe
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat, type Conversation, type Message } from '../../hooks/use-chat';
 import { useAuth } from '@/hooks/use-auth';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
 import api from '../../services/api';
 import type { DoctorProfile } from '../../services/doctor.service';
 import { MedicalLoader } from './medical-loader';
+import { PremiumLoader } from './premium-loader';
 import doctor01 from '../../assets/images/doctors/doctor_01.jpg';
 import doctor02 from '../../assets/images/doctors/doctor_02.png';
 import doctor03 from '../../assets/images/doctors/doctor_03.png';
@@ -21,6 +22,8 @@ import { useLocation } from 'react-router-dom';
 import { useClickOutside } from '../../hooks/use-click-outside';
 import { secureDownload } from '../../services/file.service';
 import { getInitials as resolveInitials } from '@/utils/avatar.resolver';
+import { logger } from '@/utils/logger';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 
 // Override helper to get images
 const getDoctorImage = (name: string) => {
@@ -35,12 +38,12 @@ const getDoctorImage = (name: string) => {
 
 // --- Premium Avatar Component ---
 const Avatar: React.FC<{ name: string; initials?: string; image?: string; profileImage?: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; className?: string }> = ({ name, initials, image, profileImage, size = 'md', className = "" }) => {
-    const sizeClasses = {
-        xs: 'h-6 w-6 text-[9px]',
-        sm: 'h-8 w-8 text-[11px]',
-        md: 'h-10 w-10 text-xs',
-        lg: 'h-12 w-12 text-sm',
-        xl: 'h-16 w-16 text-lg'
+    const sizeMap = {
+        xs: 'avatar-xs',
+        sm: 'avatar-sm',
+        md: 'avatar-md',
+        lg: 'avatar-lg',
+        xl: 'avatar-xl'
     };
 
     const getInitials = (n: string) => resolveInitials(n) || '?';
@@ -48,24 +51,28 @@ const Avatar: React.FC<{ name: string; initials?: string; image?: string; profil
     // Standardized ID-based Resolution
     const avatarUrl = profileImage ? (profileImage.startsWith('http') ? profileImage : `/api/files/profile/${profileImage}`) : image;
 
-    // Deterministic gradient based on name length/char
-    const gradients = [
-        'bg-gradient-to-br from-blue-400 to-indigo-600',
-        'bg-gradient-to-br from-emerald-400 to-teal-600',
-        'bg-gradient-to-br from-orange-400 to-red-600',
-        'bg-gradient-to-br from-pink-400 to-rose-600',
-        'bg-gradient-to-br from-violet-400 to-purple-600',
-    ];
-    const gradientIndex = name ? name.length % gradients.length : 0;
-    const bgClass = gradients[gradientIndex];
-
     const [imgError, setImgError] = useState(false);
+    const [isImageLoaded, setIsImageLoaded] = useState(false);
 
     return (
         <div className={`relative shrink-0 ${className}`}>
-            <div className={`${sizeClasses[size]} rounded-full overflow-hidden ${bgClass} flex items-center justify-center shadow-sm border border-white/20 text-white font-bold tracking-wider`}>
+            <div className={`${sizeMap[size]} rounded-full overflow-hidden premium-avatar-fallback flex items-center justify-center shadow-sm text-white font-bold tracking-wider relative`}>
                 {avatarUrl && !imgError ? (
-                    <img src={avatarUrl} alt={name} className="h-full w-full object-cover" onError={() => setImgError(true)} />
+                    <>
+                        {/* Premium Loader Overlay - Shown while image is fetching/decoding */}
+                        {!isImageLoaded && (
+                            <div className="premium-loader-overlay">
+                                <PremiumLoader size="nano" bubbleClassName="premium-loader-bubble-white" />
+                            </div>
+                        )}
+                        <img 
+                            src={avatarUrl} 
+                            alt={name} 
+                            className={`h-full w-full object-cover transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`} 
+                            onLoad={() => setIsImageLoaded(true)}
+                            onError={() => setImgError(true)} 
+                        />
+                    </>
                 ) : (
                     initials || getInitials(name)
                 )}
@@ -79,17 +86,17 @@ const ReactionIcon: React.FC<{ type: string; className?: string }> = ({ type, cl
     // Map both old IDs (fallback) and new IDs to Emojis
     switch (type) {
         case 'like':
-        case 'thumbs_up': return <span className={className}>👍</span>;
-        case 'love': return <span className={className}>❤️</span>;
+        case 'thumbs_up': return <span className={className}>≡ƒæì</span>;
+        case 'love': return <span className={className}>Γ¥ñ∩╕Å</span>;
         case 'laugh':
-        case 'appreciation': return <span className={className}>😂</span>; // Map appreciation to laugh for now or 👏 if preferred
+        case 'appreciation': return <span className={className}>≡ƒÿé</span>; // Map appreciation to laugh for now or ≡ƒæÅ if preferred
         case 'wow':
-        case 'noted': return <span className={className}>😲</span>;
+        case 'noted': return <span className={className}>≡ƒÿ▓</span>;
         case 'sad':
-        case 'acknowledgement': return <span className={className}>😢</span>;
+        case 'acknowledgement': return <span className={className}>≡ƒÿó</span>;
         case 'angry':
-        case 'agreement': return <span className={className}>😡</span>;
-        default: return <span className={className}>👍</span>;
+        case 'agreement': return <span className={className}>≡ƒÿí</span>;
+        default: return <span className={className}>≡ƒæì</span>;
     }
 };
 
@@ -120,46 +127,7 @@ export const ChatHub: React.FC = () => {
         loading: isLoadingMessages
     } = useChat();
 
-    // IntersectionObserver for Read Receipts
-    useEffect(() => {
-        if (!activeConversation || messages.length === 0) return;
-
-        const observer = new IntersectionObserver((entries) => {
-            let shouldMarkRead = false;
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const msgId = entry.target.id.replace('msg-', '');
-                    const msg = messages.find(m => m.id === msgId);
-                    if (msg && !msg.isMe && msg.status !== 'read') {
-                        shouldMarkRead = true;
-                    }
-                }
-            });
-            if (shouldMarkRead) {
-                markAsRead(activeConversation.id);
-            }
-            
-            // Per-message socket emission for real-time peer updates
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const msgId = entry.target.id.replace('msg-', '');
-                    const msg = messages.find(m => m.id === msgId);
-                    if (msg && !msg.isMe && !msg.isRead) {
-                        markMessageAsRead(msgId);
-                    }
-                }
-            });
-        }, { threshold: 0.1 });
-
-        // Observe the latest message(s) from the other party
-        const unreadMessages = messages.filter(m => !m.isMe && m.status !== 'read');
-        unreadMessages.forEach(msg => {
-            const el = document.getElementById(`msg-${msg.id}`);
-            if (el) observer.observe(el);
-        });
-
-        return () => observer.disconnect();
-    }, [activeConversation, messages, markAsRead, markMessageAsRead]);
+    // IntersectionObserver for Read Receipts replaced by Virtuoso rangeChanged in Phase 3
 
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -195,23 +163,26 @@ export const ChatHub: React.FC = () => {
         parentHeight: 0
     });
 
-    const scrollRef = useRef<HTMLDivElement>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const virtuosoRef = useRef<VirtuosoHandle>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
 
     const handleDownload = async (url: string, fileName: string, loadingId: string) => {
         try {
             setDownloadingId(loadingId);
-            
-            // P0 FRONTEND HARDENING: No manual URL building. Use API response verbatim.
-            await secureDownload({
-                url,
-                fileName: fileName
+
+            // P0 FRONTEND HARDENING: Secure asset resolution via verified pipeline
+            await secureDownload({ url, fileName });
+            logger.info('[ChatHub] Institutional download successful.', { fileName, loadingId });
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            logger.error('[ChatHub] Secure download failed:', {
+                fileName,
+                loadingId,
+                error: errorMessage
             });
-        } catch (err) {
-            console.error('[DOWNLOAD BLOCKED]', err);
-            alert('File not available or blocked for security reasons');
+            // P0: Standard healthcare-compliant security alert
+            alert('Unable to retrieve this secure medical record. Please try again or contact a system administrator.');
         } finally {
             setDownloadingId(null);
         }
@@ -228,7 +199,7 @@ export const ChatHub: React.FC = () => {
         setContextMenu(prev => ({ ...prev, isOpen: false }));
     };
 
-    // Initial Load — fetch immediately when user/token is ready
+    // Initial Load ΓÇö fetch immediately when user/token is ready
     useEffect(() => {
         if (user?.id) {
             fetchConversations();
@@ -280,15 +251,7 @@ export const ChatHub: React.FC = () => {
         }
     }, [view]);
 
-    // Clear badge logic moved to local state sync in ChatProvider
-
-    // Auto-scroll
-    useEffect(() => {
-        if (messagesEndRef.current) {
-            // P0: Instant jump avoids mid-flight layout shifts caused by Framer offsets or image loads
-            messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
-        }
-    }, [messages, view, isOpen]);
+    // Auto-scroll handled by Virtuoso followOutput in Phase 3
 
     // Auto-close on route change
     useEffect(() => {
@@ -326,10 +289,13 @@ export const ChatHub: React.FC = () => {
         if (existing) {
             handleSelectConversation(existing);
         } else {
-            await startNewConversation(doctor.id);
-            setView('conversation'); // startNewConversation usually updates state/refetches
+            // P0: WhatsApp-Grade Lazy Creation
+            // We pass the doctor metadata to create a local virtual conversation
+            await startNewConversation(doctor.id, doctor);
+            setView('conversation'); 
         }
     };
+
 
     const handleSendMessage = () => {
         if (!newMessage.trim() || !activeConversation) return;
@@ -398,12 +364,16 @@ export const ChatHub: React.FC = () => {
 
     const filteredConversations = useMemo(() => {
         return conversations.filter(c => {
+            // P0: Institutional Visibility - Hide Ghost Conversations (No messages)
+            if (!c.lastMessage && !c.isDraft) return false;
+
             const other = getOtherParticipant(c);
             const matchesSearch = other.name.toLowerCase().includes(searchTerm.toLowerCase());
 
             return matchesSearch;
         });
     }, [conversations, searchTerm, getOtherParticipant]);
+
 
     const filteredDoctors = useMemo(() => doctors.filter(d => {
         const name = d.name || '';
@@ -413,8 +383,15 @@ export const ChatHub: React.FC = () => {
 
     const getFormattedTime = (dateString: string) => {
         if (!dateString) return '';
-        const date = new Date(dateString);
-        return format(date, 'h:mm a');
+        try {
+            const date = new Date(dateString);
+            if (isToday(date)) return format(date, 'h:mm a');
+            if (isYesterday(date)) return 'Yesterday';
+            if (isThisWeek(date)) return format(date, 'EEEE');
+            return format(date, 'dd/MM/yyyy');
+        } catch {
+            return '';
+        }
     };
 
 
@@ -478,12 +455,12 @@ export const ChatHub: React.FC = () => {
                     className="h-16 w-16 rounded-full bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/50 p-0 flex items-center justify-center group border border-slate-200 dark:border-slate-700 overflow-hidden"
                 >
                     {activeConversation ? (
-                        <Avatar 
-                            name={getOtherParticipant(activeConversation).name} 
-                            initials={getOtherParticipant(activeConversation).initials} 
-                            profileImage={getOtherParticipant(activeConversation).profileImage} 
-                            size="md" 
-                            className="h-full w-full rounded-none opacity-90 group-hover:opacity-100 transition-opacity" 
+                        <Avatar
+                            name={getOtherParticipant(activeConversation).name}
+                            initials={getOtherParticipant(activeConversation).initials}
+                            profileImage={getOtherParticipant(activeConversation).profileImage}
+                            size="md"
+                            className="h-full w-full rounded-none opacity-90 group-hover:opacity-100 transition-opacity"
                         />
                     ) : (
                         <MessageCircle className="h-8 w-8 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform duration-300" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
@@ -588,7 +565,7 @@ export const ChatHub: React.FC = () => {
                     animate={{ y: 0, opacity: 1, scale: 1 }}
                     exit={{ y: 20, opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-[380px] sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5 relative"
+                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-full sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5 relative"
                     ref={chatWindowRef}
                 >
                     {/* --- Helper: Header --- */}
@@ -603,13 +580,13 @@ export const ChatHub: React.FC = () => {
                                         onClick={() => setView('contacts')}
                                     >
                                         <ChevronLeft className="h-5 w-5 text-white" />
-                                     </Button>
+                                    </Button>
                                 )}
-                                 {view === 'conversation' && activeConversation ? (() => {
+                                {view === 'conversation' && activeConversation ? (() => {
                                     const other = getOtherParticipant(activeConversation);
                                     const userPresence = presence[String(other.id)];
                                     const isOnline = !other.isGroup && !!userPresence?.isOnline;
-                                    const lastSeenTime = !other.isGroup && userPresence?.lastSeen ? format(new Date(userPresence.lastSeen), 'h:mm a') : 'Unknown';
+                                    const last_activity = !other.isGroup && userPresence?.lastActivity ? getFormattedTime(userPresence.lastActivity) : 'Unknown';
 
                                     return (
                                         <div className="flex items-center gap-3 min-w-0">
@@ -619,23 +596,23 @@ export const ChatHub: React.FC = () => {
                                                         <UserPlus className="h-4 w-4" />
                                                     </div>
                                                 ) : (
-                                                    <>
-                                                        <Avatar 
-                                                            name={other.name} 
-                                                            initials={other.initials} 
-                                                            profileImage={other.profileImage} 
-                                                            size="sm" 
+                                                    <div className="relative">
+                                                        <Avatar
+                                                            name={other.name}
+                                                            initials={other.initials}
+                                                            profileImage={other.profileImage}
+                                                            size="sm"
                                                         />
                                                         <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-[#1a1c23] rounded-full transition-colors duration-300 ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                                                    </>
+                                                    </div>
                                                 )}
                                             </div>
                                             <div className="flex flex-col truncate">
                                                 <h3 className="text-sm font-bold text-white truncate leading-tight">
                                                     {other.name}
                                                 </h3>
-                                                <span className="text-[11px] text-teal-100 dark:text-teal-400 font-medium truncate leading-tight capitalize">
-                                                    {other.isGroup ? 'Multi-Professional Case Group' : (isOnline ? 'Online' : `Last seen at ${lastSeenTime}`)}
+                                                <span className="text-[11px] text-teal-100/80 dark:text-slate-400 font-medium truncate leading-tight capitalize">
+                                                    {other.isGroup ? 'Multi-Professional Case Group' : (isOnline ? 'Online' : `Last seen at ${last_activity}`)}
                                                 </span>
                                             </div>
                                         </div>
@@ -733,11 +710,11 @@ export const ChatHub: React.FC = () => {
                                                                 </div>
                                                             ) : (
                                                                 <>
-                                                                    <Avatar 
-                                                                        name={other.name} 
-                                                                        initials={other.initials} 
-                                                                        profileImage={other.profileImage} 
-                                                                        size="md" 
+                                                                    <Avatar
+                                                                        name={other.name}
+                                                                        initials={other.initials}
+                                                                        profileImage={other.profileImage}
+                                                                        size="md"
                                                                     />
                                                                     {presence[String(other.id)]?.isOnline && (
                                                                         <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 group-hover:scale-110 transition-transform animate-pulse" />
@@ -826,14 +803,13 @@ export const ChatHub: React.FC = () => {
                                                             {doc.name}
                                                         </h4>
                                                         <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">
-                                                            {doc.specialization || 'General Practitioner'}
+                                                    {doc.specialization || 'General Practitioner'}
                                                         </p>
                                                     </div>
                                                     <UserPlus className="h-4 w-4 text-slate-300 hover:text-teal-500" />
                                                 </button>
                                             ))
                                         )}
-                                        <div ref={messagesEndRef} />
                                     </div>
                                 </motion.div>
                             )}
@@ -849,13 +825,8 @@ export const ChatHub: React.FC = () => {
                                     transition={{ duration: 0.15 }}
                                     className="h-full flex flex-col relative"
                                 >
-                                    {/* Messages list */}
-                                    <div
-                                        ref={scrollRef}
-                                        className="flex-1 overflow-y-auto p-4 space-y-4 chat-scrollbar z-0"
-                                    >
-                                        <div className="h-2" />
-                                        
+                                    {/* Messages list - Phase 3 UI Virtualization */}
+                                    <div className="flex-1 overflow-hidden z-0 bg-slate-50 dark:bg-slate-950">
                                         {isLoadingMessages ? (
                                             <div className="h-full flex items-center justify-center">
                                                 <MedicalLoader message="Retrieving messages..." />
@@ -866,198 +837,189 @@ export const ChatHub: React.FC = () => {
                                                 <p className="text-sm font-medium">No messages yet. Send a greeting to start the conversation.</p>
                                             </div>
                                         ) : (
-                                            messages.map((msg, idx) => (
-                                                <motion.div
-                                                    layout
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    key={msg.id || idx}
-                                                    id={`msg-${msg.id}`}
-                                                    className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
-                                                >
-                                                <div
-                                                    onContextMenu={(e) => {
-                                                        e.preventDefault();
-                                                        if (chatWindowRef.current) {
-                                                            const rect = chatWindowRef.current.getBoundingClientRect();
-                                                            setContextMenu({
-                                                                isOpen: true,
-                                                                x: e.clientX - rect.left,
-                                                                y: e.clientY - rect.top,
-                                                                messageId: msg.id,
-                                                                isMe: msg.isMe || false,
-                                                                parentWidth: rect.width,
-                                                                parentHeight: rect.height
-                                                            });
+                                            <Virtuoso
+                                                ref={virtuosoRef}
+                                                data={messages}
+                                                followOutput="auto"
+                                                atBottomThreshold={100}
+                                                initialTopMostItemIndex={messages.length - 1}
+                                                className="chat-scrollbar"
+                                                style={{ height: '100%' }}
+                                                increaseViewportBy={200}
+                                                rangeChanged={(range) => {
+                                                    // INSTITUTIONAL READ RECEIPTS: Mark visible messages from others as read
+                                                    const visibleItems = messages.slice(range.startIndex, range.endIndex + 1);
+                                                    let shouldMarkRead = false;
+                                                    visibleItems.forEach(msg => {
+                                                        if (!msg.isMe && !msg.isRead) {
+                                                            markMessageAsRead(msg.id);
+                                                            shouldMarkRead = true;
                                                         }
-                                                    }}
-                                                    className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm relative cursor-context-menu group ${msg.isMe
-                                                        ? 'bg-teal-600 text-white rounded-tr-none'
-                                                        : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
-                                                        }`}
-                                                >
-                                                    {/* Reply Preview in Bubble (Enhanced WhatsApp Style) */}
-                                                    {msg.replyTo && (
-                                                        <div
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                const element = document.getElementById(`msg-${msg.replyToId}`);
-                                                                if (element) {
-                                                                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                                    element.classList.add('ring-2', 'ring-teal-500', 'ring-offset-2');
-                                                                    setTimeout(() => element.classList.remove('ring-2', 'ring-teal-500', 'ring-offset-2'), 2000);
-                                                                }
-                                                            }}
-                                                            className={`mb-2 p-2 rounded-xl border-l-[3px] text-[11px] cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${msg.isMe
-                                                                ? 'bg-black/10 border-white/40 text-teal-50'
-                                                                : 'bg-slate-50 dark:bg-slate-900/50 border-teal-500 text-slate-600 dark:text-slate-400'
-                                                                }`}
+                                                    });
+                                                    if (shouldMarkRead && activeConversation) {
+                                                        markAsRead(activeConversation.id);
+                                                    }
+                                                }}
+                                                itemContent={(index, msg) => (
+                                                    <div className="px-4 py-2">
+                                                        <motion.div
+                                                            layout
+                                                            initial={{ opacity: 0, y: 10 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            key={msg.id || index}
+                                                            id={`msg-${msg.id}`}
+                                                            className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
                                                         >
-                                                            <div className="flex items-center justify-between mb-0.5">
-                                                                <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
-                                                                    {msg.replyTo.senderName}
-                                                                </p>
-                                                                <Reply className="h-2.5 w-2.5 opacity-60" />
-                                                            </div>
-                                                            <p className="line-clamp-2 opacity-80 italic">
-                                                                {msg.replyTo.content}
-                                                            </p>
-                                                        </div>
-                                                    )}
-
-                                                    {msg.attachments && msg.attachments.length > 0 && msg.attachments.map((att, i) => (
-                                                        <div key={i} className="mb-2 -mx-1 -mt-1">
-                                                            {att.type.startsWith('image/') ? (
-                                                                <div
-                                                                    className="cursor-pointer group/img relative overflow-hidden rounded-xl"
-                                                                    onClick={() => {
-                                                                        if (att.url && att.name) {
-                                                                            setLightboxImage({ src: att.url, alt: att.name });
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <AuthenticatedImage
-                                                                        src={att.url}
-                                                                        alt={att.name || 'Attachment'}
-                                                                        className="w-full max-h-48 object-cover border border-white/20 transition-all duration-300 group-hover:scale-105"
-                                                                    />
-                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                                                        <Maximize2 className="text-white opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 drop-shadow-md" />
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                (() => {
-                                                                    // P0 FRONTEND LOCK: No extension logic (Step 1)
-                                                                    const fileName = att.name;
-
-                                                                    // Brand-compliant static styling for all secure medical assets
-                                                                    const iconBg = msg.isMe ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-700';
-                                                                    const iconColor = msg.isMe ? 'text-white/80' : 'text-slate-500';
-
-                                                                    // Human-readable file size (MIME-only truth)
-                                                                    const formatSize = (bytes: number) => {
-                                                                        if (bytes < 1024) return `${bytes} B`;
-                                                                        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-                                                                        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-                                                                    };
-
-                                                                    return (
-                                                                        <button
-                                                                            onClick={() => att.url && att.name && handleDownload(att.url, att.name, msg.id)}
-                                                                            disabled={downloadingId === msg.id}
-                                                                            className={`w-full flex items-center gap-0 rounded-xl overflow-hidden border transition-all duration-200 hover:opacity-90 active:scale-[0.98] ${msg.isMe
-                                                                                ? 'border-white/10 bg-black/10 hover:bg-black/20'
-                                                                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
-                                                                                } ${downloadingId === msg.id ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                                                                        >
-                                                                            {/* Left — File Type Icon Section (WhatsApp-style) */}
-                                                                            <div className={`shrink-0 w-14 h-16 flex flex-col items-center justify-center ${iconBg} gap-0.5`}>
-                                                                                {downloadingId === msg.id ? (
-                                                                                    <Loader2 className={`h-6 w-6 animate-spin ${iconColor}`} />
-                                                                                ) : (
-                                                                                    <>
-                                                                                        {/* Document shape SVG */}
-                                                                                        <svg viewBox="0 0 24 28" className={`h-8 w-7 ${iconColor}`} fill="currentColor">
-                                                                                            <path d="M14 0H2C0.9 0 0 0.9 0 2v24c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8l-10-8z" opacity="0.9" />
-                                                                                            <path d="M14 0v8h10L14 0z" opacity="0.5" />
-                                                                                        </svg>
-                                                                                        <span className={`text-[9px] font-extrabold tracking-wider ${iconColor} -mt-1`}>FILE</span>
-                                                                                    </>
-                                                                                )}
-                                                                            </div>
-
-                                                                            {/* Right — File Info */}
-                                                                            <div className={`flex-1 min-w-0 px-3 py-2.5 flex flex-col justify-center text-left ${msg.isMe ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
-                                                                                <p className="text-[12px] font-semibold truncate leading-tight">
-                                                                                    {fileName}
-                                                                                </p>
-                                                                                <p className={`text-[10px] mt-0.5 font-medium ${msg.isMe ? 'text-white/60' : 'text-slate-400 dark:text-slate-500'}`}>
-                                                                                    {downloadingId === msg.id
-                                                                                        ? 'Downloading...'
-                                                                                        : formatSize(att.size)}
-                                                                                </p>
-                                                                            </div>
-
-                                                                            {/* Download arrow icon */}
-                                                                            <div className={`shrink-0 pr-3 ${msg.isMe ? 'text-white/70' : 'text-teal-500'}`}>
-                                                                                {downloadingId === msg.id
-                                                                                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                                                    : <Download className="h-4 w-4" />
-                                                                                }
-                                                                            </div>
-                                                                        </button>
-                                                                    );
-                                                                })()
-                                                            )}
-                                                        </div>
-                                                    ))}
-
-                                                    <p className="whitespace-pre-wrap break-words leading-relaxed font-medium">
-                                                        {msg.content}
-                                                    </p>
-
-                                                    {/* Reactions Display (Teams-style Pill) */}
-                                                    {msg.reactions && msg.reactions.length > 0 && (
-                                                        <div
-                                                            className={`absolute -bottom-3 ${msg.isMe ? '-right-1' : '-left-1'} flex items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-md border border-slate-200/50 dark:border-slate-700/50 z-[20] transition-all hover:scale-105 cursor-pointer group/reaction`}
-                                                        >
-                                                            <div className="flex -space-x-1">
-                                                                {/* Stacking unique reactions */}
-                                                                {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
+                                                            <div
+                                                                onContextMenu={(e) => {
+                                                                    e.preventDefault();
+                                                                    if (chatWindowRef.current) {
+                                                                        const rect = chatWindowRef.current.getBoundingClientRect();
+                                                                        setContextMenu({
+                                                                            isOpen: true,
+                                                                            x: e.clientX - rect.left,
+                                                                            y: e.clientY - rect.top,
+                                                                            messageId: msg.id,
+                                                                            isMe: msg.isMe || false,
+                                                                            parentWidth: rect.width,
+                                                                            parentHeight: rect.height
+                                                                        });
+                                                                    }
+                                                                }}
+                                                                className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm relative cursor-context-menu group ${msg.isMe
+                                                                    ? 'bg-teal-600 text-white rounded-tr-none'
+                                                                    : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
+                                                                    }`}
+                                                            >
+                                                                {/* Reply Preview in Bubble (Enhanced WhatsApp Style) */}
+                                                                {msg.replyTo && (
                                                                     <div
-                                                                        key={type}
-                                                                        className="relative z-10"
-                                                                        style={{ zIndex: 10 - i }}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const targetIdx = messages.findIndex(m => m.id === msg.replyToId);
+                                                                            if (targetIdx !== -1) {
+                                                                                virtuosoRef.current?.scrollToIndex({
+                                                                                    index: targetIdx,
+                                                                                    align: 'center',
+                                                                                    behavior: 'smooth'
+                                                                                });
+                                                                            }
+                                                                        }}
+                                                                        className={`mb-2 p-2 rounded-xl border-l-[3px] text-[11px] cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${msg.isMe
+                                                                            ? 'bg-black/10 border-white/40 text-teal-50'
+                                                                            : 'bg-slate-50 dark:bg-slate-900/50 border-teal-500 text-slate-600 dark:text-slate-400'
+                                                                            }`}
                                                                     >
-                                                                        <ReactionIcon type={type} className="text-sm leading-none filter drop-shadow-sm" />
+                                                                        <div className="flex items-center justify-between mb-0.5">
+                                                                            <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
+                                                                                {msg.replyTo.senderName}
+                                                                            </p>
+                                                                            <Reply className="h-2.5 w-2.5 opacity-60" />
+                                                                        </div>
+                                                                        <p className="line-clamp-2 opacity-80 italic">
+                                                                            {msg.replyTo.content}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+
+                                                                {msg.attachments && msg.attachments.length > 0 && msg.attachments.map((att, i) => (
+                                                                    <div key={i} className="mb-2 -mx-1 -mt-1">
+                                                                        {att.type.startsWith('image/') ? (
+                                                                            <div
+                                                                                className="cursor-pointer group/img relative overflow-hidden rounded-xl"
+                                                                                onClick={() => {
+                                                                                    if (att.url && att.name) {
+                                                                                        setLightboxImage({ src: att.url, alt: att.name });
+                                                                                    }
+                                                                                }}
+                                                                            >
+                                                                                <AuthenticatedImage
+                                                                                    src={att.url}
+                                                                                    alt={att.name || 'Attachment'}
+                                                                                    className="w-full max-h-48 object-cover border border-white/20 transition-all duration-300 group-hover:scale-105"
+                                                                                />
+                                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                                                    <Maximize2 className="text-white opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 drop-shadow-md" />
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={() => att.url && att.name && handleDownload(att.url, att.name, msg.id)}
+                                                                                disabled={downloadingId === msg.id}
+                                                                                className={`w-full flex items-center gap-0 rounded-xl overflow-hidden border transition-all duration-200 hover:opacity-90 active:scale-[0.98] ${msg.isMe
+                                                                                    ? 'border-white/10 bg-black/10 hover:bg-black/20'
+                                                                                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
+                                                                                    } ${downloadingId === msg.id ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                                            >
+                                                                                <div className={`shrink-0 w-14 h-16 flex flex-col items-center justify-center ${msg.isMe ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-700'} gap-0.5`}>
+                                                                                    {downloadingId === msg.id ? (
+                                                                                        <Loader2 className={`h-6 w-6 animate-spin ${msg.isMe ? 'text-white/80' : 'text-slate-500'}`} />
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            <svg viewBox="0 0 24 28" className={`h-8 w-7 ${msg.isMe ? 'text-white/80' : 'text-slate-500'}`} fill="currentColor">
+                                                                                                <path d="M14 0H2C0.9 0 0 0.9 0 2v24c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8l-10-8z" opacity="0.9" />
+                                                                                                <path d="M14 0v8h10L14 0z" opacity="0.5" />
+                                                                                            </svg>
+                                                                                            <span className={`text-[9px] font-extrabold tracking-wider ${msg.isMe ? 'text-white/80' : 'text-slate-500'} -mt-1`}>FILE</span>
+                                                                                        </>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className={`flex-1 min-w-0 px-3 py-2.5 flex flex-col justify-center text-left ${msg.isMe ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
+                                                                                    <p className="text-[12px] font-semibold truncate leading-tight">{att.name}</p>
+                                                                                    <p className={`text-[10px] mt-0.5 font-medium ${msg.isMe ? 'text-white/60' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                                                        {downloadingId === msg.id ? 'Downloading...' : `${(att.size / 1024 / 1024).toFixed(1)} MB`}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <div className={`shrink-0 pr-3 ${msg.isMe ? 'text-white/70' : 'text-teal-500'}`}>
+                                                                                    {downloadingId === msg.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                                                                </div>
+                                                                            </button>
+                                                                        )}
                                                                     </div>
                                                                 ))}
-                                                            </div>
-                                                            {(msg.reactions || []).length > 1 && (
-                                                                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 ml-1">
-                                                                    {(msg.reactions || []).length}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    )}
 
-                                                    <div className={`flex items-center justify-end gap-1.5 mt-2 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
-                                                        <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
-                                                        {msg.isMe && (
-                                                            <div className={`message-status-ticks ${msg.isRead ? 'read' : ''}`}>
-                                                                {msg.isRead ? (
-                                                                    <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />
-                                                                ) : (
-                                                                    <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
+                                                                <p className="whitespace-pre-wrap break-words leading-relaxed font-medium">
+                                                                    {msg.content}
+                                                                </p>
+
+                                                                {/* Reactions Display (Teams-style Pill) */}
+                                                                {msg.reactions && msg.reactions.length > 0 && (
+                                                                    <div
+                                                                        className={`absolute -bottom-3 ${msg.isMe ? '-right-1' : '-left-1'} flex items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-md border border-slate-200/50 dark:border-slate-700/50 z-[20] transition-all hover:scale-105 cursor-pointer group/reaction`}
+                                                                    >
+                                                                        <div className="flex -space-x-1">
+                                                                            {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
+                                                                                <div key={type} className="relative z-10" style={{ zIndex: 10 - i }}>
+                                                                                    <ReactionIcon type={type} className="text-sm leading-none filter drop-shadow-sm" />
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                        {(msg.reactions || []).length > 1 && (
+                                                                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 ml-1">
+                                                                                {(msg.reactions || []).length}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 )}
+
+                                                                <div className={`flex items-center justify-end gap-1.5 mt-2 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
+                                                                    <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
+                                                                    {msg.isMe && (
+                                                                        <div className={`message-status-ticks ${msg.isRead ? 'read' : ''}`}>
+                                                                            {msg.isRead ? (
+                                                                                <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />
+                                                                            ) : (
+                                                                                <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                        )}
+                                                        </motion.div>
                                                     </div>
-                                                </div>
-                                            </motion.div>
-                                            ))
+                                                )}
+                                            />
                                         )}
-                                        <div ref={messagesEndRef} />
                                     </div>
 
                                     {/* Input Area - Sticky Bottom with Reply Preview */}
@@ -1102,7 +1064,7 @@ export const ChatHub: React.FC = () => {
                                                         const uploadRes = await uploadAttachment(file);
                                                         // RESET BUFFER: Allow immediate re-upload of same file
                                                         target.value = '';
-                                                        
+
                                                         // Note: uploadRes is now the inner 'data' object from sendResponse
                                                         if (uploadRes && uploadRes.url) {
                                                             sendMessage(file.name, activeConversation.id, uploadRes.url, uploadRes.type, undefined, uploadRes.originalName);
@@ -1221,6 +1183,7 @@ export const ChatHub: React.FC = () => {
                             <div className="absolute bottom-8 flex gap-3">
                                 <Button
                                     onClick={() => lightboxImage && handleDownload(lightboxImage.src, lightboxImage.alt, 'lightbox')}
+                                    disabled={downloadingId === 'lightbox'}
                                     className="bg-[#148C8B] hover:bg-[#0E6B74] dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold px-6 h-11 rounded-xl shadow-lg shadow-teal-900/20 dark:shadow-teal-900/40 border-0 flex items-center gap-2"
                                 >
                                     {downloadingId === 'lightbox' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}

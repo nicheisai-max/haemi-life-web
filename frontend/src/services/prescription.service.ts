@@ -5,6 +5,10 @@ import type { ApiResponse } from '../types/auth.types';
 // PRESCRIPTION API SERVICE
 // =====================================================
 
+/**
+ * 🩺 HAEMI LIFE — Prescription Item Contract
+ * Strictly aligned with backend MedicalRecordRow and ClinicalMapper.
+ */
 export interface PrescriptionItem {
     id: number;
     prescriptionId: number;
@@ -17,6 +21,7 @@ export interface PrescriptionItem {
     durationDays: number | null;
     quantity: number | null;
     instructions: string | null;
+    createdAt?: string;
 }
 
 export interface Prescription {

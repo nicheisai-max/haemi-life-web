@@ -37,7 +37,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [authState, setAuthState] = useState<AuthState>(() => {
         const initialUserJson = sessionStorage.getItem('user');
         const initialToken = sessionStorage.getItem('token');
-        const initialUser = initialUserJson ? safeParseJSON(initialUserJson, isUser) : null;
+        const user = initialUserJson ? safeParseJSON(initialUserJson, isUser) : null;
+        
+        // 🩺 HAEMI RESILIENCE: Handle legacy session data missing hasConsent
+        const initialUser = user ? { ...user, hasConsent: user.hasConsent ?? false } : null;
+
         return {
             user: initialUser,
             token: initialToken,
@@ -67,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // ─── Phase 5, 6 & 7 Hardening: Silent Proactive Refresh (Singleton & Multi-Event)
     const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const isRefreshingRef = useRef<boolean>(false);
-    const lastActivityRef = useRef<number>(Date.now());
+    const lastInteractionRef = useRef<number>(Date.now());
 
     useEffect(() => {
         const cleanup = () => {
@@ -110,7 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const timeoutMinutes = authStateRef.current.sessionTimeout;
             if (timeoutMinutes) {
                 const idleLimitMs = timeoutMinutes * 60 * 1000;
-                const timeIdle = Date.now() - lastActivityRef.current;
+                const timeIdle = Date.now() - lastInteractionRef.current;
                 const timeRemaining = idleLimitMs - timeIdle;
 
                 // Trigger popup 2 minutes before absolute timeout
@@ -123,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         const updateActivity = () => {
-            lastActivityRef.current = Date.now();
+            lastInteractionRef.current = Date.now();
         };
 
         // Phase 7: Activity Listeners
@@ -431,15 +435,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const refreshUser = useCallback(async () => {
         try {
+            // Refetch current user profile + consent status
             const { user: verifiedUser } = await authService.verifySession();
+            
             setAuthState(prev => ({
                 ...prev,
                 user: verifiedUser,
                 profileImageVersion: Date.now()
             }));
+
+            // Sync with session storage for persistence across reloads
             sessionStorage.setItem('user', JSON.stringify(verifiedUser));
+            
+            logger.info(`[Auth] User profile refreshed (Consent: ${verifiedUser.hasConsent})`);
         } catch (error) {
-            logger.error('[Auth] Failed to refresh user:', error);
+            logger.error('[Auth] Failed to refresh user profile:', error);
         }
     }, []);
 

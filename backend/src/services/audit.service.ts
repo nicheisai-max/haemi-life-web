@@ -7,10 +7,13 @@ export const SYSTEM_ANONYMOUS_ID = '00000000-0000-0000-0000-000000000000';
 export interface AuditLogEntry {
     userId: string; // Mandatory per Zero-Trust Identity Policy
     actorRole?: string;
-    actionType: string;
-    targetId?: string;
-    entityId?: string;
-    action?: string;
+    
+    // Canonical Audit Identifiers (Google-Grade Standard)
+    action: string; 
+    entityId?: string | null;
+    entityType?: string;
+    
+    location?: string;
     details?: string;
     metadata?: Record<string, unknown>;
     ipAddress?: string;
@@ -30,11 +33,17 @@ export const auditService = {
             }
 
             const userId = entry.userId;
-            const action = entry.action || entry.actionType || 'UNKNOWN_ACTION';
-            const entityId = entry.entityId || entry.targetId || null;
+            
+            // 🩺 HAEMI CANONICAL RESOLUTION (Strict Alignment)
+            const action = entry.action || 'UNKNOWN_ACTION';
+            const entityId = entry.entityId || null;
+            const entityType = entry.entityType || 'UNKNOWN';
+            
+            // Institutional Data Normalization: Coalesce metadata/details
             const details = entry.details || 
                 (entry.metadata ? JSON.stringify(entry.metadata) : null) || 
                 '{}';
+                
             const ipAddress = entry.ipAddress || null;
             const userAgent = entry.userAgent || null;
             
@@ -42,14 +51,15 @@ export const auditService = {
 
             await pool.query(
                 `INSERT INTO audit_logs (
-                    user_id, action, entity_id, details, 
+                    user_id, action, entity_id, entity_type, details, 
                     ip_address, user_agent, created_at
                 )
-                 VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
                 [
                     userId,
                     action,
                     entityId,
+                    entityType,
                     details,
                     ipAddress,
                     userAgent
@@ -59,8 +69,10 @@ export const auditService = {
             logger.error('Failed to write audit log', { 
                 error: error instanceof Error ? error.message : String(error),
                 userId: entry.userId,
-                action: entry.action || entry.actionType
+                action: entry.action
             });
         }
     }
 };
+
+

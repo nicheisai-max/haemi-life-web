@@ -8,9 +8,12 @@ import { logger } from '../utils/logger';
 import { mapUserToResponse } from '../utils/user.mapper';
 import { mapDoctorToResponse } from '../utils/doctor.mapper';
 import { UserEntity, JoinedDoctorRow } from '../types/db.types';
+import { decrypt } from '../utils/security';
 
 // Get pending doctor verifications (Admin only)
 export const getPendingVerifications = async (req: Request, res: Response) => {
+    const { originalUrl, ip } = req;
+    logger.debug('[Admin] Fetching pending verifications', { url: originalUrl, from: ip });
     try {
         const result = await pool.query<JoinedDoctorRow>(`
             SELECT 
@@ -22,7 +25,13 @@ export const getPendingVerifications = async (req: Request, res: Response) => {
             ORDER BY u.created_at DESC
         `);
 
-        const doctors = result.rows.map(mapDoctorToResponse);
+        const doctors = result.rows.map((row: JoinedDoctorRow) => {
+            return mapDoctorToResponse({
+                ...row,
+                phone_number: row.phone_number ? decrypt(row.phone_number) : '',
+                id_number: row.id_number ? decrypt(row.id_number) : null
+            });
+        });
         return sendResponse(res, 200, true, 'Pending verifications fetched', doctors);
     } catch (error: unknown) {
         logger.error('Error fetching pending verifications:', {
@@ -58,6 +67,8 @@ export const verifyDoctor = async (req: Request, res: Response) => {
             }
 
             // Log the action
+            if (!user) throw new Error('Invalid user session');
+
             await client.query(`
                 INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details)
                 VALUES ($1, $2, $3, $4, $5)
@@ -80,10 +91,8 @@ export const verifyDoctor = async (req: Request, res: Response) => {
         } finally {
             client.release();
         }
-    } catch (error: unknown) {
+    } catch {
         logger.error('Error verifying doctor:', {
-            error: error instanceof Error ? error.message : String(error),
-            doctorId: id,
             adminId: user?.id
         });
         return sendError(res, 500, 'Error verifying doctor');
@@ -117,7 +126,14 @@ export const getAllUsers = async (req: Request, res: Response) => {
         query += ' ORDER BY created_at DESC';
 
         const result = await pool.query<UserEntity>(query, params);
-        return sendResponse(res, 200, true, 'Users fetched', result.rows.map(mapUserToResponse));
+        const users = result.rows.map((row: UserEntity) => {
+            return mapUserToResponse({
+                ...row,
+                phone_number: row.phone_number ? decrypt(row.phone_number) : '',
+                id_number: row.id_number ? decrypt(row.id_number) : null
+            });
+        });
+        return sendResponse(res, 200, true, 'Users fetched', users);
     } catch (error: unknown) {
         logger.error('Error fetching users:', {
             error: error instanceof Error ? error.message : String(error)
@@ -151,6 +167,8 @@ export const updateUserStatus = async (req: Request, res: Response) => {
             }
 
             // Log the action
+            if (!user) throw new Error('Invalid user session');
+
             await client.query(`
                 INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details)
                 VALUES ($1, $2, $3, $4, $5)
@@ -163,17 +181,19 @@ export const updateUserStatus = async (req: Request, res: Response) => {
             ]);
 
             await client.query('COMMIT');
-            return sendResponse(res, 200, true, 'User status updated', { user: mapUserToResponse(result.rows[0]) });
+            const updatedUser = {
+                ...result.rows[0],
+                phone_number: result.rows[0].phone_number ? decrypt(result.rows[0].phone_number) : ''
+            };
+            return sendResponse(res, 200, true, 'User status updated', { user: mapUserToResponse(updatedUser) });
         } catch (error: unknown) {
             await client.query('ROLLBACK');
             throw error;
         } finally {
             client.release();
         }
-    } catch (error: unknown) {
+    } catch {
         logger.error('Error updating user status:', {
-            error: error instanceof Error ? error.message : String(error),
-            targetUserId: id,
             adminId: user?.id
         });
         return sendError(res, 500, 'Error updating user status');
@@ -207,9 +227,8 @@ export const getSystemStats = async (req: Request, res: Response) => {
             activeUsers: parseInt(stats[5].rows[0].count, 10),
             totalUsers: parseInt(stats[6].rows[0].count, 10)
         });
-    } catch (error: unknown) {
+    } catch {
         logger.error('Error fetching system stats:', {
-            error: error instanceof Error ? error.message : String(error),
             adminId: req.user?.id
         });
         return sendError(res, 500, 'Error fetching system stats');
@@ -279,7 +298,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
 };
 
 // Get current session timeout (Admin only)
-export const getSessionTimeout = async (req: Request, res: Response) => {
+export const getSessionTimeout = async (_req: Request, res: Response) => {
     try {
         const timeout = await systemSettingsRepository.getSetting('SESSION_TIMEOUT_MINUTES');
         return sendResponse(res, 200, true, 'Session timeout fetched', { timeout: parseInt(timeout || '60', 10) });
@@ -362,7 +381,7 @@ export const revokeSession = async (req: Request, res: Response) => {
     }
 };
 
-export const getRevenueStats = async (req: Request, res: Response) => {
+export const getRevenueStats = async (_req: Request, res: Response) => {
     try {
         const stats = await analyticsRepository.getRevenueStats();
         return sendResponse(res, 200, true, 'Revenue stats fetched', stats);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ import { GradientMesh } from '@/components/ui/gradient-mesh';
 import { PremiumAreaChart } from '@/components/charts/premium-area-chart';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PATHS } from '../../routes/paths';
-import { ClinicalCopilot } from '@/components/ui/clinical-copilot';
 import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { AnimatedEmptyState } from '@/components/ui/animated-empty-state';
 import { PremiumLoader } from '@/components/ui/premium-loader';
@@ -68,7 +67,9 @@ export const DoctorDashboard = () => {
     const [patientCount, setPatientCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+    const copilotTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+
 
     useEffect(() => {
         fetchDashboardData();
@@ -78,15 +79,15 @@ export const DoctorDashboard = () => {
         try {
             setLoading(true);
             setError(null);
-            
+
             // Phase 2: Consolidated Real-Time Data Fetch (Optimized for Upcoming)
             const apptData = await getMyAppointments({ status: 'scheduled', upcoming: true });
             setAppointments(apptData);
-            
+
             // Institutional Logic: Derive Stats from Appointments
             const uniquePatients = new Set(apptData.map(a => a.patientId));
             setPatientCount(uniquePatients.size);
-            
+
         } catch (err) {
             console.error('Dashboard fetch error:', err);
             // Fail Safe: Return Empty State
@@ -121,7 +122,7 @@ export const DoctorDashboard = () => {
 
     return (
         <div className="space-y-8">
-            <ClinicalCopilot isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
+
 
             {/* Hero Section - Standardized Premium Style */}
             <TransitionItem className="relative overflow-hidden rounded-card border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
@@ -144,15 +145,12 @@ export const DoctorDashboard = () => {
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
+                            ref={copilotTriggerRef}
                             size="lg"
                             variant="outline"
-                            className="bg-white/10 hover:bg-white hover:text-teal-900 dark:hover:bg-white/20 dark:hover:text-white text-white border-white/20 shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-200"
+                            className="haemi-ignore-click-outside bg-white/10 text-white border-white/20 hover:bg-white hover:text-teal-900 focus-visible:bg-white/10 focus-visible:text-white active:bg-white active:text-teal-900 dark:hover:bg-white/20 dark:hover:text-white dark:focus-visible:bg-white/20 dark:focus-visible:text-white dark:active:bg-white/20 dark:active:text-white shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
                             onClick={() => {
-                                // Coordination: Close chathub when opening copilot
-                                if (!isCopilotOpen) {
-                                    window.dispatchEvent(new CustomEvent('haemi-close-chathub'));
-                                }
-                                setIsCopilotOpen(true);
+                                window.dispatchEvent(new CustomEvent('haemi-open-copilot'));
                             }}
                         >
                             <BrainCircuit className="h-5 w-5" aria-hidden="true" />
@@ -160,7 +158,7 @@ export const DoctorDashboard = () => {
                         </Button>
                         <Button
                             size="lg"
-                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
+                            className="bg-white text-teal-900 hover:bg-teal-50 border border-transparent dark:bg-primary dark:text-teal-950 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
                             onClick={() => navigate('/appointments')}
                         >
                             <CalendarCheck className="h-5 w-5" aria-hidden="true" />
@@ -366,7 +364,7 @@ export const DoctorDashboard = () => {
                                             <div className="shrink-0 relative">
                                                 <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
                                                     <AvatarImage
-                                                        src={appointment.profileImage 
+                                                        src={appointment.profileImage
                                                             ? (appointment.profileImage.startsWith('http') ? appointment.profileImage : `/api/files/profile/${appointment.patientId}`)
                                                             : `/images/patients/${appointment.otherPartyName?.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`}
                                                         alt={appointment.otherPartyName || 'Patient'}

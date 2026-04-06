@@ -3,16 +3,17 @@ import { useTheme } from '../../hooks/use-theme';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 
+
 export const ThemeToggle: React.FC = () => {
     const { theme, toggleTheme } = useTheme();
 
     return (
         <Button
             variant="ghost"
-            size="icon"
+            size="navAction"
             onClick={toggleTheme}
             aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-            className="rounded-full"
+            className="haemi-nav-action-circle haemi-ignore-click-outside"
         >
             {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
         </Button>

@@ -45,6 +45,11 @@ export const logger = {
         // console.log(`[INFO] ${message}`, maskedMeta || '');
         appendToFile(log);
     },
+    debug: (message: string, meta?: unknown) => {
+        const maskedMeta = meta ? maskPHI(meta) : undefined;
+        const log = { timestamp: getTimestamp(), level: 'DEBUG', message, meta: maskedMeta };
+        appendToFile(log);
+    },
     warn: (message: string, meta?: unknown) => {
         const maskedMeta = meta ? maskPHI(meta) : undefined;
         const log = { timestamp: getTimestamp(), level: 'WARN', message, meta: maskedMeta };

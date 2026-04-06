@@ -26,7 +26,7 @@ export const LanguageSelector: React.FC = () => {
                 <Button
                     variant="ghost"
                     size="sm"
-                    className="h-10 px-3 gap-2 hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors rounded-xl border border-slate-200 dark:border-slate-800"
+                    className="haemi-nav-action-capsule gap-2 hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors"
                 >
                     <Languages className="h-4 w-4" />
                     <span className="font-bold text-xs uppercase tracking-wider">{currentLang?.code}</span>

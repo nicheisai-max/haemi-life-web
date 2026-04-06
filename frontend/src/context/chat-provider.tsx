@@ -2,19 +2,23 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatContext } from './chat-context';
 import { useAuth } from '../hooks/use-auth';
 import api from '../services/api';
-import { decrypt, encrypt } from '../utils/security';
+import { decrypt } from '../utils/security';
 import { socketService, type ServerToClientEvents } from '../services/socket.service';
-import type { Conversation, Message } from '../hooks/use-chat';
+import { 
+    Conversation, 
+    Message, 
+    Attachment, 
+    AttachmentDTO,
+    PresenceRecord,
+    PresenceApiResponse,
+    RawParticipant,
+    normalizeParticipant,
+    ChatApiResponse
+} from '../types/chat';
 import { logger } from '../utils/logger';
+import { storageService } from '../services/storage.service';
 import axios from 'axios';
 
-// 🔒 STRICT ATTACHMENT CONTRACT (Step 5)
-interface Attachment {
-    url: string;
-    type: string;
-    size: number;
-    name: string;
-}
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, token, isAuthenticated } = useAuth();
@@ -23,7 +27,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(false);
     const [typingUsers, setTypingUsers] = useState<string[]>([]);
-    const [presence, setPresence] = useState<Record<string, { isOnline: boolean, lastSeen: string }>>({});
+    const [presence, setPresence] = useState<Record<string, PresenceRecord>>({});
     // Defensive check to ensure state is in scope for async handlers
     if (typeof typingUsers === 'undefined') {
         logger.warn('[ChatProvider] Emergency state recovery triggered');
@@ -68,13 +72,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // 2. Clear existing timeout to debounce
         if (fetchPresenceTimeoutRef.current) clearTimeout(fetchPresenceTimeoutRef.current);
 
-        // 3. Set new timeout
+        // 3. Set new timeout — 300ms debounce window
         fetchPresenceTimeoutRef.current = setTimeout(async () => {
-            // 4. Guard: If a request is already in flight, wait for it or yield
-            if (activePresenceRequestRef.current) {
-                // We'll let the next debounce cycle handle it to prevent overlapping
-                return;
-            }
+            // 4. Guard: If a request is already in flight, yield
+            if (activePresenceRequestRef.current) return;
 
             const idsToFetch = Array.from(pendingPresenceIdsRef.current);
             if (idsToFetch.length === 0) return;
@@ -83,135 +84,166 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             pendingPresenceIdsRef.current.clear();
 
             try {
-                activePresenceRequestRef.current = (async () => {
-                    interface PresenceRecord {
-                        isOnline: boolean;
-                        lastSeen: string;
-                    }
-                    interface PresenceApiResponse {
-                        success?: boolean;
-                        message?: string;
-                        data?: Record<string, PresenceRecord>;
-                    }
-
-                    const res = await api.get<PresenceApiResponse | Record<string, PresenceRecord>>(`/chat/presence?userIds=${idsToFetch.join(',')}`);
+                const doFetch = async (): Promise<void> => {
+                    // Uses centralized PresenceRecord & PresenceApiResponse from types/chat.ts
+                    const res = await api.get<PresenceApiResponse | Record<string, PresenceRecord>>(
+                        `/chat/presence?userIds=${idsToFetch.join(',')}`
+                    );
 
                     if (res.data) {
-                        const responseData: unknown = res.data;
+                        const responseData = res.data;
                         let actualPayload: Record<string, PresenceRecord> = {};
 
                         if (responseData && typeof responseData === 'object') {
-                            if ('data' in responseData && typeof (responseData as Record<string, unknown>).data === 'object') {
-                                actualPayload = (responseData as Record<string, unknown>).data as Record<string, PresenceRecord>;
+                            const isEnvelope = 'data' in responseData &&
+                                responseData.data &&
+                                typeof responseData.data === 'object' &&
+                                !Array.isArray(responseData.data);
+
+                            if (isEnvelope) {
+                                actualPayload = (responseData as { data: Record<string, PresenceRecord> }).data;
                             } else {
                                 actualPayload = responseData as Record<string, PresenceRecord>;
                             }
                         }
 
                         setPresence(prev => ({ ...prev, ...actualPayload }));
+                        // Persist to IndexedDB in background
+                        storageService.putPresence(actualPayload).catch((e: unknown) => {
+                            logger.error('[ChatProvider] Presence persistence failed', e instanceof Error ? e.message : String(e));
+                        });
                     }
-                })();
+                };
+
+                activePresenceRequestRef.current = doFetch();
                 await activePresenceRequestRef.current;
             } catch (err: unknown) {
                 logger.error('[ChatProvider] Failed to fetch presence:', err instanceof Error ? err.message : String(err));
-                // On error, we could re-add IDs to queue, but for now we'll just fail silently
             } finally {
                 activePresenceRequestRef.current = null;
             }
-        }, 300); // 300ms debounce window
+        }, 300);
     }, []);
+    // ─── 2. HYDRATION: Local-First Strategy ─────────────────────────
+    useEffect(() => {
+        if (!isAuthenticated || !user?.id) return;
+
+        const hydrate = async (): Promise<void> => {
+            try {
+                const localConversations = await storageService.getAllConversations();
+                if (localConversations.length > 0 && isMountedRef.current) {
+                    setConversations(localConversations);
+                    logger.info(`[ChatProvider] Hydrated ${localConversations.length} conversations from IndexedDB`);
+                    
+                    // Fetch presence for hydrated participants
+                    const partIds = [...new Set(localConversations.flatMap(c => c.participants.map(p => p.id)))];
+                    if (partIds.length > 0) fetchPresence(partIds);
+                }
+            } catch (err: unknown) {
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                logger.error('[ChatProvider] Hydration failed:', errorMessage);
+            }
+        };
+
+        hydrate();
+    }, [isAuthenticated, user?.id, fetchPresence]);
 
     const fetchConversations = useCallback(async () => {
         if (!isAuthenticated) return;
         const controller = getAbortController('fetchConversations');
         try {
             const res = await api.get<{ data: Conversation[] } | Conversation[]>('/chat/conversations', { signal: controller.signal });
-            // P0 FIX: Hardened unwrapping for explicit JSON envelope normalization
             const payload = res.data;
 
-            if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { data: unknown }).data)) {
-                throw new Error("Invalid API response: conversations")
+            if (!payload || typeof payload !== 'object') {
+                throw new Error("Invalid API response: conversations");
             }
 
-            const data = (payload as { data: Conversation[] }).data;
+            let data: Conversation[] = [];
+            if (Array.isArray(payload)) {
+                data = payload;
+            } else if ('data' in payload && Array.isArray((payload as { data: unknown }).data)) {
+                data = (payload as { data: Conversation[] }).data;
+            } else {
+                throw new Error("Invalid API response format: conversations");
+            }
+
             if (!isMountedRef.current) return;
 
-            // P0 PROTOCOL: Hard filter to strictly exclude ghost conversations
-            const validConversations = data.filter((conv: Conversation) =>
-                !!conv.lastMessage && !!conv.lastMessageId
+            // P0 PROTOCOL: Inclusive restoration of all institutional threads (including empty/new)
+            const decryptedConversations: Conversation[] = await Promise.all(
+                data.map(async (conv: Conversation): Promise<Conversation> => ({
+                    ...conv,
+                    lastMessage: conv.lastMessage ? await decrypt(conv.lastMessage) : conv.lastMessage,
+                    participants: (conv.participants || []).map((p: RawParticipant) => normalizeParticipant(p))
+                }))
             );
 
-            const decryptedConversations = await Promise.all(validConversations.map(async (conv: Conversation) => ({
-                ...conv,
-                lastMessage: conv.lastMessage ? await decrypt(conv.lastMessage) : conv.lastMessage,
-                participants: (() => {
-                    if (!Array.isArray(conv.participants)) {
-                        throw new Error("Invalid participants data")
-                    }
-                    return conv.participants
-                })().map((p: { id: string; name: string; role: string; profileImage?: string }) => ({
-                    ...p,
-                    id: String(p.id),
-                    profileImage: p.profileImage // Normalized by API mapper
-                }))
-            })));
+            // P0: Self-Healing Guard - ensure zero duplicate threads enter global state
+            const uniqueConversations: Conversation[] = Array.from(
+                new Map<string, Conversation>(decryptedConversations.map((c: Conversation) => [c.id, c])).values()
+            );
 
-            // P0: Self-Healing Guard - ensure zero ghost threads enter global state
-            const uniqueConversations = Array.from(
-                new Map(decryptedConversations.map((c: Conversation) => [c.id, c])).values()
-            ).filter(c => !!c.lastMessage && !!c.lastMessageId);
+            setConversations(uniqueConversations);
 
-            setConversations(uniqueConversations as Conversation[]);
+            // ─── PERSISTENCE ─────────────────────────────────────────
+            // Update local IndexedDB with latest server state
+            storageService.putConversations(uniqueConversations).catch((err: unknown) => {
+                logger.error('[ChatProvider] Conversation persistence failed:', err instanceof Error ? err.message : String(err));
+            });
 
             // Fetch initial presence for all unique participants
-            const participantIds = [...new Set(decryptedConversations.flatMap((c: Conversation) => c.participants.map(p => p.id)))];
+            const participantIds = [...new Set(uniqueConversations.flatMap((c: Conversation) => c.participants.map(p => p.id)))];
             if (participantIds.length > 0) {
                 fetchPresence(participantIds);
             }
         } catch (err: unknown) {
             if (axios.isCancel(err)) return; // Tactical suppression of network aborts
-            logger.error('[ChatProvider] Failed to fetch conversations:', err instanceof Error ? err.message : String(err));
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            logger.error('[ChatProvider] Failed to fetch conversations:', errorMessage);
         }
     }, [isAuthenticated, fetchPresence, getAbortController]);
 
     const loadMessages = useCallback(async (conversationId: string) => {
         setLoading(true);
         const controller = getAbortController(`loadMessages:${conversationId}`);
+        
         try {
+            // 1. Local-First: Load from IndexedDB immediately
+            const localMessages = await storageService.getMessagesByConversation(conversationId);
+            if (localMessages.length > 0 && isMountedRef.current) {
+                setMessages(localMessages);
+                // Background task: delivered/read status updates can happen later
+            }
+
+            // 2. Fetch from API for latest state (Sync)
             const res = await api.get<{ data: Message[] }>(`/chat/messages/${conversationId}`, { signal: controller.signal });
             const payload = res.data;
 
             if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { data: unknown }).data)) {
-                throw new Error("Invalid messages response")
+                throw new Error("Invalid messages response");
             }
 
             const data = (payload as { data: Message[] }).data;
             if (!isMountedRef.current) return;
-            const formattedMessages = (await Promise.all(data.map(async (msg: Message): Promise<Message> => ({
-                ...msg,
-                content: await decrypt(msg.content),
-                isMe: msg.senderId === user?.id,
-                attachments: (() => {
-                    if (!Array.isArray(msg.attachments)) {
-                        throw new Error("Invalid attachments payload")
-                    }
-                    return msg.attachments
-                })().reduce((acc: Attachment[], att) => {
-                    if (att.url && att.type && att.name && typeof att.size === 'number') {
-                        acc.push({
-                            url: att.url,
-                            type: att.type,
-                            size: att.size,
-                            name: att.name
-                        });
-                    }
-                    return acc;
-                }, []),
-                replyTo: msg.replyTo ? {
-                    ...msg.replyTo,
-                    content: await decrypt(msg.replyTo.content)
-                } : undefined
-            })))).filter((msg): msg is Message => msg !== null);
+
+            const formattedMessages = (await Promise.all(
+                data.map(async (msg: Message): Promise<Message> => ({
+                    ...msg,
+                    content: await decrypt(msg.content),
+                    isMe: msg.senderId === user?.id,
+                    attachments: (msg.attachments || []).map((att: Attachment & { originalName?: string }) => ({
+                        url: att.url || '',
+                        type: att.type || '',
+                        name: att.name || att.originalName || 'attachment',
+                        size: typeof att.size === 'number' ? att.size : 0
+                    })),
+                    replyTo: msg.replyTo ? {
+                        ...msg.replyTo,
+                        content: await decrypt(msg.replyTo.content)
+                    } : undefined
+                }))
+            ));
 
             // P3: Use strict, stable sorting logic
             const sortedMessages = formattedMessages.sort((a, b) => {
@@ -225,6 +257,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (activeConversationRef.current?.id !== conversationId && conversationId !== 'sync') return;
 
             setMessages(sortedMessages);
+
+            // ─── PERSISTENCE ─────────────────────────────────────────
+            // Update local IndexedDB with latest server state
+            if (user?.id) {
+                storageService.putMessages(sortedMessages, user.id).catch((err: unknown) => {
+                    logger.error('[ChatProvider] Message persistence failed:', err instanceof Error ? err.message : String(err));
+                });
+            }
+
             if (sortedMessages.some(m => !m.isMe && m.status === 'sent')) {
                 api.put(`/chat/conversations/${conversationId}/delivered`).catch(() => { });
             }
@@ -245,7 +286,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const onUserStatus: ServerToClientEvents["userStatus"] = (data) => {
             setPresence(prev => ({
                 ...prev,
-                [data.userId]: { isOnline: data.isOnline, lastSeen: data.lastSeen }
+                [data.userId]: { isOnline: data.isOnline, lastActivity: data.lastActivity }
             }));
         };
 
@@ -281,7 +322,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
 
-        const onMessageRead: ServerToClientEvents["message:read"] = ({ messageId }) => {
+        const onMessageRead: ServerToClientEvents["messageRead"] = ({ messageId }) => {
             setMessages(prev => prev.map(msg =>
                 msg.id === messageId ? { ...msg, status: 'read', isRead: true } : msg
             ));
@@ -408,7 +449,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // 3. ENTERPRISE ACKNOWLEDGEMENT FLOW (Delivery & Read)
             if (message.senderId !== user?.id) {
                 if (activeConversationRef.current?.id === message.conversationId) {
-                    socketService.emit('message:read', { messageId: message.id, userId: user?.id || '' });
+                    socketService.emit('messageRead', { messageId: message.id, userId: user?.id || '' });
                     api.put(`/chat/conversations/${message.conversationId}/read`).catch(() => { });
                 } else {
                     socketService.emit('ackDelivery', { conversationId: message.conversationId, messageId: message.id });
@@ -420,7 +461,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         socketService.connect(token);
         socketService.on('typingStarted', onTypingStarted);
         socketService.on('typingStopped', onTypingStopped);
-        socketService.on('message:read', onMessageRead);
+        socketService.on('messageRead', onMessageRead);
         socketService.on('messageReceived', onReceiveMessage);
         socketService.on('messageDeleted', onMessageDeleted);
         socketService.on('messageReaction', onMessageReaction);
@@ -434,7 +475,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             socketService.off('userStatus', onUserStatus);
             socketService.off('typingStarted', onTypingStarted);
             socketService.off('typingStopped', onTypingStopped);
-            socketService.off('message:read', onMessageRead);
+            socketService.off('messageRead', onMessageRead);
             socketService.off('messageReceived', onReceiveMessage);
             socketService.off('messageDeleted', onMessageDeleted);
             socketService.off('messageReaction', onMessageReaction);
@@ -445,34 +486,92 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [isAuthenticated, user?.id, token, fetchConversations]);
 
-    const sendMessage = async (content: string, conversationId: string, attachmentUrl?: string, attachmentType?: string, replyToId?: string, attachmentName?: string) => {
-        const optimisticId = `opt-${Date.now()}`;
+    // ─── Phase 3: Background Outbox Sync ──────────────────────────────────────
+    useEffect(() => {
+        if (!isAuthenticated || !user?.id) return;
+
+        const syncOutbox = async () => {
+            const pending = await storageService.getPendingMessages();
+            if (pending.length === 0) return;
+
+            logger.info(`[ChatProvider] 🔄 Found ${pending.length} pending messages in Outbox. Attempting sync...`);
+
+            for (const msg of pending) {
+                try {
+                    // Stripped down send logic for outbox retry
+                    await api.post('/chat/messages', {
+                        conversationId: msg.conversationId,
+                        content: msg.content,
+                        messageType: msg.messageType,
+                        attachment: msg.attachments && msg.attachments.length > 0 ? {
+                            url: msg.attachments[0].url,
+                            type: msg.attachments[0].type,
+                            originalName: msg.attachments[0].name
+                        } : undefined,
+                        replyToId: msg.replyToId
+                    });
+
+                    // Success: Remove from Outbox
+                    await storageService.removePendingMessage(msg.id);
+                    logger.info(`[ChatProvider] ✓ Outbox message ${msg.id} synced successfully`);
+                } catch (err: unknown) {
+                    logger.warn(`[ChatProvider] ❌ Outbox sync failed for ${msg.id}. Will retry later.`, err);
+                }
+            }
+        };
+
+        // Sync on mount and when coming back online
+        syncOutbox();
+        window.addEventListener('online', syncOutbox);
+        return () => window.removeEventListener('online', syncOutbox);
+    }, [isAuthenticated, user?.id]);
+
+    const sendMessage = async (
+        content: string,
+        conversationId: string,
+        attachmentUrl?: string,
+        attachmentType?: string,
+        replyToId?: string,
+        attachmentName?: string
+    ) => {
+        if (!user?.id) return;
+
+        // Phase 3: Optimistic UUID generation for Local-First tracking
+        const tempId = `opt-${crypto.randomUUID()}`;
         const resolvedType: 'text' | 'image' | 'document' = attachmentUrl
             ? (attachmentType?.startsWith('image/') ? 'image' : 'document')
             : 'text';
 
         const optimisticMessage: Message = {
-            id: optimisticId,
+            id: tempId,
+            tempId, // Mirroring for structural clarity
             conversationId,
-            senderId: user?.id || '',
+            senderId: user.id,
+            senderName: user.name || 'Me',
             content,
             messageType: resolvedType,
             status: 'sending',
-            sequenceNumber: (conversations.find(c => c.id === conversationId)?.sequenceCounter || 0) + 1,
-            createdAt: new Date().toISOString(),
+            isRead: false,
             isMe: true,
+            createdAt: new Date().toISOString(),
+            sequenceNumber: (conversations.find(c => c.id === conversationId)?.sequenceCounter || 0) + 1,
             attachments: attachmentUrl ? [{
                 url: attachmentUrl,
                 type: attachmentType || 'application/octet-stream',
                 name: attachmentName || 'attachment',
                 size: 0
-            }] : []
+            }] : [],
+            reactions: [],
+            replyToId
         };
 
-        // Optimistic UI: Update Message List
+        // 1. PERSIST TO OUTBOX: Immediate protection against browser crash/refresh
+        await storageService.putPendingMessage(optimisticMessage, user.id);
+
+        // 2. OPTIMISTIC UI: Render instantly
         setMessages(prev => [...prev, optimisticMessage]);
 
-        // Optimistic UI: Update Sidebar
+        // 3. SIDEBAR UPDATE: Instant feedback
         setConversations(prev => {
             const index = prev.findIndex(c => c.id === conversationId);
             if (index === -1) return prev;
@@ -483,42 +582,54 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 lastMessage: content || (attachmentUrl ? '📎 Attachment' : ''),
                 lastMessageAt: optimisticMessage.createdAt
             };
+            // Move to top
             const [moved] = newConversations.splice(index, 1);
             return [moved, ...newConversations];
         });
 
         try {
-            const encryptedContent = await encrypt(content);
+            // Local decryption/encryption logic for sensitive clinical data
             const res = await api.post('/chat/messages', {
-                conversationId, content: encryptedContent,
+                conversationId,
+                content,
                 messageType: resolvedType,
-                attachment: attachmentUrl ? { url: attachmentUrl, type: attachmentType, originalName: attachmentName } : undefined,
+                attachment: attachmentUrl ? {
+                    url: attachmentUrl,
+                    type: attachmentType,
+                    originalName: attachmentName
+                } : undefined,
                 replyToId
             });
 
-            // Replacement Logic: Match by ID, ensuring zero fallback to content/timestamp
             if (res.data) {
                 const realMessage = {
                     ...res.data,
-                    content,
                     isMe: true
                 };
+
+                // 4. STORAGE RETIREMENT: Remove from Outbox, commit to Permanent Store
+                await storageService.removePendingMessage(tempId);
+                await storageService.putMessages([realMessage], user.id);
+
                 setMessages(prev => {
-                    // SAFETY DEDUPE: Check if the socket already added this real ID (UUID)
                     const socketAdded = prev.some(m => m.id === realMessage.id);
                     if (socketAdded) {
-                        // Just purge the optimistic marker
-                        return prev.filter(m => m.id !== optimisticId);
+                        return prev.filter(m => m.id !== tempId);
                     }
-                    // Standard inline replacement
-                    return prev.map(m => (m.id === optimisticId) ? realMessage : m);
+                    // Institutional Guard: Replace opt-id with real-id if not already handled by socket
+                    return prev.map(m => m.id === tempId ? realMessage : m);
                 });
             }
         } catch (error: unknown) {
-            logger.error('[ChatProvider] Failed to send message:', error instanceof Error ? error.message : String(error));
-            // Rollback optimistic message on failure
-            setMessages(prev => prev.filter(m => m.id !== optimisticId));
-            // Rollback conversation state would be complex; usually user will see failure badge
+            logger.error('[ChatProvider] Transmission failure:', error);
+
+            // 5. FAILURE HANDLING: Update Outbox status for future retry
+            await storageService.updatePendingMessageStatus(tempId, 'failed');
+
+            // Visual feedback: Update optimistic message status in state
+            setMessages(prev => prev.map(m =>
+                m.id === tempId ? { ...m, status: 'failed' } : m
+            ));
         }
     };
 
@@ -540,7 +651,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (otherIds.length > 0) fetchPresence(otherIds);
     };
 
-    const startNewConversation = async (participantId: string) => {
+    const startNewConversation = async (participantId: string, _meta?: Record<string, unknown>) => {
         try {
             const res = await api.post<{ data: { conversationId: string } }>('/chat/conversations', { participantId });
             if (!res.data || typeof res.data !== 'object' || !res.data.data?.conversationId) {
@@ -594,25 +705,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    interface AttachmentDTO {
-        url: string;
-        tempId: string | number;
-        type: string;
-        originalName: string;
-    }
 
-    interface ApiResponse<T> {
-        success: boolean;
-        message: string;
-        data: T;
-        statusCode: number;
-    }
 
     const uploadAttachment = async (file: File): Promise<AttachmentDTO | null> => {
         const formData = new FormData();
         formData.append('file', file);
         try {
-            const res = await api.post<ApiResponse<AttachmentDTO>>('/chat/attachments', formData, {
+            const res = await api.post<ChatApiResponse<AttachmentDTO>>('/chat/attachments', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -693,10 +792,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!user || !isAuthenticated) return;
 
         try {
-            socketService.emit('message:read', { messageId, userId: user.id });
+            socketService.emit('messageRead', { messageId, userId: user.id });
             // Optional: Backend persistency call if not already handled by conversation-level markAsRead
         } catch (err: unknown) {
-            logger.error('[ChatProvider] Failed to emit message:read', err instanceof Error ? err.message : String(err));
+            logger.error('[ChatProvider] Failed to emit messageRead', err instanceof Error ? err.message : String(err));
         }
     };
 

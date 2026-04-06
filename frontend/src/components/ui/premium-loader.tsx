@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 interface PremiumLoaderProps {
-    size?: 'xs' | 'sm' | 'md' | 'lg';
+    size?: 'nano' | 'xs' | 'sm' | 'md' | 'lg';
     className?: string;
     bubbleClassName?: string;
 }
@@ -14,6 +14,7 @@ export const PremiumLoader: React.FC<PremiumLoaderProps> = ({
     bubbleClassName
 }) => {
     const sizeMap = {
+        nano: { container: 'h-2 w-5', bubble: 'h-0.5 w-0.5', gap: 'gap-0.5' },
         xs: { container: 'h-4 w-12', bubble: 'h-1.5 w-1.5', gap: 'gap-0.5' },
         sm: { container: 'h-6 w-16', bubble: 'h-2 w-2', gap: 'gap-1' },
         md: { container: 'h-10 w-24', bubble: 'h-3 w-3', gap: 'gap-1.5' },
