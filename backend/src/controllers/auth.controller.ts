@@ -193,18 +193,6 @@ export const signup = async (req: Request, res: Response) => {
                 source: 'backend'
             });
 
-            /* 
-               PATCH: Removing cookie-based refresh token for multi-tab isolation.
-               Now returning refreshToken in the JSON response body.
-            */
-            // res.cookie('refreshToken', refreshToken, {
-            //     httpOnly: true,
-            //     secure: process.env.NODE_ENV === 'production',
-            //     sameSite: 'strict',
-            //     path: '/',
-            //     maxAge: 7 * 24 * 60 * 60 * 1000
-            // });
-
             await pool.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [newUser.id]);
 
             return sendResponse(res, 201, true, 'User created successfully', {
@@ -214,8 +202,9 @@ export const signup = async (req: Request, res: Response) => {
             });
         } catch (error: unknown) {
             await client.query('ROLLBACK');
-            logger.error('Signup transaction failed', {
+            logger.error('[Auth.Signup] Transaction failed', {
                 error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
                 email
             });
             throw error;
@@ -223,7 +212,7 @@ export const signup = async (req: Request, res: Response) => {
             client.release();
         }
     } catch (error: unknown) {
-        logger.error('Error creating user', { 
+        logger.error('[Auth.Signup] General failure', { 
             error: error instanceof Error ? error.message : String(error), 
             email, 
             phoneNumber, 
@@ -423,7 +412,7 @@ export const login = async (req: Request, res: Response) => {
             user: mapUserToResponse(user)
         });
     } catch (error: unknown) {
-        logger.error('Login server error', { 
+        logger.error('[Auth.Login] Server error', { 
             error: error instanceof Error ? error.message : String(error), 
             identifier 
         });
@@ -440,7 +429,7 @@ export const getProfile = async (req: Request, res: Response) => {
         if (!user) return sendError(res, 404, 'User not found');
         return sendResponse(res, 200, true, 'Profile fetched', mapUserToResponse(user));
     } catch (error: unknown) {
-        logger.error('Error fetching profile:', {
+        logger.error('[Auth.GetProfile] Error fetching profile', {
             error: error instanceof Error ? error.message : String(error),
             userId: req.user?.id
         });
@@ -463,7 +452,7 @@ export const updateProfile = async (req: Request, res: Response) => {
 
         return sendResponse(res, 200, true, 'Profile updated', mapUserToResponse(updatedUser));
     } catch (error: unknown) {
-        logger.error('Error updating profile:', {
+        logger.error('[Auth.UpdateProfile] Error updating profile', {
             error: error instanceof Error ? error.message : String(error),
             userId: req.user?.id
         });
@@ -493,7 +482,7 @@ export const uploadProfileImage = async (req: Request, res: Response) => {
             user: mapUserToResponse(updatedUser)
         });
     } catch (error: unknown) {
-        logger.error('Error uploading profile image', { 
+        logger.error('[Auth.UploadProfileImage] Failure', { 
             userId: req.user?.id, 
             error: error instanceof Error ? error.message : String(error)
         });
@@ -526,7 +515,7 @@ export const changePassword = async (req: Request, res: Response) => {
 
         return sendResponse(res, 200, true, 'Password updated successfully');
     } catch (error: unknown) {
-        logger.error('Error changing password:', {
+        logger.error('[Auth.ChangePassword] Failure', {
             error: error instanceof Error ? error.message : String(error),
             userId: req.user?.id
         });
@@ -750,7 +739,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         if (errorMessage === 'TokenExpiredError') {
             return sendResponse(res, 401, false, 'Session expired. Please log in again.');
         }
-        logger.error('Refresh operation failed', {
+        logger.error('[Auth.RefreshToken] Detailed failure', {
             error: err instanceof Error ? err.message : String(err),
             userId: decoded?.id || 'unknown'
         });
@@ -775,8 +764,9 @@ export const logout = async (req: Request, res: Response) => {
             }
 
             // Fallback: Increment token_version for radical invalidation
+            // Institutional Fix: Use COALESCE to protect against NULL drifts
             await pool.query(
-                'UPDATE users SET token_version = token_version + 1, "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1',
+                'UPDATE users SET token_version = COALESCE(token_version, 0) + 1, "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1',
                 [user.id]
             );
 
@@ -819,8 +809,8 @@ export const heartbeat = async (req: Request, res: Response) => {
 };
 
 export const verifySession = async (req: Request, res: Response) => {
+    const user = req.user as JWTPayload;
     try {
-        const user = req.user as JWTPayload;
         const timeoutMinutes = await getSessionTimeoutMinutes();
         
         // Fetch fresh user data to ensure mapUserToResponse integrity
@@ -833,9 +823,9 @@ export const verifySession = async (req: Request, res: Response) => {
             sessionTimeout: timeoutMinutes
         });
     } catch (err: unknown) {
-        logger.error('Session verification failed', {
+        logger.error('[Auth.VerifySession] Failure', {
             error: err instanceof Error ? err.message : String(err),
-            userId: req.user?.id
+            userId: user?.id
         });
         return sendError(res, 500, 'Server error');
     }
@@ -853,9 +843,9 @@ export const getMe = async (req: Request, res: Response) => {
             user: dbUser ? mapUserToResponse(dbUser) : null
         });
     } catch (err: unknown) {
-        logger.error('Get profile failed', {
+        logger.error('[Auth.GetMe] Failure', {
             error: err instanceof Error ? err.message : String(err),
-            userId: req.user?.id
+            userId: (req.user as JWTPayload)?.id
         });
         return sendError(res, 500, 'Server error');
     }

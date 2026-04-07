@@ -24,9 +24,10 @@ type JwtPayloadStrict = {
 
 /**
  * Local Bridge Interface
+ * PHASE 7.3.2 — ZERO DRIFT: Standardizing on 'id' to match JWT and DB entities.
  */
 interface LocalJWTPayload extends GlobalJWTPayload {
-    user_id: string;
+    id: string; // Unified with JWT 'id'
 }
 
 /**
@@ -54,10 +55,13 @@ interface AuthUserRow {
  * FIX 2 — TYPE GUARD
  */
 function isLocalJWTPayload(user: unknown): user is LocalJWTPayload {
-    return typeof user === 'object' &&
+    return (
+        typeof user === 'object' &&
         user !== null &&
-        'user_id' in user &&
-        'role' in user;
+        'id' in user &&
+        'role' in user &&
+        'email' in user
+    );
 }
 
 /**
@@ -131,7 +135,6 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
              */
             const finalUserPayload: LocalJWTPayload = {
                 id: payload.id,
-                user_id: payload.id,
                 email: payload.email,
                 role: payload.role,
                 name: userData.name,
@@ -146,8 +149,11 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
 
             req.user = finalUserPayload;
             return next();
-        } catch {
-            logger.error('Session verification failed', { userId: payload.id });
+        } catch (error: unknown) {
+            logger.error('[Auth.Middleware.authenticateToken] Failure', { 
+                userId: payload.id,
+                error: error instanceof Error ? error.message : String(error)
+            });
             return sendError(res, 500, 'Server error');
         }
     });
@@ -176,7 +182,6 @@ export const relaxedAuthenticateToken = (inputReq: Request, res: Response, next:
 
             const finalUserPayload: LocalJWTPayload = {
                 id: payload.id,
-                user_id: payload.id,
                 email: payload.email,
                 role: payload.role,
                 name: '',
@@ -188,7 +193,10 @@ export const relaxedAuthenticateToken = (inputReq: Request, res: Response, next:
 
             req.user = finalUserPayload;
             return next();
-        } catch {
+        } catch (error: unknown) {
+            logger.error('[Auth.Middleware.relaxedAuthenticateToken] Graceful skip on error', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             return next();
         }
     });
@@ -199,7 +207,7 @@ export const requireRole = (allowedRole: string) => {
         const user = req.user;
         if (!isLocalJWTPayload(user) || user.role !== allowedRole) {
             await auditService.log({
-                userId: isLocalJWTPayload(user) ? user.user_id : SYSTEM_ANONYMOUS_ID,
+                userId: isLocalJWTPayload(user) ? user.id : SYSTEM_ANONYMOUS_ID,
                 actorRole: isLocalJWTPayload(user) ? user.role : undefined,
                 action: 'ACCESS_DENIED_RBAC',
                 ipAddress: req.ip,
@@ -216,7 +224,7 @@ export const authorizeRole = (roles: string[]) => {
         const user = req.user;
         if (!isLocalJWTPayload(user) || !roles.includes(user.role)) {
             await auditService.log({
-                userId: isLocalJWTPayload(user) ? user.user_id : SYSTEM_ANONYMOUS_ID,
+                userId: isLocalJWTPayload(user) ? user.id : SYSTEM_ANONYMOUS_ID,
                 actorRole: isLocalJWTPayload(user) ? user.role : undefined,
                 action: 'ACCESS_DENIED_RBAC_MULTI',
                 ipAddress: req.ip,
