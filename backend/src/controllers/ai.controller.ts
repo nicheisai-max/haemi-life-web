@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { clinicalCopilotService } from '../services/clinical-copilot.service';
 import { logger } from '../utils/logger';
 import { z } from 'zod';
+import { Content } from '@google/generative-ai'; // FIXED: Importing formal Content type
 
 /**
  * 🩺 HAEMI LIFE | INSTITUTIONAL AI CONTROLLER
@@ -12,7 +13,7 @@ import { z } from 'zod';
 // P0 Schema: Forensic payload check for AI prompts
 const aiPromptSchema = z.object({
     prompt: z.string().min(1, "Prompt is required").max(15000, "Prompt payload too large"),
-    context: z.array(z.any()).optional()
+    context: z.array(z.unknown()).optional() // FIXED: Replacing z.any() with z.unknown()
 });
 
 export class AIController {
@@ -38,7 +39,8 @@ export class AIController {
             const { prompt, context } = validation.data;
 
             // 🩺 EXECUTION: Primary SDK generation via 2.5 Pro Service
-            const responseText = await clinicalCopilotService.generateResponse(prompt, context);
+            // Institutional Sync: context is narrowed to Content[] for the SDK contract
+            const responseText = await clinicalCopilotService.generateResponse(prompt, (context || []) as Content[]);
 
             // 🔵 ARCHITECT SYNC: Universal Response Contract
             return res.status(200).json({ 
@@ -49,7 +51,7 @@ export class AIController {
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             
-            logger.error('[AIController] Gemini 2.5 Pro Generative AI Failure:', {
+            logger.error('[AI.Controller.ask] Gemini 2.5 Pro Generative AI Failure', {
                 error: errorMessage,
                 userId: req.user?.id
             });

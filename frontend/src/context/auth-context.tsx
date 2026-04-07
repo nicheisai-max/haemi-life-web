@@ -256,10 +256,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
 
+        // 🛡️ INSTITUTIONAL HARDENING: Storage Event Sync (Secondary Logout Signal)
+        // This ensures background/sleeping tabs also respond to logout via localStorage events.
+        const handleStorageChange = (event: StorageEvent) => {
+            if (event.key === 'haemi_logout_signal' && event.newValue) {
+                const signal = safeParseJSON(event.newValue, (val: unknown): val is { userId: string } => {
+                    return typeof val === 'object' && val !== null && 'userId' in val;
+                });
+                
+                if (signal && signal.userId === authStateRef.current.user?.id) {
+                    logger.info('[AuthSync] Logout signal detected in localStorage. Executing radical invalidation...');
+                    setAccessToken(null);
+                    sessionStorage.clear(); // Nuclear purge
+                    setAuthState(prev => ({ 
+                        ...prev,
+                        user: null, 
+                        token: null, 
+                        authStatus: 'unauthenticated'
+                    }));
+                }
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+
         return () => {
             if (authChannel) authChannel.close();
             window.removeEventListener('auth:unauthorized', handleUnauthorized);
             window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
+            window.removeEventListener('storage', handleStorageChange);
         };
     }, []); 
 
@@ -401,7 +426,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     typeof err === 'object' &&
                     err !== null &&
                     'isAxiosError' in err &&
-                    (err as { isAxiosError: unknown }).isAxiosError === true
+                    (err as { isAxiosError: boolean }).isAxiosError === true
                 );
             };
 
@@ -412,20 +437,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     logger.error('[Auth] Remote logout failed', { status: error.response?.status });
                 }
             } else {
-                logger.error('[Auth] Unknown error during remote logout', error);
+                logger.error('[Auth] Unknown error during remote logout', { error: String(error) });
             }
         }
 
 
-        // Phase 2: Broadcast to other tabs
+        // Phase 2: Broadcast to other tabs (Dual-Channel Propagation)
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
         if (!IS_DEMO_MODE && currentUserId) {
             try {
+                // A. BroadcastChannel for active tabs
                 const authChannel = new BroadcastChannel('haemi_auth_sync');
                 authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
                 authChannel.close();
+
+                // B. localStorage signal for background/sleeping tabs
+                localStorage.setItem('haemi_logout_signal', JSON.stringify({ userId: currentUserId, ts: Date.now() }));
+                // Cleanup signal immediately after trigger
+                setTimeout(() => localStorage.removeItem('haemi_logout_signal'), 500);
+
+                logger.info('[AuthSync] Global logout signals emitted.');
             } catch (err) {
-                logger.error('[AuthSync] Logout broadcast failure insulated', err);
+                logger.error('[AuthSync] Logout broadcast failure insulated', { error: String(err) });
             }
         }
 
