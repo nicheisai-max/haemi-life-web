@@ -51,7 +51,7 @@ const getJwtSecret = (): string => {
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       logger.error('CRITICAL: JWT_SECRET is not configured in environment variables');
-      return 'UNSET_SECRET_INTERNAL_FAILSAFE';
+      return 'HAEMI_LIFE_INTEGRITY_FAILSAFE';
     }
     return secret;
 };
@@ -807,7 +807,7 @@ export const logout = async (req: Request, res: Response) => {
         });
     }
 
-    return sendResponse(res, 204, true, 'Logged out successfully');
+    return sendResponse(res, 200, true, 'Logged out successfully');
 };
 
 export const heartbeat = async (req: Request, res: Response) => {

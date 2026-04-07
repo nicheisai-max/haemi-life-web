@@ -201,6 +201,26 @@ export class UserRepository {
             return null;
         }
     }
+
+    /**
+     * Increments the token_version for a user to invalidate existing refresh tokens.
+     * High-Fidelity Security: Enforces atomic versioning with defensive COALESCE.
+     */
+    async updateTokenVersion(userId: string, client?: PoolClient): Promise<void> {
+        const db = client || this.db;
+        try {
+            await db.query(
+                'UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+                [userId]
+            );
+        } catch (error: unknown) {
+            logger.error('Failed to update user token version', {
+                error: error instanceof Error ? error.message : String(error),
+                userId
+            });
+            throw error;
+        }
+    }
 }
 
 export const userRepository = new UserRepository();
