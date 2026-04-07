@@ -451,7 +451,7 @@ api.interceptors.response.use(
         if (isExpectedAuthFailure && error.response) {
             const data = error.response.data;
             const msg = isErrorResponseData(data) ? data.message || error.message : error.message;
-            return Promise.reject(new AuthError(msg, error.response.status, true));
+            return Promise.reject(new AuthError(msg, error.response.status));
         }
 
         // 3. 401 Handling with Request Queuing System (Mutex Locked)
@@ -513,8 +513,15 @@ api.interceptors.response.use(
             return api(originalRequest);
         }
 
-        if (error.response?.status === 403 && originalRequest.url?.includes('/auth/login')) {
-            clearAuthSession();
+        if (error.response?.status === 403) {
+            // Institutional Hardening: Only clear session on 403 if we actually have a session to clear.
+            // This prevents boot-time redirect loops in E2E tests for unauthenticated probes.
+            if (accessToken) {
+                logger.warn('[API] Forbidden access detected on authenticated session. Executing security logout.');
+                clearAuthSession();
+            } else {
+                logger.error('[API] Forbidden access (403) on unauthenticated request.', { url: originalRequest.url });
+            }
         }
 
         return Promise.reject(error);
