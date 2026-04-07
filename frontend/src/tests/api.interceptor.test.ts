@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
 import MockAdapter from 'axios-mock-adapter';
-import api, { setAppInitialized } from '../services/api';
+import api, { setAppInitialized, setAccessToken } from '../services/api';
 
 describe('Global Axios Interceptors (api.ts)', () => {
     let mock: MockAdapter;
@@ -30,6 +30,7 @@ describe('Global Axios Interceptors (api.ts)', () => {
     it('should force logout on 403 Forbidden', async () => {
         // Mock a 403 response
         mock.onGet('/admin-dashboard').reply(403);
+        setAccessToken('mock-session-token'); // Institutional sync: ensure we have a session to clear
 
         // Listen to custom event to prove clearAuthSession fired
         const spyEvent = vi.fn();
@@ -51,6 +52,6 @@ describe('Global Axios Interceptors (api.ts)', () => {
         mock.onGet('/flaky').replyOnce(502).onGet('/flaky').reply(200, { success: true, data: { msg: 'ok' } });
 
         const res = await api.get('/flaky');
-        expect(res.data.msg).toBe('ok');
+        expect(res.data.data.msg).toBe('ok');
     });
 });
