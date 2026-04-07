@@ -56,7 +56,7 @@ test.describe('Authentication E2E Lifecycle', () => {
 
     // TEST CASE 2
     test('Invalid credentials display error & block redirect', async ({ page }) => {
-        await page.getByLabel(/email|phone/i).fill('wrong@user.com');
+        await page.getByPlaceholder(/user@example\.com/i).fill('wrong@user.com');
         await page.locator('input[type="password"]').fill('badpass');
         await page.getByRole('button', { name: /sign in/i }).click();
 
@@ -72,7 +72,7 @@ test.describe('Authentication E2E Lifecycle', () => {
     // TEST CASE 3 & 6: Expired access token auto-refresh
     test('Simulate Expired Access Token (Auto-Refresh)', async ({ page }) => {
         // Login first
-        await page.getByLabel(/email|phone/i).fill(TEST_EMAIL);
+        await page.getByPlaceholder(/user@example\.com/i).fill(TEST_EMAIL);
         await page.locator('input[type="password"]').fill(TEST_PASSWORD);
         await page.getByRole('button', { name: /sign in/i }).click();
         await expect(page).toHaveURL(/.*admin|.*dashboard/, { timeout: 25000 });
@@ -96,7 +96,7 @@ test.describe('Authentication E2E Lifecycle', () => {
     // TEST CASE 4: Expired refresh token forces logout
     test('Simulate Expired Refresh Token (Forced Logout)', async ({ page }) => {
         // Login first
-        await page.getByLabel(/email|phone/i).fill(TEST_EMAIL);
+        await page.getByPlaceholder(/user@example\.com/i).fill(TEST_EMAIL);
         await page.locator('input[type="password"]').fill(TEST_PASSWORD);
         await page.getByRole('button', { name: /sign in/i }).click();
         await expect(page).toHaveURL(/.*admin|.*dashboard/, { timeout: 25000 });
@@ -126,6 +126,9 @@ test.describe('Authentication E2E Lifecycle', () => {
         // The 3rd time let it pass through (backend "recovered")
 
         await page.goto('/login');
+        
+        // Institutional Bypass: Ensure onboarding doesn't obscure the login form
+        await page.getByRole('button', { name: /skip/i }).click({ timeout: 5000 }).catch(() => {});
 
         // Wait for page to finish loading
         // We shouldn't crash or get stuck in a white screen.
