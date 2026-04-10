@@ -9,7 +9,8 @@ import {
     Package,
     Activity,
     Search,
-    Video
+    Video,
+    BarChart3
 } from 'lucide-react';
 import { useAuth } from './use-auth';
 import { PATHS } from '../routes/paths';
@@ -33,6 +34,7 @@ export const useNavigation = () => {
             { icon: LayoutDashboard, label: 'Dashboard', path: PATHS.DOCTOR.DASHBOARD },
             { icon: Calendar, label: 'Schedule', path: PATHS.DOCTOR.SCHEDULE },
             { icon: Users, label: 'Patients', path: PATHS.DOCTOR.PATIENTS },
+            { icon: BarChart3, label: 'Clinical Reports', path: PATHS.DOCTOR.REPORTS },
             { icon: Settings, label: 'Settings', path: PATHS.SETTINGS },
         ],
         pharmacist: [

@@ -43,7 +43,7 @@ jobs:
 
       - name: ⚖️ Governance Budget Audit
         run: |
-          ALLOWED_FILES=("agent_contract.ts" "agent_watchdog.ts" "branch_guard.ts" "repo-hygiene.ts" "safe-dev.ts" "safe_push.ps1" "schema_guard.ts")
+          ALLOWED_FILES=("agent-contract.ts" "agent-watchdog.ts" "branch-guard.ts" "repo-hygiene.ts" "safe-dev.ts" "safe-push.ps1" "schema-guard.ts")
           ACTUAL_FILES=$(ls scripts/ | grep -v "^\.")
           for FILE in $ACTUAL_FILES; do
             FOUND=false
@@ -68,7 +68,7 @@ jobs:
         run: npm run lint
 
       - name: Governance Contract Check
-        run: npx tsx scripts/agent_contract.ts
+        run: npx tsx scripts/agent-contract.ts
 
       - name: Governance Watchdog Audit
-        run: npx tsx scripts/agent_watchdog.ts
+        run: npx tsx scripts/agent-watchdog.ts

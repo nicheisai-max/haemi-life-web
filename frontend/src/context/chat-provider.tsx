@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatContext } from './chat-context';
 import { useAuth } from '../hooks/use-auth';
-import api from '../services/api';
+import api, { getAccessToken } from '../services/api';
 import { decrypt } from '../utils/security';
 import { socketService, type ServerToClientEvents } from '../services/socket.service';
 import { 
@@ -14,10 +14,15 @@ import {
     RawParticipant,
     normalizeParticipant,
     ChatApiResponse,
-    ParticipantMetadata
+    ParticipantMetadata,
+    UserId,
+    MessageId,
+    ConversationId,
+    MessageReadEvent
 } from '../types/chat';
 import { logger } from '../utils/logger';
 import { storageService } from '../services/storage.service';
+import { ApiResponse } from '../types/auth.types';
 import axios from 'axios';
 
 
@@ -27,8 +32,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(false);
-    const [typingUsers, setTypingUsers] = useState<string[]>([]);
-    const [presence, setPresence] = useState<Record<string, PresenceRecord>>({});
+    const [typingUsers, setTypingUsers] = useState<UserId[]>([]);
+    const [presence, setPresence] = useState<Record<UserId, PresenceRecord>>({});
     // Defensive check to ensure state is in scope for async handlers
     if (typeof typingUsers === 'undefined') {
         logger.warn('[ChatProvider] Emergency state recovery triggered');
@@ -40,6 +45,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const lastReadRequestRef = useRef<Record<string, number>>({});
     const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
     const isMountedRef = useRef(true);
+    const syncRetryCountRef = useRef<number>(0);
+    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -61,14 +68,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const fetchPresenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const activePresenceRequestRef = useRef<Promise<void> | null>(null);
-    const pendingPresenceIdsRef = useRef<Set<string>>(new Set());
+    const pendingPresenceIdsRef = useRef<Set<UserId>>(new Set());
 
-    const fetchPresence = useCallback(async (userIds: string[]) => {
+    const fetchPresence = useCallback(async (userIds: UserId[]) => {
         if (!userIds || userIds.length === 0) return;
 
         // 1. Add to pending queue
         // P0 PROTOCOL: EXACT ID MATCHING (NO NORMALIZATION)
-        userIds.forEach(id => pendingPresenceIdsRef.current.add(String(id)));
+        userIds.forEach(id => pendingPresenceIdsRef.current.add(String(id) as UserId));
 
         // 2. Clear existing timeout to debounce
         if (fetchPresenceTimeoutRef.current) clearTimeout(fetchPresenceTimeoutRef.current);
@@ -131,13 +138,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const hydrate = async (): Promise<void> => {
             try {
+                // 🔒 INSTITUTIONAL SESSION ISOLATION (D14)
+                // Audit the outbox for messages belonging to other users.
+                // This prevents cross-session leakage during rapid user switching.
+                const outbox = await storageService.getPendingMessages();
+                if (outbox.length > 0) {
+                    const foreignMessages = outbox.filter(m => m.senderId !== user.id);
+                    if (foreignMessages.length > 0) {
+                        logger.warn(`[ChatProvider] Security: Purging ${foreignMessages.length} foreign outbox messages from previous session.`);
+                        for (const msg of foreignMessages) {
+                            await storageService.removePendingMessage(msg.id as MessageId);
+                        }
+                    }
+                }
+
                 const localConversations = await storageService.getAllConversations();
                 if (localConversations.length > 0 && isMountedRef.current) {
                     setConversations(localConversations);
                     logger.info(`[ChatProvider] Hydrated ${localConversations.length} conversations from IndexedDB`);
                     
                     // Fetch presence for hydrated participants
-                    const partIds = [...new Set(localConversations.flatMap(c => c.participants.map(p => p.id)))];
+                    const partIds = [...new Set(localConversations.flatMap(c => c.participants.map(p => p.id as UserId)))];
                     if (partIds.length > 0) fetchPresence(partIds);
                 }
             } catch (err: unknown) {
@@ -149,7 +170,37 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hydrate();
     }, [isAuthenticated, user?.id, fetchPresence]);
 
-    const fetchConversations = useCallback(async () => {
+    // ─── D12 REMEDIATION: Presence Polling Fallback ─────────────────────────
+    // When the socket is disconnected (NAT blip, server restart), presence data
+    // goes stale. This effect provides a 15-30s polling window as a secondary
+    // transport, only active when socketService.isConnected() is false.
+    const syncPresenceFallback = useCallback(() => {
+        if (!isAuthenticated || !user?.id) return;
+        
+        if (!socketService.isConnected()) {
+            const participantIds = [...new Set(conversations.flatMap(c => c.participants.map(p => p.id as UserId)))];
+            if (participantIds.length > 0) {
+                fetchPresence(participantIds);
+                logger.info(`[ChatProvider] Reactive presence sync triggered (${participantIds.length} users)`);
+            }
+        }
+    }, [isAuthenticated, user, conversations, fetchPresence]);
+
+    useEffect(() => {
+        if (!isAuthenticated || !user?.id) return;
+
+        // P0: Immediate reactive sync on disconnect to eliminate the 30s lag
+        socketService.on('disconnect', syncPresenceFallback);
+        
+        const intervalId = setInterval(syncPresenceFallback, 30000); // 30s institutional window
+        
+        return () => {
+            socketService.off('disconnect', syncPresenceFallback);
+            clearInterval(intervalId);
+        };
+    }, [isAuthenticated, user?.id, syncPresenceFallback]);
+
+    const internalFetchConversations = useCallback(async (): Promise<Conversation[] | void> => {
         if (!isAuthenticated) return;
         const controller = getAbortController('fetchConversations');
         try {
@@ -194,24 +245,33 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             // Fetch initial presence for all unique participants
-            const participantIds = [...new Set(uniqueConversations.flatMap((c: Conversation) => c.participants.map(p => p.id)))];
+            const participantIds = [...new Set(uniqueConversations.flatMap((c: Conversation) => c.participants.map(p => p.id as UserId)))];
             if (participantIds.length > 0) {
                 fetchPresence(participantIds);
             }
+
+            return uniqueConversations;
         } catch (err: unknown) {
             if (axios.isCancel(err)) return; // Tactical suppression of network aborts
             const errorMessage = err instanceof Error ? err.message : String(err);
             logger.error('[ChatProvider] Failed to fetch conversations:', errorMessage);
+        } finally {
+            // P0: Escape hatch to prevent indefinite loading hang on "Securing clinical data..." 
+            if (isMountedRef.current) setLoading(false);
         }
     }, [isAuthenticated, fetchPresence, getAbortController]);
 
-    const loadMessages = useCallback(async (conversationId: string) => {
+    const fetchConversations = useCallback(async (): Promise<void> => {
+        await internalFetchConversations();
+    }, [internalFetchConversations]);
+
+    const loadMessages = useCallback(async (conversationId: ConversationId) => {
         setLoading(true);
         const controller = getAbortController(`loadMessages:${conversationId}`);
         
         try {
             // 1. Local-First: Load from IndexedDB immediately
-            const localMessages = await storageService.getMessagesByConversation(conversationId);
+            const localMessages = await storageService.getMessagesByConversation(conversationId as ConversationId);
             if (localMessages.length > 0 && isMountedRef.current) {
                 setMessages(localMessages);
                 // Background task: delivered/read status updates can happen later
@@ -233,12 +293,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     ...msg,
                     content: await decrypt(msg.content),
                     isMe: msg.senderId === user?.id,
-                    attachments: (msg.attachments || []).map((att: Attachment & { originalName?: string }) => ({
-                        url: att.url || '',
-                        type: att.type || '',
-                        name: att.name || att.originalName || 'attachment',
-                        size: typeof att.size === 'number' ? att.size : 0
-                    })),
+                    attachments: (msg.attachments || []).map((att: Attachment & { id?: string; url?: string; originalName?: string; name?: string; type?: string; size?: number }) => {
+                        const rawName = att.name || att.originalName || 'attachment';
+                        const safeName = rawName.replace(/\\/g, '/').split('/').pop() || 'attachment';
+                        return {
+                            id: att.id || `legacy-${Date.now()}-${Math.random()}`,
+                            url: att.url || (att.id ? `/api/files/message/${att.id}` : ''),
+                            type: att.type || 'application/octet-stream',
+                            name: safeName,
+                            size: typeof att.size === 'number' ? att.size : 0
+                        };
+                    }),
                     replyTo: msg.replyTo ? {
                         ...msg.replyTo,
                         content: await decrypt(msg.replyTo.content)
@@ -262,15 +327,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // ─── PERSISTENCE ─────────────────────────────────────────
             // Update local IndexedDB with latest server state
             if (user?.id) {
-                storageService.putMessages(sortedMessages, user.id).catch((err: unknown) => {
+                storageService.putMessages(sortedMessages, user.id as UserId).catch((err: unknown) => {
                     logger.error('[ChatProvider] Message persistence failed:', err instanceof Error ? err.message : String(err));
                 });
             }
 
             if (sortedMessages.some(m => !m.isMe && m.status === 'sent')) {
-                api.put(`/chat/conversations/${conversationId}/delivered`).catch(() => { });
+                api.put<ApiResponse<void>>(`/chat/conversations/${conversationId}/delivered`).catch((err: unknown) => {
+                    logger.error('[ChatProvider] Delivered status sync failed:', err instanceof Error ? err.message : String(err));
+                });
             }
-            await api.put(`/chat/conversations/${conversationId}/read`);
+            await api.put<ApiResponse<void>>(`/chat/conversations/${conversationId}/read`);
         } catch (err: unknown) {
             if (axios.isCancel(err)) return; // Tactical suppression of network aborts
             logger.error('[ChatProvider] Failed to load messages:', err instanceof Error ? err.message : String(err));
@@ -287,7 +354,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const onUserStatus: ServerToClientEvents["userStatus"] = (data) => {
             setPresence(prev => ({
                 ...prev,
-                [data.userId]: { isOnline: data.isOnline, lastActivity: data.lastActivity }
+                [data.userId]: { isOnline: data.isOnline, last_activity: data.last_activity }
             }));
         };
 
@@ -314,27 +381,71 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         };
 
-        const onTypingStarted: ServerToClientEvents["typingStarted"] = (data) => {
-            setTypingUsers((prev) => [...new Set([...prev, data.name])]);
+        const onTypingStarted = (data: { userId: UserId; conversationId: ConversationId; name: string }) => {
+            setTypingUsers((prev) => [...new Set([...prev, data.userId])]);
         };
 
-        const onTypingStopped: ServerToClientEvents["typingStopped"] = (data) => {
-            setTypingUsers((prev) => prev.filter(name => name !== data.name));
+        const onTypingStopped = (data: { userId: UserId; conversationId: ConversationId; name: string }) => {
+            setTypingUsers((prev) => prev.filter(id => id !== data.userId));
         };
 
 
-        const onMessageRead: ServerToClientEvents["messageRead"] = ({ messageId }) => {
-            setMessages(prev => prev.map(msg =>
-                msg.id === messageId ? { ...msg, status: 'read', isRead: true } : msg
-            ));
+        const onMessageRead = ({ conversationId, messageIds }: MessageReadEvent) => {
+            if (activeConversationRef.current?.id === conversationId) {
+                setMessages(prev => prev.map(msg =>
+                    messageIds.includes(msg.id) ? { ...msg, status: 'read', isRead: true } : msg
+                ));
+            }
+            // Batched sync to storage
+            storageService.markMessagesRead(messageIds, new Date().toISOString());
         };
 
-        const onMessageDeleted: ServerToClientEvents["messageDeleted"] = ({ messageId }) => {
+        const onMessageDelivered = ({ conversationId, messageIds }: { conversationId: ConversationId; messageIds: MessageId[] }) => {
+            if (activeConversationRef.current?.id === conversationId) {
+                setMessages(prev => prev.map(msg =>
+                    messageIds.includes(msg.id) ? { ...msg, status: 'delivered' } : msg
+                ));
+            }
+            // Batched sync to storage
+            storageService.markMessagesDelivered(messageIds);
+        };
+
+        const onMessageDeleted: ServerToClientEvents["messageDeleted"] = ({ messageId, conversationId, newLastMessage }) => {
             // P6: Propagation of deletion across thread + sidebar
             setMessages(prev => prev.filter(m => m.id !== messageId));
-            setConversations(prev => prev.map(c =>
-                c.lastMessageId === messageId ? { ...c, lastMessage: 'Message deleted' } : c
-            ));
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId && c.lastMessageId === messageId) {
+                    return { 
+                        ...c, 
+                        lastMessage: newLastMessage?.content || 'Message deleted',
+                        lastMessageId: newLastMessage?.id || c.lastMessageId,
+                        lastMessageAt: newLastMessage?.createdAt || c.lastMessageAt
+                    };
+                }
+                return c;
+            }));
+        };
+
+        // ─── D2 REMEDIATION: "Delete for Me" Private Multi-Tab Sync ────────────────
+        const onLocalMessageDeleted: ServerToClientEvents['localMessageDeleted'] = ({
+            messageId,
+            conversationId,
+            newLastMessage
+        }) => {
+            setMessages(prev => prev.filter(m => m.id !== messageId));
+            // Mirror the sidebar preview update so every tab stays consistent.
+            setConversations(prev =>
+                prev.map(c =>
+                    c.id === conversationId && c.lastMessageId === messageId
+                        ? { 
+                            ...c, 
+                            lastMessage: newLastMessage?.content || 'Message deleted',
+                            lastMessageId: newLastMessage?.id || c.lastMessageId,
+                            lastMessageAt: newLastMessage?.createdAt || c.lastMessageAt
+                          }
+                        : c
+                )
+            );
         };
 
         const onMessageReaction: ServerToClientEvents["messageReaction"] = (data) => {
@@ -358,27 +469,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const decryptedContent = await decrypt(message.content);
             const decryptedReplyContent = message.replyTo ? await decrypt(message.replyTo.content) : undefined;
 
-            const formattedMessage = {
+            const formattedMessage: Message = {
                 ...message,
                 content: decryptedContent,
                 isMe: message.senderId === user?.id,
-                attachments: (() => {
-                    if (!Array.isArray(message.attachments)) {
-                        logger.error("Invalid attachments payload (socket)");
-                        return [];
-                    }
-                    return message.attachments
-                })().reduce((acc: Attachment[], att) => {
-                    if (att.url && att.type && att.name && typeof att.size === 'number') {
-                        acc.push({
-                            url: att.url,
-                            type: att.type,
-                            size: att.size,
-                            name: att.name
-                        });
-                    }
-                    return acc;
-                }, []),
+                attachments: (message.attachments || []).map((att: Attachment) => {
+                    // Phase 12: Permissive Normalization - Fallback to defaults instead of dropping data
+                    const rawName = att.name || 'attachment';
+                    const safeName = rawName.replace(/\\/g, '/').split('/').pop() || 'attachment';
+                    
+                    return {
+                        id: att.id || `legacy-${Date.now()}-${Math.random()}`,
+                        url: att.url || (att.id ? `/api/files/message/${att.id}` : ''),
+                        type: att.type || 'application/octet-stream',
+                        size: typeof att.size === 'number' ? att.size : 0,
+                        name: safeName
+                    };
+                }),
                 replyTo: message.replyTo && decryptedReplyContent
                     ? { ...message.replyTo, content: decryptedReplyContent }
                     : undefined
@@ -386,20 +493,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // 1. Update Active Message List with Hardened Deduplication & Sorting
             if (activeConversationRef.current && message.conversationId === activeConversationRef.current.id) {
-                setMessages((prev) => {
+                setMessages((prev: Message[]) => {
                     // Exact ID match check
-                    const exists = prev.some(m => m.id === message.id);
+                    const exists = prev.some((m: Message) => m.id === message.id);
                     if (exists) {
                         // Update status if it's our own optimistic message coming back
-                        return prev.map(m => m.id === message.id ? { ...m, status: message.status } : m);
+                        return prev.map((m: Message) => m.id === message.id ? { ...m, status: message.status } : m);
                     }
 
-                    // SEARCH MATCH: Check for optimistic message that matches by sequence and sender
-                    const optMatch = prev.find(m =>
-                        String(m.id).startsWith('opt-') &&
-                        m.sequenceNumber === message.sequenceNumber &&
-                        m.senderId === message.senderId
-                    );
+                // SEARCH MATCH: Check for optimistic message that matches by sequence and sender
+                const optMatch = prev.find(m =>
+                    String(m.id).startsWith('opt-') &&
+                    m.sequenceNumber === message.sequenceNumber &&
+                    m.senderId === message.senderId
+                );
 
                     let newMessages;
                     if (optMatch) {
@@ -418,43 +525,57 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 });
             }
 
-            // 2. State-Safe Conversation List Update
-            setConversations(prev => {
-                const index = prev.findIndex(c => c.id === message.conversationId);
+            // 2. State-Safe Conversation List Update (Atomic Shuffling)
+            setConversations((prev: Conversation[]) => {
+                const index = prev.findIndex((c: Conversation) => c.id === message.conversationId);
+                const lastMsgPreview = decryptedContent || (message.attachments && message.attachments.length > 0 ? '📎 Attachment' : 'New message');
+                
                 if (index === -1) {
-                    // New conversation discovered - schedule fetch
+                    // Phase 12: Atomic Discovery - schedule full sync but return prev to avoid jumpiness
+                    // The backend fetchConversations call will merge this new thread correctly.
                     fetchConversations();
                     return prev;
                 }
+
                 const newConversations = [...prev];
-                const target = newConversations[index];
+                const target = { ...newConversations[index] };
 
                 const isUnread = message.senderId !== user?.id && activeConversationRef.current?.id !== message.conversationId;
 
                 newConversations[index] = {
                     ...target,
                     unreadCount: isUnread ? (target.unreadCount || 0) + 1 : target.unreadCount,
-                    lastMessage: decryptedContent,
-                    lastMessageAt: message.createdAt
+                    lastMessage: lastMsgPreview,
+                    lastMessageAt: message.createdAt,
+                    lastMessageId: message.id
                 };
 
-                // Update last sync timestamp
-                if (new Date(message.createdAt) > new Date(lastSyncRef.current)) {
-                    lastSyncRef.current = message.createdAt;
-                }
-
-                const [moved] = newConversations.splice(index, 1);
-                return [moved, ...newConversations];
+                // Re-order: Move updated conversation to the top
+                const updatedConv = newConversations.splice(index, 1)[0];
+                return [updatedConv, ...newConversations];
             });
 
             // 3. ENTERPRISE ACKNOWLEDGEMENT FLOW (Delivery & Read)
             if (message.senderId !== user?.id) {
                 if (activeConversationRef.current?.id === message.conversationId) {
-                    socketService.emit('messageRead', { messageId: message.id, userId: user?.id || '' });
-                    api.put(`/chat/conversations/${message.conversationId}/read`).catch(() => { });
+                    socketService.emit('messageRead', { 
+                        conversationId: message.conversationId, 
+                        messageIds: [message.id], 
+                        userId: user!.id as UserId 
+                    });
+                    api.put<ApiResponse<void>>(`/chat/conversations/${message.conversationId}/read`).catch((err: unknown) => {
+                        logger.error('[ChatProvider] Read receipt sync failed:', err instanceof Error ? err.message : String(err));
+                    });
                 } else {
-                    socketService.emit('ackDelivery', { conversationId: message.conversationId, messageId: message.id });
-                    api.put(`/chat/conversations/${message.conversationId}/delivered`).catch(() => { });
+                    socketService.emit('ackDelivery', { 
+                        conversationId: message.conversationId, 
+                        messageId: message.id,
+                        senderId: user!.id as UserId,
+                        senderRole: (user?.role as string) || 'patient'
+                    });
+                    api.put<ApiResponse<void>>(`/chat/conversations/${message.conversationId}/delivered`).catch((err: unknown) => {
+                        logger.error('[ChatProvider] Delivery acknowledgement failed:', err instanceof Error ? err.message : String(err));
+                    });
                 }
             }
         };
@@ -463,91 +584,192 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         socketService.on('typingStarted', onTypingStarted);
         socketService.on('typingStopped', onTypingStopped);
         socketService.on('messageRead', onMessageRead);
+        socketService.on('messageDelivered', onMessageDelivered); // NEW: Batched Sync
         socketService.on('messageReceived', onReceiveMessage);
         socketService.on('messageDeleted', onMessageDeleted);
         socketService.on('messageReaction', onMessageReaction);
         socketService.on('userStatus', onUserStatus);
         socketService.on('reconnect', syncMissedMessages);
+        socketService.on('localMessageDeleted', onLocalMessageDeleted);
 
-        // Initial fetch
-        fetchConversations();
+        // ─── D9 REMEDIATION: Token Refresh-on-Reconnect ──────────────────────────
+        // socket.io-client freezes `socket.auth` at the moment `connect()` is first
+        // called. After a proactive token rotation the in-memory credential in api.ts
+        // is fresh, but the socket still holds the original stale token in its
+        // auth closure. `reconnect_attempt` fires BEFORE each connection handshake,
+        // giving us the correct window to push the freshest token to the socket.
+        const onReconnectAttempt = (_attempt: number): void => {
+            const freshToken = getAccessToken();
+            if (freshToken !== null) {
+                socketService.updateAuthToken(freshToken);
+            }
+        };
+        socketService.on('reconnect_attempt', onReconnectAttempt);
+
+        // ─── Phase 14: Token Hydration Safety Guard ─────────────────────────────
+        // Root Cause (2026-04-09): `isAuthenticated` transitions to `true` during a
+        // proactive refresh cycle BEFORE the fresh token is written to the in-memory
+        // `accessToken` closure in api.ts. In this window, `fetchConversations()`
+        // fires without a valid Authorization header → spurious 401 on /chat/conversations.
+        //
+        // Fix: Validate the current token before the initial fetch. If within the
+        // near-death threshold (<= 10s), defer until the `auth:token-refreshed`
+        // CustomEvent confirms a fresh credential is available in memory.
+        const TOKEN_NEAR_DEATH_THRESHOLD_MS = 10_000 as const;
+
+        const isViableToken = (rawToken: string | null): boolean => {
+            if (!rawToken) return false;
+            try {
+                const parts = rawToken.split('.');
+                if (parts.length !== 3) return false;
+                const part1 = parts[1];
+                if (!part1) return false;
+                const payload: unknown = JSON.parse(
+                    atob(part1.replace(/-/g, '+').replace(/_/g, '/'))
+                );
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    !('exp' in payload) ||
+                    typeof (payload as { exp: unknown }).exp !== 'number'
+                ) return false;
+                return ((payload as { exp: number }).exp * 1000) > (Date.now() + TOKEN_NEAR_DEATH_THRESHOLD_MS);
+            } catch {
+                return false;
+            }
+        };
+
+        const currentToken = token ?? sessionStorage.getItem('token');
+        let deferredFetchListener: (() => void) | null = null;
+
+        if (isViableToken(currentToken)) {
+            // Token is healthy — fire the initial fetch immediately
+            fetchConversations();
+        } else {
+            // Token is absent or within near-death window — defer until refresh confirms
+            logger.info('[ChatProvider] Token near-death or absent. Deferring fetchConversations until auth:token-refreshed fires.');
+            const onTokenRefreshed = (): void => { fetchConversations(); };
+            deferredFetchListener = onTokenRefreshed;
+            window.addEventListener('auth:token-refreshed', onTokenRefreshed, { once: true });
+        }
 
         return () => {
             socketService.off('userStatus', onUserStatus);
             socketService.off('typingStarted', onTypingStarted);
             socketService.off('typingStopped', onTypingStopped);
             socketService.off('messageRead', onMessageRead);
+            socketService.off('messageDelivered', onMessageDelivered);
             socketService.off('messageReceived', onReceiveMessage);
             socketService.off('messageDeleted', onMessageDeleted);
             socketService.off('messageReaction', onMessageReaction);
+            // D2 + D9 REMEDIATION: Deregister the two new handlers on unmount / auth-loss
+            socketService.off('localMessageDeleted', onLocalMessageDeleted);
+            socketService.off('reconnect_attempt', onReconnectAttempt);
+
+            // Deferred fetch cleanup: remove stale listener if component unmounts before
+            // the refresh cycle completes. `{ once: true }` auto-removes on fire,
+            // but this guards pre-fire unmount scenarios explicitly.
+            if (deferredFetchListener !== null) {
+                window.removeEventListener('auth:token-refreshed', deferredFetchListener);
+                deferredFetchListener = null;
+            }
 
             // P0: Physical Disconnection on unmount/auth-loss
-            // This ensures the backend disconnect event fires immediately
+            // This ensures the backend disconnect event fires immediately.
             socketService.disconnect();
         };
-    }, [isAuthenticated, user?.id, token, fetchConversations]);
 
-    // ─── Phase 3: Background Outbox Sync ──────────────────────────────────────
+    }, [isAuthenticated, user, token, fetchConversations]);
+
+    // ─── Phase 3: Hardened Outbox Sync (Exponential Backoff) ──────────────────
     useEffect(() => {
         if (!isAuthenticated || !user?.id) return;
 
         const syncOutbox = async () => {
-            const pending = await storageService.getPendingMessages();
-            if (pending.length === 0) return;
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
-            logger.info(`[ChatProvider] 🔄 Found ${pending.length} pending messages in Outbox. Attempting sync...`);
+            const pending = await storageService.getPendingMessages();
+            if (pending.length === 0) {
+                syncRetryCountRef.current = 0; // Reset on clean outbox
+                return;
+            }
+
+            logger.info(`[ChatProvider] 🔄 Outbox sync attempt ${syncRetryCountRef.current + 1} (${pending.length} messages)`);
+
+            let hasTerminalFailure = false;
 
             for (const msg of pending) {
                 try {
-                    // Stripped down send logic for outbox retry
-                    await api.post('/chat/messages', {
+                    await api.post<ApiResponse<Message>>('/chat/messages', {
                         conversationId: msg.conversationId,
                         content: msg.content,
                         messageType: msg.messageType,
-                        attachment: msg.attachments && msg.attachments.length > 0 ? {
-                            url: msg.attachments[0].url,
-                            type: msg.attachments[0].type,
-                            originalName: msg.attachments[0].name
-                        } : undefined,
+                        attachments: msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => ({
+                            url: att.url,
+                            type: att.type,
+                            originalName: att.name
+                        })) : undefined,
                         replyToId: msg.replyToId
                     });
 
-                    // Success: Remove from Outbox
                     await storageService.removePendingMessage(msg.id);
-                    logger.info(`[ChatProvider] ✓ Outbox message ${msg.id} synced successfully`);
+                    logger.info(`[ChatProvider] ✓ Outbox sync success: ${msg.id}`);
                 } catch (err: unknown) {
-                    logger.warn(`[ChatProvider] ❌ Outbox sync failed for ${msg.id}. Will retry later.`, err);
+                    const status = axios.isAxiosError(err) ? err.response?.status : null;
+                    const isTerminal = status === 400 || status === 401 || status === 403;
+                    
+                    if (isTerminal) {
+                        logger.error(`[ChatProvider] ❌ Terminal outbox failure (${status}) for ${msg.id}. Halting sync.`);
+                        hasTerminalFailure = true;
+                        break; 
+                    }
+                    
+                    const errorMsg = err instanceof Error ? err.message : String(err);
+                    logger.warn(`[ChatProvider] ! Transient outbox failure for ${msg.id}: ${errorMsg}`);
                 }
+            }
+
+            if (!hasTerminalFailure && isMountedRef.current) {
+                // Schedule next retry with exponential backoff + jitter
+                syncRetryCountRef.current++;
+                const baseDelay = Math.min(1000 * Math.pow(2, syncRetryCountRef.current), 60000);
+                const jitter = Math.floor(Math.random() * 1000);
+                const finalDelay = baseDelay + jitter;
+
+                logger.info(`[ChatProvider] Next outbox sync in ${Math.round(finalDelay/1000)}s...`);
+                syncTimeoutRef.current = setTimeout(syncOutbox, finalDelay);
             }
         };
 
-        // Sync on mount and when coming back online
+        // Initial trigger
         syncOutbox();
+
         window.addEventListener('online', syncOutbox);
-        return () => window.removeEventListener('online', syncOutbox);
+        return () => {
+            window.removeEventListener('online', syncOutbox);
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        };
     }, [isAuthenticated, user?.id]);
 
     const sendMessage = async (
         content: string,
-        conversationId: string,
-        attachmentUrl?: string,
-        attachmentType?: string,
-        replyToId?: string,
-        attachmentName?: string
+        conversationId: ConversationId,
+        attachments: Attachment[] = [],
+        replyToId?: string
     ) => {
         if (!user?.id) return;
 
         // Phase 3: Optimistic UUID generation for Local-First tracking
         const tempId = `opt-${crypto.randomUUID()}`;
-        const resolvedType: 'text' | 'image' | 'document' = attachmentUrl
-            ? (attachmentType?.startsWith('image/') ? 'image' : 'document')
+        const resolvedType: 'text' | 'image' | 'document' = attachments.length > 0
+            ? (attachments.some(a => a.type.startsWith('image/')) ? 'image' : 'document')
             : 'text';
 
         const optimisticMessage: Message = {
-            id: tempId,
+            id: tempId as MessageId,
             tempId, // Mirroring for structural clarity
             conversationId,
-            senderId: user.id,
+            senderId: user.id as UserId,
             senderName: user.name || 'Me',
             content,
             messageType: resolvedType,
@@ -556,31 +778,26 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isMe: true,
             createdAt: new Date().toISOString(),
             sequenceNumber: (conversations.find(c => c.id === conversationId)?.sequenceCounter || 0) + 1,
-            attachments: attachmentUrl ? [{
-                url: attachmentUrl,
-                type: attachmentType || 'application/octet-stream',
-                name: attachmentName || 'attachment',
-                size: 0
-            }] : [],
+            attachments: attachments,
             reactions: [],
-            replyToId
+            replyToId: replyToId as MessageId
         };
 
         // 1. PERSIST TO OUTBOX: Immediate protection against browser crash/refresh
-        await storageService.putPendingMessage(optimisticMessage, user.id);
+        await storageService.putPendingMessage(optimisticMessage, user.id as UserId);
 
         // 2. OPTIMISTIC UI: Render instantly
-        setMessages(prev => [...prev, optimisticMessage]);
+        setMessages((prev: Message[]) => [...prev, optimisticMessage]);
 
         // 3. SIDEBAR UPDATE: Instant feedback
-        setConversations(prev => {
-            const index = prev.findIndex(c => c.id === conversationId);
+        setConversations((prev: Conversation[]) => {
+            const index = prev.findIndex((c: Conversation) => c.id === conversationId);
             if (index === -1) return prev;
             const newConversations = [...prev];
             const target = newConversations[index];
             newConversations[index] = {
                 ...target,
-                lastMessage: content || (attachmentUrl ? '📎 Attachment' : ''),
+                lastMessage: content || (attachments.length > 0 ? '📎 Attachment' : ''),
                 lastMessageAt: optimisticMessage.createdAt
             };
             // Move to top
@@ -590,45 +807,46 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         try {
             // Local decryption/encryption logic for sensitive clinical data
-            const res = await api.post('/chat/messages', {
+            const res = await api.post<ApiResponse<Message>>('/chat/messages', {
                 conversationId,
                 content,
                 messageType: resolvedType,
-                attachment: attachmentUrl ? {
-                    url: attachmentUrl,
-                    type: attachmentType,
-                    originalName: attachmentName
-                } : undefined,
+                attachments: attachments.map(att => ({
+                    url: att.url,
+                    type: att.type,
+                    originalName: att.name
+                })),
                 replyToId
             });
 
             if (res.data) {
                 const realMessage = {
-                    ...res.data,
+                    ...res.data.data,
                     isMe: true
                 };
 
                 // 4. STORAGE RETIREMENT: Remove from Outbox, commit to Permanent Store
-                await storageService.removePendingMessage(tempId);
-                await storageService.putMessages([realMessage], user.id);
+                await storageService.removePendingMessage(tempId as MessageId);
+                await storageService.putMessages([realMessage], user.id as UserId);
 
-                setMessages(prev => {
+                setMessages((prev: Message[]) => {
                     const socketAdded = prev.some(m => m.id === realMessage.id);
                     if (socketAdded) {
-                        return prev.filter(m => m.id !== tempId);
+                        return prev.filter((m: Message) => m.id !== tempId);
                     }
                     // Institutional Guard: Replace opt-id with real-id if not already handled by socket
-                    return prev.map(m => m.id === tempId ? realMessage : m);
+                    return prev.map((m: Message) => m.id === tempId ? realMessage : m);
                 });
             }
         } catch (error: unknown) {
-            logger.error('[ChatProvider] Transmission failure:', error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            logger.error(`[ChatProvider] Transmission failure: ${errorMsg}`);
 
-            // 5. FAILURE HANDLING: Update Outbox status for future retry
-            await storageService.updatePendingMessageStatus(tempId, 'failed');
+            // FAILURE HANDLING: Update Outbox status for future retry
+            await storageService.updatePendingMessageStatus(tempId as MessageId, 'failed');
 
             // Visual feedback: Update optimistic message status in state
-            setMessages(prev => prev.map(m =>
+            setMessages((prev: Message[]) => prev.map((m: Message) =>
                 m.id === tempId ? { ...m, status: 'failed' } : m
             ));
         }
@@ -654,35 +872,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const startNewConversation = async (participantId: string, _meta?: ParticipantMetadata) => {
         try {
-            const res = await api.post<{ data: { conversationId: string } }>('/chat/conversations', { participantId });
-            if (!res.data || typeof res.data !== 'object' || !res.data.data?.conversationId) {
-                throw new Error("Invalid conversation response")
+            const res = await api.post<ChatApiResponse<Conversation>>('/chat/conversations', { participantId });
+            
+            if (!res.data?.success || !res.data?.data) {
+                throw new Error("Invalid conversation response");
             }
 
-            const conversationId = res.data.data.conversationId;
-            await fetchConversations();
-            // The list fetch will populate conversations, then we find it
-            const resConv = await api.get<{ data: Conversation[] } | Conversation[]>('/chat/conversations');
+            const newConv = res.data.data;
 
-            const payload = resConv.data;
+            // P0 Optimization (D8): Atomic local update instead of global re-fetch
+            setConversations(prev => {
+                const exists = prev.find(c => c.id === newConv.id);
+                if (exists) return prev;
+                return [newConv, ...prev];
+            });
 
-            if (
-                !payload ||
-                typeof payload !== 'object' ||
-                !Array.isArray((payload as { data: unknown }).data)
-            ) {
-                throw new Error("Invalid conversations response")
-            }
-
-            const convData = (payload as { data: Conversation[] }).data;
-            const newConv = convData.find((c: Conversation) => c.id === conversationId);
-            if (newConv) selectConversation(newConv);
+            selectConversation(newConv);
         } catch (err: unknown) {
             logger.error('[ChatProvider] Failed to start conversation:', err instanceof Error ? err.message : String(err));
         }
     };
 
-    const emitTyping = (conversationId: string, isTyping: boolean) => {
+    const emitTyping = (conversationId: ConversationId, isTyping: boolean) => {
         if (!user || !isAuthenticated) return;
 
         // Enterprise Throttling: Start immediately, stop after inactivity
@@ -727,14 +938,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    const deleteMessage = async (messageId: string, forEveryone: boolean) => {
+    const deleteMessage = async (messageId: MessageId, forEveryone: boolean) => {
         const previousMessages = [...messages];
-        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+        setMessages((prev: Message[]) => prev.filter((msg: Message) => msg.id !== messageId));
         try {
-            await api.post(`/chat/messages/${messageId}/delete`, { forEveryone });
+            await api.post<ApiResponse<void>>(`/chat/messages/${messageId}/delete`, { forEveryone });
             // Local sync only, no blind refetch
-            setConversations(prev => prev.map(c => {
-                if (c.id === activeConversationRef.current?.id && c.lastMessageId === messageId) {
+            setConversations((prev: Conversation[]) => prev.map((c: Conversation) => {
+                // D1 REMEDIATION: Universal sidebar update.
+                // We update the snippet regardless of activeConversation state to ensure
+                // consistency across all threads in the sidebar.
+                if (c.lastMessageId === messageId) {
                     return { ...c, lastMessage: 'Message deleted' };
                 }
                 return c;
@@ -746,20 +960,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    const reactToMessage = async (messageId: string, reactionType: string) => {
+    const reactToMessage = async (messageId: MessageId, reactionType: string) => {
         const previousMessages = [...messages];
-        setMessages(prev => prev.map(msg => {
+        setMessages((prev: Message[]) => prev.map((msg: Message) => {
             if (msg.id === messageId) {
                 const reactions = msg.reactions || [];
-                const existing = reactions.find(r => r.userId === user?.id && r.type === reactionType);
-                if (existing) return { ...msg, reactions: reactions.filter(r => r.userId !== user?.id) };
-                const withoutMyReactions = reactions.filter(r => r.userId !== user?.id);
-                return { ...msg, reactions: [...withoutMyReactions, { type: reactionType, userId: user?.id ?? '' }] };
+                const currentUserId = user?.id as UserId;
+                const existing = reactions.find(r => r.userId === currentUserId && r.type === reactionType);
+                if (existing) return { ...msg, reactions: reactions.filter(r => r.userId !== currentUserId) };
+                const withoutMyReactions = reactions.filter(r => r.userId !== currentUserId);
+                return { ...msg, reactions: [...withoutMyReactions, { type: reactionType, userId: currentUserId }] };
             }
             return msg;
         }));
         try {
-            await api.post(`/chat/messages/${messageId}/react`, { reactionType });
+            await api.post<ApiResponse<void>>(`/chat/messages/${messageId}/react`, { reactionType });
         }
         catch (err: unknown) {
             logger.error('[ChatProvider] Reaction failed:', err instanceof Error ? err.message : String(err));
@@ -767,33 +982,35 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    const markAsRead = async (conversationId: string) => {
+    const markAsRead = async (conversationId: ConversationId) => {
         const now = Date.now();
-        const lastRead = lastReadRequestRef.current[conversationId] || 0;
+        const lastRead = lastReadRequestRef.current[conversationId as string] || 0;
 
         // ENTERPRISE THROTTLING: Max 1 request per 2 seconds per conversation for read status
         if (now - lastRead < 2000) return;
 
         try {
-            lastReadRequestRef.current[conversationId] = now;
+            lastReadRequestRef.current[conversationId as string] = now;
             await api.put<void>(`/chat/conversations/${conversationId}/read`);
 
             // Standardize unread badge sync locally
-            setConversations(prev => prev.map(c =>
+            setConversations((prev: Conversation[]) => prev.map((c: Conversation) =>
                 c.id === conversationId ? { ...c, unreadCount: 0 } : c
             ));
         } catch (err: unknown) {
             logger.error('[ChatProvider] Failed to mark read:', err instanceof Error ? err.message : String(err));
-            // Reset throttle on failure to allow retry
-            lastReadRequestRef.current[conversationId] = 0;
+            lastReadRequestRef.current[conversationId as string] = 0;
         }
     };
 
-    const markMessageAsRead = async (messageId: string) => {
+    const markMessageAsRead = async (messageId: MessageId) => {
         if (!user || !isAuthenticated) return;
-
         try {
-            socketService.emit('messageRead', { messageId, userId: user.id });
+            socketService.emit('messageRead', { 
+                conversationId: activeConversationRef.current?.id as ConversationId,
+                messageIds: [messageId], 
+                userId: user.id as UserId 
+            });
             // Optional: Backend persistency call if not already handled by conversation-level markAsRead
         } catch (err: unknown) {
             logger.error('[ChatProvider] Failed to emit messageRead', err instanceof Error ? err.message : String(err));

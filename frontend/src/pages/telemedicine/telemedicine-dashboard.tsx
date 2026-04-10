@@ -1,56 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Video, CalendarPlus, ShieldCheck, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getConsentStatus } from '@/services/consent.service';
 import { PATHS } from '@/routes/paths';
-import { MedicalLoader } from '@/components/ui/medical-loader';
-import { logger } from '@/utils/logger';
 import { motion } from 'framer-motion';
 
 export const TelemedicineDashboard: React.FC = () => {
     const navigate = useNavigate();
-    const [checking, setChecking] = useState<boolean>(true);
 
-    useEffect(() => {
-        let isMounted = true;
-
-        const checkAndGate = async () => {
-            try {
-                const data = await getConsentStatus();
-                if (!isMounted) return;
-
-                if (!data.hasConsent) {
-                    // 🛡️ ENTERPRISE FIX: Intentionally 'leak' the verifying state (checking=true)
-                    // This ensures the <MedicalLoader> stays permanently mounted while React Router
-                    // <Suspense> lazily downloads the next JS chunk, eliminating the "Ghost UI" flash.
-                    navigate(PATHS.CONSENT, { replace: true });
-                    return;
-                }
-                
-                // ONLY unlock the dashboard UI once explicitly authorized
-                setChecking(false);
-            } catch (error: unknown) {
-                if (!isMounted) return;
-                
-                logger.error('[Telemedicine-Dashboard] Verification failure:', error);
-                
-                // Safe Fallback: Protect the user and maintain the checking state lock
-                navigate(PATHS.CONSENT, { replace: true });
-            }
-        };
-
-        checkAndGate();
-        
-        return () => {
-            isMounted = false;
-        };
-    }, [navigate]);
-
-    if (checking) {
-        return <MedicalLoader fullPage={false} message="Verifying consent status..." />;
-    }
+    // 🛡️ INSTITUTIONAL PROTECTION: Relying on TelemedicineGuard for atomic flow.
+    // Dashboard logic now assumes a valid session with appropriate consent.
 
     return (
         <div className="space-y-8 animate-in fade-in">
@@ -102,7 +62,7 @@ export const TelemedicineDashboard: React.FC = () => {
                                 e.stopPropagation();
                                 navigate(PATHS.PATIENT.BOOK_APPOINTMENT);
                             }}
-                            className="w-full gap-2 bg-gradient-to-r from-primary to-teal-600 hover:from-primary/90 hover:to-teal-700 text-white font-medium rounded-lg h-11 shadow-lg shadow-primary/20 group-hover:-translate-y-0.5 transition-transform"
+                            className="w-full gap-2 bg-gradient-to-r from-primary to-teal-600 hover:from-primary/90 hover:to-teal-700 text-white font-medium rounded-[var(--card-radius)] h-11 shadow-lg shadow-primary/20 group-hover:-translate-y-0.5 transition-transform"
                         >
                             <Video className="h-4 w-4" />
                             Book Video Call

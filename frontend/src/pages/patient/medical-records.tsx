@@ -22,8 +22,12 @@ import { useFileActionHandler } from '@/hooks/use-file-action-handler';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { motion, AnimatePresence } from 'framer-motion';
 import { secureDownload } from '../../services/file.service';
+import { logger } from '@/utils/logger';
+
+import { useToast } from '../../hooks/use-toast';
 
 export const MedicalRecords: React.FC = () => {
+    const { error: toastError, warning: toastWarning } = useToast();
     const [records, setRecords] = useState<MedicalRecord[]>([]);
     const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -66,7 +70,7 @@ export const MedicalRecords: React.FC = () => {
     const fetchRecords = async () => {
         try {
             setLoading(true);
-            
+
             const [uploadedData, digitalData] = await Promise.all([
                 getMyRecords(),
                 getMyPrescriptions()
@@ -88,7 +92,7 @@ export const MedicalRecords: React.FC = () => {
                 dateOfService: p.createdAt
             }));
 
-            const combined = [...uploadedData, ...mappedDigital].sort((a, b) => 
+            const combined = [...uploadedData, ...mappedDigital].sort((a, b) =>
                 new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
             );
 
@@ -116,7 +120,19 @@ export const MedicalRecords: React.FC = () => {
 
         try {
             setError(null);
-            await handleBatchUpload(files, ClinicalRecordType.GeneralRecord);
+
+            // 🛡️ CONTEXTUAL INFERENCE OVERRIDE (v5.0)
+            // Maps the active tab to a suggested ClinicalRecordType for better heuristic accuracy.
+            let suggestedType = ClinicalRecordType.GeneralRecord;
+            if (selectedType === 'lab') suggestedType = ClinicalRecordType.LabResult;
+            if (selectedType === 'radiology') suggestedType = ClinicalRecordType.Radiology;
+            if (selectedType === 'prescription') suggestedType = ClinicalRecordType.Prescription;
+            if (selectedType === 'notes') suggestedType = ClinicalRecordType.ClinicalNote;
+
+            await handleBatchUpload(files, suggestedType);
+        } catch (err: unknown) {
+            logger.error('[Medical-Records] Upload dispatch failure:', err instanceof Error ? err.message : String(err));
+            setError('Institutional communication failure. Please try again.');
         } finally {
             if (e.target) e.target.value = '';
         }
@@ -156,10 +172,16 @@ export const MedicalRecords: React.FC = () => {
                 url: `${baseUrl}/api/files/record/${record.id}`,
                 fileName: record.name || `record-${record.id}`
             });
-        } catch {
-            setError('Failed to download the clinical document. Please try again later.');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg === 'FILE_TYPE_NOT_SUPPORTED') {
+                toastWarning('Institutional Security: This file type is restricted and cannot be downloaded.');
+            } else {
+                toastError('Failed to download the clinical document. Please try again later.');
+            }
         }
     };
+
 
     return (
         <div className="space-y-8">
@@ -203,7 +225,7 @@ export const MedicalRecords: React.FC = () => {
             )}
 
             <TransitionItem>
-                <Card className="p-4 bg-background/50 backdrop-blur-sm border shadow-sm">
+                <Card className="p-4 bg-background/50 backdrop-blur-sm shadow-sm">
                     <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                         <div className="relative w-full md:w-96">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -230,11 +252,9 @@ export const MedicalRecords: React.FC = () => {
             {/* Records List */}
             <TransitionItem className="space-y-6">
                 {loading ? (
-                    <div className="flex justify-center p-24">
-                        <MedicalLoader message="Retrieving clinical records from MoH database..." />
-                    </div>
+                    <MedicalLoader message="Retrieving clinical records from MoH database..." />
                 ) : filteredRecords.length === 0 ? (
-                    <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-80 border-dashed rounded-card">
+                    <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-80 border-dashed rounded-[var(--card-radius)]">
                         <div className="bg-muted/30 p-6 rounded-full mb-6">
                             <FolderOpen className="h-12 w-12 opacity-30" />
                         </div>
@@ -256,16 +276,17 @@ export const MedicalRecords: React.FC = () => {
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     layout
                                 >
-                                    <Card className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full rounded-card">
+                                    <Card className="group p-0 overflow-hidden hover:shadow-md transition-all shadow-sm flex flex-col md:flex-row h-full rounded-[var(--card-radius)]">
                                         <div className={`w-full md:w-1.5 h-1.5 md:h-auto ${record.recordType === ClinicalRecordType.LabResult ? 'bg-purple-500' :
                                             record.recordType === ClinicalRecordType.Radiology ? 'bg-blue-500' :
                                                 record.recordType === ClinicalRecordType.Immunization ? 'bg-emerald-500' :
-                                                    'bg-slate-400'
+                                                    record.recordType === ClinicalRecordType.Prescription ? 'bg-slate-400' :
+                                                        'bg-slate-400'
                                             }`} />
 
                                         <div className="flex-1 p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
                                             <div className="shrink-0">
-                                                <div className="w-12 h-12 rounded-xl bg-muted/30 flex items-center justify-center text-foreground border shadow-sm">
+                                                <div className="w-12 h-12 rounded-[var(--card-radius)] bg-muted/30 flex items-center justify-center text-foreground institutional-border shadow-sm">
                                                     {getFileIcon(record.fileMime)}
                                                 </div>
                                             </div>
@@ -309,9 +330,9 @@ export const MedicalRecords: React.FC = () => {
                                             </div>
 
                                             <div className="flex flex-row items-center gap-3 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-border/50">
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
                                                     className="flex gap-2 h-9 px-4 font-medium transition-all"
                                                     onClick={() => handleDownload(record)}
                                                 >
@@ -320,9 +341,9 @@ export const MedicalRecords: React.FC = () => {
                                                 </Button>
 
                                                 {!record.id.toString().startsWith('digital-') && (
-                                                    <Button 
-                                                        variant="destructive" 
-                                                        size="sm" 
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
                                                         className="flex gap-2 h-9 px-4 font-medium shadow-sm transition-all hover:brightness-110 active:scale-95"
                                                         onClick={(e) => {
                                                             e.stopPropagation();

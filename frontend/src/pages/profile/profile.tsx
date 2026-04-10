@@ -109,11 +109,7 @@ export const Profile: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div className="flex justify-center items-center min-h-[32rem]">
-                <MedicalLoader message="Loading your profile..." />
-            </div>
-        );
+        return <MedicalLoader message="Loading your profile..." />;
     }
 
     return (
@@ -290,7 +286,7 @@ export const Profile: React.FC = () => {
 
                     <div className="space-y-6 mb-8">
                         <div className="flex gap-4 items-start">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <div className="p-2 rounded-[var(--card-radius)] bg-primary/10 text-primary">
                                 <Shield className="h-5 w-5" />
                             </div>
                             <div>
@@ -300,7 +296,7 @@ export const Profile: React.FC = () => {
                         </div>
 
                         <div className="flex gap-4 items-start">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <div className="p-2 rounded-[var(--card-radius)] bg-primary/10 text-primary">
                                 <Calendar className="h-5 w-5" />
                             </div>
                             <div>
@@ -316,7 +312,7 @@ export const Profile: React.FC = () => {
                         </div>
 
                         <div className="flex gap-4 items-start">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <div className="p-2 rounded-[var(--card-radius)] bg-primary/10 text-primary">
                                 <BadgeCheck className="h-5 w-5" />
                             </div>
                             <div>

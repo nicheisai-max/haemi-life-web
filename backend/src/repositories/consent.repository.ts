@@ -4,11 +4,11 @@ import { logger } from '../utils/logger';
 export const consentRepository = {
     async hasConsent(patientId: string): Promise<boolean> {
         try {
-            const result = await pool.query<{ id: string }>(
-                'SELECT id FROM telemedicine_consents WHERE patient_id = $1',
+            const result = await pool.query<{ is_consented: boolean }>(
+                'SELECT is_consented FROM telemedicine_consents WHERE patient_id = $1',
                 [patientId]
             );
-            return (result.rowCount ?? 0) > 0;
+            return result.rows[0]?.is_consented === true;
         } catch (error: unknown) {
             logger.error('Failed to check consent status', {
                 error: error instanceof Error ? error.message : String(error),
@@ -20,12 +20,12 @@ export const consentRepository = {
 
     async recordConsent(patientId: string, ipAddress: string, userAgent: string, signatureData: string, version: string = 'v1.0'): Promise<{ id: string; agreed_at: Date; version: string }> {
         try {
-            // Use UPSERT (ON CONFLICT) just in case, though the controller will likely check first.
             const result = await pool.query<{ id: string; agreed_at: Date; version: string }>(
-                `INSERT INTO telemedicine_consents (patient_id, ip_address, user_agent, signature_data, version, agreed_at) 
-                 VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+                `INSERT INTO telemedicine_consents (patient_id, ip_address, user_agent, signature_data, version, is_consented, agreed_at) 
+                 VALUES ($1, $2, $3, $4, $5, TRUE, CURRENT_TIMESTAMP)
                  ON CONFLICT (patient_id) 
                  DO UPDATE SET 
+                    is_consented = TRUE,
                     agreed_at = CURRENT_TIMESTAMP,
                     ip_address = EXCLUDED.ip_address,
                     user_agent = EXCLUDED.user_agent,

@@ -16,6 +16,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getInitials } from '@/utils/avatar.resolver';
 import { getDoctorPatients, Patient } from '@/services/doctor.service';
 import { toast } from 'sonner';
+import { MedicalLoader } from '@/components/ui/medical-loader';
 
 
 export const DoctorPatientList: React.FC = () => {
@@ -43,6 +44,9 @@ export const DoctorPatientList: React.FC = () => {
         p.email?.toLowerCase().includes(search.toLowerCase())
     );
 
+    if (loading) {
+        return <MedicalLoader message="Synchronizing with regional patient registry..." />;
+    }
 
     return (
         <div className="space-y-6">
@@ -114,10 +118,10 @@ export const DoctorPatientList: React.FC = () => {
                                         {patient.totalAppointments} Appts
                                     </Badge>
                                     <div className="flex items-center gap-2 border-l border-border/40 pl-4">
-                                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/10 hover:text-primary">
+                                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-[var(--card-radius)] hover:bg-primary/10 hover:text-primary">
                                             <MessageSquare className="h-4 w-4" />
                                         </Button>
-                                        <Button size="icon" variant="outline" className="h-9 w-9 rounded-xl group-hover:bg-primary group-hover:text-white transition-all">
+                                        <Button size="icon" variant="outline" className="h-9 w-9 rounded-[var(--card-radius)] group-hover:bg-primary group-hover:text-white transition-all">
                                             <ChevronRight className="h-4 w-4" />
                                         </Button>
                                     </div>

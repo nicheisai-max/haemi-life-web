@@ -37,7 +37,7 @@ export interface UserSession {
     ipAddress: string | null;
     userAgent: string | null;
     loginTime: string;
-    lastActivity: string | null;
+    last_activity: string | null;
     isActive: boolean;
 }
 

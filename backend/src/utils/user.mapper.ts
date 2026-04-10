@@ -26,7 +26,7 @@ export interface UserResponse {
     isVerified: boolean;
     hasConsent: boolean;
     profileImage: string | null;
-    lastActivity: string | null;
+    last_activity: string | null;
     createdAt: string;
 }
 
@@ -47,7 +47,7 @@ export const mapUserToResponse = (user: UserEntity): UserResponse => {
         isVerified: user.is_verified,
         hasConsent: user.has_consent,
         profileImage: user.profile_image ? (typeof user.profile_image === 'string' ? user.profile_image : (Buffer.isBuffer(user.profile_image) ? (user.profile_image as Buffer).toString('base64') : String(user.profile_image))) : null,
-        lastActivity: toIsoString(user.lastActivity),
+        last_activity: toIsoString(user.last_activity),
         createdAt: toIsoString(user.created_at) || new Date().toISOString()
     };
 };

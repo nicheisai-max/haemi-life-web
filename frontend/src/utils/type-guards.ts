@@ -1,6 +1,16 @@
 import type { SocketErrorPayload, SocketErrorCode } from '../types/socket.types';
 import type { User } from '../types/auth.types';
-import type { JWTPayload } from '../../../backend/src/types/express'; // If available or common types
+
+export interface JWTPayload {
+    id: string;
+    email: string;
+    role: 'patient' | 'doctor' | 'pharmacist' | 'admin';
+    tokenVersion: number;
+    sessionId: string;
+    jti: string;
+    exp: number;
+    iat: number;
+}
 
 /**
  * Enterprise Hardening: Strict Type Guards (Phase 1)
@@ -64,15 +74,17 @@ export function isUser(value: unknown): value is User {
 
 export function isJWTPayload(value: unknown): value is JWTPayload {
     if (!isObject(value)) return false;
-    const { id, email, role, tokenVersion, sessionId, jti } = value;
+    const v = value as Record<string, unknown>;
     return (
-        isString(id) &&
-        isString(email) &&
-        isString(role) &&
-        (role === 'patient' || role === 'doctor' || role === 'pharmacist' || role === 'admin') &&
-        isNumber(tokenVersion) &&
-        isString(sessionId) &&
-        isString(jti)
+        isString(v.id) &&
+        isString(v.email) &&
+        isString(v.role) &&
+        (v.role === 'patient' || v.role === 'doctor' || v.role === 'pharmacist' || v.role === 'admin') &&
+        isNumber(v.tokenVersion) &&
+        isString(v.sessionId) &&
+        isString(v.jti) &&
+        isNumber(v.exp) &&
+        isNumber(v.iat)
     );
 }
 

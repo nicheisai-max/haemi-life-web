@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle, Activity, Microscope, Zap, Heart, Wind, Filter, Loader2 } from 'lucide-react';
+import { MedicalLoader } from '@/components/ui/medical-loader';
 
 import { inventorySchema } from '../../lib/validation/inventory.schema';
 import { PremiumNumberInput } from '@/components/ui/premium-number-input';
@@ -128,6 +129,10 @@ export const Inventory: React.FC = () => {
         if (item.stock < item.minStock * 1.5) return 'medium';
         return 'good';
     };
+
+    if (loading) {
+        return <MedicalLoader message="Hydrating pharmaceutical inventories..." />;
+    }
 
     return (
         <div className="space-y-8">
@@ -393,7 +398,7 @@ export const Inventory: React.FC = () => {
                                             <TableRow key={item.id} className="hover:bg-muted/50">
                                                 <TableCell>
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                                        <div className="w-9 h-9 rounded-[var(--card-radius)] bg-primary/10 flex items-center justify-center text-primary">
                                                             <Pill className="h-5 w-5" />
                                                         </div>
                                                         <span className="font-medium">{item.name}</span>

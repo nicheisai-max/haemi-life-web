@@ -66,7 +66,7 @@ export const SessionManagement: React.FC = () => {
         endIndex,
     } = usePagination(sessions);
 
-    if (loading) return <div className="pt-20"><MedicalLoader message="Enumerating Live Sessions..." /></div>;
+    if (loading) return <MedicalLoader variant="global" message="Enumerating Live Sessions..." />;
 
     return (
         <div className="space-y-8">
@@ -80,7 +80,7 @@ export const SessionManagement: React.FC = () => {
                 <div className="flex items-center gap-3">
                     <Button
                         variant="outline"
-                        className="h-10 px-4 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-semibold transition-all hover:scale-105 active:scale-95 gap-2"
+                        className="h-10 px-4 rounded-[var(--card-radius)] border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-semibold transition-all hover:scale-105 active:scale-95 gap-2"
                         onClick={() => { setRefreshing(true); fetchSessions(); }}
                         disabled={refreshing}
                     >
@@ -140,7 +140,7 @@ export const SessionManagement: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:scale-110 transition-transform">
+                                                    <div className="p-1.5 rounded-[var(--card-radius)] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:scale-110 transition-transform">
                                                         {getDeviceIcon(session.userAgent)}
                                                     </div>
                                                     <div className="flex flex-col">
@@ -151,7 +151,7 @@ export const SessionManagement: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col text-[10px]">
-                                                    <span className="font-bold text-foreground">{session.lastActivity ? new Date(session.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
+                                                    <span className="font-bold text-foreground">{session.last_activity ? new Date(session.last_activity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
                                                     <span className="text-muted-foreground opacity-70">Logged: {new Date(session.loginTime).toLocaleDateString()}</span>
                                                 </div>
                                             </td>
@@ -159,7 +159,7 @@ export const SessionManagement: React.FC = () => {
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    className="h-8 w-8 p-0 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all hover:scale-110 active:scale-95"
+                                                    className="h-8 w-8 p-0 rounded-[var(--card-radius)] text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all hover:scale-110 active:scale-95"
                                                     title="Revoke Session"
                                                     onClick={() => handleRevoke(session.sessionId || session.id)}
                                                 >

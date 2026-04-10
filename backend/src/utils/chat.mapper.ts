@@ -1,9 +1,15 @@
+/**
+ * 🩺 HAEMI LIFE — INSTITUTIONAL CHAT MAPPER (v5.1)
+ * Standard: Google/Meta Strict Type Normalization
+ * Domain: Clinical Messaging Reliability
+ */
+
 import { ChatMessage, UserRole } from '../types/socket.types';
 import { DbMessage, DbConversation, ConversationResponse, DbAttachment, DbReaction } from '../types/chat.types';
 
 /**
- * Institutional Timestamp Normalization (Military Grade)
- * Guaranteed ISO-8601 UTC output from any Date or String source.
+ * 🧬 ISO GENERIC TIMESTAMP HANDLER
+ * Ensures UTC consistency across all clinical events.
  */
 const toIsoString = (val: Date | string | null | undefined): string => {
     if (!val) return new Date().toISOString();
@@ -16,28 +22,64 @@ const toIsoString = (val: Date | string | null | undefined): string => {
 };
 
 /**
- * Normalizes a Message object from DB to camelCase API response
+ * 🛡️ INSTITUTIONAL PRIVACY GUARD (v4.2)
+ * Strips absolute filesystem paths from text content.
+ */
+const sanitizeContent = (content: string | null | undefined): string => {
+    if (!content) return '';
+    const pathPattern = /[A-Z]:\\[^ \n\r]+|[\\/][^ \n\r]+/gi;
+    return content.replace(pathPattern, (match) => {
+        if (match.includes('\\') || match.startsWith('/')) {
+            const parts = match.replace(/\\/g, '/').split('/');
+            return parts[parts.length - 1] || match;
+        }
+        return match;
+    });
+};
+
+/**
+ * 🩺 HAEMI MESSAGE TRANSFORMER
+ * Maps database message objects to strict API response types.
  */
 export const mapMessageToResponse = (message: DbMessage): ChatMessage | null => {
+    // P0 Guard: Structural Integrity Check
     if (!message || !message.id || !message.conversation_id) return null;
 
-    // Standardized Message Type Logic
-    let normalizedType: 'text' | 'image' | 'document' = 'text';
-    const allowedTypes = ['text', 'image', 'document'] as const;
-    if (allowedTypes.includes(message.message_type as typeof allowedTypes[number])) {
-        normalizedType = message.message_type as typeof allowedTypes[number];
-    }
+    // Hardened Message Type Mapping
+    const typeAlias: Record<string, ChatMessage['messageType']> = {
+        'text': 'text',
+        'image': 'image',
+        'document': 'document'
+    };
+    const messageType: ChatMessage['messageType'] = typeAlias[message.message_type] || 'text';
+
+    // P1: Attachment Recovery Pipeline
+    // Ensures that even if content is null (attachment-only), the message remains valid.
+    const attachments = (message.attachments || []).map((att: DbAttachment) => {
+        const cleanName = (att.file_name || 'attachment')
+            .replace(/\\/g, '/')
+            .split('/')
+            .pop() || 'attachment';
+
+        return {
+            id: att.id,
+            url: `/api/files/message/${att.id}`,
+            type: att.file_type || 'application/octet-stream',
+            size: Number(att.file_size || 0),
+            name: cleanName
+        };
+    });
 
     return {
         id: message.id,
         conversationId: message.conversation_id,
         senderId: message.sender_id,
         senderName: message.sender_name || 'System',
-        senderRole: (message.sender_role as UserRole) || 'system', 
-        content: message.content,
-        messageType: normalizedType,
-        status: message.status as ChatMessage['status'],
-        isRead: message.is_read || message.status === 'read',
+        senderRole: (message.sender_role as UserRole) || 'system',
+        content: message.is_deleted ? 'This message was deleted' : sanitizeContent(message.content),
+        messageType,
+        status: (message.status as ChatMessage['status']) || 'sent',
+        isRead: Boolean(message.is_read || message.status === 'read'),
         deliveredAt: message.delivered_at ? toIsoString(message.delivered_at) : undefined,
         readAt: message.read_at ? toIsoString(message.read_at) : undefined,
         createdAt: toIsoString(message.created_at),
@@ -47,22 +89,17 @@ export const mapMessageToResponse = (message: DbMessage): ChatMessage | null => 
             content: message.reply_to.content,
             senderName: message.reply_to.sender_name,
         } : null,
-        attachments: (message.attachments || []).map((att: DbAttachment) => ({
-            url: `/api/files/message/${att.id}`, // P0 Institutional Fix: Maps physical storage to virtual delivery
-            type: att.file_type || 'document',
-            size: Number(att.file_size || 0),
-            name: att.file_name || 'attachment'
-        })),
+        attachments,
         reactions: (message.reactions || []).map((rx: DbReaction) => ({
             type: rx.reaction_type,
-            userId: rx.userId
+            userId: rx.user_id
         })),
         sequenceNumber: Number(message.sequence_number || 0)
     };
 };
 
 /**
- * Normalizes a Conversation object from DB to camelCase API response
+ * 🩺 HAEMI CONVERSATION TRANSFORMER
  */
 export const mapConversationToResponse = (conversation: DbConversation): ConversationResponse | null => {
     if (!conversation) return null;
@@ -74,7 +111,7 @@ export const mapConversationToResponse = (conversation: DbConversation): Convers
         lastMessageAt: toIsoString(conversation.last_message_at),
         lastMessage: conversation.last_message || null,
         lastMessageId: conversation.last_message_id || null,
-        participants: conversation.participants || [],
+        participants: (conversation.participants || []),
         unreadCount: Number(conversation.unread_count || 0),
         messageCount: Number(conversation.message_count || 0),
         sequenceCounter: Number(conversation.sequence_counter || 0)

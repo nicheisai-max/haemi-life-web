@@ -99,18 +99,26 @@
   /* -------------------------------------------------- */
   /* INSTITUTIONAL LAYOUT TOKENS (Single Source of Truth) */
   /* -------------------------------------------------- */
-  --layout-sidebar-width: 16.25rem; /* Exactly 260px (Google Standard) */
-  --layout-header-height: 4.5rem;   /* Exactly 72px */
-  --layout-max-width: 120rem;      /* Exactly 1920px (Ultra-Wide Lock) */
-  
+  --layout-sidebar-width: 16.25rem;
+  /* Exactly 260px (Google Standard) */
+  --layout-header-height: 4.5rem;
+  /* Exactly 72px */
+  --layout-max-width: 120rem;
+  /* Exactly 1920px (Ultra-Wide Lock) */
+
   /* Horizontal Rhythm Tokens */
-  --layout-px-mobile: 1rem;        /* 16px */
-  --layout-px-tablet: 1.5rem;      /* 24px */
-  --layout-px-desktop: 2.5rem;     /* 40px (Institutional Breathing Space) */
+  --layout-px-mobile: 1rem;
+  /* 16px */
+  --layout-px-tablet: 1.5rem;
+  /* 24px */
+  --layout-px-desktop: 2.5rem;
+  /* 40px (Institutional Breathing Space) */
 
   /* Nav Action System (Google/Meta Grade) */
-  --nav-action-height: 2.5rem;     /* Precisely 40px */
-  --nav-action-radius: 0.75rem;    /* Institutional Soft Capsule */
+  --nav-action-height: 2.5rem;
+  /* Precisely 40px */
+  --nav-action-radius: 0.75rem;
+  /* Institutional Soft Capsule */
   --nav-action-bg: var(--bg-surface-hover);
   --nav-action-border: rgba(0, 0, 0, 0.05);
 
@@ -164,8 +172,11 @@
   --input-px: 1rem;
 
   /* Dashboard Card Radius (System Actions unified value) */
-  --dashboard-card-radius: 0.35rem;
   --card-radius: 0.35rem;
+
+  /* INSTITUTIONAL Z-INDEX HIERARCHY */
+  --z-loader: 99998;
+  --z-toast: 99999;
 }
 
 .dark {
@@ -202,9 +213,9 @@
   --accent: rgba(63, 194, 181, 0.1);
   --accent-foreground: #E6F4F3;
 
-  --border: rgba(31, 59, 64, 0.4);
-  /* Phantom Border */
-  --input: rgba(31, 59, 64, 0.3);
+  --border: rgba(31, 59, 64, 0.6);
+  /* Hardened Phantom Border (v2.0) */
+  --input: rgba(31, 59, 64, 0.4);
   --placeholder: #648285;
   --ring: rgba(63, 194, 181, 0.4);
 
@@ -213,14 +224,32 @@
 }
 
 @layer base {
-  /* Targeted Border/Outline Defaults: Purged star (*) selector to allow instant Theme Toggles in DevTools. */
-  *, ::before, ::after {
+
+  /* Targeted Border/Outline Defaults: 
+     🛡️ INSTITUTIONAL HARDENING: Borders transition at 0ms to prevent the "White-Halo" flash 
+     during theme toggle while background and opacity maintain their premium transitions.
+  */
+  *,
+  ::before,
+  ::after {
     border-color: var(--border);
     outline-color: var(--ring);
+    /* 🛡️ INSTITUTIONAL RADIUS LOCKDOWN: Instant border-color swap to prevent "White-Halo" flash */
+    transition-property: background-color, color, opacity, box-shadow, transform, filter, backdrop-filter !important;
+  }
+
+  /* 🛡️ INSTITUTIONAL BORDER UTILITY
+     Definitively solves the "White-Halo" glitch by disabling border transitions 
+     while allowing premium background/opacity fades.
+  */
+  .institutional-border {
+    border: 1px solid var(--border) !important;
+    transition-property: color, background-color, opacity, box-shadow, transform !important;
   }
 
   /* Core layout elements */
-  html, body {
+  html,
+  body {
     @apply border-border;
   }
 
@@ -241,7 +270,7 @@
   .premium-cta,
   .user-action-btn,
   [role="dialog"] {
-    border-radius: 0.35rem !important;
+    border-radius: 0.35rem;
   }
 
   h1,
@@ -278,7 +307,8 @@
     padding-left: var(--input-px);
     padding-right: var(--input-px);
     border: 1px solid var(--border) !important;
-    @apply bg-background transition-all duration-200 outline-none;
+    @apply bg-background outline-none;
+    transition: background-color 0.2s, color 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s !important;
   }
 
   /* Support for shadcn/ui and other components that might use height: 10px or similar */
@@ -399,6 +429,44 @@
   .dark .chat-scrollbar::-webkit-scrollbar-thumb {
     background: #475569;
   }
+
+  /* 🩺 HAEMI PREMIUM STATUS PULSE (Google/Apple Grade) */
+  @keyframes haemi-status-breathing {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.92); }
+  }
+
+  .haemi-status-pulse {
+    animation: haemi-status-breathing 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  /* 🩺 HAEMI CHAT THUMBNAIL SYSTEM (Passport Size Lock)
+     Architecture: Google-grade responsive constraints using rem.
+     Prevents CLS (Cumulative Layout Shift) and massive expansion in 12-column grids.
+  */
+  .chat-thumbnail-container {
+    position: relative !important;
+    width: 100% !important;
+    max-width: 12.5rem !important; /* ~200px Passport Size */
+    aspect-ratio: 1 / 1 !important;
+    overflow: hidden !important;
+    border-radius: var(--radius) !important;
+    background-color: var(--muted) !important;
+    border: 1px solid var(--border) !important;
+    cursor: pointer !important;
+    transition: transform var(--duration-fast) var(--ease-premium) !important;
+  }
+
+  .chat-thumbnail-container:hover {
+    transform: scale(1.02) !important;
+  }
+
+  .chat-thumbnail-image {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    transition: opacity var(--duration-hover) var(--ease-premium) !important;
+  }
 }
 
 @utility premium-cta {
@@ -473,6 +541,120 @@
 
   .dark .selected-card {
     @apply bg-primary/[0.05] ring-primary/50;
+  }
+
+  /* ──────────────────────────────────────────────
+     HAEMI SEARCH HUB | INSTITUTIONAL COMPONENTS
+     Phase 8: Ultra-Minimalist (Zero-Shake)
+  ────────────────────────────────────────────── */
+  .haemi-command-item-wrapper {
+    display: flex !important;
+    align-items: center !important;
+    gap: 1.25rem !important; /* Premium Breathing Space (20px) */
+    padding: 1rem 1.25rem !important;
+    cursor: pointer !important;
+    transition: background-color var(--duration-fast) var(--ease-premium) !important;
+    border-radius: var(--card-radius) !important;
+    margin: 0.125rem 0.5rem !important;
+    border: none !important; /* NO BORDERS TO PREVENT SHAKING */
+    position: relative !important;
+    background-color: transparent;
+    transform: none !important; /* NO TRANSLATIONS */
+  }
+
+  .haemi-command-item-wrapper[data-selected="true"] {
+    background-color: var(--accent) !important;
+  }
+
+  .dark .haemi-command-item-wrapper[data-selected="true"] {
+    background-color: rgba(63, 194, 181, 0.15) !important;
+  }
+
+  /* NO BOXES - ICON ONLY ARCHITECTURE */
+  .haemi-command-icon-box {
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    transition: transform var(--duration-fast) var(--ease-standard) !important;
+  }
+
+  .haemi-command-item-wrapper[data-selected="true"] .haemi-command-icon-box {
+    transform: scale(1.1) !important;
+  }
+
+  /* REFINED TRENDING PILL (Subtle & Elegant) */
+  .haemi-trending-pill {
+    font-size: 10px !important;
+    font-weight: 500 !important; /* Sophisticated Weight */
+    text-transform: uppercase !important;
+    padding: 0.25rem 0.75rem !important; 
+    border-radius: 999px !important;
+    background-color: var(--secondary) !important;
+    color: var(--muted-foreground) !important;
+    transition: all var(--duration-hover) var(--ease-premium) !important;
+    letter-spacing: 0.05em !important;
+    border: 1px solid rgba(0, 0, 0, 0.05) !important;
+    white-space: nowrap !important;
+  }
+
+  .haemi-command-item-wrapper[data-selected="true"] .haemi-trending-pill {
+    background-color: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+    border-color: transparent !important;
+  }
+
+  .dark .haemi-trending-pill {
+    background-color: rgba(31, 59, 64, 0.4) !important;
+    border-color: rgba(63, 194, 181, 0.1) !important;
+  }
+
+  .dark .haemi-command-item-wrapper[data-selected="true"] .haemi-trending-pill {
+    background-color: #3FC2B5 !important;
+    color: #0B1214 !important;
+  }
+
+  /* ──────────────────────────────────────────────
+     HAEMI DIALOG SYSTEM | INSTITUTIONAL COMPONENTS
+     Phase 9: Google Circle Standard (Close Button)
+  ────────────────────────────────────────────── */
+  .haemi-dialog-close-institutional {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 1.5rem !important; /* Institutional Mini-Circle (24px) */
+    height: 1.5rem !important; /* Institutional Mini-Circle (24px) */
+    border-radius: 999px !important; /* Perfect Circle */
+    background-color: #E2E8F0 !important; /* Gray-200 (High Contrast on White) */
+    color: #475569 !important; /* Gray-600 (Google Standard Icon) */
+    transition: all var(--duration-fast) var(--ease-premium) !important;
+    border: none !important;
+    padding: 0 !important;
+    outline: none !important;
+    cursor: pointer !important;
+    z-index: 60 !important;
+  }
+
+  .haemi-dialog-close-institutional:hover {
+    background-color: #CBD5E1 !important; /* Gray-300 (Subtle Hover) */
+    color: #0F172A !important; /* Gray-900 (Focused Icon) */
+    transform: rotate(90deg) !important;
+  }
+
+  .dark .haemi-dialog-close-institutional {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  }
+
+  .dark .haemi-dialog-close-institutional:hover {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.1) !important;
   }
 
   /* Icon Glow & Scale */
@@ -1159,7 +1341,7 @@
     @apply transition-all duration-300;
     border-left: 4px solid var(--primary-700) !important;
     padding: 1rem 1.25rem !important;
-    border-radius: var(--dashboard-card-radius) !important;
+    border-radius: var(--card-radius) !important;
   }
 
   .dark .haemi-toast {
@@ -1167,13 +1349,14 @@
     background-color: rgba(27, 46, 51, 0.98) !important;
     /* Adding a faint teal frame to distinguish edges from the dashboard background */
     border: 1px solid rgba(63, 194, 181, 0.2) !important;
-    border-left: 6px solid var(--primary-300) !important; /* 6px for extra institutional weight */
-    
+    border-left: 6px solid var(--primary-300) !important;
+    /* 6px for extra institutional weight */
+
     /* Branded High-Depth Shadow: Creates a floating 3D effect */
-    box-shadow: 
-      0 20px 40px -20px rgba(0, 0, 0, 0.8), 
+    box-shadow:
+      0 20px 40px -20px rgba(0, 0, 0, 0.8),
       0 0 25px -10px var(--primary-400) !important;
-      
+
     backdrop-filter: blur(12px) !important;
   }
 
@@ -1197,14 +1380,16 @@
     background-color: var(--background);
     border-top: 1px solid var(--border);
     padding: 1.5rem 0;
-    margin-top: 3.5rem; /* Institutional Vertical Rhythm (56px) */
+    margin-top: 3.5rem;
+    /* Institutional Vertical Rhythm (56px) */
     transition: all var(--duration-hover) var(--ease-premium);
   }
 
   /* Google-Grade Attached Alignment: Ensures footer feels part of the content flow */
   .footer-attached {
     border-top: 1px solid rgba(0, 0, 0, 0.05);
-    background-color: transparent; /* Seamless blend with dashboard surface */
+    background-color: transparent;
+    /* Seamless blend with dashboard surface */
   }
 
   .dark .footer-attached {
@@ -1222,13 +1407,17 @@
     padding: 0 var(--layout-px-mobile);
   }
 
-  @media (min-width: 40rem) { /* sm */
+  @media (min-width: 40rem) {
+
+    /* sm */
     .haemi-footer-container {
       padding: 0 var(--layout-px-tablet);
     }
   }
 
-  @media (min-width: 64rem) { /* lg */
+  @media (min-width: 64rem) {
+
+    /* lg */
     .haemi-footer-container {
       flex-direction: row;
       padding: 0 var(--layout-px-desktop);
@@ -1239,7 +1428,8 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.6875rem; /* ~11px */
+    font-size: 0.6875rem;
+    /* ~11px */
     color: var(--muted-foreground);
     letter-spacing: 0.025em;
   }
@@ -1253,7 +1443,8 @@
     display: flex;
     align-items: center;
     gap: 1.5rem;
-    font-size: 0.6875rem; /* ~11px */
+    font-size: 0.6875rem;
+    /* ~11px */
     font-weight: 500;
     color: var(--muted-foreground);
   }
@@ -1272,7 +1463,8 @@
     padding: 0.125rem 0.5rem;
     border-radius: 9999px;
     font-family: inherit;
-    font-size: 0.625rem; /* ~10px */
+    font-size: 0.625rem;
+    /* ~10px */
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -1288,13 +1480,33 @@
   }
 
   /* HAEMI OFFICIAL LOGO SYSTEM (Institutional Scale) */
-  .official-logo-sm { height: 1.75rem; }
-  .official-logo-md { height: 2rem; }
-  .official-logo-nav { height: 3rem; }
-  .official-logo-auth { height: 3.75rem; }
-  .official-logo-lg { height: 4rem; }
-  .official-logo-xl { height: 6rem; }
-  .official-logo-xxl { height: 8rem; }
+  .official-logo-sm {
+    height: 1.75rem;
+  }
+
+  .official-logo-md {
+    height: 2rem;
+  }
+
+  .official-logo-nav {
+    height: 3rem;
+  }
+
+  .official-logo-auth {
+    height: 3.75rem;
+  }
+
+  .official-logo-lg {
+    height: 4rem;
+  }
+
+  .official-logo-xl {
+    height: 6rem;
+  }
+
+  .official-logo-xxl {
+    height: 8rem;
+  }
 
   /* HAEMI INSTITUTIONAL AUTH SURFACES */
   .auth-visual-section {
@@ -1312,7 +1524,8 @@
   }
 
   .error-boundary-card {
-    max-width: 25rem; /* ~400px */
+    max-width: 25rem;
+    /* ~400px */
     text-align: center;
     padding: 2rem;
   }
@@ -1337,7 +1550,8 @@
   }
 
   .error-boundary-btn {
-    width: 8.75rem; /* ~140px */
+    width: 8.75rem;
+    /* ~140px */
   }
 
   .error-boundary-dev-details {
@@ -1351,7 +1565,8 @@
     width: 100%;
     max-width: var(--layout-max-width);
     margin: 0 auto;
-    padding: 0 1rem; /* 16px Sidebar Baseline (Matches 'M') */
+    padding: 0 1rem;
+    /* 16px Sidebar Baseline (Matches 'M') */
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1362,40 +1577,50 @@
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    height: 2.5rem !important; /* System Locked 40px */
-    width: 2.5rem !important;  /* System Locked 40px */
+    height: 2.5rem !important;
+    /* System Locked 40px */
+    width: 2.5rem !important;
+    /* System Locked 40px */
     min-width: 2.5rem !important;
     max-width: 2.5rem !important;
     max-height: 2.5rem !important;
     aspect-ratio: 1 / 1 !important;
-    border-radius: 9999px !important; /* Force Absolute Circle */
+    border-radius: 9999px !important;
+    /* Force Absolute Circle */
     background-color: transparent !important;
-    transition: none !important; /* Zero-Shake Policy */
-    transform: none !important;  /* Zero-Shake Policy */
+    transition: none !important;
+    /* Zero-Shake Policy */
+    transform: none !important;
+    /* Zero-Shake Policy */
     flex-shrink: 0 !important;
-    padding: 0 !important; /* FORCE-ZERO PADDING Protocol */
+    padding: 0 !important;
+    /* FORCE-ZERO PADDING Protocol */
     overflow: hidden !important;
     border: none !important;
   }
 
   /* Synchronized Horizon: Prevent 48px Atmospheric Drift */
   .haemi-nav-action-sync {
-    height: 2.5rem !important; /* Hard 40px Lock */
+    height: 2.5rem !important;
+    /* Hard 40px Lock */
     display: flex !important;
     align-items: center !important;
   }
 
   /* Negative-Gutter Precision Protocol */
   .haemi-nav-logo-offset-fix {
-    margin-left: -0.875rem !important; /* Pulls hamburger visual-edge to 16px line */
+    margin-left: -0.875rem !important;
+    /* Pulls hamburger visual-edge to 16px line */
   }
 
   .haemi-nav-action-capsule {
     display: flex;
     align-items: center;
-    height: 2.5rem; /* System Locked 40px */
+    height: 2.5rem;
+    /* System Locked 40px */
     min-height: 2.5rem;
-    border-radius: 0.75rem; /* Institutional Soft Capsule */
+    border-radius: var(--card-radius);
+    /* Institutional Soft Capsule */
     padding: 0 1rem;
     background-color: var(--nav-action-bg);
     border: 1px solid var(--nav-action-border);
@@ -1411,11 +1636,13 @@
     object-fit: cover !important;
     display: block !important;
     transform: none !important;
-    border: 0.09375rem solid #A7E6DB; /* Institutional Border (Primary-300) */
+    border: 0.09375rem solid #A7E6DB;
+    /* Institutional Border (Primary-300) */
   }
 
   .dark .haemi-avatar-full-bleed {
-    border-color: rgba(63, 194, 181, 0.4); /* Primary-Dark-Glow definition */
+    border-color: rgba(63, 194, 181, 0.4);
+    /* Primary-Dark-Glow definition */
   }
 
   .haemi-nav-action-circle:hover {
@@ -1443,14 +1670,32 @@
   /* Responsive Search Shield (Prevents Overlap) */
   .haemi-nav-search-shield {
     @apply hidden md:flex flex-1 items-center justify-center min-w-0;
-    max-width: 42rem; /* ~672px */
+    max-width: 42rem;
+    /* ~672px */
     padding: 0 0.5rem;
   }
 
-  @media (min-width: 80rem) { /* xl */
+  @media (min-width: 80rem) {
+
+    /* xl */
     .haemi-nav-search-shield {
       padding: 0 2rem;
     }
   }
 
 }
+
+  /* ?? HAEMI INSTITUTIONAL LOADING (End-to-End Dominance) */
+  .haemi-institutional-loader {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    z-index: var(--z-loader) !important;
+    background-color: var(--background) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    backdrop-filter: blur(12px) !important;
+    transition: opacity var(--duration-state) var(--ease-premium) !important;
+  }

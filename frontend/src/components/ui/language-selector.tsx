@@ -32,7 +32,7 @@ export const LanguageSelector: React.FC = () => {
                     <span className="font-bold text-xs uppercase tracking-wider">{currentLang?.code}</span>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl border-slate-200 dark:border-slate-800 shadow-2xl">
+            <DropdownMenuContent align="end" className="w-48 rounded-[var(--card-radius)] p-1.5 bg-card/95 backdrop-blur-xl border-border shadow-2xl mt-2 transition-all">
                 <div className="px-2 py-1.5 text-[10px] font-black uppercase text-slate-400 tracking-widest">
                     Select Region
                 </div>
@@ -41,7 +41,7 @@ export const LanguageSelector: React.FC = () => {
                         key={lang.code}
                         onClick={() => setLanguage(lang.code)}
                         className={`
-                            flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all mb-1
+                            flex items-center justify-between p-3 rounded-[var(--card-radius)] cursor-pointer transition-all mb-1
                             ${language === lang.code ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-900'}
                         `}
                     >

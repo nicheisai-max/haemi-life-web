@@ -16,6 +16,7 @@ import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
+import { MedicalLoader } from '@/components/ui/medical-loader';
 import { PATHS } from '../../routes/paths';
 
 // Realistic Growth Data for a National Platform
@@ -64,6 +65,10 @@ export const AdminDashboard: React.FC = () => {
         fetchData();
     }, []);
 
+    if (loading) {
+        return <MedicalLoader message="Synchronizing institutional controls..." />;
+    }
+
     const insightsData = [
         {
             label: 'System Load',
@@ -97,7 +102,7 @@ export const AdminDashboard: React.FC = () => {
     return (
         <div className="space-y-8">
             {/* Hero Section - Standardized Premium Style */}
-            <TransitionItem className="relative overflow-hidden rounded-card bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl shadow-teal-900/20">
+            <TransitionItem className="relative overflow-hidden rounded-[var(--card-radius)] bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl shadow-teal-900/20">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
@@ -119,7 +124,7 @@ export const AdminDashboard: React.FC = () => {
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
                             size="lg"
-                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
+                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
                             onClick={() => navigate(PATHS.ADMIN.USERS)}
                         >
                             <Users className="h-5 w-5" aria-hidden="true" />
@@ -127,7 +132,7 @@ export const AdminDashboard: React.FC = () => {
                         </Button>
                         <Button
                             size="lg"
-                            className="bg-white/10 hover:bg-white/20 text-white border-none shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
+                            className="bg-white/10 hover:bg-white/20 text-white border-none shadow-lg h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
                             onClick={() => navigate(PATHS.ADMIN.SECURITY)}
                         >
                             <ShieldAlert className="h-5 w-5" aria-hidden="true" />

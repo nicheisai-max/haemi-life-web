@@ -81,11 +81,7 @@ export const FindDoctors: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div className="pt-8 flex justify-center items-center min-h-96">
-                <MedicalLoader message="Retrieving Specialist Directory..." />
-            </div>
-        );
+        return <MedicalLoader message="Retrieving Specialist Directory..." />;
     }
 
     return (
@@ -106,7 +102,7 @@ export const FindDoctors: React.FC = () => {
 
             <TransitionItem>
                 {/* Search and Filters */}
-                <Card className="mb-8 border-border/40 shadow-lg shadow-primary/5 bg-card/50 backdrop-blur-xl rounded-xl overflow-hidden">
+                <Card className="mb-8 border-border/40 shadow-lg shadow-primary/5 bg-card/50 backdrop-blur-xl rounded-[var(--card-radius)] overflow-hidden">
                     <CardContent className="p-6">
                         <div className="flex flex-col md:flex-row gap-4">
                             <div className="relative flex-1 group">

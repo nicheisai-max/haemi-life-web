@@ -1,14 +1,19 @@
 // ============================================================
 // HAEMI LIFE — CHAT TYPE SYSTEM (v3.0)
 // Institutional-Grade TypeScript Definitions
-// Naming Standard: camelCase throughout (snake_case only in DB)
+// Naming Standard: snake_case for DB parity, camelCase for local logic
 // ============================================================
+
+/** Branded string types for institutional-grade type safety (Google/Meta Standard) */
+export type UserId = string & { readonly __brand: unique symbol };
+export type MessageId = string & { readonly __brand: unique symbol };
+export type ConversationId = string & { readonly __brand: unique symbol };
 
 // --- Presence ---
 
 export interface PresenceRecord {
     isOnline: boolean;
-    lastActivity: string; // FIXED: was last_activity (snake_case drift)
+    last_activity: string;
 }
 
 export interface PresenceApiResponse {
@@ -21,6 +26,7 @@ export interface PresenceApiResponse {
 
 /** Raw DTO from the API/Socket layer before normalization */
 export interface AttachmentDTO {
+    id?: string;
     url: string;
     tempId: string | number;
     type: string;
@@ -31,6 +37,7 @@ export interface AttachmentDTO {
 
 /** Normalized attachment used inside the frontend Message model */
 export interface Attachment {
+    id?: string; // Institutional UUID SSOT (Optional for optimistic states)
     url: string;
     type: string;
     name: string;
@@ -41,13 +48,13 @@ export interface Attachment {
 
 export interface MessageReaction {
     type: string;
-    userId: string;
+    userId: UserId;
 }
 
 // --- Reply Preview ---
 
 export interface ReplyPreview {
-    id: string;
+    id: MessageId;
     content: string;
     senderName: string;
 }
@@ -55,7 +62,7 @@ export interface ReplyPreview {
 // --- Participants ---
 
 export interface ChatParticipant {
-    id: string;       // Always string. Normalize at the boundary (mapper/provider).
+    id: UserId;       // Institutional Branded Type
     name: string;
     role: string;
     profileImage?: string | null;
@@ -75,9 +82,9 @@ export type MessageType = 'text' | 'image' | 'document';
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 export interface Message {
-    id: string;
-    conversationId: string;
-    senderId: string;
+    id: MessageId;
+    conversationId: ConversationId;
+    senderId: UserId;
     tempId?: string;
     content: string;
     messageType: MessageType;
@@ -91,20 +98,20 @@ export interface Message {
     isMe?: boolean;
     reactions?: MessageReaction[];
     replyTo?: ReplyPreview;
-    replyToId?: string;
+    replyToId?: MessageId;
     sequenceNumber?: number;
 }
 
 // --- Conversations ---
 
 export interface Conversation {
-    id: string;
+    id: ConversationId;
     isDraft?: boolean;
     name?: string;
     updatedAt: string;
     lastMessageAt: string;
     lastMessage: string;
-    lastMessageId: string;
+    lastMessageId: MessageId;
     participants: ChatParticipant[];
     unreadCount: number;
     messageCount: number;
@@ -134,10 +141,16 @@ export interface RawParticipant {
 
 export function normalizeParticipant(p: RawParticipant): ChatParticipant {
     return {
-        id: String(p.id),
+        id: String(p.id) as UserId,
         name: p.name,
         role: p.role,
         profileImage: p.profileImage ?? p.profile_image ?? null,
         initials: p.initials ?? '',
     };
+}
+
+export interface MessageReadEvent {
+    conversationId: ConversationId;
+    messageIds: MessageId[];
+    userId: UserId;
 }

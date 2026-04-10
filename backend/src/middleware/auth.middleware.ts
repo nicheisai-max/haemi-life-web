@@ -46,7 +46,7 @@ interface AuthUserRow {
     status: UserStatus;
     role: UserRole;
     token_version: number;
-    lastActivity: Date;
+    last_activity: Date;
     minutes_since_activity: number | null;
 }
 
@@ -81,62 +81,86 @@ const validateJwtPayload = (decoded: unknown): decoded is JwtPayloadStrict => {
 };
 
 /**
- * Standard Authentication Middleware
+ * Standard Authentication Middleware (Institutional Grade)
  */
 export const authenticateToken = async (inputReq: Request, res: Response, next: NextFunction) => {
-    const req = inputReq as AuthenticatedRequest; // Single safe transition to local type
+    const req = inputReq as AuthenticatedRequest;
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
-    if (!token) return sendError(res, 401, 'Authentication required');
+    if (!token) {
+        logger.info('[Auth.Middleware] Anonymous access attempt blocked.');
+        return sendError(res, 401, 'Authentication required');
+    }
 
     jwt.verify(token, process.env.JWT_SECRET as string, async (err: jwt.VerifyErrors | null, decoded: unknown) => {
         if (err || !validateJwtPayload(decoded)) {
+            logger.warn('[Auth.Middleware] Invalid or expired JWT intercepted.', { error: err?.message });
             return sendError(res, 401, 'Invalid or expired session.');
         }
 
         const payload: JwtPayloadStrict = decoded;
 
         try {
+            // Institutional Guard: Verify user exists and status is ACTIVE
             const userResult = await pool.query<AuthUserRow>(
-                'SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, "lastActivity" FROM users WHERE id = $1',
+                'SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity FROM users WHERE id = $1',
                 [payload.id]
             );
 
-            if (userResult.rows.length === 0) return sendError(res, 401, 'User session invalid.');
+            if (userResult.rows.length === 0) {
+                logger.warn('[Auth.Middleware] Ghost user session attempt', { userId: payload.id });
+                return sendError(res, 401, 'User session invalid.');
+            }
 
             const userData = userResult.rows[0];
-            if (payload.tokenVersion !== userData.token_version) return sendError(res, 401, 'Session revoked.');
-            if (userData.status !== 'ACTIVE') return sendError(res, 403, 'Account restricted.');
+            
+            // Versioning Guard: Detect and reject revoked token versions
+            if (payload.tokenVersion !== userData.token_version) {
+                logger.warn('[Auth.Middleware] Token version mismatch (Revoked)', { userId: payload.id });
+                return sendError(res, 401, 'Session revoked.');
+            }
+            
+            if (userData.status !== 'ACTIVE') {
+                logger.warn('[Auth.Middleware] Restricted account access attempt', { userId: payload.id, status: userData.status });
+                return sendError(res, 403, 'Account restricted.');
+            }
 
-            const sessionResult = await pool.query<{ revoked: boolean, access_token_jti: string, previous_access_token_jti: string, jti_rotated_at: Date, lastActivity: Date }>(
-                'SELECT revoked, access_token_jti, previous_access_token_jti, jti_rotated_at, "lastActivity" FROM user_sessions WHERE session_id = $1',
+            // Session Silo Guard: Verify physical session status in database
+            const sessionResult = await pool.query<{ revoked: boolean, last_activity: Date }>(
+                'SELECT revoked, last_activity FROM user_sessions WHERE session_id = $1',
                 [payload.sessionId]
             );
 
-            if (sessionResult.rows.length === 0 || sessionResult.rows[0].revoked) return sendError(res, 401, 'Session invalid.');
-
-            const sessionData = sessionResult.rows[0];
-            const nowMs = Date.now();
-            const lastActivityTime = sessionData.lastActivity ? new Date(sessionData.lastActivity).getTime() : 0;
-
-            if (nowMs - lastActivityTime > 60000) {
-                const timeoutMinutes = await getSessionTimeoutMinutes();
-                const newExpiresAt = new Date(nowMs + timeoutMinutes * 60 * 1000);
-                await pool.query('UPDATE user_sessions SET "lastActivity" = CURRENT_TIMESTAMP, expires_at = $1 WHERE session_id = $2', [newExpiresAt, payload.sessionId]);
-                await pool.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [payload.id]);
+            if (sessionResult.rows.length === 0 || sessionResult.rows[0].revoked) {
+                logger.warn('[Auth.Middleware] Explicitly revoked session attempt', { sessionId: payload.sessionId });
+                return sendError(res, 401, 'Session invalid.');
             }
 
-            userData.lastActivity = new Date(); // Update local ref after DB update
+            // High-Performance Activity Tracking (Batch-optimized)
+            const sessionData = sessionResult.rows[0];
+            const nowMs = Date.now();
+            const last_activity_time = sessionData.last_activity ? new Date(sessionData.last_activity).getTime() : 0;
 
-            /**
-             * FIX 1 — STRUCTURAL TYPING
-             * No cast required for finalUserPayload assignment.
-             */
+            if (nowMs - last_activity_time > 60000) {
+                const timeoutMinutes = await getSessionTimeoutMinutes();
+                const newExpiresAt = new Date(nowMs + timeoutMinutes * 60 * 1000);
+                
+                // Nuclear Persistence: Update both user and session markers
+                Promise.all([
+                    pool.query('UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP, expires_at = $1 WHERE session_id = $2', [newExpiresAt, payload.sessionId]),
+                    pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [payload.id])
+                ]).catch(error => {
+                    logger.error('[Auth.Middleware] Background pulse update failed', { 
+                        error: error instanceof Error ? error.message : String(error) 
+                    });
+                });
+            }
+
             const finalUserPayload: LocalJWTPayload = {
                 id: payload.id,
                 email: payload.email,
-                role: payload.role,
+                role: payload.role as UserRole,
                 name: userData.name,
                 initials: userData.initials,
                 tokenVersion: payload.tokenVersion,
@@ -150,7 +174,7 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
             req.user = finalUserPayload;
             return next();
         } catch (error: unknown) {
-            logger.error('[Auth.Middleware.authenticateToken] Failure', { 
+            logger.error('[Auth.Middleware.authenticateToken] Systemic failure', {
                 userId: payload.id,
                 error: error instanceof Error ? error.message : String(error)
             });
@@ -161,6 +185,46 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
 
 export const protect = authenticateToken;
 
+/**
+ * Standard RBAC Guard (Role-Based Access Control)
+ */
+export const authorizeRole = (roles: UserRole[]) => {
+    return async (req: Request, res: Response, next: NextFunction) => {
+        const user = req.user;
+        if (!isLocalJWTPayload(user) || !roles.includes(user.role as UserRole)) {
+            await auditService.log({
+                userId: isLocalJWTPayload(user) ? user.id : SYSTEM_ANONYMOUS_ID,
+                actorRole: isLocalJWTPayload(user) ? user.role : undefined,
+                action: 'ACCESS_DENIED_RBAC',
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
+            });
+            
+            logger.warn('[Auth.Middleware] RBAC Access Rejected', { 
+                userId: user?.id, 
+                required: roles, 
+                actual: user?.role 
+            });
+            
+            return sendError(res, 403, 'Access denied.');
+        }
+        next();
+    };
+};
+
+/**
+ * @deprecated Use authorizeRole directly for single roles if needed, or this wrapper.
+ */
+export const requireRole = (allowedRole: UserRole) => authorizeRole([allowedRole]);
+
+/**
+ * @deprecated Use authorizeRole directly.
+ */
+export const restrictTo = (...roles: UserRole[]) => authorizeRole(roles);
+
+/**
+ * Graceful Decryption for Public/Private Hybrid Routes
+ */
 export const relaxedAuthenticateToken = (inputReq: Request, res: Response, next: NextFunction) => {
     const req = inputReq as AuthenticatedRequest;
     const authHeader = req.headers['authorization'];
@@ -183,7 +247,7 @@ export const relaxedAuthenticateToken = (inputReq: Request, res: Response, next:
             const finalUserPayload: LocalJWTPayload = {
                 id: payload.id,
                 email: payload.email,
-                role: payload.role,
+                role: payload.role as UserRole,
                 name: '',
                 tokenVersion: payload.tokenVersion,
                 jti: payload.jti,
@@ -194,48 +258,10 @@ export const relaxedAuthenticateToken = (inputReq: Request, res: Response, next:
             req.user = finalUserPayload;
             return next();
         } catch (error: unknown) {
-            logger.error('[Auth.Middleware.relaxedAuthenticateToken] Graceful skip on error', {
-                error: error instanceof Error ? error.message : String(error)
+            logger.error('[Auth.Middleware.relaxedAuthenticateToken] Silent capture failure', { 
+                error: error instanceof Error ? error.message : String(error) 
             });
-            return next();
+            return next(); 
         }
     });
 };
-
-export const requireRole = (allowedRole: string) => {
-    return async (req: Request, res: Response, next: NextFunction) => {
-        const user = req.user;
-        if (!isLocalJWTPayload(user) || user.role !== allowedRole) {
-            await auditService.log({
-                userId: isLocalJWTPayload(user) ? user.id : SYSTEM_ANONYMOUS_ID,
-                actorRole: isLocalJWTPayload(user) ? user.role : undefined,
-                action: 'ACCESS_DENIED_RBAC',
-                ipAddress: req.ip,
-                userAgent: req.headers['user-agent'],
-            });
-            return sendError(res, 403, 'Access denied.');
-        }
-        next();
-    };
-};
-
-export const authorizeRole = (roles: string[]) => {
-    return async (req: Request, res: Response, next: NextFunction) => {
-        const user = req.user;
-        if (!isLocalJWTPayload(user) || !roles.includes(user.role)) {
-            await auditService.log({
-                userId: isLocalJWTPayload(user) ? user.id : SYSTEM_ANONYMOUS_ID,
-                actorRole: isLocalJWTPayload(user) ? user.role : undefined,
-                action: 'ACCESS_DENIED_RBAC_MULTI',
-                ipAddress: req.ip,
-                userAgent: req.headers['user-agent'],
-            });
-            return sendError(res, 403, 'Access denied.');
-        }
-        next();
-    };
-};
-
-export function restrictTo(...roles: string[]) {
-    return authorizeRole(roles);
-}

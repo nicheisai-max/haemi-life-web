@@ -249,7 +249,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
                     <button
                         onClick={() => setActiveTab('draw')}
                         className={cn(
-                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300",
+                            "flex items-center gap-2 px-4 py-1.5 rounded-[var(--card-radius)] text-sm font-medium transition-all duration-300",
                             activeTab === 'draw'
                                 ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
                                 : "text-muted-foreground hover:text-foreground"
@@ -261,7 +261,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
                     <button
                         onClick={() => setActiveTab('type')}
                         className={cn(
-                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300",
+                            "flex items-center gap-2 px-4 py-1.5 rounded-[var(--card-radius)] text-sm font-medium transition-all duration-300",
                             activeTab === 'type'
                                 ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
                                 : "text-muted-foreground hover:text-foreground"

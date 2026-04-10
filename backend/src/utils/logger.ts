@@ -63,8 +63,14 @@ export const logger = {
     auth: (message: string, meta?: unknown) => {
         const maskedMeta = meta ? maskPHI(meta) : undefined;
         const log = { timestamp: getTimestamp(), level: 'AUTH', message, meta: maskedMeta };
-        // console.log(`[AUTH] ${message}`, maskedMeta || '');
         appendToFile(log, 'auth.log');
+    },
+    audit: (message: string, meta?: unknown) => {
+        const maskedMeta = meta ? maskPHI(meta) : undefined;
+        const log = { timestamp: getTimestamp(), level: 'AUDIT', message, meta: maskedMeta };
+        // Institutional Standard: Audit logs are mirrored to the main app log AND dedicated audit store
+        appendToFile(log);
+        appendToFile(log, 'audit.log');
     }
 };
 

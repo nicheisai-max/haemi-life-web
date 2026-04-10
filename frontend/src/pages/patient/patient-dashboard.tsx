@@ -18,6 +18,7 @@ import { TransitionItem } from '../../components/layout/page-transition';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
+import { MedicalLoader } from '@/components/ui/medical-loader';
 
 // REALISTIC BOTSWANA CONTEXT DATA
 const HEALTH_TRENDS_DATA = [
@@ -84,11 +85,15 @@ export const PatientDashboard: React.FC = () => {
     const upcomingAppointments = appointments.slice(0, 3);
     const activePrescriptions = prescriptions.filter(p => p.status === 'pending' || p.status === 'filled');
 
+    if (loading) {
+        return <MedicalLoader message="Syncing your health vault..." />;
+    }
+
     return (
 
         <div className="space-y-8">
             {/* Hero Section - Compact */}
-            <TransitionItem className="relative overflow-hidden rounded-card border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+            <TransitionItem className="relative overflow-hidden rounded-[var(--card-radius)] border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="space-y-3">
@@ -106,20 +111,19 @@ export const PatientDashboard: React.FC = () => {
                             }
                         </div>
                     </div>
-                    <Button
-                        size="sm"
-                        className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] px-6 h-10 text-sm font-bold rounded-xl border-none whitespace-nowrap transition-all duration-300 hover:scale-105 active:scale-95"
-                        onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
-                    >
+                        <Button
+                            size="sm"
+                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] px-6 h-10 text-sm font-bold rounded-[var(--card-radius)] border-none whitespace-nowrap transition-all duration-300 hover:scale-105 active:scale-95"
+                            onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
+                        >
                         <Plus className="h-4 w-4 mr-2" />
                         Book Appointment
                     </Button>
                 </div>
             </TransitionItem>
 
-            {/* Error Message */}
             {error && (
-                <TransitionItem className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive flex items-center gap-3" role="alert">
+                <TransitionItem className="rounded-[var(--card-radius)] border border-destructive/50 bg-destructive/10 p-3 text-destructive flex items-center gap-3" role="alert">
                     <AlertCircle className="h-4 w-4" />
                     <p className="text-sm font-medium">{error}</p>
                 </TransitionItem>
@@ -242,7 +246,7 @@ export const PatientDashboard: React.FC = () => {
                 <div className="w-full lg:w-1/3 flex flex-col h-full space-y-6">
 
                     {/* Appointments List */}
-                    <section className="bg-white dark:bg-slate-950/50 rounded-card border border-slate-200 dark:border-slate-800 flex-1 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
+                    <section className="bg-white dark:bg-slate-950/50 rounded-[var(--card-radius)] border border-slate-200 dark:border-slate-800 flex-1 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
                         <div className="p-6 border-b border-transparent flex items-center justify-between">
                             <h2 className="font-bold text-slate-900 dark:text-white text-sm tracking-wide">Upcoming</h2>
                             <Button variant="ghost" size="sm" className="h-6 text-[10px] font-semibold text-primary/80 hover:text-primary px-2 uppercase tracking-wider" onClick={() => navigate(PATHS.PATIENT.APPOINTMENTS)}>
@@ -269,11 +273,11 @@ export const PatientDashboard: React.FC = () => {
                                         <button
                                             key={appointment.id}
                                             type="button"
-                                            className={`w-full appearance-none bg-transparent border-none text-left flex gap-3 p-0 m-0 rounded-full !rounded-xl transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 group cursor-pointer ${isToday ? 'bg-primary/5' : ''}`}
+                                            className={`w-full appearance-none bg-transparent border-none text-left flex gap-3 p-0 m-0 rounded-[var(--card-radius)] transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50 group cursor-pointer ${isToday ? 'bg-primary/5' : ''}`}
                                             onClick={() => navigate(PATHS.CONSULTATION(appointment.id.toString()))}
                                         >
                                             <div className="flex gap-3 p-3 w-full">
-                                                <div className="flex flex-col items-center justify-center h-11 w-11 shrink-0 bg-slate-100 dark:bg-slate-800/50 rounded-lg group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
+                                                <div className="flex flex-col items-center justify-center h-11 w-11 shrink-0 bg-slate-100 dark:bg-slate-800/50 rounded-[var(--card-radius)] group-hover:bg-white dark:group-hover:bg-slate-700 transition-colors">
                                                     <span className="text-sm font-bold text-slate-900 dark:text-white leading-none">{dateInfo.day}</span>
                                                     <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{dateInfo.month}</span>
                                                 </div>
@@ -295,7 +299,7 @@ export const PatientDashboard: React.FC = () => {
                     </section>
 
                     {/* Compact Health Tip */}
-                    <section className="bg-gradient-to-br from-teal-800 to-teal-950 rounded-card p-4 text-white relative overflow-hidden shadow-lg">
+                    <section className="bg-gradient-to-br from-teal-800 to-teal-950 rounded-[var(--card-radius)] p-4 text-white relative overflow-hidden shadow-lg">
                         <GradientMesh variant="subtle" className="opacity-10" />
                         <div className="relative z-10 flex gap-4">
                             <div className="p-2.5 bg-white/10 rounded-xl h-fit backdrop-blur-sm">

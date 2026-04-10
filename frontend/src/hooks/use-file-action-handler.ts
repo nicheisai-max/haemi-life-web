@@ -22,10 +22,44 @@ export const useFileActionHandler = ({ onSuccess, onDeleteSuccess, onError }: Us
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const { confirm } = useConfirm();
 
+    // 🛡️ INSTITUTIONAL KEYWORD SCANNER (v5.0)
+    // High-performance heuristic mapping for clinical asset classification.
+    // Order matters: Match priority is sequential.
+    const CLINICAL_HEURISTICS: Array<{ keywords: string[]; type: ClinicalRecordType }> = [
+        { keywords: ['presc', 'rx', 'medication', 'drug'], type: ClinicalRecordType.Prescription },
+        { keywords: ['lab', 'result', 'blood', 'test', 'urea', 'glucose'], type: ClinicalRecordType.LabResult },
+        { keywords: ['xray', 'radiology', 'scan', 'mri', 'ct', 'ultra', 'imaging'], type: ClinicalRecordType.Radiology },
+        { keywords: ['note', 'clinic', 'visit', 'consult'], type: ClinicalRecordType.ClinicalNote },
+        { keywords: ['immun', 'vaccin', 'vax', 'shot'], type: ClinicalRecordType.Immunization },
+        { keywords: ['report', 'specialist', 'summary', 'discharge'], type: ClinicalRecordType.SpecialistReport }
+    ];
+
+    /**
+     * 🔍 INSTITUTIONAL INFERENCE ENGINE (v5.0)
+     * Automatically classifies clinical assets based on filename heuristics 
+     * to maintain Google/Meta grade metadata integrity.
+     */
+    const inferClinicalType = (fileName: string, suggestedType: ClinicalRecordType): ClinicalRecordType => {
+        const lowerName = fileName.toLocaleLowerCase();
+        
+        for (const entry of CLINICAL_HEURISTICS) {
+            if (entry.keywords.some(keyword => lowerName.includes(keyword))) {
+                logger.info(`[Forensic-Inference] Classified '${fileName}' as '${entry.type}' via heuristics.`);
+                return entry.type;
+            }
+        }
+
+        // Fallback to the context-aware suggested type from the page
+        return suggestedType;
+    };
+
     // 🚀 UNIFIED UPLOAD PIPELINE: Forensic Replace Logic
-    const handleUpload = async (file: File, recordType: ClinicalRecordType): Promise<MedicalRecord | undefined> => {
+    const handleUpload = async (file: File, suggestedType: ClinicalRecordType): Promise<MedicalRecord | undefined> => {
         setIsProcessing(true);
         try {
+            // Step 0: Institutional Classification
+            const recordType = inferClinicalType(file.name, suggestedType);
+
             // 🔎 Step 1: Forensic Existence Check (Google/Meta Grade)
             const check = await checkFileExistence(file.name);
 
@@ -33,7 +67,7 @@ export const useFileActionHandler = ({ onSuccess, onDeleteSuccess, onError }: Us
                 // ⚠️ Step 2: Strategic Conflict Resolution via Global Modal
                 const shouldReplace = await confirm({
                     title: 'Replace existing file?',
-                    message: `A file named '${file.name}' already exists in your clinical history. Would you like to replace it with this version?`,
+                    message: `A file named '${file.name}' already exists in your clinical history as a '${check.record.recordType}'. Would you like to replace it?`,
                     type: 'warning',
                     confirmText: 'Replace File',
                     cancelText: 'Cancel'
@@ -46,9 +80,9 @@ export const useFileActionHandler = ({ onSuccess, onDeleteSuccess, onError }: Us
 
                 // Step 3: Atomic Replacement (Delete then Upload)
                 try {
-                    await deleteRecord(check.record.id);
+                    await deleteRecord(check.record.id.toString());
                     if (onDeleteSuccess) {
-                        onDeleteSuccess(check.record.id);
+                        onDeleteSuccess(check.record.id.toString());
                     }
                 } catch (delError: unknown) {
                     // 🛡️ GHOST RECOVERY: If it's a 404, the record was already logically purged.
@@ -80,7 +114,7 @@ export const useFileActionHandler = ({ onSuccess, onDeleteSuccess, onError }: Us
     };
 
     // 📦 BATCH UPLOAD PIPELINE: Strict 5-File Institutional Override
-    const handleBatchUpload = async (files: FileList | File[], recordType: ClinicalRecordType): Promise<void> => {
+    const handleBatchUpload = async (files: FileList | File[], suggestedType: ClinicalRecordType): Promise<void> => {
         const fileArray = Array.from(files);
         
         // 🔒 GLOBAL INSTITUTIONAL LIMIT CHECK
@@ -95,7 +129,7 @@ export const useFileActionHandler = ({ onSuccess, onDeleteSuccess, onError }: Us
 
         try {
             for (const file of fileArray) {
-                await handleUpload(file, recordType);
+                await handleUpload(file, suggestedType);
             }
         } catch (error: unknown) {
             logger.error('[FileActionHandler] Batch Processing Failure:', error instanceof Error ? error.message : String(error));

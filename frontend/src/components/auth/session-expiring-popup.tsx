@@ -122,7 +122,7 @@ export const SessionExpiringPopup: React.FC<SessionExpiringPopupProps> = ({ onEx
                                 </DialogDescription>
                             </DialogHeader>
 
-                            <div className="flex flex-col items-center justify-center py-[1.5rem] my-[1rem] bg-muted/30 dark:bg-muted/10 rounded-lg border border-border/50">
+                            <div className="flex flex-col items-center justify-center py-[1.5rem] my-[1rem] bg-muted/30 dark:bg-muted/10 rounded-[var(--card-radius)] border border-border/50">
                                 <motion.div 
                                     className="flex items-center gap-[0.75rem] text-[2rem] font-bold text-primary"
                                     animate={timeLeft <= 30 ? { scale: [1, 1.05, 1] } : {}}
@@ -148,7 +148,7 @@ export const SessionExpiringPopup: React.FC<SessionExpiringPopupProps> = ({ onEx
                                     Dismiss
                                 </Button>
                                 <Button 
-                                    className="flex-1 h-[2.75rem] text-[0.875rem] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all active:scale-[0.98]"
+                                    className="flex-1 h-[2.75rem] text-[0.875rem] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-[background-color,color,opacity,box-shadow,transform] active:scale-[0.98]"
                                     onClick={handleExtend}
                                     isLoading={isExtending}
                                     disabled={isExtending}

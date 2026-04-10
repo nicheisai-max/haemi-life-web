@@ -69,11 +69,7 @@ export const PrescriptionQueue: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div className="max-w-7xl mx-auto p-8 flex justify-center items-center min-h-[400px]">
-                <MedicalLoader message="Retrieving prescription queue..." />
-            </div>
-        );
+        return <MedicalLoader message="Retrieving prescription queue..." />;
     }
 
     return (
@@ -83,7 +79,7 @@ export const PrescriptionQueue: React.FC = () => {
                     <h1 className="page-heading">Prescription Queue</h1>
                     <p className="page-subheading">Process pending prescription orders</p>
                 </div>
-                <div className="flex bg-primary/10 rounded-lg p-4 items-center gap-3">
+                <div className="flex bg-primary/10 rounded-[var(--card-radius)] p-4 items-center gap-3">
                     <div className="text-h3 text-primary leading-none">{prescriptions.length}</div>
                     <div className="text-sm font-medium text-muted-foreground">Pending Orders</div>
                 </div>
@@ -122,7 +118,7 @@ export const PrescriptionQueue: React.FC = () => {
                         <Card key={prescription.id} className="group hover:shadow-lg transition-all duration-300 border-border/60 hover:border-primary/20">
                             <CardContent className="p-6">
                                 <div className="flex flex-col md:flex-row gap-5 items-start">
-                                    <div className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-lg bg-orange-100 dark:bg-orange-900/30 items-center justify-center text-orange-600 dark:text-orange-400">
+                                    <div className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-[var(--card-radius)] bg-orange-100 dark:bg-orange-900/30 items-center justify-center text-orange-600 dark:text-orange-400">
                                         <AlertTriangle className="h-6 w-6" />
                                     </div>
 

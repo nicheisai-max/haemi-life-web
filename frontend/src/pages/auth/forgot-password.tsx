@@ -136,7 +136,7 @@ export const ForgotPassword: React.FC = () => {
                     <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center text-green-600 dark:text-green-400 mb-2">
                         <CheckCircle2 className="h-10 w-10" />
                     </div>
-                    <div className="p-4 bg-muted/30 rounded-lg w-full max-w-sm border border-muted text-center">
+                    <div className="p-4 bg-muted/30 rounded-[var(--card-radius)] w-full max-w-sm border border-muted text-center">
                         <p className="text-sm font-medium animate-pulse">Redirecting to login...</p>
                     </div>
                 </div>

@@ -15,7 +15,7 @@
     "test:e2e:backend": "tsx src/app.ts",
     "preflight": "tsx src/utils/preflight.ts",
     "wait-for-backend": "tsx src/utils/wait-for-backend.ts",
-    "db:health": "node scripts/db_health_check.js"
+    "db:health": "tsx ../scripts/schema-guard.ts"
   },
   "keywords": [],
   "author": "",

@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { PATHS } from '../../routes/paths';
 import { getErrorMessage } from '../../lib/error';
 
-const DispensePrescription: React.FC = () => {
+export const DispensePrescription: React.FC = () => {
     const [rxId, setRxId] = useState('');
     const [prescription, setPrescription] = useState<Prescription | null>(null);
     const [loading, setLoading] = useState(false);
@@ -189,14 +189,14 @@ const DispensePrescription: React.FC = () => {
                                 <h3 className="text-xl font-bold mb-2">No Active Prescription</h3>
                                 <p className="text-muted-foreground max-w-sm mb-6">Enter a Prescription ID or scan a patient's pharmacy card to see medication details here.</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md">
-                                    <div className="p-4 rounded-xl border bg-slate-50/50 dark:bg-slate-900/50 text-left">
+                                    <div className="p-4 rounded-[var(--card-radius)] border bg-slate-50/50 dark:bg-slate-900/50 text-left">
                                         <div className="flex items-center gap-2 mb-1">
                                             <User className="h-4 w-4 text-teal-500" />
                                             <span className="text-xs font-bold uppercase">Patient Data</span>
                                         </div>
                                         <div className="text-sm text-muted-foreground italic">Waiting for input...</div>
                                     </div>
-                                    <div className="p-4 rounded-xl border bg-slate-50/50 dark:bg-slate-900/50 text-left">
+                                    <div className="p-4 rounded-[var(--card-radius)] border bg-slate-50/50 dark:bg-slate-900/50 text-left">
                                         <div className="flex items-center gap-2 mb-1">
                                             <Pill className="h-4 w-4 text-teal-500" />
                                             <span className="text-xs font-bold uppercase">Medication</span>
@@ -213,4 +213,4 @@ const DispensePrescription: React.FC = () => {
     );
 };
 
-export default DispensePrescription;
+

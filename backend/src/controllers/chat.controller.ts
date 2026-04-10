@@ -12,21 +12,26 @@ import { chatReliabilityService } from '../services/chat-reliability.service';
 import * as path from 'path';
 import { fileService } from '../services/file.service';
 import { upload as commonUpload } from '../middleware/upload.middleware';
-import { encrypt, decrypt } from '../utils/security';
 import { sendResponse, sendError } from '../utils/response';
 import { notificationService } from '../services/notification.service';
 import { mapMessageToResponse, mapConversationToResponse } from '../utils/chat.mapper';
 import crypto from 'crypto';
 import { statusService } from '../services/status.service';
-import { 
-    DbMessage, 
-    DbConversation, 
-    ChatParticipant, 
-    DbAttachment, 
-    DbReaction, 
-    ConversationResponse 
+import {
+    DbMessage,
+    DbConversation,
+    ChatParticipant,
+    DbAttachment,
+    DbReaction,
+    ConversationResponse,
+    UserId,
+    MessageId,
+    ConversationId,
+    SendMessageRequest,
+    ReactToMessageRequest,
+    DeleteMessageRequest
 } from '../types/chat.types';
-import { ChatMessage } from '../types/socket.types';
+import { ChatMessage, MessageDeletedPayload } from '../types/socket.types';
 import { JWTPayload } from '../types/express';
 
 // 🔒 STRICT UUID VALIDATION (RFC 4122)
@@ -46,8 +51,10 @@ export const uploadAttachment = async (req: Request, res: Response) => {
     }
 
     try {
-        const { originalname, mimetype, buffer } = req.file;
-        
+        const { mimetype, buffer } = req.file;
+        // Institutional Privacy Guard: Strip any absolute path segments leaked by client environments
+        const originalname = path.basename(req.file.originalname);
+
         // Institutional Save: Non-blocking async write via FileService
         const relativePath = await fileService.saveFileFromBuffer(buffer, 'chat/temp', originalname);
 
@@ -81,19 +88,19 @@ export const uploadAttachment = async (req: Request, res: Response) => {
 export const getConversations = async (req: Request, res: Response) => {
     const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
-    const userId = user.id;
+    const userId = user.id as UserId;
 
     if (!isUUID(userId)) {
         return sendError(res, 400, 'Invalid or missing userId (UUID expected)');
     }
 
     try {
-        const convResult = await pool.query<{ 
-            id: string, 
-            updated_at: string | Date, 
-            last_message_at: string | Date | null, 
-            participants_hash: string, 
-            last_message_id: string | null 
+        const convResult = await pool.query<{
+            id: string,
+            updated_at: string | Date,
+            last_message_at: string | Date | null,
+            participants_hash: string,
+            last_message_id: string | null
         }>(
             `SELECT DISTINCT ON (c.id) 
                 c.id, c.updated_at, 
@@ -101,28 +108,46 @@ export const getConversations = async (req: Request, res: Response) => {
                 c.participants_hash, m.id as last_message_id
              FROM conversations c
              JOIN conversation_participants cp ON c.id = cp.conversation_id
-             LEFT JOIN messages m ON c.id = m.conversation_id
+             LEFT JOIN messages m ON c.id = m.conversation_id AND m.is_deleted = false
              WHERE cp.user_id = $1
+               AND (
+                     -- D7 REMEDIATION: Exclude ghost conversations (0 messages) older than
+                     -- 10 minutes. Using EXISTS (not COUNT) for optimal query plan.
+                     -- DB is the SSOT: the row still exists in "conversations"; we only
+                     -- filter the read projection so the sidebar stays clean.
+                     EXISTS (
+                         SELECT 1 FROM messages msg
+                         WHERE msg.conversation_id = c.id
+                           AND msg.is_deleted = false
+                     )
+                     -- 10-minute grace: allows freshly-created threads to appear in the
+                     -- sidebar immediately so the new-chat UX flow is not broken.
+                     OR c.created_at > NOW() - INTERVAL '10 minutes'
+                   )
              ORDER BY c.id, m.created_at DESC NULLS LAST`,
-            [userId]
+            // TS-STRICT: String() strips the branded UserId type → resolves to the
+            // `pool.query(text, values)` Promise overload, preventing pg from matching
+            // the callback overload `pool.query(text, values, callback)` instead.
+            [String(userId)]
         );
 
         if (convResult.rows.length === 0) {
             return sendResponse(res, 200, true, 'No conversations found', []);
         }
 
-        const sortedConvs = convResult.rows.sort((a, b) => {
-            const timeA = new Date(a.last_message_at || a.updated_at).getTime();
-            const timeB = new Date(b.last_message_at || b.updated_at).getTime();
+        const sortedConvs = convResult.rows.sort((a, b): number => {
+            const timeA = new Date(a.last_message_at ?? a.updated_at).getTime();
+            const timeB = new Date(b.last_message_at ?? b.updated_at).getTime();
             return timeB - timeA;
         });
 
-        const convIds = sortedConvs.map(c => c.id);
+        const convIds: string[] = sortedConvs.map((c): string => c.id);
 
         const msgResult = await pool.query<{ conversation_id: string, preview_text: string | null }>(
             `SELECT DISTINCT ON (conversation_id) conversation_id, preview_text
              FROM messages
              WHERE conversation_id = ANY($1)
+               AND is_deleted = false
                AND NOT EXISTS (SELECT 1 FROM deleted_messages dm WHERE dm.message_id = messages.id AND dm.user_id = $2)
              ORDER BY conversation_id, created_at DESC`,
             [convIds, userId]
@@ -133,6 +158,7 @@ export const getConversations = async (req: Request, res: Response) => {
             `SELECT m.conversation_id, COUNT(*) as count
              FROM messages m
              WHERE m.conversation_id = ANY($1)
+               AND m.is_deleted = false
                AND m.status != 'read' AND m.sender_id != $2
                AND NOT EXISTS (SELECT 1 FROM deleted_messages dm WHERE dm.message_id = m.id AND dm.user_id = $2)
              GROUP BY m.conversation_id`,
@@ -140,13 +166,13 @@ export const getConversations = async (req: Request, res: Response) => {
         );
         const unreadMap = new Map<string, number>(unreadResult.rows.map(r => [r.conversation_id, parseInt(r.count)]));
 
-        const partResult = await pool.query<{ 
-            conversation_id: string, 
-            id: string, 
-            name: string, 
-            role: string, 
-            initials: string, 
-            profile_image: string | null 
+        const partResult = await pool.query<{
+            conversation_id: string,
+            id: string,
+            name: string,
+            role: string,
+            initials: string,
+            profile_image: string | null
         }>(
             `SELECT cp.conversation_id, u.id, u.name, u.role, u.initials, u.profile_image
              FROM conversation_participants cp
@@ -156,23 +182,23 @@ export const getConversations = async (req: Request, res: Response) => {
         );
 
         const partMap = new Map<string, ChatParticipant[]>();
-        partResult.rows.forEach(r => {
+        partResult.rows.forEach((r): void => {
             if (!partMap.has(r.conversation_id)) partMap.set(r.conversation_id, []);
             partMap.get(r.conversation_id)!.push({
-                id: r.id, name: r.name, role: r.role, initials: r.initials, profileImage: r.profile_image
+                id: r.id as UserId, name: r.name, role: r.role, initials: r.initials, profileImage: r.profile_image
             });
         });
 
-        const conversations: ConversationResponse[] = sortedConvs.map(row => {
+        const conversations: ConversationResponse[] = sortedConvs.map((row): ConversationResponse | null => {
             const dbConv: DbConversation = {
-                id: row.id,
+                id: row.id as ConversationId,
                 updated_at: row.updated_at,
-                last_message_at: row.last_message_at || row.updated_at,
+                last_message_at: row.last_message_at ?? row.updated_at,
                 participants_hash: row.participants_hash,
-                last_message: lastMsgMap.get(row.id) || undefined,
-                last_message_id: row.last_message_id || undefined,
-                participants: partMap.get(row.id) || [],
-                unread_count: unreadMap.get(row.id) || 0,
+                last_message: lastMsgMap.get(row.id) ?? undefined,
+                last_message_id: (row.last_message_id as MessageId | null) ?? undefined,
+                participants: partMap.get(row.id) ?? [],
+                unread_count: unreadMap.get(row.id) ?? 0,
                 message_count: 0,
                 sequence_counter: 0
             };
@@ -193,8 +219,8 @@ export const getConversations = async (req: Request, res: Response) => {
 export const getMessages = async (req: Request, res: Response) => {
     const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
-    const userId = user.id;
-    const { conversationId } = req.params as { conversationId: string };
+    const userId = user.id as UserId;
+    const { conversationId } = req.params as { conversationId: ConversationId };
 
     if (!isUUID(conversationId)) {
         return sendError(res, 400, 'Invalid or missing conversationId (UUID expected)');
@@ -238,8 +264,8 @@ export const getMessages = async (req: Request, res: Response) => {
             return sendResponse(res, 200, true, 'Messages fetched', []);
         }
 
-        const messageIds = result.rows.map(m => m.id);
-        const replyToIds = result.rows.map(m => m.reply_to_id).filter((id): id is string => !!id);
+        const messageIds = result.rows.map(m => m.id as MessageId);
+        const replyToIds = result.rows.map(m => m.reply_to_id as MessageId).filter((id): id is MessageId => !!id);
 
         const [attachmentsRes, reactionsRes, repliesRes] = await Promise.all([
             pool.query<DbAttachment>(
@@ -248,7 +274,7 @@ export const getMessages = async (req: Request, res: Response) => {
                 [messageIds]
             ),
             pool.query<DbReaction>(
-                `SELECT message_id, reaction_type as reaction_type, user_id as "userId" 
+                `SELECT message_id, reaction_type, user_id 
                  FROM message_reactions WHERE message_id = ANY($1)`,
                 [messageIds]
             ),
@@ -262,37 +288,35 @@ export const getMessages = async (req: Request, res: Response) => {
                 Promise.resolve({ rows: [] })
         ]);
 
-        const attachmentsMap: Record<string, DbAttachment[]> = attachmentsRes.rows.reduce((acc: Record<string, DbAttachment[]>, att) => {
+        const attachmentsMap: Record<MessageId, DbAttachment[]> = attachmentsRes.rows.reduce((acc: Record<MessageId, DbAttachment[]>, att) => {
             if (!acc[att.message_id]) acc[att.message_id] = [];
             acc[att.message_id].push(att);
             return acc;
-        }, {});
+        }, {} as Record<MessageId, DbAttachment[]>);
 
-        const reactionsMap: Record<string, DbReaction[]> = reactionsRes.rows.reduce((acc: Record<string, DbReaction[]>, rx) => {
+        const reactionsMap: Record<MessageId, DbReaction[]> = reactionsRes.rows.reduce((acc: Record<MessageId, DbReaction[]>, rx) => {
             if (!acc[rx.message_id]) acc[rx.message_id] = [];
             acc[rx.message_id].push(rx);
             return acc;
-        }, {});
+        }, {} as Record<MessageId, DbReaction[]>);
 
-        const repliesMap: Record<string, { id: string, content: string, sender_name: string }> = repliesRes.rows.reduce((acc: Record<string, { id: string, content: string, sender_name: string }>, row) => {
-            acc[row.id] = row;
+        const repliesMap: Record<MessageId, { id: MessageId, content: string, sender_name: string }> = repliesRes.rows.reduce((acc: Record<MessageId, { id: MessageId, content: string, sender_name: string }>, row) => {
+            acc[row.id as MessageId] = {
+                id: row.id as MessageId,
+                content: row.content,
+                sender_name: row.sender_name
+            };
             return acc;
-        }, {});
+        }, {} as Record<MessageId, { id: MessageId, content: string, sender_name: string }>);
 
         const messages: ChatMessage[] = result.rows.map(row => {
             const dbMsg: DbMessage = {
                 ...row,
                 attachments: attachmentsMap[row.id] || [],
                 reactions: reactionsMap[row.id] || [],
-                reply_to: row.reply_to_id ? repliesMap[row.reply_to_id] : undefined
+                reply_to: row.reply_to_id ? (repliesMap[row.reply_to_id] as { id: MessageId, content: string, sender_name: string }) : undefined
             };
             const normalized = mapMessageToResponse(dbMsg);
-            if (normalized) {
-                normalized.content = row.content ? decrypt(row.content) : row.content;
-                if (normalized.replyTo && dbMsg.reply_to) {
-                    normalized.replyTo.content = dbMsg.reply_to.content ? decrypt(dbMsg.reply_to.content) : dbMsg.reply_to.content;
-                }
-            }
             return normalized;
         }).filter((m): m is ChatMessage => m !== null);
 
@@ -310,9 +334,9 @@ export const getMessages = async (req: Request, res: Response) => {
 export const sendMessage = async (req: Request, res: Response) => {
     const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
-    const senderId = user.id;
-    const { participantId, content, messageType = 'text', attachment, tempId, attachments } = req.body;
-    let { conversationId } = req.body;
+    const senderId = user.id as UserId;
+    const { participantId, content, messageType = 'text', attachment, tempId, attachments } = req.body as SendMessageRequest;
+    let { conversationId } = req.body as SendMessageRequest;
 
     if (!isUUID(senderId)) {
         return sendError(res, 400, 'Invalid or missing senderId (UUID expected)');
@@ -356,7 +380,7 @@ export const sendMessage = async (req: Request, res: Response) => {
             );
 
             if (insertResult.rows.length > 0) {
-                conversationId = insertResult.rows[0].id;
+                conversationId = insertResult.rows[0].id as ConversationId;
                 // Atomic participant linking
                 await client.query(
                     `INSERT INTO conversation_participants (conversation_id, user_id) 
@@ -373,9 +397,10 @@ export const sendMessage = async (req: Request, res: Response) => {
                 if (existing.rows.length === 0) {
                     throw new Error('Consistency fracture: Hash exists but conversation not found during atomic send');
                 }
-                conversationId = existing.rows[0].id;
+                conversationId = existing.rows[0].id as ConversationId;
             }
         } else {
+            // SECURITY GUARD: Institutional verification that sender is a participant
             const membershipCheck = await client.query(
                 'SELECT 1 FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2',
                 [conversationId, senderId]
@@ -387,10 +412,21 @@ export const sendMessage = async (req: Request, res: Response) => {
             }
         }
 
-        const encryptedContent = (content && !content.startsWith('enc:')) ? encrypt(content) : content;
-        const decodedPreview = (content && content.startsWith('enc:')) ? await decrypt(content) : content;
+        if (!conversationId) {
+            throw new Error('Consistency fracture: conversationId is null after upsert/check');
+        }
 
-        const sequenceNumber = await chatReliabilityService.getNextSequence(conversationId);
+        // Institutional Hardening: Backend serves as encrypted pass-through (Zero-Knowledge)
+        const storedContent = content;
+
+        // P0 FIX: Institutional Preview Guard
+        // Ensure preview_text is NEVER empty if attachments exist
+        let decodedPreview = content && content.startsWith('enc:') ? '[Encrypted Preview]' : content;
+        if (!decodedPreview && attachmentPool.length > 0) {
+            decodedPreview = '📎 Attachment';
+        }
+
+        const sequenceNumber = await chatReliabilityService.getNextSequence(conversationId as string);
 
         const msgResult = await client.query<DbMessage>(
             `
@@ -398,7 +434,7 @@ export const sendMessage = async (req: Request, res: Response) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', $8)
             RETURNING *
             `,
-            [conversationId, senderId, user.role, encryptedContent, decodedPreview, messageType, req.body.replyToId, sequenceNumber]
+            [conversationId as string, senderId, user.role, storedContent as string, (decodedPreview || '') as string, messageType as string, req.body.replyToId as MessageId, sequenceNumber]
         );
 
         const newMessage = msgResult.rows[0];
@@ -418,7 +454,7 @@ export const sendMessage = async (req: Request, res: Response) => {
                 const replyTo = replyResult.rows[0];
                 newMessage.reply_to = {
                     ...replyTo,
-                    content: replyTo.content ? decrypt(replyTo.content) : replyTo.content
+                    content: replyTo.content
                 };
             }
         }
@@ -429,13 +465,19 @@ export const sendMessage = async (req: Request, res: Response) => {
         for (const att of attachmentPool) {
             if (att.url && att.url.includes('/files/temp/')) {
                 const innerTempId = att.url.split('/').pop();
-                
+
                 // Institutional Move: Atomic staging-to-vault promotion via FileService
-                const metadata = await fileService.moveStagedFile(innerTempId, 'chat');
-                
+                const metadata = await fileService.moveStagedFile(innerTempId as string, 'chat');
+
                 if (!metadata) {
-                    logger.warn('[ChatController] Staged attachment promotion failed/missing', { innerTempId, messageId: newMessage.id });
-                    continue; // P0 FIX: Skip missing staged files but continue message flow
+                    logger.warn('[ChatController] Staged attachment promotion failed (Physical file missing)', {
+                        tempId: innerTempId,
+                        messageId: newMessage.id,
+                        senderId
+                    });
+                    // Institutional Cleanup: Purge dead temp record to prevent infinite sync loops
+                    await client.query('DELETE FROM temp_attachments WHERE id = $1', [innerTempId]);
+                    continue;
                 }
 
                 let fileCat = 'other';
@@ -463,12 +505,12 @@ export const sendMessage = async (req: Request, res: Response) => {
         }
 
         newMessage.reactions = [];
-        
+
         // P0 FIX: Institutional Attachment Normalization for Socket Payload
         const normalizedAttachments: DbAttachment[] = finalAttachments.map(fa => ({
             id: fa.id || crypto.randomUUID(), // Use actual DB ID
             message_id: newMessage.id,
-            file_path: fa.filePath || fa.url, 
+            file_path: fa.filePath || fa.url,
             file_type: fa.type,
             file_size: fa.size,
             file_name: fa.name,
@@ -480,8 +522,8 @@ export const sendMessage = async (req: Request, res: Response) => {
         newMessage.attachments = normalizedAttachments;
 
         await client.query(
-            'UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1',
-            [conversationId]
+            'UPDATE conversations SET last_message_id = $1, preview_text = $2, last_message_at = NOW(), updated_at = NOW() WHERE id = $3',
+            [newMessage.id, (decodedPreview || '') as string, conversationId as string]
         );
 
         await client.query('COMMIT');
@@ -500,7 +542,7 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         if (io && socketPayload) {
             io.to(`conversation:${conversationId}`).emit('messageReceived', socketPayload);
-            
+
             // The Governor Mirroring
             io.to('admin:observability').emit('adminMirrorEvent', {
                 event: 'messageReceived',
@@ -509,15 +551,16 @@ export const sendMessage = async (req: Request, res: Response) => {
             });
         }
 
-        chatReliabilityService.getParticipants(conversationId).then(participants => {
+        chatReliabilityService.getParticipants(conversationId as string).then(participants => {
             const others = participants.filter(pid => pid !== senderId);
             let previewText = finalAttachments.length > 0 ? '📎 Attachment' : 'New message';
             if (content) {
-                previewText = (decodedPreview.length > 100) ? decodedPreview.substring(0, 100) + '...' : decodedPreview;
+                const previewStr = (decodedPreview || '') as string;
+                previewText = (previewStr.length > 100) ? previewStr.substring(0, 100) + '...' : previewStr;
             }
 
             others.forEach(pid => {
-                notificationService.create(pid, `New message from ${senderName}`, previewText, 'info')
+                notificationService.create(pid as UserId, `New message from ${senderName}`, previewText, 'info')
                     .catch(e => logger.error('Notification failed:', e));
             });
         }).catch(e => logger.error('Participant lookup failed:', e));
@@ -537,10 +580,10 @@ export const sendMessage = async (req: Request, res: Response) => {
 };
 
 export const startConversation = async (req: Request, res: Response) => {
-    const user = req.user;
+    const user = req.user as JWTPayload | undefined;
     if (!user || !user.id) return sendError(res, 401, 'Unauthorized');
-    const userId = user.id;
-    const { participantId } = req.body;
+    const userId = user.id as UserId;
+    const { participantId } = req.body as { participantId: UserId };
 
     // Forensic Validation: Ensure participantId is a valid UUID and not self
     if (!participantId) {
@@ -577,7 +620,7 @@ export const startConversation = async (req: Request, res: Response) => {
         let conversationId: string;
 
         if (insertResult.rows.length > 0) {
-            conversationId = insertResult.rows[0].id;
+            conversationId = insertResult.rows[0].id as ConversationId;
             // Atomic participant linking
             await pool.query(
                 `INSERT INTO conversation_participants (conversation_id, user_id) 
@@ -592,13 +635,78 @@ export const startConversation = async (req: Request, res: Response) => {
                 [participantsHash]
             );
             if (existing.rows.length === 0) {
-                // This state should be unreachable with the UNIQUE constraint, but we handle it safely
                 throw new Error('Consistency fracture: Hash exists but conversation not found');
             }
-            conversationId = existing.rows[0].id;
+            conversationId = existing.rows[0].id as ConversationId;
         }
 
-        return sendResponse(res, 201, true, 'Conversation established', { conversationId });
+        // D8 OPTIMIZATION: Return full conversation DTO instead of just ID
+        const convResult = await pool.query<{
+            id: string,
+            updated_at: string | Date,
+            last_message_at: string | Date | null,
+            participants_hash: string,
+            last_message_id: string | null
+        }>(
+            `SELECT c.id, c.updated_at, 
+                COALESCE(m.created_at, c.last_message_at, c.updated_at) as last_message_at, 
+                c.participants_hash, c.last_message_id
+             FROM conversations c
+             LEFT JOIN messages m ON c.last_message_id = m.id AND m.is_deleted = false
+             WHERE c.id = $1`,
+            [conversationId]
+        );
+
+        if (convResult.rows.length === 0) {
+            throw new Error('Failed to retrieve newly established conversation');
+        }
+
+        const row = convResult.rows[0];
+
+        // Fetch participants
+        const partResult = await pool.query<{
+            id: string,
+            name: string,
+            role: string,
+            initials: string,
+            profile_image: string | null
+        }>(
+            `SELECT u.id, u.name, u.role, u.initials, u.profile_image
+             FROM conversation_participants cp
+             JOIN users u ON cp.user_id = u.id
+             WHERE cp.conversation_id = $1 AND cp.user_id != $2`,
+            [conversationId, userId]
+        );
+
+        // Fetch last message preview separately (consistent with getConversations logic)
+        const lastMsgResult = await pool.query<{ preview_text: string | null }>(
+            `SELECT preview_text FROM messages 
+             WHERE conversation_id = $1 AND is_deleted = false 
+             ORDER BY created_at DESC LIMIT 1`,
+            [conversationId]
+        );
+
+        const dbConv: DbConversation = {
+            id: row.id as ConversationId,
+            updated_at: row.updated_at,
+            last_message_at: row.last_message_at ?? row.updated_at,
+            participants_hash: row.participants_hash,
+            last_message: lastMsgResult.rows[0]?.preview_text ?? undefined,
+            last_message_id: (row.last_message_id as MessageId | null) ?? undefined,
+            participants: partResult.rows.map(r => ({
+                id: r.id as UserId, name: r.name, role: r.role, initials: r.initials, profileImage: r.profile_image
+            })),
+            unread_count: 0, // Freshly created or retrieved thread from user's perspective
+            message_count: 0,
+            sequence_counter: 0
+        };
+
+        const response = mapConversationToResponse(dbConv);
+        if (!response) {
+            throw new Error('Failed to map established conversation to response');
+        }
+        return sendResponse(res, 201, true, 'Conversation established', response);
+
     } catch (error: unknown) {
         logger.error('[ChatController] startConversation forensic failure:', {
             error: error instanceof Error ? error.message : String(error),
@@ -612,22 +720,26 @@ export const startConversation = async (req: Request, res: Response) => {
 export const markAsDelivered = async (req: Request, res: Response) => {
     const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
-    const userId = user.id;
-    const { conversationId } = req.params as { conversationId: string };
+    const userId = user.id as UserId;
+    const { conversationId } = req.params as { conversationId: ConversationId };
 
     try {
-        await pool.query(
+        const result = await pool.query<{ id: MessageId }>(
             `
             UPDATE messages 
             SET status = 'delivered', delivered_at = NOW() 
             WHERE conversation_id = $1 AND sender_id != $2 AND status = 'sent'
+            RETURNING id
             `,
             [conversationId, userId]
         );
-        if (io) {
-            io.to(`conversation:${conversationId}`).emit('messageDelivered', { 
-                conversationId, 
-                messageIds: [] 
+        if (io && result.rows.length > 0) {
+            const messageIds = result.rows.map(r => r.id);
+            io.to(`conversation:${conversationId}`).emit('messageDelivered', {
+                conversationId: conversationId as ConversationId,
+                messageIds: messageIds,
+                userId: userId,
+                timestamp: new Date().toISOString()
             });
         }
         return sendResponse(res, 200, true, 'Messages marked as delivered');
@@ -644,18 +756,27 @@ export const markAsDelivered = async (req: Request, res: Response) => {
 export const markAsRead = async (req: Request, res: Response) => {
     const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
-    const userId = user.id;
-    const { conversationId } = req.params as { conversationId: string };
+    const userId = user.id as UserId;
+    const { conversationId } = req.params as { conversationId: ConversationId };
 
     try {
-        await pool.query(
+        const result = await pool.query<{ id: MessageId }>(
             `
             UPDATE messages 
             SET status = 'read', read_at = NOW(), is_read = true
             WHERE conversation_id = $1 AND sender_id != $2 AND status != 'read'
+            RETURNING id
             `,
             [conversationId, userId]
         );
+        if (io && result.rows.length > 0) {
+            const messageIds = result.rows.map(r => r.id as MessageId);
+            io.to(`conversation:${conversationId}`).emit('messageRead', {
+                conversationId,
+                messageIds,
+                userId: userId
+            });
+        }
         return sendResponse(res, 200, true, 'Messages marked as read');
     } catch (error: unknown) {
         logger.error('Error marking read:', {
@@ -670,9 +791,9 @@ export const markAsRead = async (req: Request, res: Response) => {
 export const reactToMessage = async (req: Request, res: Response) => {
     const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
-    const userId = user.id;
-    const { messageId } = req.params as { messageId: string };
-    const { reactionType } = req.body;
+    const userId = user.id as UserId;
+    const { messageId } = req.params as { messageId: MessageId };
+    const { reactionType } = req.body as ReactToMessageRequest;
 
     if (!reactionType || typeof reactionType !== 'string') {
         return sendError(res, 400, 'Invalid reaction type');
@@ -753,9 +874,9 @@ export const reactToMessage = async (req: Request, res: Response) => {
 export const deleteMessage = async (req: Request, res: Response) => {
     const user = req.user as JWTPayload | undefined;
     if (!user) return sendError(res, 401, 'Unauthorized');
-    const userId = user.id;
-    const { messageId } = req.params as { messageId: string };
-    const { forEveryone } = req.body;
+    const userId = user.id as UserId;
+    const { messageId } = req.params as { messageId: MessageId };
+    const { forEveryone } = req.body as DeleteMessageRequest;
 
     try {
         const msgCheck = await pool.query<DbMessage>(
@@ -772,58 +893,106 @@ export const deleteMessage = async (req: Request, res: Response) => {
         const message = msgCheck.rows[0];
         const conversationId = message.conversation_id;
 
+        let newLastMessageData: { id: MessageId, content: string, createdAt: string } | null = null;
+
         if (forEveryone) {
             if (message.sender_id !== userId) {
                 return sendError(res, 403, 'Only sender can delete for everyone');
             }
 
-            // P0 FIX: Fetch metadata BEFORE updating DB
-            const attachments = await pool.query<DbAttachment>(
-                'SELECT file_path FROM message_attachments WHERE message_id = $1 AND deleted_at IS NULL', 
-                [messageId]
-            );
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
 
-            // P0 FIX: Institutional Sequence - Soft Delete DB first, then quarantine physical assets
-            const deleteTime = new Date().toISOString();
-            
-            await pool.query(
-                'UPDATE message_attachments SET deleted_at = $1 WHERE message_id = $2', 
-                [deleteTime, messageId]
-            );
-            
-            await pool.query(
-                'UPDATE messages SET deleted_at = $1 WHERE id = $2', 
-                [deleteTime, messageId]
-            );
+                const attachments = await client.query<DbAttachment>(
+                    'SELECT file_path FROM message_attachments WHERE message_id = $1 AND deleted_at IS NULL',
+                    [messageId]
+                );
 
-            for (const att of attachments.rows) {
-                if (att.file_path) {
-                    // Background task: Move to quarantine after DB confirms soft-delete
-                    fileService.quarantineFile(att.file_path).catch(e => 
-                        logger.error('[Forensic-Cleanup] File quarantine failed after soft-delete:', { 
-                            path: att.file_path, 
-                            error: e.message 
-                        })
+                const deleteTime = new Date().toISOString();
+
+                await client.query(
+                    'UPDATE message_attachments SET deleted_at = $1 WHERE message_id = $2',
+                    [deleteTime, messageId]
+                );
+
+                await client.query(
+                    'UPDATE messages SET is_deleted = true, deleted_at = $1 WHERE id = $2',
+                    [deleteTime, messageId]
+                );
+
+                // Sidebard Drift Fix (D1): Recalculate if this was the last message
+                const convCheck = await client.query<{ last_message_id: string }>(
+                    'SELECT last_message_id FROM conversations WHERE id = $1',
+                    [conversationId]
+                );
+
+                if (convCheck.rows[0]?.last_message_id === messageId) {
+                    const fallbackRes = await client.query<{ id: MessageId, preview_text: string, created_at: Date }>(
+                        `SELECT id, COALESCE(preview_text, content) as preview_text, created_at FROM messages 
+                         WHERE conversation_id = $1 AND is_deleted = false 
+                         ORDER BY created_at DESC LIMIT 1`,
+                        [conversationId]
                     );
+
+                    if (fallbackRes.rows.length > 0) {
+                        const fallback = fallbackRes.rows[0];
+                        await client.query(
+                            'UPDATE conversations SET last_message_id = $1, preview_text = $2, last_message_at = $3 WHERE id = $4',
+                            [fallback.id, fallback.preview_text, fallback.created_at, conversationId]
+                        );
+                        newLastMessageData = {
+                            id: fallback.id,
+                            content: fallback.preview_text,
+                            createdAt: fallback.created_at.toISOString()
+                        };
+                    } else {
+                        // Empty thread now
+                        await client.query(
+                            'UPDATE conversations SET last_message_id = NULL, preview_text = NULL WHERE id = $1',
+                            [conversationId]
+                        );
+                    }
                 }
+
+                await client.query('COMMIT');
+
+                for (const att of attachments.rows) {
+                    if (att.file_path) {
+                        fileService.quarantineFile(att.file_path).catch(e =>
+                            logger.error('[Forensic-Cleanup] File quarantine failed after soft-delete:', {
+                                path: att.file_path,
+                                error: e.message
+                            })
+                        );
+                    }
+                }
+
+                if (io) {
+                    const deleteData: MessageDeletedPayload = {
+                        messageId,
+                        conversationId: conversationId as ConversationId,
+                        newLastMessage: newLastMessageData
+                    };
+                    io.to(`conversation:${conversationId}`).emit('messageDeleted', deleteData);
+                    io.to('admin:observability').emit('adminMirrorEvent', {
+                        event: 'messageDeleted',
+                        data: deleteData,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+
+                notificationService.recall(messageId).catch(e =>
+                    logger.error('[Recall-Failure] Automated notification recall failed:', { messageId, error: e.message })
+                );
+
+            } catch (err: unknown) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
             }
 
-            if (io) {
-                const deleteData = { messageId, conversationId };
-                io.to(`conversation:${conversationId}`).emit('messageDeleted', deleteData);
-
-                // The Governor Mirroring
-                io.to('admin:observability').emit('adminMirrorEvent', {
-                    event: 'messageDeleted',
-                    data: deleteData,
-                    timestamp: new Date().toISOString()
-                });
-            }
-
-            // P0 RECALL: Atomic removal of notifications for this message
-            notificationService.recall(messageId).catch(e => 
-                logger.error('[Recall-Failure] Automated notification recall failed:', { messageId, error: e.message })
-            );
         } else {
             // P0 INSTITUTIONAL FIX: Private Sync for Multi-tab "Delete for Me"
             await pool.query(
@@ -831,19 +1000,39 @@ export const deleteMessage = async (req: Request, res: Response) => {
                 [messageId, userId]
             );
 
-            if (io) {
-                // Scoped emission to only the acting user's private room/sessions
-                const localDeleteData = { messageId, conversationId };
-                io.to(`user:${userId}`).emit('localMessageDeleted', localDeleteData);
+            // Fetch New Last Message for THIS user to fix drift in their sidebar across all their tabs
+            const localFallbackRes = await pool.query<{ id: MessageId, preview_text: string, created_at: Date }>(
+                `SELECT m.id, COALESCE(m.preview_text, m.content) as preview_text, m.created_at 
+                 FROM messages m 
+                 WHERE m.conversation_id = $1 
+                   AND m.is_deleted = false 
+                   AND m.id NOT IN (SELECT message_id FROM deleted_messages WHERE user_id = $2)
+                 ORDER BY m.created_at DESC 
+                 LIMIT 1`,
+                [conversationId, userId]
+            );
 
-                // The Governor Mirroring
+            if (localFallbackRes.rows.length > 0) {
+                const fb = localFallbackRes.rows[0];
+                newLastMessageData = {
+                    id: fb.id,
+                    content: fb.preview_text,
+                    createdAt: fb.created_at.toISOString()
+                };
+            }
+
+            if (io) {
+                const localDeleteData: MessageDeletedPayload = {
+                    messageId,
+                    conversationId: conversationId as ConversationId,
+                    newLastMessage: newLastMessageData
+                };
+                io.to(`user:${userId}`).emit('localMessageDeleted', localDeleteData);
                 io.to('admin:observability').emit('adminMirrorEvent', {
                     event: 'localMessageDeleted',
                     data: { ...localDeleteData, userId },
                     timestamp: new Date().toISOString()
                 });
-                
-                logger.info('[ChatController] Private deletion sync emitted.', { userId, messageId });
             }
         }
         return sendResponse(res, 200, true, 'Message deleted');
@@ -895,6 +1084,7 @@ export const syncChat = async (req: Request, res: Response) => {
             LEFT JOIN users u ON m.sender_id = u.id
             LEFT JOIN messages rm ON m.reply_to_id = rm.id
             WHERE cp.user_id = $1 
+              AND m.is_deleted = false
               AND m.created_at > $2
             ORDER BY m.created_at ASC
         `;

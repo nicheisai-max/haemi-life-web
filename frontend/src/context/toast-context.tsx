@@ -92,7 +92,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     return (
         <ToastContext.Provider value={{ showToast, success, error, warning, info }}>
             {children}
-            <div className="fixed top-24 right-4 z-[100] flex flex-col gap-3 w-full max-w-[400px] pointer-events-none sm:right-4 sm:left-auto max-sm:left-2 max-sm:right-2 max-sm:w-auto">
+            <div className="fixed top-24 right-4 z-[var(--z-toast)] flex flex-col gap-3 w-full max-w-[400px] pointer-events-none sm:right-4 sm:left-auto max-sm:left-2 max-sm:right-2 max-sm:w-auto">
                 <AnimatePresence>
                     {toasts.map(toast => (
                         <motion.div
@@ -102,7 +102,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             exit={{ opacity: 0, x: 20, scale: 0.95 }}
                             transition={{ duration: 0.2 }}
-                            className={`flex items-center gap-3 p-4 bg-background rounded-xl shadow-lg border-l-4 cursor-pointer pointer-events-auto hover:opacity-95 ${getToastStyles(toast.type)}`}
+                            className={`flex items-center gap-3 p-4 bg-background rounded-[var(--card-radius)] shadow-lg border-l-4 cursor-pointer pointer-events-auto hover:opacity-95 ${getToastStyles(toast.type)}`}
                             onClick={() => removeToast(toast.id)}
                         >
                             <div className="flex-shrink-0 flex items-center justify-center">

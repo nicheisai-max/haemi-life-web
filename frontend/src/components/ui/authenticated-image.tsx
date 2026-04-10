@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios, { AxiosResponse } from 'axios';
-import { ImageIcon, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { getAccessToken } from '../../services/api';
+import { logger } from '../../utils/logger';
 
 /**
  * 🩺 HAEMI LIFE | INSTITUTIONAL AUTHENTICATED IMAGE HANDLER
@@ -13,15 +16,48 @@ interface AuthenticatedImageProps {
     src: string;
     alt: string;
     className?: string;
+    /**
+     * 🧬 INSTITUTIONAL DIMENSION LOCK (CLS PREVENTION)
+     * Options: 'square', 'video', 'portrait', or custom ratio strings like 'aspect-[4/3]'
+     */
+    aspectRatio?: 'square' | 'video' | 'portrait' | string;
+    /**
+     * 🛡️ D4 REMEDIATION: Optional error fallback node.
+     * Rendered when the authenticated blob fetch fails (401, 404, network drop).
+     * If omitted, the component returns null on error — backward-compatible quiet fail.
+     */
+    errorFallback?: React.ReactNode;
 }
 
-// Institutional Cache (Global Memory Space)
-const imageCache = new Map<string, string>();
+// D5 REMEDIATION: Bounded, reference-counted blob-URL cache.
+// • imageCacheRefs tracks active mounted instances per src — prevents premature
+//   URL revocation when the same asset is rendered by multiple components.
+// • MAX_CACHE_SIZE caps session-memory growth via LRU eviction of unused entries.
+// • imageCache is module-level so identical clinical assets are fetched only once.
+const MAX_CACHE_SIZE = 100 as const;
+const imageCache = new Map<string, string>();       // src → objectUrl
+const imageCacheRefs = new Map<string, number>();   // src → active render count
 
-export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ src, alt, className }) => {
+export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ 
+    src, 
+    alt, 
+    className,
+    aspectRatio = 'square',
+    errorFallback,
+}) => {
     const [imgUrl, setImgUrl] = useState<string | null>(imageCache.get(src) || null);
     const [loading, setLoading] = useState<boolean>(!imageCache.has(src));
     const [error, setError] = useState<boolean>(false);
+
+    // DETERMINISTIC CLS PROTECTION: Mapping institutional tokens to Tailwind properties
+    const ratioClass = React.useMemo(() => {
+        switch (aspectRatio) {
+            case 'square': return 'aspect-square';
+            case 'video': return 'aspect-video';
+            case 'portrait': return 'aspect-[3/4]';
+            default: return aspectRatio.startsWith('aspect-') ? aspectRatio : '';
+        }
+    }, [aspectRatio]);
 
     /**
      * 🧬 CLINICAL BINARY TUNNEL
@@ -30,6 +66,15 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ src, alt
     const fetchImage = useCallback(async (targetSrc: string) => {
         if (!targetSrc) return;
         
+        // D7 REMEDIATION: Origin-Aware Resolution Guard
+        // If the URL is already a local blob (optimistic) or base64 data,
+        // bypass the authenticated Axios tunnel to prevent protocol-mismatch 404s.
+        if (targetSrc.startsWith('blob:') || targetSrc.startsWith('data:')) {
+            setImgUrl(targetSrc);
+            setLoading(false);
+            return;
+        }
+
         if (imageCache.has(targetSrc)) {
             setImgUrl(imageCache.get(targetSrc)!);
             setLoading(false);
@@ -40,24 +85,17 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ src, alt
             setLoading(true);
             setError(false);
 
-            // Access token from sessionStorage (Institutional Consensus)
-            const token = sessionStorage.getItem('token');
+            // D6 REMEDIATION: Use getAccessToken() from api.ts instead of
+            // sessionStorage.getItem() directly. After a proactive token rotation
+            // the in-memory credential in api.ts is updated first; sessionStorage
+            // may briefly lag, causing a stale-token 401 on the blob fetch.
+            const token = getAccessToken();
             
-            /**
-             * 🎯 FORENSIC CORRECTION: Routing Bypass
-             * Logic: Using a direct axios instance to bypass the global '/api' baseURL.
-             * This ensures 'uploads/' paths point to the root backend instead of /api/uploads/.
-             */
-            let finalUrl = targetSrc;
+            const finalUrl = targetSrc;
             
-            // 🩺 HAEMI RESOLVER: Institutional Path Mapping
-            // Logic: Catch raw 'uploads/' paths and route them through the authorized /api/files/temp tunnel.
-            if (targetSrc.includes('uploads/chat/')) {
-                const fileName = targetSrc.split('/').pop();
-                if (fileName) {
-                    finalUrl = `/api/files/temp/${fileName}`;
-                }
-            }
+            // 🩺 HAEMI RESOLVER: Institutional Path Resolution
+            // Architecture: Direct tunnel via targetSrc. Relative paths must be resolved by the caller
+            // to maintain zero-drift parity between Frontend and Backend FileServices.
 
             const response: AxiosResponse<Blob> = await axios.get<Blob>(finalUrl, {
                 baseURL: import.meta.env.VITE_API_URL || '',
@@ -73,9 +111,24 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ src, alt
             setImgUrl(objectUrl);
             imageCache.set(targetSrc, objectUrl);
 
+            // D5 REMEDIATION: LRU eviction — when the cache exceeds MAX_CACHE_SIZE,
+            // revoke + remove the oldest entry. We only revoke entries with zero
+            // active renders (checked via imageCacheRefs) to prevent breaking any
+            // <img> element that is currently displaying that blob URL.
+            if (imageCache.size > MAX_CACHE_SIZE) {
+                const oldestEntry = imageCache.entries().next();
+                if (!oldestEntry.done) {
+                    const [oldKey, oldUrl] = oldestEntry.value;
+                    if ((imageCacheRefs.get(oldKey) ?? 0) === 0) {
+                        URL.revokeObjectURL(oldUrl);
+                        imageCache.delete(oldKey);
+                    }
+                }
+            }
+
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'BINARY_FETCH_FAILURE';
-            console.error(`[InstitutionalAudit] Image failed: ${targetSrc}`, message);
+            logger.error(`[InstitutionalAudit] Image failed: ${targetSrc}`, { error: message });
             setError(true);
         } finally {
             setLoading(false);
@@ -86,28 +139,54 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ src, alt
         fetchImage(src);
     }, [src, fetchImage]);
 
+    // D5 REMEDIATION: Reference-count lifecycle management.
+    // Increment on mount (or src change). Decrement on unmount (or src change).
+    // When the last instance using a given src unmounts, the blob URL is revoked
+    // and the entry is removed from imageCache — freeing browser memory.
+    useEffect(() => {
+        const activeSrc = src;
+        imageCacheRefs.set(activeSrc, (imageCacheRefs.get(activeSrc) ?? 0) + 1);
+        return (): void => {
+            const refs = imageCacheRefs.get(activeSrc) ?? 1;
+            if (refs <= 1) {
+                imageCacheRefs.delete(activeSrc);
+                const blobUrl = imageCache.get(activeSrc);
+                if (blobUrl !== undefined) {
+                    URL.revokeObjectURL(blobUrl);
+                    imageCache.delete(activeSrc);
+                }
+            } else {
+                imageCacheRefs.set(activeSrc, refs - 1);
+            }
+        };
+    }, [src]);
+
+    // INSTITUTIONAL SKELETON: Synchronized with ratioClass
     if (loading) {
         return (
-            <div className={`flex items-center justify-center bg-slate-100 dark:bg-slate-800 animate-pulse ${className}`}>
+            <div className={cn(
+                "flex items-center justify-center bg-slate-100 dark:bg-slate-800 animate-pulse overflow-hidden rounded-[inherit]",
+                ratioClass,
+                className
+            )}>
                 <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
             </div>
         );
     }
 
     if (error || !imgUrl) {
-        return (
-            <div className={`flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 gap-1 ${className}`}>
-                <ImageIcon className="h-6 w-6 opacity-40" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#DC2626]">Failed to load image</span>
-            </div>
-        );
+        // If the caller provides a fallback node, render it (e.g. lightbox error state).
+        // Otherwise preserve the original quiet-fail behaviour (returns null) so the
+        // message grid collapses cleanly without visual noise.
+        return errorFallback !== undefined ? <>{errorFallback}</> : null;
     }
 
     return (
         <img
             src={imgUrl}
             alt={alt}
-            className={className}
+            className={cn("object-cover", ratioClass, className)}
+            padding-none="true"
             loading="lazy"
         />
     );

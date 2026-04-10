@@ -10,6 +10,8 @@ export interface AuthContextType {
     signup: (credentials: SignupCredentials) => Promise<void>;
     logout: () => void;
     refreshUser: () => Promise<void>;
+    isRefreshing: boolean;
+    isTokenNearDeath: boolean;
     isLoading: boolean;
     isAuthenticated: boolean;
 }

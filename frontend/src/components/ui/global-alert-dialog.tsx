@@ -171,7 +171,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-                        className="relative w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-[32px] shadow-2xl overflow-hidden border border-white/50 dark:border-slate-700/50 ring-1 ring-black/5 dark:ring-white/5"
+                        className="relative w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-[var(--card-radius)] shadow-2xl overflow-hidden border border-white/50 dark:border-slate-700/50 ring-1 ring-black/5 dark:ring-white/5"
                     >
                         {/* Decorative Top Highlight */}
                         <div className={`absolute top-0 left-0 right-0 h-1.5 ${type === 'error' ? 'bg-rose-500' : type === 'warning' ? 'bg-amber-500' : type === 'success' ? 'bg-emerald-500' : 'bg-primary-800'}`} />
@@ -209,7 +209,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                                         variant="outline"
                                         onClick={onCancel}
                                         disabled={isLoading}
-                                        className="flex-1 h-12 rounded-xl text-base font-medium"
+                                        className="flex-1 h-12 rounded-[var(--card-radius)] text-base font-medium"
                                     >
                                         {cancelText}
                                     </Button>
@@ -219,7 +219,7 @@ export const GlobalAlertDialog: React.FC<GlobalAlertDialogProps> = ({
                                     disabled={isLoading}
                                     isLoading={isLoading}
                                     variant={type === 'error' ? 'destructive' : type === 'warning' ? 'default' : type === 'success' ? 'default' : 'default'}
-                                    className={`flex-1 h-12 rounded-xl text-base font-semibold ${type === 'warning' ? 'bg-amber-600 hover:bg-amber-700' : type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : type === 'confirm' ? 'bg-primary-800 hover:bg-primary-900' : ''}`}
+                                    className={`flex-1 h-12 rounded-[var(--card-radius)] text-base font-semibold ${type === 'warning' ? 'bg-amber-600 hover:bg-amber-700' : type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : type === 'confirm' ? 'bg-primary-800 hover:bg-primary-900' : ''}`}
                                 >
                                     {confirmText}
                                 </Button>

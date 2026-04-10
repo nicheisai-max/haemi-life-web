@@ -63,15 +63,18 @@ export const recordRepository = {
             const params: string[] = [patientId];
 
             if (category === 'Prescription') {
-                // UNIFIED SIDEBAR: Include both Doctor-issued AND Patient-uploaded prescriptions
+                // 🛡️ INSTITUTIONAL RECOVERY: Include Doctor-issued AND Patient-uploaded (fuzzy name match) prescriptions.
+                // We normalize record_type to 'Prescription' at the query level to allow frontend filtering parity.
                 finalQuery = `
                     (SELECT 
                         id::text, patient_id::text, name, file_path, file_mime, file_size::text, 
-                        record_type::text, status::text, notes, uploaded_at, 
+                        'Prescription'::text as record_type, status::text, notes, uploaded_at, 
                         date_of_service::text, doctor_name, facility_name,
                         'medical_records' as source_table
                     FROM medical_records 
-                    WHERE patient_id = $1 AND record_type = 'Prescription' AND deleted_at IS NULL)
+                    WHERE patient_id = $1 
+                    AND (record_type = 'Prescription' OR name ILIKE '%prescription%') 
+                    AND deleted_at IS NULL)
                     UNION ALL
                     (${prescriptionsQuery})
                 `;
@@ -93,6 +96,7 @@ export const recordRepository = {
         } catch (error: unknown) {
             logger.error('[Haemi-Unified] Failed to fetch unified clinical history:', {
                 error: (error instanceof Error) ? error.message : String(error),
+                stack: (error instanceof Error) ? error.stack : undefined,
                 patientId,
                 category
             });

@@ -100,7 +100,7 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
                 }}
                 className={`${isMobile ? 'fixed' : 'absolute'} z-[1000] ${isMobile
                     ? 'bottom-0 left-0 right-0 rounded-t-[28px] pb-10 pt-3 px-6'
-                    : 'rounded-2xl p-1.5'
+                    : 'rounded-[var(--card-radius)] p-1.5'
                     } bg-white dark:bg-[#111d21] shadow-[0_20px_60px_rgba(0,0,0,0.35)] border border-slate-200/40 dark:border-white/10 overflow-visible font-sans pointer-events-auto`}
             >
                 {isMobile && (
@@ -126,7 +126,7 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
                 <div className="flex flex-col space-y-0.5">
                     <button
                         onClick={() => { onReply(); onClose(); }}
-                        className="flex items-center gap-3.5 px-3.5 py-3 sm:py-2.5 text-[16px] sm:text-[13.5px] font-medium text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-teal-500/10 hover:text-teal-600 dark:hover:text-teal-400 rounded-lg transition-all w-full group outline-none"
+                        className="flex items-center gap-3.5 px-3.5 py-3 sm:py-2.5 text-[16px] sm:text-[13.5px] font-medium text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-teal-500/10 hover:text-teal-600 dark:hover:text-teal-400 rounded-[var(--card-radius)] transition-all w-full group outline-none"
                     >
                         <Reply className="w-5 h-5 sm:w-3.5 sm:h-3.5 opacity-40 group-hover:opacity-100 transition-opacity" />
                         Reply to message
@@ -134,7 +134,7 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
 
                     <button
                         onClick={() => { onCopy(); onClose(); }}
-                        className="flex items-center gap-3.5 px-3.5 py-3 sm:py-2.5 text-[16px] sm:text-[13.5px] font-medium text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-teal-500/10 hover:text-teal-600 dark:hover:text-teal-400 rounded-lg transition-all w-full group outline-none"
+                        className="flex items-center gap-3.5 px-3.5 py-3 sm:py-2.5 text-[16px] sm:text-[13.5px] font-medium text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-teal-500/10 hover:text-teal-600 dark:hover:text-teal-400 rounded-[var(--card-radius)] transition-all w-full group outline-none"
                     >
                         <Copy className="w-5 h-5 sm:w-3.5 sm:h-3.5 opacity-40 group-hover:opacity-100 transition-opacity" />
                         Copy text
@@ -144,7 +144,7 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
 
                     <button
                         onClick={() => { onDeleteForMe(); onClose(); }}
-                        className="flex items-center gap-3.5 px-3.5 py-3 sm:py-2.5 text-[16px] sm:text-[13.5px] font-medium text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg transition-all w-full group outline-none"
+                        className="flex items-center gap-3.5 px-3.5 py-3 sm:py-2.5 text-[16px] sm:text-[13.5px] font-medium text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 rounded-[var(--card-radius)] transition-all w-full group outline-none"
                     >
                         <Trash2 className="w-5 h-5 sm:w-3.5 sm:h-3.5 opacity-40 group-hover:opacity-100 transition-opacity" />
                         Delete for me
@@ -153,7 +153,7 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
                     {isMe && onDeleteForEveryone && (
                         <button
                             onClick={() => { onDeleteForEveryone(); onClose(); }}
-                            className="flex items-center gap-3.5 px-3.5 py-3 sm:py-2.5 text-[16px] sm:text-[13.5px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-lg transition-all w-full outline-none"
+                            className="flex items-center gap-3.5 px-3.5 py-3 sm:py-2.5 text-[16px] sm:text-[13.5px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-[var(--card-radius)] transition-all w-full outline-none"
                         >
                             <XCircle className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
                             Delete for everyone

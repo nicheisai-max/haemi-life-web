@@ -13,7 +13,11 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User as UserIcon, Settings, LogOut } from 'lucide-react';
+import { 
+    User as UserIcon, 
+    Settings, 
+    LogOut
+} from 'lucide-react';
 import { CommandCenter } from '../ui/command-center';
 import { NotificationMenu } from '../ui/notification-menu';
 import { MobileSidebar } from './mobile-sidebar';
@@ -63,7 +67,7 @@ export const Navbar: React.FC = () => {
 
 
     return (
-        <header className="fixed top-0 left-0 right-0 z-50 h-[var(--layout-header-height)] bg-white/80 dark:bg-[#0B1214]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 transition-all duration-300">
+        <header className="fixed top-0 left-0 right-0 z-50 h-[var(--layout-header-height)] bg-white/80 dark:bg-background/80 backdrop-blur-md border-b border-border transition-[background-color,color,backdrop-filter,opacity] duration-300">
             <div className="haemi-nav-container">
                 {/* Left: Logo & Hamburger (Bit-for-Bit Sidebar Baseline at 16px) */}
                 <div className="flex items-center h-full gap-4 haemi-nav-logo-offset-fix">
@@ -114,42 +118,43 @@ export const Navbar: React.FC = () => {
                                     </Avatar>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-64 rounded-3xl p-1.5 bg-white/95 dark:bg-[#1e1e1e]/95 backdrop-blur-xl border-slate-200 dark:border-white/5 shadow-2xl mt-2 transition-all">
-                                <DropdownMenuLabel className="font-normal px-4 py-3.5">
-                                    <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-semibold leading-none text-slate-900 dark:text-white capitalize">{user?.name}</p>
-                                        <p className="text-xs leading-none text-slate-500 dark:text-slate-400 truncate mt-1">{user?.email}</p>
+                                <DropdownMenuContent align="end" className="w-64 rounded-[var(--card-radius)] p-1.5 bg-card/95 backdrop-blur-xl border-border shadow-2xl mt-2 transition-all">
+                                    <DropdownMenuLabel className="font-normal px-4 py-3.5 border-b border-border/50 mb-1">
+                                        <div className="flex flex-col space-y-1">
+                                            <p className="text-sm font-semibold leading-none text-slate-900 dark:text-white capitalize">{user?.name}</p>
+                                            <p className="text-xs leading-none text-slate-500 dark:text-slate-400 truncate mt-1">{user?.email}</p>
+                                        </div>
+                                    </DropdownMenuLabel>
+                                    
+                                    <div className="py-1">
+                                        <DropdownMenuItem 
+                                            className="flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-[var(--card-radius)] hover:bg-primary/5 text-slate-700 dark:text-slate-300 transition-colors group mb-0.5"
+                                            onClick={() => navigate('/profile')}
+                                        >
+                                            <UserIcon className="w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
+                                            <span className="text-sm font-medium">Your Profile</span>
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuItem 
+                                            className="flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-[var(--card-radius)] hover:bg-primary/5 text-slate-700 dark:text-slate-300 transition-colors group mb-0.5"
+                                            onClick={() => navigate('/settings')}
+                                        >
+                                            <Settings className="w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
+                                            <span className="text-sm font-medium">Settings</span>
+                                        </DropdownMenuItem>
                                     </div>
-                                </DropdownMenuLabel>
-                                <div className="h-px bg-slate-100 dark:bg-white/5 mx-2 my-1" />
-                                
-                                <DropdownMenuItem 
-                                    className="flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-2xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group mb-1"
-                                    onClick={() => navigate('/profile')}
-                                >
-                                    <UserIcon className="w-4 h-4 text-slate-500 group-hover:text-primary" />
-                                    <span className="text-sm font-medium">Profile Settings</span>
-                                </DropdownMenuItem>
 
-                                <DropdownMenuItem 
-                                    className="flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-2xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group mb-1"
-                                    onClick={() => navigate('/settings')}
-                                >
-                                    <Settings className="w-4 h-4 text-slate-500 group-hover:text-primary" />
-                                    <span className="text-sm font-medium">Dashboard Preferences</span>
-                                </DropdownMenuItem>
-
-                                <div className="h-px bg-slate-100 dark:bg-white/5 mx-2 my-1" />
-                                
-                                <DropdownMenuItem 
-                                    className="flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-2xl hover:bg-red-50 dark:hover:bg-red-900/10 text-red-600 dark:text-red-400 transition-colors group"
-                                    onClick={handleLogout}
-                                >
-                                    <LogOut className="w-4 h-4" />
-                                    <span className="text-sm font-semibold">Sign Out</span>
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                    <div className="h-px bg-muted/60 mx-1 my-1" />
+                                    
+                                    <DropdownMenuItem 
+                                        className="flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-[var(--card-radius)] hover:bg-red-50 dark:hover:bg-red-900/10 text-red-600 dark:text-red-400 transition-colors group"
+                                        onClick={handleLogout}
+                                    >
+                                        <LogOut className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                                        <span className="text-sm font-semibold">Sign Out</span>
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                     </div>
                 </div>
             </div>

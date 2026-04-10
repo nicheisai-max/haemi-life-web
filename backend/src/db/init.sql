@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS users (
     profile_image VARCHAR(255),
     profile_image_data BYTEA,                          -- Binary storage for uploaded profile pictures
     profile_image_mime VARCHAR(100),                   -- MIME type for profile picture (e.g. image/jpeg)
-    "lastActivity" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
+    last_activity TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Tracking for session timeout
     phone_blind_index VARCHAR(64),                     -- Searchable hash for encrypted phone
     id_blind_index VARCHAR(64),                        -- Searchable hash for encrypted ID
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     os_name VARCHAR,
     login_method VARCHAR,
     login_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    "lastActivity" TIMESTAMPTZ DEFAULT NOW(),
+    last_activity TIMESTAMPTZ DEFAULT NOW(),
     logout_time TIMESTAMPTZ,
     is_active BOOLEAN DEFAULT TRUE,
     revoked BOOLEAN DEFAULT FALSE,
@@ -96,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_users_phone_blind ON users(phone_blind_index);
 CREATE INDEX IF NOT EXISTS idx_users_id_blind ON users(id_blind_index);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status);
-CREATE INDEX IF NOT EXISTS idx_users_lastActivity ON users("lastActivity");
+CREATE INDEX IF NOT EXISTS idx_users_last_activity ON users(last_activity);
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
 
 -- 3. Audit Logs (Aligned with Admin & Audit Services)
@@ -349,6 +349,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     participants_hash VARCHAR(64) UNIQUE, -- Deterministic de-duplication lock
     is_redundant BOOLEAN DEFAULT false,
+    last_message_id UUID,
+    preview_text TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     last_message_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -502,8 +504,8 @@ CREATE TABLE IF NOT EXISTS medical_record_files (
   file_path TEXT NOT NULL,
   file_mime TEXT,
   file_name TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  deleted_at TIMESTAMP WITH TIME ZONE
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_rec_att_rid ON medical_record_files(record_id);
 CREATE INDEX IF NOT EXISTS idx_medical_record_files_deleted_at ON medical_record_files(deleted_at);
@@ -515,11 +517,13 @@ CREATE INDEX IF NOT EXISTS idx_medical_records_deleted_at ON medical_records(del
 
 -- (medical_records.file_data and file_mime already defined in CREATE TABLE above)
 
--- Telemedicine Consents
+-- Telemedicine Consents (Institutional Compliance)
 CREATE TABLE IF NOT EXISTS telemedicine_consents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     patient_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    is_consented BOOLEAN DEFAULT TRUE, -- Explicit consent state (Google/Meta Grade)
     agreed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    signature_data TEXT, -- D15: Digital signature blob/hash
     ip_address VARCHAR(45),
     user_agent TEXT,
     version VARCHAR(20) DEFAULT 'v1.0'
@@ -817,7 +821,7 @@ BEGIN
         JOIN conversation_participants p1 ON c.id = p1.conversation_id AND p1.user_id = v_patient_id
         JOIN conversation_participants p2 ON c.id = p2.conversation_id AND p2.user_id = v_doctor_id
         GROUP BY c.id
-        HAVING COUNT(participant_id) = 2; -- Must be exactly 2 participants
+        HAVING COUNT(user_id) = 2; -- Must be exactly 2 participants
 
         IF v_demo_conv_id IS NULL THEN
             -- Create fresh conversation
@@ -901,15 +905,6 @@ VALUES
     ('JWT_REFRESH_EXPIRY_DAYS', '7')
 ON CONFLICT (key) DO NOTHING;
 
--- Telemedicine Consent Table
-CREATE TABLE IF NOT EXISTS telemedicine_consents (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    patient_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-    signature_data TEXT,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
--- Final Seed Execution
 -- Seeding is now managed by setup-db.ts to ensure dynamic hashing of DEMO_PASSWORD
 -- CALL sp_seed_demo_data(...);
 
@@ -930,10 +925,64 @@ CREATE TABLE IF NOT EXISTS active_connections (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     socket_id VARCHAR(255) NOT NULL,
     connected_at TIMESTAMPTZ DEFAULT NOW(),
-    "lastActivity" TIMESTAMPTZ DEFAULT NOW()
+    last_activity TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_active_connections_user_id ON active_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_active_connections_socket_id ON active_connections(socket_id);
+
+-- 2. Pharmacy Commerce & Inventory (Consolidated for v4.0 Platinum)
+CREATE TABLE IF NOT EXISTS orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    patient_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    pharmacy_id INTEGER REFERENCES pharmacies(id) ON DELETE SET NULL,
+    status VARCHAR(50) DEFAULT 'Pending',
+    total_amount NUMERIC(10,2) DEFAULT 0.00,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_orders_patient_id ON orders(patient_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+
+CREATE TABLE IF NOT EXISTS order_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
+    medicine_id INTEGER REFERENCES medicines(id),
+    quantity INTEGER DEFAULT 1,
+    unit_price NUMERIC(10,2) DEFAULT 0.00,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+
+CREATE TABLE IF NOT EXISTS pharmacy_inventory (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    pharmacy_id INTEGER REFERENCES pharmacies(id) ON DELETE CASCADE,
+    medicine_id INTEGER REFERENCES medicines(id) ON DELETE CASCADE,
+    price NUMERIC(10,2) DEFAULT 0.00,
+    stock_quantity INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(pharmacy_id, medicine_id)
+);
+CREATE INDEX IF NOT EXISTS idx_inventory_pharmacy_medicine ON pharmacy_inventory(pharmacy_id, medicine_id);
+
+-- 3. Institutional Metadata (Lifecycle Audit)
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    id SERIAL PRIMARY KEY,
+    migration_name VARCHAR(255) NOT NULL,
+    applied_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS knex_migrations (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255),
+    batch INTEGER,
+    migration_time TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS knex_migrations_lock (
+    "index" SERIAL PRIMARY KEY,
+    is_locked INTEGER
+);
 
 -- 4. Unique Active Thread Index
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_conversation 

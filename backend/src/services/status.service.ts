@@ -1,10 +1,11 @@
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
+import { UserId } from '../types/chat.types';
 
 export type UserStatusEvent = {
-    userId: string;
-    status: 'online' | 'offline';
-    lastActivity: string; // FIXED: renamed from last_activity
+    userId: UserId;
+    isOnline: boolean; // Institutional standard (boolean)
+    last_activity: string;
 };
 
 
@@ -49,9 +50,9 @@ class StatusService {
         }
 
         return {
-            userId,
-            status: 'online',
-            lastActivity: new Date().toISOString()
+            userId: id as UserId,
+            isOnline: true,
+            last_activity: new Date().toISOString()
         };
     }
 
@@ -68,8 +69,8 @@ class StatusService {
         }
 
         try {
-            // 2. Definitive State Retrieval (Pre-deletion lastActivity)
-            const lastActivity = await this.fetchUserLastActivity(userId) || new Date().toISOString();
+            // 2. Definitive State Retrieval (Pre-deletion last_activity)
+            const last_activity = await this.fetchUserLastActivity(userId) || new Date().toISOString();
 
             // 3. Strict Sequential DB Deletion (Source of Truth)
             await pool.query("DELETE FROM active_connections WHERE socket_id = $1", [socketId]);
@@ -81,16 +82,16 @@ class StatusService {
             if (!stillOnline) {
                 // Updated user table only if definitively offline in DB
                 await pool.query(
-                    "UPDATE users SET \"lastActivity\" = CURRENT_TIMESTAMP WHERE id = $1",
+                    "UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1",
                     [id]
                 );
                 logger.info('[Phase 1] User definitively offline (DB Truth)', { userId: id });
             }
 
             return {
-                userId,
-                status: stillOnline ? 'online' : 'offline',
-                lastActivity: lastActivity
+                userId: id as UserId,
+                isOnline: stillOnline,
+                last_activity: last_activity
             };
         } catch (error: unknown) {
             logger.error('[StatusService] Failed to set user offline', {
@@ -119,16 +120,16 @@ class StatusService {
 
             // 4. Force update users table
             await pool.query(
-                "UPDATE users SET \"lastActivity\" = CURRENT_TIMESTAMP WHERE id = $1",
+                "UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1",
                 [id]
             );
 
             logger.info('[Phase 1] User connections purged globally (DB Truth)', { userId: id });
 
             return {
-                userId: id,
-                status: 'offline',
-                lastActivity: new Date().toISOString()
+                userId: id as UserId,
+                isOnline: false,
+                last_activity: new Date().toISOString()
             };
         } catch (error: unknown) {
             logger.error('[StatusService] Failed to purge user connections', {
@@ -139,9 +140,9 @@ class StatusService {
         }
     }
 
-    public async getPresenceBatch(userIds: string[]): Promise<Record<string, { isOnline: boolean, lastActivity: string }>> {
+    public async getPresenceBatch(userIds: string[]): Promise<Record<string, { isOnline: boolean, last_activity: string }>> {
         if (!userIds || userIds.length === 0) return {};
-        const results: Record<string, { isOnline: boolean, lastActivity: string }> = {};
+        const results: Record<string, { isOnline: boolean, last_activity: string }> = {};
 
         try {
             // 1. Query active_connections for ALL requested users (Truth Source)
@@ -151,17 +152,17 @@ class StatusService {
             );
             const onlineSet = new Set(onlineResult.rows.map(r => r.user_id));
 
-            // 2. Fetch lastActivity for ALL from users table
-            const dbResult = await pool.query<{ id: string, lastActivity: Date | string | null }>(
-                `SELECT id, "lastActivity" FROM users WHERE id = ANY($1)`,
+            // 2. Fetch last_activity for ALL from users table
+            const dbResult = await pool.query<{ id: string, last_activity: Date | string | null }>(
+                `SELECT id, last_activity FROM users WHERE id = ANY($1)`,
                 [userIds]
             );
 
             dbResult.rows.forEach((row) => {
                 results[row.id] = {
                     isOnline: onlineSet.has(row.id),
-                    lastActivity: row.lastActivity ?
-                        (row.lastActivity instanceof Date ? row.lastActivity.toISOString() : new Date(row.lastActivity).toISOString()) :
+                    last_activity: row.last_activity ?
+                        (row.last_activity instanceof Date ? row.last_activity.toISOString() : new Date(row.last_activity).toISOString()) :
                         new Date().toISOString()
                 };
             });
@@ -201,12 +202,12 @@ class StatusService {
             await pool.query(
                 `INSERT INTO active_connections (user_id, socket_id) 
                  VALUES ($1, $2) 
-                 ON CONFLICT (user_id, socket_id) DO UPDATE SET "lastActivity" = CURRENT_TIMESTAMP`,
+                 ON CONFLICT (user_id, socket_id) DO UPDATE SET last_activity = CURRENT_TIMESTAMP`,
                 [userId, socketId]
             );
-            // which updates the session heartbeat (lastActivity and expires_at).
-            // Ensure lastActivity is updated to track active interaction
-            await pool.query("UPDATE users SET \"lastActivity\" = CURRENT_TIMESTAMP WHERE id = $1", [userId]);
+            // which updates the session heartbeat (last_activity and expires_at).
+            // Ensure last_activity is updated to track active interaction
+            await pool.query("UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1", [userId]);
         } catch (error: unknown) {
             logger.error(`[StatusService] persistConnection DB error for userId = ${userId}`, {
                 error: error instanceof Error ? error.message : String(error),
@@ -218,9 +219,9 @@ class StatusService {
 
     private async fetchUserLastActivity(userId: string): Promise<string | null> {
         try {
-            const result = await pool.query<{ lastActivity: Date | string | null }>("SELECT \"lastActivity\" FROM users WHERE id = $1", [userId]);
-            if (result.rows[0]?.lastActivity) {
-                const date = result.rows[0].lastActivity;
+            const result = await pool.query<{ last_activity: Date | string | null }>("SELECT last_activity FROM users WHERE id = $1", [userId]);
+            if (result.rows[0]?.last_activity) {
+                const date = result.rows[0].last_activity;
                 return date instanceof Date ? date.toISOString() : new Date(date).toISOString();
             }
             return null;

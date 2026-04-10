@@ -9,7 +9,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-[var(--dashboard-card-radius)] border bg-card text-card-foreground shadow-sm dark:shadow-none dark:border-border",
+      "rounded-[var(--card-radius)] institutional-border bg-card text-card-foreground shadow-sm dark:shadow-none",
       interactive && "interactive-card cursor-pointer",
       className
     )}

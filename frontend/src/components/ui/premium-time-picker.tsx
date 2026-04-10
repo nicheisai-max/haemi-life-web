@@ -122,7 +122,7 @@ export const PremiumTimePicker: React.FC<PremiumTimePickerProps> = ({
                                             type="button"
                                             onClick={() => handleHourChange(h)}
                                             className={cn(
-                                                "w-full py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
+                                                "w-full py-1.5 rounded-[var(--card-radius)] text-sm font-medium transition-all duration-200",
                                                 hour === h
                                                     ? "bg-primary text-primary-foreground shadow-md scale-105"
                                                     : "hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -148,7 +148,7 @@ export const PremiumTimePicker: React.FC<PremiumTimePickerProps> = ({
                                             type="button"
                                             onClick={() => handleMinuteChange(m)}
                                             className={cn(
-                                                "w-full py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
+                                                "w-full py-1.5 rounded-[var(--card-radius)] text-sm font-medium transition-all duration-200",
                                                 minute === m
                                                     ? "bg-primary text-primary-foreground shadow-md scale-105"
                                                     : "hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -173,7 +173,7 @@ export const PremiumTimePicker: React.FC<PremiumTimePickerProps> = ({
                                             type="button"
                                             onClick={() => handlePeriodChange(p)}
                                             className={cn(
-                                                "w-full py-2.5 rounded-lg text-xs font-bold transition-all duration-300",
+                                                "w-full py-2.5 rounded-[var(--card-radius)] text-xs font-bold transition-all duration-300",
                                                 period === p
                                                     ? "bg-primary text-primary-foreground shadow-md"
                                                     : "bg-muted/30 text-muted-foreground hover:bg-muted hover:text-foreground"
