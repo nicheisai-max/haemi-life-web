@@ -175,7 +175,6 @@ const seed = async () => {
         // Array of 10 Specific Doctors (some might match previous seed, which is fine, exact emails will trigger skip)
         const doctorsData = [
             { name: 'Dr. Thabo Kgosi', email: 'thabo.kgosi@haemilife.com', spec: 'Cardiologist', exp: 18, fee: 1200 },
-            { name: 'Dr. Lorato Molefe', email: 'lorato.molefe@haemilife.com', spec: 'Pediatrician', exp: 12, fee: 850 },
             { name: 'Dr. Neo Mousi', email: 'neo.mousi@haemilife.com', spec: 'General Practitioner', exp: 8, fee: 400 },
             { name: 'Dr. Kagiso Dube', email: 'kagiso.dube@haemilife.com', spec: 'Dermatologist', exp: 15, fee: 950 },
             { name: 'Dr. Mpho Seretse', email: 'mpho.seretse@haemilife.com', spec: 'Gynecologist', exp: 20, fee: 1100 },

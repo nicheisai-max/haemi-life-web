@@ -1,31 +1,38 @@
 import { createContext } from 'react';
-import type { Conversation, Message, Attachment, AttachmentDTO, PresenceRecord, ParticipantMetadata } from '../types/chat';
+import type { 
+    Conversation, 
+    Message, 
+    Attachment, 
+    AttachmentDTO, 
+    PresenceRecord, 
+    ParticipantMetadata,
+    UserId,
+    MessageId,
+    ConversationId
+} from '../types/chat';
 
 export interface ChatContextType {
     conversations: Conversation[];
     activeConversation: Conversation | null;
     messages: Message[];
     loading: boolean;
-    typingUsers: string[];
-    presence: Record<string, PresenceRecord>;
+    typingUsers: UserId[];
+    presence: Record<UserId, PresenceRecord>;
     fetchConversations: () => Promise<void>;
     selectConversation: (conversation: Conversation) => void;
     sendMessage: (
         content: string, 
-        conversationId: string, 
-        attachmentUrl?: string, 
-        attachmentType?: string, 
-        replyToId?: string, 
-        attachmentName?: string,
-        attachments?: Attachment[]
+        conversationId: ConversationId, 
+        attachments?: Attachment[],
+        replyToId?: string
     ) => Promise<void>;
     startNewConversation: (participantId: string, meta?: ParticipantMetadata) => Promise<void>;
-    emitTyping: (conversationId: string, isTyping: boolean) => void;
+    emitTyping: (conversationId: ConversationId, isTyping: boolean) => void;
     uploadAttachment: (file: File) => Promise<AttachmentDTO | null>;
-    deleteMessage: (messageId: string, forEveryone: boolean) => Promise<void>;
-    reactToMessage: (messageId: string, reactionType: string) => Promise<void>;
-    markAsRead: (conversationId: string) => Promise<void>;
-    markMessageAsRead: (messageId: string) => Promise<void>;
+    deleteMessage: (messageId: MessageId, forEveryone: boolean) => Promise<void>;
+    reactToMessage: (messageId: MessageId, reactionType: string) => Promise<void>;
+    markAsRead: (conversationId: ConversationId) => Promise<void>;
+    markMessageAsRead: (messageId: MessageId) => Promise<void>;
     user: { id: string; name: string; role: string } | null;
 }
 

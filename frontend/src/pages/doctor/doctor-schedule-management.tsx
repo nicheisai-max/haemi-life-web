@@ -90,11 +90,7 @@ export const DoctorScheduleManagement: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div className="flex justify-center items-center min-h-[400px]">
-                <MedicalLoader message="Synchronizing clinical calendar..." />
-            </div>
-        );
+        return <MedicalLoader message="Synchronizing clinical calendar..." />;
     }
 
     return (<div className="space-y-8">

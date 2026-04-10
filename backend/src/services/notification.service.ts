@@ -2,6 +2,7 @@ import { pool } from '../config/db';
 import { socketIO as io } from '../app';
 import { HaemiNotification } from '../types/socket.types';
 import { logger } from '../utils/logger';
+import { UserId, MessageId, ConversationId } from '../types/chat.types';
 
 export type NotificationType = 'success' | 'info' | 'warning' | 'error';
 
@@ -57,13 +58,13 @@ export const notificationService = {
             const raw = result.rows[0];
             const notification: HaemiNotification = {
                 id: raw.id,
-                userId: raw.user_id,
+                userId: raw.user_id as UserId,
                 title: raw.title,
                 description: raw.description,
                 type: raw.type,
                 isRead: raw.is_read,
-                messageId: raw.message_id || undefined,
-                conversationId: raw.conversation_id || undefined,
+                messageId: (raw.message_id as MessageId) || undefined,
+                conversationId: (raw.conversation_id as ConversationId) || undefined,
                 metadata: raw.metadata || undefined,
                 createdAt: raw.created_at instanceof Date ? raw.created_at.toISOString() : String(raw.created_at),
                 receivedAt: raw.received_at instanceof Date ? raw.received_at.toISOString() : (raw.received_at ? String(raw.received_at) : undefined)
@@ -111,7 +112,7 @@ export const notificationService = {
                 affected.forEach(row => {
                     socketServer.to(`user:${row.user_id}`).emit('notificationDelete', { 
                         id: row.id,
-                        messageId 
+                        messageId: messageId as MessageId
                     });
                 });
             }

@@ -28,7 +28,7 @@ export class UserRepository {
         try {
             const blindIndex = getBlindIndex(identifier);
             const result = await this.db.query<UserRow>(
-                `SELECT u.*, (tc.id IS NOT NULL) as has_consent 
+                `SELECT u.*, (tc.is_consented IS TRUE) as has_consent 
                  FROM users u 
                  LEFT JOIN telemedicine_consents tc ON u.id = tc.patient_id 
                  WHERE u.email = $1 OR u.phone_blind_index = $2 OR u.phone_number = $1`,
@@ -67,7 +67,7 @@ export class UserRepository {
     async findById(id: string): Promise<User | null> {
         try {
             const result = await this.db.query<UserRow>(
-                `SELECT u.*, (tc.id IS NOT NULL) as has_consent 
+                `SELECT u.*, (tc.is_consented IS TRUE) as has_consent 
                  FROM users u 
                  LEFT JOIN telemedicine_consents tc ON u.id = tc.patient_id 
                  WHERE u.id = $1`,
@@ -99,7 +99,7 @@ export class UserRepository {
                 `INSERT INTO users (
                     name, phone_number, email, password, role, id_number, phone_blind_index, id_blind_index, created_at, updated_at, status
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'ACTIVE') 
-                RETURNING id, name, phone_number, email, role, id_number, status, initials, is_active, is_verified, token_version, profile_image, "lastActivity", created_at, updated_at, FALSE as has_consent`,
+                RETURNING id, name, phone_number, email, role, id_number, status, initials, is_active, is_verified, token_version, profile_image, last_activity, created_at, updated_at, FALSE as has_consent`,
                 [name, encryptedPhone, email || null, password, role, encryptedID, phoneBlindIndex, idBlindIndex]
             );
             return this.decryptUser(result.rows[0]);

@@ -4,9 +4,11 @@ import { logger } from '../utils/logger';
 import type { SocketConnectionState } from '../types/socket.types';
 import { safeParseJSON, isSocketErrorPayload } from '../utils/type-guards';
 import type { Notification as HaemiNotification } from './notification.service';
-import type { Message } from '../hooks/use-chat';
+import type { Message, UserId, MessageId, ConversationId } from '../types/chat';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
+const RAW_SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
+// P0: Institutional Determinism - Replace 'localhost' with '127.0.0.1' to bypass IPv6 resolution drift
+const SOCKET_URL = RAW_SOCKET_URL.replace('localhost', '127.0.0.1');
 
 /* ---------------- SIGNAL ---------------- */
 
@@ -19,8 +21,9 @@ interface SignalData {
 /* ---------------- EVENTS ---------------- */
 
 export interface MessageReadEvent {
-    messageId: string;
-    userId: string;
+    conversationId: ConversationId;
+    messageIds: MessageId[];
+    userId: UserId;
 }
 
 export interface ServerToClientEvents {
@@ -30,42 +33,68 @@ export interface ServerToClientEvents {
     reconnect_attempt: (attempt: number) => void;
     reconnect_failed: () => void;
     reconnect: () => void;
-    participantJoined: (participantId: string) => void;
+    participantJoined: (participantId: UserId) => void;
     callMade: (data: { offer: SignalData; socket: string }) => void;
     answerMade: (data: { answer: SignalData; socket: string }) => void;
     iceCandidate: (data: { candidate: SignalData; socket: string }) => void;
     messageReaction: (data: {
-        messageId: string;
-        userId: string;
+        messageId: MessageId;
+        userId: UserId;
         reactionType: string;
         action: 'added' | 'removed';
     }) => void | Promise<void>;
-    messageDeleted: (data: { messageId: string; conversationId: string }) => void | Promise<void>;
-    typingStarted: (data: { userId: string; conversationId: string; name: string }) => void | Promise<void>;
-    typingStopped: (data: { userId: string; conversationId: string; name: string }) => void | Promise<void>;
-    messageDelivered: (data: { conversationId: string; messageIds: string[] }) => void | Promise<void>;
+    messageDeleted: (data: { 
+        messageId: MessageId; 
+        conversationId: ConversationId;
+        newLastMessage?: {
+            id: MessageId;
+            content: string;
+            createdAt: string;
+        } | null;
+    }) => void | Promise<void>;
+    typingStarted: (data: { userId: UserId; conversationId: ConversationId; name: string }) => void | Promise<void>;
+    typingStopped: (data: { userId: UserId; conversationId: ConversationId; name: string }) => void | Promise<void>;
+    messageDelivered: (data: { conversationId: ConversationId; messageIds: MessageId[] }) => void | Promise<void>;
     messageRead: (data: MessageReadEvent) => void | Promise<void>;
     messageReceived: (message: Message) => void | Promise<void>;
     notificationNew: (notification: HaemiNotification) => void | Promise<void>;
     notificationRead: (data: { id: string }) => void | Promise<void>;
-    notificationDelete: (data: { id: string; messageId?: string }) => void | Promise<void>;
+    notificationDelete: (data: { id: string; messageId?: MessageId }) => void | Promise<void>;
     notificationReadAll: () => void | Promise<void>;
-    userStatus: (data: { userId: string; isOnline: boolean; lastActivity: string }) => void | Promise<void>;
-    ackDelivery: (data: { conversationId: string; messageId: string }) => void | Promise<void>;
-    localMessageDeleted: (data: { messageId: string }) => void | Promise<void>;
+    userStatus: (data: { userId: UserId; isOnline: boolean; last_activity: string }) => void | Promise<void>;
+    ackDelivery: (data: { 
+        conversationId: ConversationId; 
+        messageId: MessageId;
+        senderId: UserId;
+        senderRole: string;
+    }) => void | Promise<void>;
+    localMessageDeleted: (data: {
+        messageId: MessageId;
+        conversationId: ConversationId;
+        newLastMessage?: {
+            id: MessageId;
+            content: string;
+            createdAt: string;
+        } | null;
+    }) => void | Promise<void>;
     adminMirrorEvent: (payload: { event: string; data: unknown; timestamp: string }) => void | Promise<void>;
 }
 
 export interface ClientToServerEvents {
     joinConsultation: (appointmentId: string) => void;
-    callUser: (data: { offer: SignalData; to: string }) => void;
-    makeAnswer: (data: { answer: SignalData; to: string }) => void;
-    iceCandidate: (data: { candidate: SignalData; to: string }) => void;
-    ackDelivery: (data: { conversationId: string; messageId: string }) => void;
-    joinConversation: (conversationId: string) => void;
+    callUser: (data: { offer: SignalData; to: UserId }) => void;
+    makeAnswer: (data: { answer: SignalData; to: UserId }) => void;
+    iceCandidate: (data: { candidate: SignalData; to: UserId }) => void;
+    ackDelivery: (data: { 
+        conversationId: ConversationId; 
+        messageId: MessageId;
+        senderId: UserId;
+        senderRole: string;
+    }) => void;
+    joinConversation: (conversationId: ConversationId) => void;
     messageRead: (data: MessageReadEvent) => void;
-    typingStarted: (data: { conversationId: string; name: string }) => void;
-    typingStopped: (data: { conversationId: string; name: string }) => void;
+    typingStarted: (data: { conversationId: ConversationId; name: string }) => void;
+    typingStopped: (data: { conversationId: ConversationId; name: string }) => void;
 }
 
 /* ---------------- TYPES ---------------- */
@@ -90,24 +119,31 @@ class SocketService {
         logger.info(`Socket → ${state}`);
     }
 
-    private getSet(event: keyof ServerToClientEvents) {
-        let set = this.listeners.get(event);
+    private getSet<K extends keyof ServerToClientEvents>(event: K): Set<ServerToClientEvents[K]> {
+        let set = this.listeners.get(event) as Set<ServerToClientEvents[K]> | undefined;
         if (!set) {
-            set = new Set();
-            this.listeners.set(event, set);
+            set = new Set<ServerToClientEvents[K]>();
+            this.listeners.set(event, set as Set<ServerToClientEvents[keyof ServerToClientEvents]>);
         }
         return set;
     }
 
-    private attachAll(socket: SocketInstance) {
+    private attachAll(socket: SocketInstance): void {
         this.listeners.forEach((set, event) => {
-            set.forEach((cb) => {
-                // Type-safe attachment using the specific event key
-                // Convert to unknown first to allow cross-type casting without 'any'
-                socket.on(
-                    event as keyof ServerToClientEvents, 
-                    cb as never
-                ); 
+            // Institutional Master Listener Pattern: Zero-Any implementation
+            // Cast event as string for socket.on compatibility in generic iteration
+            const eventName = String(event);
+            socket.on(eventName as keyof ServerToClientEvents, (...args: unknown[]) => {
+                set.forEach((cb: unknown) => {
+                    if (typeof cb === 'function') {
+                        try {
+                            cb(...args);
+                        } catch (err: unknown) {
+                            const errorMsg = err instanceof Error ? err.message : String(err);
+                            logger.error(`[SocketService] Error in listener for ${eventName}:`, { error: errorMsg });
+                        }
+                    }
+                });
             });
         });
     }
@@ -122,9 +158,13 @@ class SocketService {
                 withCredentials: true,
                 transports: ['polling', 'websocket'], // P0: Institutional Handshake (Polling → WS Upgrade)
                 reconnection: true,
-                reconnectionAttempts: 5,
-                reconnectionDelay: 1000,
-                timeout: 20000,
+                // D10 REMEDIATION: Infinity attempts + exponential backoff capped at 30 s.
+                // Prevents permanent socket-death after a brief WiFi blip or server
+                // restart during investor demo. Google/Meta-grade resilience pattern.
+                reconnectionAttempts: Infinity,
+                reconnectionDelay: 1_000,
+                reconnectionDelayMax: 30_000,
+                timeout: 20_000,
             });
 
             this.socket?.disconnect();
@@ -158,9 +198,38 @@ class SocketService {
 
         } catch (error: unknown) {
             const err = error instanceof Error ? error : new Error(String(error));
-            logger.error(err.message);
+            logger.error(`[SocketService] Connection failed: ${err.message}`, { stack: err.stack });
             this.setState('FAILED');
         }
+    }
+
+    /**
+     * 🔐 D9 REMEDIATION: Token Refresh-on-Reconnect
+     *
+     * socket.io-client freezes `socket.auth` at the moment `connect()` is called.
+     * After a proactive token rotation the in-memory credential in api.ts is fresh,
+     * but the socket still holds the original stale token in its auth object.
+     *
+     * Calling this method from a `reconnect_attempt` listener updates `socket.auth`
+     * BEFORE the next connection handshake is sent to the server, ensuring the backend
+     * JWT middleware always validates a live credential.
+     *
+     * Type-safe: `socket.auth` is typed as `{ [key: string]: unknown }` in socket.io-client,
+     * so assigning `{ token: string }` is fully compliant — no cast required.
+     */
+    public updateAuthToken(freshToken: string): void {
+        if (this.socket !== null) {
+            this.socket.auth = { token: freshToken };
+        }
+    }
+
+    /**
+     * 🛡️ D12 REMEDIATION: Exposure of internal connection state.
+     * Required for auxiliary presence-polling logic in ChatProvider
+     * when the socket is in a disconnected state.
+     */
+    public isConnected(): boolean {
+        return this.socket?.connected ?? false;
     }
 
     on<K extends keyof ServerToClientEvents>(
@@ -169,19 +238,26 @@ class SocketService {
     ) {
         const set = this.getSet(event);
         
-        // P0: Idempotency Guard. Prevent multiple socket.on registrations for same callback
+        // P0: Idempotency Guard. Prevent multiple registrations for same callback
         if (set.has(cb)) {
             logger.warn(`[SocketService] Duplicate registration skipped for event: ${event}`);
             return;
         }
 
+        const isFirst = set.size === 0;
         set.add(cb);
 
-        if (this.socket) {
-            this.socket.on(
-                event as keyof ServerToClientEvents, 
-                cb as never
-            );
+        // Institutional Master Listener Pattern: Zero-Any implementation
+        if (this.socket && isFirst) {
+            const eventName = String(event);
+            this.socket.on(eventName as keyof ServerToClientEvents, (...args: unknown[]) => {
+                const currentSet = this.listeners.get(event);
+                if (currentSet) {
+                    currentSet.forEach((l: unknown) => {
+                        if (typeof l === 'function') l(...args);
+                    });
+                }
+            });
         }
     }
 
@@ -194,8 +270,10 @@ class SocketService {
 
         set.delete(cb);
 
-        if (this.socket) {
-            this.socket.off(event as Parameters<SocketInstance['off']>[0], cb as never);
+        // If no listeners left, unregister the master listener from the socket
+        if (set.size === 0 && this.socket) {
+            const eventName = String(event);
+            this.socket.off(eventName as keyof ServerToClientEvents);
         }
     }
 

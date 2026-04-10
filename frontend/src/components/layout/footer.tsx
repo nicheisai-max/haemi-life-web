@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
+import { PATHS } from '../../routes/paths';
 
 export const Footer: React.FC = () => {
     return (
@@ -14,9 +15,9 @@ export const Footer: React.FC = () => {
                 </div>
 
                 <div className="haemi-footer-nav">
-                    <Link to="/privacy-policy" className="haemi-footer-link">Privacy Policy</Link>
-                    <Link to="/terms-of-service" className="haemi-footer-link">Terms of Service</Link>
-                    <Link to="/help" className="haemi-footer-link">Support</Link>
+                    <Link to={PATHS.PRIVACY} className="haemi-footer-link">Privacy Policy</Link>
+                    <Link to={PATHS.TERMS} className="haemi-footer-link">Terms of Service</Link>
+                    <Link to={PATHS.HELP} className="haemi-footer-link">Support</Link>
                     <span className="haemi-footer-badge">
                         v2.1.0-stable
                     </span>

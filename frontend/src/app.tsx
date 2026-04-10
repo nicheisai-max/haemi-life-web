@@ -12,22 +12,42 @@ import { NotificationProvider } from './context/notification-provider';
 import { ChatProvider } from './context/chat-provider';
 import { ErrorBoundary } from './components/ui/error-boundary';
 import { DelayedFallback } from './components/layout/delayed-fallback';
-const LazyDashboardLayout = lazy(() => import('./components/layout/dashboard-layout').then(m => ({ default: m.DashboardLayout })));
-const RoleRouter = lazy(() => import('./components/layout/role-router').then(m => ({ default: m.RoleRouter })));
+import { LanguageProvider } from './context/language-context';
 import { ScrollToTop } from './components/utils/scroll-to-top';
 import { PageTransition } from './components/layout/page-transition';
 import { MedicalLoader } from './components/ui/medical-loader';
 import { RoleRoute } from './components/auth/role-route';
 import { FirstVisitGuard } from './components/guards/first-visit-guard';
+import { TelemedicineGuard } from './components/guards/telemedicine-guard';
+import { logger, auditLogger } from './utils/logger';
+import { safeParseJSON, isJWTPayload } from './utils/type-guards';
 
+// ─── Institutional JWT Decoder (Zero Hallucination Guard) ───────────────────
+const decodeJWT = (token: string | null) => {
+  if (!token) return null;
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonString = atob(base64);
+    return safeParseJSON(jsonString, isJWTPayload);
+  } catch (error: unknown) {
+    logger.error('[InstitutionalJWT] Decoding systemic failure', { 
+        error: error instanceof Error ? error.message : String(error) 
+    });
+    return null;
+  }
+};
 
-// Lazy loaded pages
 // Eagerly loaded Auth/Public pages for zero-jerks and instantaneous navigation
 import { Login } from './pages/public/login';
 import { Signup } from './pages/public/signup';
 import { ForgotPassword } from './pages/auth/forgot-password';
 import { StyleGuide } from './pages/public/style-guide';
 import { PATHS } from './routes/paths';
+
+// Lazy loaded layout components
+const LazyDashboardLayout = lazy(() => import('./components/layout/dashboard-layout').then(m => ({ default: m.DashboardLayout })));
+const RoleRouter = lazy(() => import('./components/layout/role-router').then(m => ({ default: m.RoleRouter })));
 
 // Lazy loaded dashboard pages
 const AdminDashboard = lazy(() => import('./pages/admin/admin-dashboard').then(m => ({ default: m.AdminDashboard })));
@@ -53,16 +73,68 @@ const TelemedicineConsent = lazy(() => import('./pages/legal/telemedicine-consen
 const TelemedicineDashboard = lazy(() => import('./pages/telemedicine/telemedicine-dashboard').then(m => ({ default: m.TelemedicineDashboard })));
 const VideoConsultation = lazy(() => import('./components/telemedicine/video-consultation').then(m => ({ default: m.VideoConsultation })));
 const NotFound = lazy(() => import('./pages/public/not-found').then(m => ({ default: m.NotFound })));
-const DoctorReports = lazy(() => import('./pages/doctor/reports'));
-const DispensePrescription = lazy(() => import('./pages/pharmacist/dispense-prescription'));
-import { DoctorPatientList } from './pages/doctor/doctor-patient-list';
+const DoctorReports = lazy(() => import('./pages/doctor/reports').then(m => ({ default: m.DoctorReports })));
+const DispensePrescription = lazy(() => import('./pages/pharmacist/dispense-prescription').then(m => ({ default: m.DispensePrescription })));
+const DoctorPatientList = lazy(() => import('./pages/doctor/doctor-patient-list').then(m => ({ default: m.DoctorPatientList })));
 
-const LoadingFallback = () => <MedicalLoader fullPage message="Securing clinical data..." />;
+const LoadingFallback = () => <MedicalLoader variant="global" message="Securing clinical data..." />;
 
 /**
- * Renders NotificationProvider unconditionally to prevent React from unmounting
- * the entire AppRoutes subtree whenever authStatus toggles.
- * The NotificationProvider internally guards its socket connection via user?.id.
+ * 🛡️ INSTITUTIONAL PROTECTION GUARD:
+ * Redirects unauthorized users while ensuring the loading state is never dual-mounted.
+ */
+const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { isAuthenticated, isLoading, isRefreshing, isTokenNearDeath, token } = useAuth();
+  const location = useLocation();
+
+  if (isLoading || isRefreshing) return <LoadingFallback />;
+
+  // 🩺 INSTITUTIONAL STANDARD: Strict Expiry Guard
+  // P0 FIX: Even if theoretically authenticated, if the token is near death (<10s),
+  // we block mounting to ensure child components don't fire requests with a stale credential.
+  if (isTokenNearDeath && isRefreshing) {
+    const payload = decodeJWT(token);
+    logger.info('[Guard] Critical near-death session intercepted for refresh sync.', { 
+        userId: payload?.id, 
+        exp: payload?.exp 
+    });
+    return <LoadingFallback />;
+  }
+
+  if (!isAuthenticated) {
+    logger.info('[Guard] Unauthorized access attempt blocked. Redirecting to login.');
+    return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
+  }
+
+  return children;
+};
+
+/**
+ * ⚖️ UNIVERSAL LEGAL SHELL:
+ * Wraps legal/support pages in the institutional DashboardLayout ONLY for authenticated users.
+ * For non-authenticated users, it returns the raw component to allow public access.
+ */
+const UniversalLegalWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+  
+  if (isAuthenticated) {
+    return (
+      <Suspense fallback={<DelayedFallback />}>
+        <LazyDashboardLayout>
+          <PageTransition>
+            {children}
+          </PageTransition>
+        </LazyDashboardLayout>
+      </Suspense>
+    );
+  }
+  
+  return <PageTransition>{children}</PageTransition>;
+};
+
+/**
+ * 🛡️ INSTITUTIONAL CONTEXT WRAPPER:
+ * Synchronizes Notification and Chat contexts to prevent unmounting across route transitions.
  */
 const AuthGatedNotifications: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -74,21 +146,6 @@ const AuthGatedNotifications: React.FC<{ children: React.ReactNode }> = ({ child
   );
 };
 
-const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { isLoading, isAuthenticated } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return <LoadingFallback />;
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
-  }
-
-  return children;
-};
-
 const IdentityGate = () => {
   const { isLoading, isAuthenticated, user } = useAuth();
 
@@ -97,14 +154,10 @@ const IdentityGate = () => {
   }
 
   if (isAuthenticated && user) {
-    // Redirect to the role-specific canonical dashboard URL.
-    // This ensures the browser URL always reflects the correct path, enabling
-    // sidebar NavLink active-state detection and proper deep linking.
     const dashboardPath = user.role === 'admin' ? PATHS.ADMIN.DASHBOARD : PATHS.DASHBOARD;
     return <Navigate to={dashboardPath} replace />;
   }
 
-  // Unauthenticated: redirect to /login — FirstVisitGuard handles onboarding interception.
   return <Navigate to={PATHS.LOGIN} replace />;
 };
 
@@ -112,28 +165,33 @@ const AppRoutes = () => {
   const location = useLocation();
   const { isLoading } = useAuth();
 
-  // UNIVERSAL PRODUCTION GUARD:
-  // Do not render ANY routes until the initial session check is complete.
-  // This prevents the "Flicker" of protected layouts to unauthorized users.
   if (isLoading) {
     return <LoadingFallback />;
   }
 
+  const handleError = (error: Error, info: React.ErrorInfo) => {
+    logger.error('[APP_ERROR] Component boundary failure:', error.message);
+    auditLogger.log('UNHANDLED_ERROR', {
+      message: error.message,
+      context: info.componentStack || 'unknown_component'
+    });
+  };
+
   return (
-    <ErrorBoundary onReset={() => window.location.reload()}>
+    <ErrorBoundary onReset={() => window.location.reload()} onError={handleError}>
       <Suspense fallback={<LoadingFallback />}>
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.key}>
-            {/* Eagerly Loaded Auth/Public Routes (Zero Flicker) */}
+            {/* Eagerly Loaded Private/Public Routes */}
             <Route path={PATHS.STYLE_GUIDE} element={<StyleGuide />} />
             <Route path={PATHS.LOGIN} element={<FirstVisitGuard><Login /></FirstVisitGuard>} />
             <Route path={PATHS.SIGNUP} element={<Signup />} />
             <Route path={PATHS.FORGOT_PASSWORD} element={<ForgotPassword />} />
-            <Route path={PATHS.PRIVACY} element={<PrivacyPolicy />} />
-            <Route path={PATHS.TERMS} element={<TermsOfService />} />
+            <Route path={PATHS.PRIVACY} element={<UniversalLegalWrapper><PrivacyPolicy /></UniversalLegalWrapper>} />
+            <Route path={PATHS.TERMS} element={<UniversalLegalWrapper><TermsOfService /></UniversalLegalWrapper>} />
 
             {/* Lazy Loaded Routes */}
-            <Route path={PATHS.HELP} element={<Help />} />
+            <Route path={PATHS.HELP} element={<UniversalLegalWrapper><Help /></UniversalLegalWrapper>} />
             <Route
               path="/dashboard/*"
               element={
@@ -150,11 +208,13 @@ const AppRoutes = () => {
               path={PATHS.CONSENT}
               element={
                 <ProtectedRoute>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <TelemedicineConsent />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
+                  <TelemedicineGuard>
+                    <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
+                      <PageTransition>
+                        <TelemedicineConsent />
+                      </PageTransition>
+                    </LazyDashboardLayout></Suspense>
+                  </TelemedicineGuard>
                 </ProtectedRoute>
               }
             />
@@ -162,11 +222,13 @@ const AppRoutes = () => {
               path={PATHS.TELEMEDICINE}
               element={
                 <ProtectedRoute>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <TelemedicineDashboard />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
+                  <TelemedicineGuard>
+                    <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
+                      <PageTransition>
+                        <TelemedicineDashboard />
+                      </PageTransition>
+                    </LazyDashboardLayout></Suspense>
+                  </TelemedicineGuard>
                 </ProtectedRoute>
               }
             />
@@ -419,14 +481,10 @@ const AppRoutes = () => {
   );
 };
 
-import { LanguageProvider } from './context/language-context';
-
-
 const App: React.FC = () => {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary onReset={() => window.location.reload()}>
       <Router>
-
         <AuthProvider>
           <ThemeProvider>
             <ToastProvider>
@@ -445,11 +503,9 @@ const App: React.FC = () => {
             </ToastProvider>
           </ThemeProvider>
         </AuthProvider>
-
       </Router>
     </ErrorBoundary>
   );
 };
 
 export default App;
-// Dummy commit for pipeline verification

@@ -20,6 +20,7 @@ import { AnimatedEmptyState } from '@/components/ui/animated-empty-state';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
+import { MedicalLoader } from '@/components/ui/medical-loader';
 
 const CLINICAL_VOLUME_DATA = [
     { name: '08:00', patients: 3 },
@@ -120,12 +121,16 @@ export const DoctorDashboard = () => {
 
     const pendingReviews = appointments.filter(a => a.status === 'completed').length;
 
+    if (loading) {
+        return <MedicalLoader message="Hydrating clinical intelligence..." />;
+    }
+
     return (
         <div className="space-y-8">
 
 
             {/* Hero Section - Standardized Premium Style */}
-            <TransitionItem className="relative overflow-hidden rounded-card border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
+            <TransitionItem className="relative overflow-hidden rounded-[var(--card-radius)] border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
@@ -148,7 +153,7 @@ export const DoctorDashboard = () => {
                             ref={copilotTriggerRef}
                             size="lg"
                             variant="outline"
-                            className="haemi-ignore-click-outside bg-white/10 text-white border-white/20 hover:bg-white hover:text-teal-900 focus-visible:bg-white/10 focus-visible:text-white active:bg-white active:text-teal-900 dark:hover:bg-white/20 dark:hover:text-white dark:focus-visible:bg-white/20 dark:focus-visible:text-white dark:active:bg-white/20 dark:active:text-white shadow-lg h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
+                            className="haemi-ignore-click-outside bg-white/10 text-white border-white/20 hover:bg-white hover:text-teal-900 focus-visible:bg-white/10 focus-visible:text-white active:bg-white active:text-teal-900 dark:hover:bg-white/20 dark:hover:text-white dark:focus-visible:bg-white/20 dark:focus-visible:text-white dark:active:bg-white/20 dark:active:text-white shadow-lg h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
                             onClick={() => {
                                 window.dispatchEvent(new CustomEvent('haemi-open-copilot'));
                             }}
@@ -158,7 +163,7 @@ export const DoctorDashboard = () => {
                         </Button>
                         <Button
                             size="lg"
-                            className="bg-white text-teal-900 hover:bg-teal-50 border border-transparent dark:bg-primary dark:text-teal-950 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-xl gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
+                            className="bg-white text-teal-900 hover:bg-teal-50 border border-transparent dark:bg-primary dark:text-teal-950 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
                             onClick={() => navigate('/appointments')}
                         >
                             <CalendarCheck className="h-5 w-5" aria-hidden="true" />
@@ -170,7 +175,7 @@ export const DoctorDashboard = () => {
 
             {/* Error Message */}
             {error && (
-                <TransitionItem className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3" role="alert">
+                <TransitionItem className="rounded-[var(--card-radius)] border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3" role="alert">
                     <AlertCircle className="h-5 w-5" aria-hidden="true" />
                     <p className="text-sm font-medium">{error}</p>
                 </TransitionItem>
@@ -333,7 +338,7 @@ export const DoctorDashboard = () => {
                         </Button>
                     </div>
 
-                    <div className="flex-1 bg-white dark:bg-slate-950/50 rounded-card border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
+                    <div className="flex-1 bg-white dark:bg-slate-950/50 rounded-[var(--card-radius)] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden backdrop-blur-sm flex flex-col min-h-0">
                         <div className="p-6 flex-1 overflow-y-auto min-h-0">
                             {loading ? (
                                 <div className="flex justify-center p-12 h-full items-center">
@@ -356,7 +361,7 @@ export const DoctorDashboard = () => {
                                     const time = formatTime(appointment.appointmentTime);
                                     return (
                                         <DashboardCard key={appointment.id} className="group p-4 flex items-center gap-4 transition-all hover:border-primary/50 hover:bg-muted/30">
-                                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-xl p-3 w-20 text-center shrink-0 border border-blue-100 dark:border-blue-900/50">
+                                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-[var(--card-radius)] p-3 w-20 text-center shrink-0 border border-blue-100 dark:border-blue-900/50">
                                                 <span className="block text-lg font-bold leading-none">{time.split(' ')[0]}</span>
                                                 <span className="block text-xs font-bold uppercase mt-1">{time.split(' ')[1]}</span>
                                             </div>

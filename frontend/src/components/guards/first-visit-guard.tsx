@@ -39,7 +39,7 @@ export const FirstVisitGuard: React.FC<FirstVisitGuardProps> = ({ children }) =>
 
     // Auth still resolving — show loader to prevent flicker.
     if (isLoading) {
-        return <MedicalLoader fullPage message="Initializing Haemi Life..." />;
+        return <MedicalLoader variant="global" message="Initializing Haemi Life..." />;
     }
 
     // Authenticated users never see onboarding.
@@ -54,7 +54,7 @@ export const FirstVisitGuard: React.FC<FirstVisitGuardProps> = ({ children }) =>
 
     // Unauthenticated + fresh load → show Onboarding.
     return (
-        <Suspense fallback={<MedicalLoader fullPage message="Initializing Haemi Life..." />}>
+        <Suspense fallback={<MedicalLoader variant="global" message="Initializing Haemi Life..." />}>
             <Onboarding />
         </Suspense>
     );

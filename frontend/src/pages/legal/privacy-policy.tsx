@@ -12,11 +12,11 @@ export const PrivacyPolicy: React.FC = () => {
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="space-y-4">
                 <button
-                    className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
                     onClick={() => navigate(-1)}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-full bg-card border shadow-sm hover:border-primary/50 transition-all duration-300 active:scale-95"
                 >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
+                    <ArrowLeft className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" strokeWidth={2.5} />
+                    <span className="text-sm font-semibold text-muted-foreground group-hover:text-primary transition-colors">Go Back</span>
                 </button>
                 <div>
                     <h1 className="page-heading !mb-0 transition-all duration-300">Privacy Policy</h1>
@@ -188,7 +188,7 @@ export const PrivacyPolicy: React.FC = () => {
                 <section className="space-y-4">
                     <h2 className="text-h2 text-foreground border-b-2 border-primary pb-2">11. Contact Us</h2>
                     <p className="text-muted-foreground">If you have questions or concerns about this Privacy Policy, please contact us:</p>
-                    <div className="bg-muted p-6 rounded-lg border-l-4 border-primary space-y-2">
+                    <div className="bg-muted p-6 rounded-[var(--card-radius)] border-l-4 border-primary space-y-2">
                         <p className="font-semibold text-foreground">Haemi Life</p>
                         <p className="text-muted-foreground">Email: privacy@haemi.life</p>
                         <p className="text-muted-foreground">Phone: +267 XXX XXXX</p>

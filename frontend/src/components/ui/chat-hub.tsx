@@ -1,12 +1,12 @@
-// ≡ƒöÆ HAEMI ATTACHMENT PIPELINE LOCK
+// 🛡️ HAEMI ATTACHMENT PIPELINE LOCK
 // DO NOT MODIFY WITHOUT EXPLICIT USER APPROVAL
 // SINGLE SOURCE: message_attachments ONLY
 // FALLBACKS FORBIDDEN
 // TYPESCRIPT STRICT MODE ENFORCED
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button } from './button';
-import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus } from 'lucide-react';
+import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus, FileText, File, FileSpreadsheet, ImageOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat, type Conversation, type Message } from '../../hooks/use-chat';
 import { useAuth } from '@/hooks/use-auth';
@@ -23,6 +23,7 @@ import { useClickOutside } from '../../hooks/use-click-outside';
 import { secureDownload } from '../../services/file.service';
 import { getInitials as resolveInitials } from '@/utils/avatar.resolver';
 import { logger } from '@/utils/logger';
+import { toast } from 'sonner';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 
 // Override helper to get images
@@ -65,12 +66,12 @@ const Avatar: React.FC<{ name: string; initials?: string; image?: string; profil
                                 <PremiumLoader size="nano" bubbleClassName="premium-loader-bubble-white" />
                             </div>
                         )}
-                        <img 
-                            src={avatarUrl} 
-                            alt={name} 
-                            className={`h-full w-full object-cover transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`} 
+                        <img
+                            src={avatarUrl}
+                            alt={name}
+                            className={`h-full w-full object-cover transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
                             onLoad={() => setIsImageLoaded(true)}
-                            onError={() => setImgError(true)} 
+                            onError={() => setImgError(true)}
                         />
                     </>
                 ) : (
@@ -86,25 +87,267 @@ const ReactionIcon: React.FC<{ type: string; className?: string }> = ({ type, cl
     // Map both old IDs (fallback) and new IDs to Emojis
     switch (type) {
         case 'like':
-        case 'thumbs_up': return <span className={className}>≡ƒæì</span>;
-        case 'love': return <span className={className}>Γ¥ñ∩╕Å</span>;
+        case 'thumbs_up': return <span className={className}>👍</span>;
+        case 'love': return <span className={className}>❤️</span>;
         case 'laugh':
-        case 'appreciation': return <span className={className}>≡ƒÿé</span>; // Map appreciation to laugh for now or ≡ƒæÅ if preferred
+        case 'appreciation': return <span className={className}>😂</span>; // Map appreciation to laugh for now or 👏 if preferred
         case 'wow':
-        case 'noted': return <span className={className}>≡ƒÿ▓</span>;
+        case 'noted': return <span className={className}>😲</span>;
         case 'sad':
-        case 'acknowledgement': return <span className={className}>≡ƒÿó</span>;
+        case 'acknowledgement': return <span className={className}>😢</span>;
         case 'angry':
-        case 'agreement': return <span className={className}>≡ƒÿí</span>;
-        default: return <span className={className}>≡ƒæì</span>;
+        case 'agreement': return <span className={className}>😡</span>;
+        default: return <span className={className}>👍</span>;
     }
 };
 
 import { ChatContextMenu } from './chat-context-menu';
 import { AuthenticatedImage } from './authenticated-image';
 
+import type { ChatParticipant, PresenceRecord, UserId, MessageId, AttachmentDTO } from '@/types/chat';
+
+// --- INSTITUTIONAL MEMOIZATION: ATOMIC COMPONENTS ---
+
+// 🧬 CONVERSATION ITEM: Prevents entire contact list re-render on presence update
+const ConversationItem = React.memo(({
+    conv,
+    other,
+    presence,
+    onClick,
+    getFormattedTime
+}: {
+    conv: Conversation;
+    other: ChatParticipant & { isGroup?: boolean };
+    presence: Record<string, PresenceRecord>;
+    onClick: () => void;
+    getFormattedTime: (d: string) => string;
+}) => {
+    const userPresence = presence[String(other.id)];
+    const isOnline = !other.isGroup && !!userPresence?.isOnline;
+
+    return (
+        <button
+            onClick={onClick}
+            className="w-full flex items-center gap-3 p-3 rounded-[var(--card-radius)] hover:bg-accent/50 dark:hover:bg-accent/20 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
+        >
+            <div className="relative shrink-0">
+                {other.isGroup ? (
+                    <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-800">
+                        <UserPlus className="h-5 w-5" />
+                    </div>
+                ) : (
+                    <>
+                        <Avatar
+                            name={other.name}
+                            initials={other.initials}
+                            profileImage={other.profileImage ?? undefined}
+                            size="md"
+                        />
+                        {isOnline && (
+                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 group-hover:scale-110 transition-transform haemi-status-pulse" />
+                        )}
+                    </>
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-center mb-0.5">
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">
+                        {other.name}
+                    </h4>
+                    <span className="text-[10px] font-medium text-slate-400 shrink-0">
+                        {getFormattedTime(conv.lastMessageAt)}
+                    </span>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                    <p className="text-xs text-slate-500 truncate dark:text-slate-400">
+                        {conv.lastMessage || 'Start a conversation'}
+                    </p>
+                    {((conv.unreadCount as number) || 0) > 0 && (
+                        <span className="conv-unread-pill animate-badge-pop">
+                            {conv.unreadCount}
+                        </span>
+                    )}
+                </div>
+            </div>
+        </button>
+    );
+});
+
+// 🧬 MESSAGE ITEM: Crucial for Virtuoso performance in long histories
+const MessageItem = React.memo(({
+    msg,
+    index,
+    onContextMenu,
+    onDownload,
+    onLightbox,
+    onScrollToReply,
+    downloadingId,
+    getFormattedTime
+}: {
+    msg: Message;
+    index: number;
+    onContextMenu: (e: React.MouseEvent, msgId: MessageId, isMe: boolean) => void;
+    onDownload: (url: string, name: string, id: MessageId) => void;
+    onLightbox: (src: string, alt: string) => void;
+    onScrollToReply: (replyToId: MessageId) => void;
+    downloadingId: string | null;
+    getFormattedTime: (d: string) => string;
+}) => (
+    <div className="px-4 py-2">
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            key={msg.id || index}
+            id={`msg-${msg.id}`}
+            className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
+        >
+            <div
+                onContextMenu={(e) => onContextMenu(e, msg.id, !!msg.isMe)}
+                className={`max-w-[85%] p-3 rounded-[var(--card-radius)] shadow-sm text-sm relative cursor-context-menu group ${msg.isMe
+                    ? 'bg-teal-600 text-white rounded-tr-none'
+                    : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
+                    }`}
+            >
+                {/* Reply Preview */}
+                {msg.replyTo && (
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onScrollToReply(msg.replyToId!);
+                        }}
+                        className={`mb-2 p-2 rounded-xl border-l-[3px] text-[11px] cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${msg.isMe
+                            ? 'bg-black/10 border-white/40 text-teal-50'
+                            : 'bg-slate-50 dark:bg-slate-900/50 border-teal-500 text-slate-600 dark:text-slate-400'
+                            }`}
+                    >
+                        <div className="flex items-center justify-between mb-0.5">
+                            <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
+                                {msg.replyTo.senderName}
+                            </p>
+                            <Reply className="h-2.5 w-2.5 opacity-60" />
+                        </div>
+                        <p className="line-clamp-2 opacity-80 italic">
+                            {msg.replyTo.content}
+                        </p>
+                    </div>
+                )}
+
+                {/* Institutional Multi-Attachment Pipeline (P3: Grid Layout) */}
+                {msg.attachments && msg.attachments.length > 0 && (
+                    <div className={`mb-2 -mx-1 -mt-1 grid gap-1 ${msg.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        {msg.attachments.map((att, i) => (
+                            <div key={i} className="relative overflow-hidden rounded-[8px] bg-black/5 dark:bg-white/5 border border-white/10">
+                                {att.type.startsWith('image/') ? (
+                                    <div
+                                        className="chat-thumbnail-container"
+                                        onClick={() => att.id && att.name && onLightbox(att.url.startsWith('blob:') || att.url.startsWith('data:') ? att.url : `/api/files/message/${att.id}`, att.name)}
+                                    >
+                                        <AuthenticatedImage
+                                            src={att.url.startsWith('blob:') || att.url.startsWith('data:') ? att.url : `/api/files/message/${att.id}`}
+                                            alt={att.name || 'Attachment'}
+                                            className="chat-thumbnail-image"
+                                        />
+                                        <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
+                                            <Maximize2 className="text-white opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 drop-shadow-md" />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => att.id && att.name && onDownload(att.url.startsWith('blob:') ? att.url : `/api/files/message/${att.id}`, att.name, msg.id)}
+                                        disabled={downloadingId === msg.id}
+                                        className={`w-full group/file flex items-center gap-[0.75rem] p-[0.75rem] rounded-[var(--card-radius)] border transition-all duration-200 ${
+                                            msg.isMe 
+                                                ? 'bg-white/10 border-white/10 hover:bg-white/20' 
+                                                : 'bg-secondary/50 dark:bg-white/5 border-border/50 hover:border-primary/30'
+                                        }`}
+                                    >
+                                        <div className={`p-[0.5rem] rounded-md transition-colors ${
+                                            msg.isMe ? 'bg-white/10' : 'bg-primary/10 text-primary'
+                                        }`}>
+                                            {(() => {
+                                                const ext = att.name.split('.').pop()?.toLowerCase();
+                                                if (ext === 'pdf') return <FileText className="h-[1.25rem] w-[1.25rem]" />;
+                                                if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') return <FileSpreadsheet className="h-[1.25rem] w-[1.25rem]" />;
+                                                return <File className="h-[1.25rem] w-[1.25rem]" />;
+                                            })()}
+                                        </div>
+                                        
+                                        <div className="flex-1 min-w-0 text-left">
+                                            <div className={`text-[0.875rem] font-medium truncate ${
+                                                msg.isMe ? 'text-white' : 'text-foreground'
+                                            }`}>
+                                                {(att.name || 'attachment').replace(/\\/g, '/').split('/').pop()}
+                                            </div>
+                                            <div className={`text-[0.625rem] font-bold uppercase tracking-wider opacity-60 ${
+                                                msg.isMe ? 'text-white/70' : 'text-muted-foreground'
+                                            }`}>
+                                                {att.name.split('.').pop()?.toUpperCase() || 'FILE'}
+                                            </div>
+                                        </div>
+
+                                        <div className={`flex-shrink-0 transition-opacity ${
+                                            downloadingId === msg.id ? 'opacity-100' : 'opacity-40 group-hover/file:opacity-100'
+                                        }`}>
+                                            {downloadingId === msg.id ? (
+                                                <Loader2 className="h-[1rem] w-[1rem] animate-spin" />
+                                            ) : (
+                                                <Download className={`h-[1rem] w-[1rem] ${msg.isMe ? 'text-white' : 'text-primary'}`} />
+                                            )}
+                                        </div>
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <p className="whitespace-pre-wrap break-words leading-relaxed font-medium">
+                    {msg.content}
+                </p>
+
+                {/* Reactions */}
+                {msg.reactions && msg.reactions.length > 0 && (
+                    <div
+                        className={`absolute -bottom-3 ${msg.isMe ? '-right-1' : '-left-1'} flex items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-md border border-slate-200/50 dark:border-slate-700/50 z-[20] transition-all hover:scale-105 cursor-pointer group/reaction`}
+                    >
+                        <div className="flex -space-x-1">
+                            {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
+                                <div key={type} className="relative z-10" style={{ zIndex: 10 - i }}>
+                                    <ReactionIcon type={type} className="text-sm leading-none filter drop-shadow-sm" />
+                                </div>
+                            ))}
+                        </div>
+                        {(msg.reactions || []).length > 1 && (
+                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 ml-1">
+                                {(msg.reactions || []).length}
+                            </span>
+                        )}
+                    </div>
+                )}
+
+                <div className={`flex items-center justify-end gap-1.5 mt-2 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
+                    <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
+                    {msg.isMe && (
+                        <div className={`message-status-ticks ${msg.isRead ? 'read' : ''}`}>
+                            {msg.isRead ? (
+                                <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />
+                            ) : (
+                                <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </motion.div>
+    </div>
+));
+
+import { useToast } from '@/hooks/use-toast';
+
 // --- Main Chat Hub ---
 export const ChatHub: React.FC = () => {
+    const { error: toastError, warning: toastWarning } = useToast();
     const { user } = useAuth();
     const location = useLocation(); // Hook for route changes
     // Close on click outside using robust capture-phase hook
@@ -149,7 +392,7 @@ export const ChatHub: React.FC = () => {
         isOpen: boolean;
         x: number;
         y: number;
-        messageId: string;
+        messageId: MessageId;
         isMe: boolean;
         parentWidth: number;
         parentHeight: number;
@@ -157,7 +400,7 @@ export const ChatHub: React.FC = () => {
         isOpen: false,
         x: 0,
         y: 0,
-        messageId: '',
+        messageId: '' as MessageId,
         isMe: false,
         parentWidth: 0,
         parentHeight: 0
@@ -168,33 +411,43 @@ export const ChatHub: React.FC = () => {
     const chatWindowRef = useRef<HTMLDivElement>(null);
 
     const handleDownload = async (url: string, fileName: string, loadingId: string) => {
+        if (!url || !fileName) {
+            logger.warn('[ChatHub] Blocked incomplete download request', { url, fileName });
+            return;
+        }
+
         try {
             setDownloadingId(loadingId);
 
             // P0 FRONTEND HARDENING: Secure asset resolution via verified pipeline
+            // Synchronized with FileService v4.0 (Origin-Aware Engine)
             await secureDownload({ url, fileName });
             logger.info('[ChatHub] Institutional download successful.', { fileName, loadingId });
         } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            logger.error('[ChatHub] Secure download failed:', {
-                fileName,
-                loadingId,
-                error: errorMessage
-            });
-            // P0: Standard healthcare-compliant security alert
-            alert('Unable to retrieve this secure medical record. Please try again or contact a system administrator.');
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg === 'FILE_TYPE_NOT_SUPPORTED') {
+                toastWarning('Institutional Security: This file type is restricted and cannot be downloaded.');
+            } else {
+                toastError('Failed to download the attachment. Please try again later.');
+                logger.error('[ChatHub] Secure download failed:', {
+                    fileName,
+                    loadingId,
+                    error: msg
+                });
+            }
         } finally {
             setDownloadingId(null);
         }
     };
 
+
     // Handlers for Context Menu
-    const handleDeleteMessage = (messageId: string, forEveryone: boolean) => {
+    const handleDeleteMessage = (messageId: MessageId, forEveryone: boolean) => {
         deleteMessage(messageId, forEveryone);
         setContextMenu(prev => ({ ...prev, isOpen: false }));
     };
 
-    const handleReaction = (messageId: string, reactionType: string) => {
+    const handleReaction = (messageId: MessageId, reactionType: string) => {
         reactToMessage(messageId, reactionType);
         setContextMenu(prev => ({ ...prev, isOpen: false }));
     };
@@ -231,20 +484,25 @@ export const ChatHub: React.FC = () => {
         if (view === 'new-chat') {
             const loadDoctors = async () => {
                 try {
-                    const res = await api.get<DoctorProfile[]>('/doctor');
-                    // Phase 8: Strict Type Narrowing (No 'as unknown' hacks)
+                    const res = await api.get<DoctorProfile[] | { data: DoctorProfile[] }>('/doctor');
+
+                    // P0: Strict Type Narrowing (Zero 'as unknown' fallback)
                     let doctorData: DoctorProfile[] = [];
+
                     if (Array.isArray(res.data)) {
                         doctorData = res.data;
-                    } else if (res.data && typeof res.data === 'object' && 'data' in (res.data as object)) {
-                        const potentialData = (res.data as { data: unknown }).data;
+                    } else if (res.data && typeof res.data === 'object' && 'data' in res.data) {
+                        const potentialData = res.data.data;
                         if (Array.isArray(potentialData)) {
-                            doctorData = potentialData as DoctorProfile[];
+                            doctorData = potentialData;
                         }
                     }
+
                     setDoctors(doctorData);
-                } catch {
-                    setDoctors([]); // Set empty array on error
+                } catch (err: unknown) {
+                    const errorMessage = err instanceof Error ? err.message : String(err);
+                    logger.error('[ChatHub.loadDoctors] Failed to retrieve medical specialists:', { error: errorMessage });
+                    setDoctors([]); // Fail-safe: empty array
                 }
             };
             loadDoctors();
@@ -296,14 +554,14 @@ export const ChatHub: React.FC = () => {
                 specialization: doctor.specialization,
                 profileImage: doctor.profileImage || undefined
             });
-            setView('conversation'); 
+            setView('conversation');
         }
     };
 
 
     const handleSendMessage = () => {
         if (!newMessage.trim() || !activeConversation) return;
-        sendMessage(newMessage, activeConversation.id, undefined, undefined, replyingTo?.id);
+        sendMessage(newMessage, activeConversation.id, [], replyingTo?.id);
         setNewMessage('');
         setReplyingTo(null);
         // Keep focus
@@ -318,7 +576,7 @@ export const ChatHub: React.FC = () => {
         // 1. If conversation has an explicit name, prioritize it for groups
         if (conversation.name) {
             return {
-                id: `group-${conversation.id}`,
+                id: `group-${conversation.id}` as UserId,
                 name: conversation.name,
                 role: 'Case Group',
                 initials: resolveInitials(conversation.name),
@@ -332,7 +590,7 @@ export const ChatHub: React.FC = () => {
             const others = participants.filter(p => String(p.id) !== currentId);
             const groupName = others.map(p => p.name.split(' ')[0]).join(', ');
             return {
-                id: `group-${conversation.id}`,
+                id: `group-${conversation.id}` as UserId,
                 name: groupName || 'Medical Team',
                 role: 'Case Group',
                 initials: 'GP',
@@ -346,7 +604,7 @@ export const ChatHub: React.FC = () => {
 
         if (!other) {
             return {
-                id: 'unknown',
+                id: 'unknown' as UserId,
                 name: 'Haemi Member',
                 role: 'User',
                 initials: 'HM',
@@ -368,8 +626,11 @@ export const ChatHub: React.FC = () => {
 
     const filteredConversations = useMemo(() => {
         return conversations.filter(c => {
-            // P0: Institutional Visibility - Hide Ghost Conversations (No messages)
-            if (!c.lastMessage && !c.isDraft) return false;
+            // P0 FIX: Institutional Visibility Softening
+            // Show all valid conversations regardless of lastMessage text (Google/Meta standard)
+            // This prevents new or strictly encrypted threads from "vanishing" during sync.
+            const hasActivity = true; // We now trust the conversations state provided by ChatProvider
+            if (!hasActivity) return false;
 
             const other = getOtherParticipant(c);
             const matchesSearch = other.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -569,7 +830,7 @@ export const ChatHub: React.FC = () => {
                     animate={{ y: 0, opacity: 1, scale: 1 }}
                     exit={{ y: 20, opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-full sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5 relative"
+                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-[var(--card-radius)] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-full sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5 relative"
                     ref={chatWindowRef}
                 >
                     {/* --- Helper: Header --- */}
@@ -588,9 +849,9 @@ export const ChatHub: React.FC = () => {
                                 )}
                                 {view === 'conversation' && activeConversation ? (() => {
                                     const other = getOtherParticipant(activeConversation);
-                                    const userPresence = presence[String(other.id)];
+                                    const userPresence = presence[other.id as UserId];
                                     const isOnline = !other.isGroup && !!userPresence?.isOnline;
-                                    const last_activity = !other.isGroup && userPresence?.lastActivity ? getFormattedTime(userPresence.lastActivity) : 'Unknown';
+                                    const last_activity = !other.isGroup && userPresence?.last_activity ? getFormattedTime(userPresence.last_activity) : 'Unknown';
 
                                     return (
                                         <div className="flex items-center gap-3 min-w-0">
@@ -607,7 +868,7 @@ export const ChatHub: React.FC = () => {
                                                             profileImage={other.profileImage}
                                                             size="sm"
                                                         />
-                                                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-[#1a1c23] rounded-full transition-colors duration-300 ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                                                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-[#1a1c23] rounded-full transition-colors duration-300 ${isOnline ? 'bg-emerald-500 haemi-status-pulse' : 'bg-slate-400'}`}></span>
                                                     </div>
                                                 )}
                                             </div>
@@ -684,7 +945,7 @@ export const ChatHub: React.FC = () => {
                                                 value={searchTerm}
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                                 placeholder="Search messages..."
-                                                className="w-full h-10 pl-10 pr-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-sm transition-all"
+                                                className="w-full h-10 pl-10 pr-4 rounded-[var(--card-radius)] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-sm transition-all"
                                             />
                                         </div>
                                     </div>
@@ -699,56 +960,16 @@ export const ChatHub: React.FC = () => {
                                                 <p className="text-xs text-slate-500 mt-1">Start a consultation or chat with a doctor.</p>
                                             </div>
                                         ) : (
-                                            filteredConversations.map(conv => {
-                                                const other = getOtherParticipant(conv);
-                                                return (
-                                                    <button
-                                                        key={conv.id}
-                                                        onClick={() => handleSelectConversation(conv)}
-                                                        className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 dark:hover:bg-accent/20 hover:shadow-sm border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all text-left group"
-                                                    >
-                                                        <div className="relative shrink-0">
-                                                            {other.isGroup ? (
-                                                                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-800">
-                                                                    <UserPlus className="h-5 w-5" />
-                                                                </div>
-                                                            ) : (
-                                                                <>
-                                                                    <Avatar
-                                                                        name={other.name}
-                                                                        initials={other.initials}
-                                                                        profileImage={other.profileImage}
-                                                                        size="md"
-                                                                    />
-                                                                    {presence[String(other.id)]?.isOnline && (
-                                                                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 group-hover:scale-110 transition-transform animate-pulse" />
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex justify-between items-center mb-0.5">
-                                                                <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">
-                                                                    {other.name}
-                                                                </h4>
-                                                                <span className="text-[10px] font-medium text-slate-400 shrink-0">
-                                                                    {getFormattedTime(conv.lastMessageAt)}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex justify-between items-center gap-2">
-                                                                <p className="text-xs text-slate-500 truncate dark:text-slate-400">
-                                                                    {conv.lastMessage || 'Start a conversation'}
-                                                                </p>
-                                                                {((conv.unreadCount as number) || 0) > 0 && (
-                                                                    <span className="conv-unread-pill animate-badge-pop">
-                                                                        {conv.unreadCount}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </button>
-                                                );
-                                            })
+                                            filteredConversations.map(conv => (
+                                                <ConversationItem
+                                                    key={conv.id}
+                                                    conv={conv}
+                                                    other={getOtherParticipant(conv)}
+                                                    presence={presence}
+                                                    onClick={() => handleSelectConversation(conv)}
+                                                    getFormattedTime={getFormattedTime}
+                                                />
+                                            ))
                                         )}
                                     </div>
 
@@ -783,7 +1004,7 @@ export const ChatHub: React.FC = () => {
                                                 value={doctorSearch}
                                                 onChange={(e) => setDoctorSearch(e.target.value)}
                                                 placeholder="Search doctors by name or specialty..."
-                                                className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-teal-500 text-sm"
+                                                className="w-full h-10 pl-10 pr-4 rounded-[var(--card-radius)] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-teal-500 text-sm"
                                             />
                                         </div>
                                     </div>
@@ -807,7 +1028,7 @@ export const ChatHub: React.FC = () => {
                                                             {doc.name}
                                                         </h4>
                                                         <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">
-                                                    {doc.specialization || 'General Practitioner'}
+                                                            {doc.specialization || 'General Practitioner'}
                                                         </p>
                                                     </div>
                                                     <UserPlus className="h-4 w-4 text-slate-300 hover:text-teal-500" />
@@ -851,7 +1072,6 @@ export const ChatHub: React.FC = () => {
                                                 style={{ height: '100%' }}
                                                 increaseViewportBy={200}
                                                 rangeChanged={(range) => {
-                                                    // INSTITUTIONAL READ RECEIPTS: Mark visible messages from others as read
                                                     const visibleItems = messages.slice(range.startIndex, range.endIndex + 1);
                                                     let shouldMarkRead = false;
                                                     visibleItems.forEach(msg => {
@@ -865,162 +1085,39 @@ export const ChatHub: React.FC = () => {
                                                     }
                                                 }}
                                                 itemContent={(index, msg) => (
-                                                    <div className="px-4 py-2">
-                                                        <motion.div
-                                                            layout
-                                                            initial={{ opacity: 0, y: 10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            key={msg.id || index}
-                                                            id={`msg-${msg.id}`}
-                                                            className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
-                                                        >
-                                                            <div
-                                                                onContextMenu={(e) => {
-                                                                    e.preventDefault();
-                                                                    if (chatWindowRef.current) {
-                                                                        const rect = chatWindowRef.current.getBoundingClientRect();
-                                                                        setContextMenu({
-                                                                            isOpen: true,
-                                                                            x: e.clientX - rect.left,
-                                                                            y: e.clientY - rect.top,
-                                                                            messageId: msg.id,
-                                                                            isMe: msg.isMe || false,
-                                                                            parentWidth: rect.width,
-                                                                            parentHeight: rect.height
-                                                                        });
-                                                                    }
-                                                                }}
-                                                                className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm relative cursor-context-menu group ${msg.isMe
-                                                                    ? 'bg-teal-600 text-white rounded-tr-none'
-                                                                    : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
-                                                                    }`}
-                                                            >
-                                                                {/* Reply Preview in Bubble (Enhanced WhatsApp Style) */}
-                                                                {msg.replyTo && (
-                                                                    <div
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            const targetIdx = messages.findIndex(m => m.id === msg.replyToId);
-                                                                            if (targetIdx !== -1) {
-                                                                                virtuosoRef.current?.scrollToIndex({
-                                                                                    index: targetIdx,
-                                                                                    align: 'center',
-                                                                                    behavior: 'smooth'
-                                                                                });
-                                                                            }
-                                                                        }}
-                                                                        className={`mb-2 p-2 rounded-xl border-l-[3px] text-[11px] cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${msg.isMe
-                                                                            ? 'bg-black/10 border-white/40 text-teal-50'
-                                                                            : 'bg-slate-50 dark:bg-slate-900/50 border-teal-500 text-slate-600 dark:text-slate-400'
-                                                                            }`}
-                                                                    >
-                                                                        <div className="flex items-center justify-between mb-0.5">
-                                                                            <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
-                                                                                {msg.replyTo.senderName}
-                                                                            </p>
-                                                                            <Reply className="h-2.5 w-2.5 opacity-60" />
-                                                                        </div>
-                                                                        <p className="line-clamp-2 opacity-80 italic">
-                                                                            {msg.replyTo.content}
-                                                                        </p>
-                                                                    </div>
-                                                                )}
-
-                                                                {msg.attachments && msg.attachments.length > 0 && msg.attachments.map((att, i) => (
-                                                                    <div key={i} className="mb-2 -mx-1 -mt-1">
-                                                                        {att.type.startsWith('image/') ? (
-                                                                            <div
-                                                                                className="cursor-pointer group/img relative overflow-hidden rounded-xl"
-                                                                                onClick={() => {
-                                                                                    if (att.url && att.name) {
-                                                                                        setLightboxImage({ src: att.url, alt: att.name });
-                                                                                    }
-                                                                                }}
-                                                                            >
-                                                                                <AuthenticatedImage
-                                                                                    src={att.url}
-                                                                                    alt={att.name || 'Attachment'}
-                                                                                    className="w-full max-h-48 object-cover border border-white/20 transition-all duration-300 group-hover:scale-105"
-                                                                                />
-                                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                                                                    <Maximize2 className="text-white opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 drop-shadow-md" />
-                                                                                </div>
-                                                                            </div>
-                                                                        ) : (
-                                                                            <button
-                                                                                onClick={() => att.url && att.name && handleDownload(att.url, att.name, msg.id)}
-                                                                                disabled={downloadingId === msg.id}
-                                                                                className={`w-full flex items-center gap-0 rounded-xl overflow-hidden border transition-all duration-200 hover:opacity-90 active:scale-[0.98] ${msg.isMe
-                                                                                    ? 'border-white/10 bg-black/10 hover:bg-black/20'
-                                                                                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
-                                                                                    } ${downloadingId === msg.id ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                                                                            >
-                                                                                <div className={`shrink-0 w-14 h-16 flex flex-col items-center justify-center ${msg.isMe ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-700'} gap-0.5`}>
-                                                                                    {downloadingId === msg.id ? (
-                                                                                        <Loader2 className={`h-6 w-6 animate-spin ${msg.isMe ? 'text-white/80' : 'text-slate-500'}`} />
-                                                                                    ) : (
-                                                                                        <>
-                                                                                            <svg viewBox="0 0 24 28" className={`h-8 w-7 ${msg.isMe ? 'text-white/80' : 'text-slate-500'}`} fill="currentColor">
-                                                                                                <path d="M14 0H2C0.9 0 0 0.9 0 2v24c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V8l-10-8z" opacity="0.9" />
-                                                                                                <path d="M14 0v8h10L14 0z" opacity="0.5" />
-                                                                                            </svg>
-                                                                                            <span className={`text-[9px] font-extrabold tracking-wider ${msg.isMe ? 'text-white/80' : 'text-slate-500'} -mt-1`}>FILE</span>
-                                                                                        </>
-                                                                                    )}
-                                                                                </div>
-                                                                                <div className={`flex-1 min-w-0 px-3 py-2.5 flex flex-col justify-center text-left ${msg.isMe ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
-                                                                                    <p className="text-[12px] font-semibold truncate leading-tight">{att.name}</p>
-                                                                                    <p className={`text-[10px] mt-0.5 font-medium ${msg.isMe ? 'text-white/60' : 'text-slate-400 dark:text-slate-500'}`}>
-                                                                                        {downloadingId === msg.id ? 'Downloading...' : `${(att.size / 1024 / 1024).toFixed(1)} MB`}
-                                                                                    </p>
-                                                                                </div>
-                                                                                <div className={`shrink-0 pr-3 ${msg.isMe ? 'text-white/70' : 'text-teal-500'}`}>
-                                                                                    {downloadingId === msg.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                                                                                </div>
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
-
-                                                                <p className="whitespace-pre-wrap break-words leading-relaxed font-medium">
-                                                                    {msg.content}
-                                                                </p>
-
-                                                                {/* Reactions Display (Teams-style Pill) */}
-                                                                {msg.reactions && msg.reactions.length > 0 && (
-                                                                    <div
-                                                                        className={`absolute -bottom-3 ${msg.isMe ? '-right-1' : '-left-1'} flex items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-md border border-slate-200/50 dark:border-slate-700/50 z-[20] transition-all hover:scale-105 cursor-pointer group/reaction`}
-                                                                    >
-                                                                        <div className="flex -space-x-1">
-                                                                            {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
-                                                                                <div key={type} className="relative z-10" style={{ zIndex: 10 - i }}>
-                                                                                    <ReactionIcon type={type} className="text-sm leading-none filter drop-shadow-sm" />
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                        {(msg.reactions || []).length > 1 && (
-                                                                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 ml-1">
-                                                                                {(msg.reactions || []).length}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-
-                                                                <div className={`flex items-center justify-end gap-1.5 mt-2 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
-                                                                    <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
-                                                                    {msg.isMe && (
-                                                                        <div className={`message-status-ticks ${msg.isRead ? 'read' : ''}`}>
-                                                                            {msg.isRead ? (
-                                                                                <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />
-                                                                            ) : (
-                                                                                <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </motion.div>
-                                                    </div>
+                                                    <MessageItem
+                                                        msg={msg}
+                                                        index={index}
+                                                        onContextMenu={(e, msgId: MessageId, isMe) => {
+                                                            e.preventDefault();
+                                                            if (chatWindowRef.current) {
+                                                                const rect = chatWindowRef.current.getBoundingClientRect();
+                                                                setContextMenu({
+                                                                    isOpen: true,
+                                                                    x: e.clientX - rect.left,
+                                                                    y: e.clientY - rect.top,
+                                                                    messageId: msgId,
+                                                                    isMe: isMe,
+                                                                    parentWidth: rect.width,
+                                                                    parentHeight: rect.height
+                                                                });
+                                                            }
+                                                        }}
+                                                        onDownload={handleDownload}
+                                                        onLightbox={(src, alt) => setLightboxImage({ src, alt })}
+                                                        onScrollToReply={(replyToId) => {
+                                                            const targetIdx = messages.findIndex(m => m.id === replyToId);
+                                                            if (targetIdx !== -1) {
+                                                                virtuosoRef.current?.scrollToIndex({
+                                                                    index: targetIdx,
+                                                                    align: 'center',
+                                                                    behavior: 'smooth'
+                                                                });
+                                                            }
+                                                        }}
+                                                        downloadingId={downloadingId}
+                                                        getFormattedTime={getFormattedTime}
+                                                    />
                                                 )}
                                             />
                                         )}
@@ -1034,7 +1131,7 @@ export const ChatHub: React.FC = () => {
                                                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                                    className="mb-3 bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur rounded-2xl border-l-4 border-teal-500 overflow-hidden shadow-sm"
+                                                    className="mb-3 bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur rounded-[var(--card-radius)] border-l-4 border-teal-500 overflow-hidden shadow-sm"
                                                 >
                                                     <div className="p-3 flex items-start gap-3 relative">
                                                         <div className="flex-1 min-w-0 pr-6">
@@ -1056,22 +1153,45 @@ export const ChatHub: React.FC = () => {
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
+
                                         <div className="chat-footer-row flex items-end gap-2">
                                             <input
                                                 type="file"
                                                 id="chat-attach-input"
                                                 className="hidden"
+                                                multiple
                                                 onChange={async (e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file && activeConversation) {
+                                                    const files = Array.from(e.target.files || []);
+                                                    // D3 REMEDIATION: Pre-flight 5-file institutional limit guard.
+                                                    // Backend enforces this (HTTP 400) but the UX guard prevents
+                                                    // wasted upload round-trips and gives the user instant feedback.
+                                                    if (files.length > 5) {
+                                                        toast.error(
+                                                            `Attachment limit: ${files.length} files selected`,
+                                                            { description: 'Maximum 5 attachments per message. Please deselect some files and try again.' }
+                                                        );
+                                                        e.target.value = '';
+                                                        return;
+                                                    }
+                                                    if (files.length > 0 && activeConversation) {
                                                         const target = e.target;
-                                                        const uploadRes = await uploadAttachment(file);
-                                                        // RESET BUFFER: Allow immediate re-upload of same file
+                                                        const uploadPromises = files.map(file => uploadAttachment(file));
+                                                        const results = await Promise.all(uploadPromises);
+
                                                         target.value = '';
 
-                                                        // Note: uploadRes is now the inner 'data' object from sendResponse
-                                                        if (uploadRes && uploadRes.url) {
-                                                            sendMessage(file.name, activeConversation.id, uploadRes.url, uploadRes.type, undefined, uploadRes.originalName);
+                                                        const validAttachments = results
+                                                            .filter((res): res is AttachmentDTO => !!res && !!res.url)
+                                                            .map(res => ({
+                                                                id: String(res.tempId || res.url),
+                                                                url: res.url,
+                                                                type: res.type,
+                                                                name: (res.originalName || res.name || 'attachment').replace(/\\\\/g, '/').split('/').pop() || 'attachment',
+                                                                size: res.size || 0
+                                                            }));
+
+                                                        if (validAttachments.length > 0) {
+                                                            sendMessage('', activeConversation.id, validAttachments);
                                                         }
                                                     }
                                                 }}
@@ -1087,7 +1207,7 @@ export const ChatHub: React.FC = () => {
 
                                             <input
                                                 ref={inputRef}
-                                                className="chat-input flex-1 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 px-6 py-2.5 text-slate-900 dark:text-white placeholder-slate-400 text-sm outline-none transition-all focus:border-teal-600 dark:focus:border-teal-500 focus:ring-1 focus:ring-teal-600/20"
+                                                className="chat-input flex-1 bg-slate-50 dark:bg-slate-900 rounded-[var(--card-radius)] border border-slate-200 dark:border-slate-800 px-6 py-2.5 text-slate-900 dark:text-white placeholder-slate-400 text-sm outline-none transition-all focus:border-teal-600 dark:focus:border-teal-500 focus:ring-1 focus:ring-teal-600/20"
                                                 placeholder="Type a message..."
                                                 value={newMessage}
                                                 onChange={(e) => setNewMessage(e.target.value)}
@@ -1098,7 +1218,7 @@ export const ChatHub: React.FC = () => {
                                                 size="icon"
                                                 onClick={handleSendMessage}
                                                 disabled={!newMessage.trim()}
-                                                className={`chat-send-button h-10 w-10 shrink-0 rounded-full shadow-md transition-all ${newMessage.trim()
+                                                className={`chat-send-button h-10 w-10 shrink-0 rounded-[var(--card-radius)] shadow-md transition-all ${newMessage.trim()
                                                     ? 'bg-teal-600 hover:bg-teal-700 text-white scale-100'
                                                     : 'bg-slate-100 dark:bg-slate-800 text-slate-300 scale-95'
                                                     }`}
@@ -1180,7 +1300,19 @@ export const ChatHub: React.FC = () => {
                                 <AuthenticatedImage
                                     src={lightboxImage.src}
                                     alt={lightboxImage.alt}
-                                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl shadow-teal-500/10 border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-transparent"
+                                    className="max-w-full max-h-full object-contain rounded-[var(--card-radius)] shadow-2xl shadow-teal-500/10 border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-transparent"
+                                    errorFallback={
+                                        // D4 REMEDIATION: Lightbox error state instead of blank modal.
+                                        // Shown when the authenticated blob fetch fails (401, 404, network blip).
+                                        <div className="flex flex-col items-center justify-center gap-4 p-10 rounded-2xl bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                                            <ImageOff className="h-12 w-12 text-slate-400 dark:text-slate-500" />
+                                            <p className="text-base font-semibold text-slate-700 dark:text-slate-300">Image Unavailable</p>
+                                            <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-xs">
+                                                This medical asset could not be retrieved.<br />
+                                                It may have been deleted or your access was revoked.
+                                            </p>
+                                        </div>
+                                    }
                                 />
                             </div>
 
@@ -1188,7 +1320,7 @@ export const ChatHub: React.FC = () => {
                                 <Button
                                     onClick={() => lightboxImage && handleDownload(lightboxImage.src, lightboxImage.alt, 'lightbox')}
                                     disabled={downloadingId === 'lightbox'}
-                                    className="bg-[#148C8B] hover:bg-[#0E6B74] dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold px-6 h-11 rounded-xl shadow-lg shadow-teal-900/20 dark:shadow-teal-900/40 border-0 flex items-center gap-2"
+                                    className="bg-[#148C8B] hover:bg-[#0E6B74] dark:bg-teal-600 dark:hover:bg-teal-700 text-white font-bold px-6 h-11 rounded-[var(--card-radius)] shadow-lg shadow-teal-900/20 dark:shadow-teal-900/40 border-0 flex items-center gap-2"
                                 >
                                     {downloadingId === 'lightbox' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                                     Save to Device
@@ -1196,7 +1328,7 @@ export const ChatHub: React.FC = () => {
                                 <Button
                                     variant="outline"
                                     onClick={() => setLightboxImage(null)}
-                                    className="bg-white/80 dark:bg-white/5 border-slate-200 dark:border-white/20 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10 font-bold px-6 h-11 rounded-xl shadow-sm"
+                                    className="bg-white/80 dark:bg-white/5 border-slate-200 dark:border-white/20 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10 font-bold px-6 h-11 rounded-[var(--card-radius)] shadow-sm"
                                 >
                                     Close
                                 </Button>

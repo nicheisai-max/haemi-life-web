@@ -11,6 +11,7 @@ import { GradientMesh } from '@/components/ui/gradient-mesh';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
+import { MedicalLoader } from '@/components/ui/medical-loader';
 import { PATHS } from '../../routes/paths';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PremiumPieChart } from '../../components/charts/premium-pie-chart';
@@ -52,10 +53,14 @@ export const PharmacistDashboard = () => {
     const pendingOrders = prescriptions.filter(p => p.status === 'pending');
     const completedOrdersValue = prescriptions.filter(p => p.status === 'filled').length;
 
+    if (loading) {
+        return <MedicalLoader message="Synchronizing regional prescription queue..." />;
+    }
+
     return (
         <div className="space-y-8">
             {/* Hero Section - Standardized Premium Style */}
-            <TransitionItem className="relative overflow-hidden rounded-card bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl shadow-teal-900/20">
+            <TransitionItem className="relative overflow-hidden rounded-[var(--card-radius)] bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl shadow-teal-900/20">
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
@@ -76,7 +81,7 @@ export const PharmacistDashboard = () => {
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
                             size="lg"
-                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
+                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
                             onClick={() => navigate(PATHS.PHARMACIST.DISPENSE)}
                         >
                             <QrCode className="h-5 w-5" aria-hidden="true" />
@@ -84,7 +89,7 @@ export const PharmacistDashboard = () => {
                         </Button>
                         <Button
                             size="lg"
-                            className="bg-white/10 hover:bg-white/20 text-white border-none shadow-lg h-12 text-sm font-bold rounded-xl gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
+                            className="bg-white/10 hover:bg-white/20 text-white border-none shadow-lg h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
                             onClick={() => navigate(PATHS.PHARMACIST.INVENTORY)}
                         >
                             <ClipboardList className="h-5 w-5" aria-hidden="true" />
@@ -94,9 +99,8 @@ export const PharmacistDashboard = () => {
                 </div>
             </TransitionItem>
 
-            {/* Error Message */}
             {error && (
-                <TransitionItem className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3" role="alert">
+                <TransitionItem className="rounded-[var(--card-radius)] border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3" role="alert">
                     <AlertOctagon className="h-5 w-5" aria-hidden="true" />
                     <p className="text-sm font-medium">{error}</p>
                 </TransitionItem>
@@ -170,7 +174,7 @@ export const PharmacistDashboard = () => {
                         ) : (
                             pendingOrders.map((prescription) => (
                                 <DashboardCard key={prescription.id} className="group p-4 flex items-center gap-4 transition-all hover:border-primary-500/50">
-                                    <div className="bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-lg p-2 w-16 text-center shrink-0 border border-primary-100 dark:border-primary-900/50">
+                                    <div className="bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-[var(--card-radius)] p-2 w-16 text-center shrink-0 border border-primary-100 dark:border-primary-900/50">
                                         <span className="block text-xs font-bold uppercase tracking-wider">New</span>
                                     </div>
                                     <div className="flex-1 min-w-0">

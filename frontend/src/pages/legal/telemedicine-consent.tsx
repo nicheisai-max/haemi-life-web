@@ -14,47 +14,50 @@ import { getErrorMessage } from '../../lib/error';
 import { SignaturePad } from '@/components/ui/signature-pad';
 import { cn } from '@/lib/utils';
 import { PATHS } from '@/routes/paths';
-import { useAuth } from '@/hooks/use-auth';
-import { Navigate } from 'react-router-dom';
 import * as consentService from '../../services/consent.service';
 import { MedicalLoader } from '@/components/ui/medical-loader';
+import { useAuth } from '@/hooks/use-auth';
 
 export const TelemedicineConsent: React.FC = () => {
     const navigate = useNavigate();
     const { user, refreshUser } = useAuth();
-    
-    // 🛡️ ENTERPRISE SSOT: Strict Database Truth States
-    const [isVerifying, setIsVerifying] = React.useState<boolean>(true);
-    const [serverHasConsent, setServerHasConsent] = React.useState<boolean>(false);
+    // 🛡️ INSTITUTIONAL SSOT: Strict Database Truth States
+    // If local context knows we lack consent, show form immediately (no flash).
+    // If local context says we HAVE consent but we landed here, verify with server first.
+    const [isVerifying, setIsVerifying] = React.useState<boolean>(!!user?.hasConsent);
+
+    // 🛡️ MOUNT GUARD: Preventing redundant double-hits to the API
+    const hasCheckedRef = React.useRef<boolean>(false);
 
     React.useEffect(() => {
+        if (hasCheckedRef.current) return;
+        hasCheckedRef.current = true;
+
         let isMounted = true;
 
         const verifyConsentStatus = async () => {
             try {
                 // 100% Single Source of Truth: Database via Network
                 const dbStatus = await consentService.getConsentStatus();
-                
-                if (isMounted) {
-                    setServerHasConsent(dbStatus.hasConsent);
-                    setIsVerifying(false);
 
-                    // If DB says false but App Context thinks true, heal the stale cache immediately.
-                    if (!dbStatus.hasConsent && user?.hasConsent) {
-                        refreshUser();
+                if (isMounted) {
+                    // HEALING SYNC: If server and local state differ, synchronize the system.
+                    if (dbStatus.hasConsent !== user?.hasConsent) {
+                        await refreshUser();
                     }
+
+                    setIsVerifying(false);
                 }
             } catch {
                 // On failure, fail securely to requesting consent
                 if (isMounted) {
-                    setServerHasConsent(false);
                     setIsVerifying(false);
                 }
             }
         };
 
         verifyConsentStatus();
-        
+
         return () => {
             isMounted = false;
         };
@@ -73,17 +76,11 @@ export const TelemedicineConsent: React.FC = () => {
 
     // 🩺 GATED RENDER 1: Waiting for Absolute Truth (Fills the Right Panel smoothly)
     if (isVerifying) {
-        return (
-            <div className="flex h-[80vh] items-center justify-center">
-                <MedicalLoader fullPage={false} message="Verifying institutional consent..." />
-            </div>
-        );
+        return <MedicalLoader variant="global" message="Verifying institutional consent..." />;
     }
 
-    // 🩺 GATED RENDER 2: 100% DB confirmed consent -> Safely Redirect
-    if (!isVerifying && serverHasConsent) {
-        return <Navigate to={PATHS.TELEMEDICINE} replace />;
-    }
+    // 🩺 GATED RENDER 2: 100% DB confirmed consent -> Handled by TelemedicineGuard
+    // Redirection logic removed to prevent mount-loops and ensure SSO.
 
     const onSubmit = async (data: TelemedicineConsentFormData) => {
         if (data.accepted && data.signature) {
@@ -232,7 +229,7 @@ export const TelemedicineConsent: React.FC = () => {
 
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                        <section className="bg-primary/5 border border-primary/20 rounded-lg p-6 md:p-8 space-y-6">
+                        <section className="bg-primary/5 border border-primary/20 rounded-[var(--card-radius)] p-6 md:p-8 space-y-6">
                             <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
                                 <ShieldCheck className="h-5 w-5 text-primary" />
                                 Consent Declaration
@@ -293,7 +290,7 @@ export const TelemedicineConsent: React.FC = () => {
                                 type="button"
                                 variant="outline"
                                 onClick={() => navigate(-1)}
-                                className="flex items-center justify-center gap-2 sm:min-w-40 h-11 text-base rounded-lg font-medium transition-all duration-300"
+                                className="flex items-center justify-center gap-2 sm:min-w-40 h-11 text-base rounded-[var(--card-radius)] font-medium transition-all duration-300"
                             >
                                 <X className="h-4 w-4" />
                                 Decline
@@ -303,7 +300,7 @@ export const TelemedicineConsent: React.FC = () => {
                                 variant="default"
                                 disabled={!accepted || !signature || form.formState.isSubmitting}
                                 className={cn(
-                                    "flex items-center justify-center gap-2 sm:min-w-52 h-11 text-base rounded-lg font-medium transition-all duration-500",
+                                    "flex items-center justify-center gap-2 sm:min-w-52 h-11 text-base rounded-[var(--card-radius)] font-medium transition-all duration-500",
                                     accepted && signature
                                         ? "bg-gradient-to-r from-primary to-teal-600 hover:from-primary/90 hover:to-teal-700 shadow-lg shadow-primary/20 hover:-translate-y-0.5 animate-in slide-in-from-bottom-2 fade-in border border-transparent"
                                         : "border border-transparent"

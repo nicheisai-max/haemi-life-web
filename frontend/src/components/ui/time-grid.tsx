@@ -20,7 +20,7 @@ export const TimeGrid: React.FC<TimeGridProps> = ({
         return (
             <div className="grid grid-cols-3 md:grid-cols-4 gap-3 animate-pulse">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-                    <div key={i} className="h-11 bg-muted rounded-lg" />
+                    <div key={i} className="h-11 bg-muted rounded-[var(--card-radius)]" />
                 ))}
             </div>
         );
@@ -121,7 +121,7 @@ const Section = ({ title, items, icon: Icon, selectedTime, onTimeSelect }: Secti
                             onClick={() => onTimeSelect(slot)}
                             type="button"
                             className={cn(
-                                "py-2.5 px-3 rounded-lg border text-sm font-medium transition-all duration-200",
+                                "py-2.5 px-3 rounded-[var(--card-radius)] border text-sm font-medium transition-all duration-200",
                                 isSelected
                                     ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
                                     : "bg-background border-border hover:border-primary/50 hover:bg-primary/5 text-foreground"

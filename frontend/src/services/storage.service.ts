@@ -15,6 +15,9 @@ import type {
     MessageReaction,
     ReplyPreview,
     ChatParticipant,
+    UserId,
+    MessageId,
+    ConversationId
 } from '@/types/chat.ts';
 
 // ─── 1. PERSISTED ENTITY DEFINITIONS ─────────────────────────────────────────
@@ -26,13 +29,13 @@ import type {
 
 export interface PersistedConversation {
     /** Primary Key — UUID */
-    id: string;
+    id: ConversationId;
     isDraft?: boolean;
     name?: string;
     updatedAt: string;
     lastMessageAt: string;
     lastMessage: string;
-    lastMessageId: string;
+    lastMessageId: MessageId;
     /** Stored as JSON string because Dexie cannot index nested objects */
     participantsJson: string;
     unreadCount: number;
@@ -44,9 +47,9 @@ export interface PersistedConversation {
 
 export interface PersistedMessage {
     /** Primary Key — UUID */
-    id: string;
-    conversationId: string;
-    senderId: string;
+    id: MessageId;
+    conversationId: ConversationId;
+    senderId: UserId;
     tempId?: string;
     content: string;
     messageType: 'text' | 'image' | 'document';
@@ -63,7 +66,7 @@ export interface PersistedMessage {
     reactionsJson: string;
     /** Stored as JSON string */
     replyToJson?: string;
-    replyToId?: string;
+    replyToId?: MessageId;
     sequenceNumber?: number;
     /** ISO timestamp of when this was written locally */
     localSyncedAt: string;
@@ -71,9 +74,9 @@ export interface PersistedMessage {
 
 export interface PersistedPresence {
     /** Primary Key — User UUID */
-    userId: string;
+    userId: UserId;
     isOnline: boolean;
-    lastActivity: string;
+    last_activity: string;
     /** ISO timestamp */
     localSyncedAt: string;
 }
@@ -81,10 +84,10 @@ export interface PersistedPresence {
 // ─── 2. DATABASE CLASS ────────────────────────────────────────────────────────
 
 class HaemiChatDatabase extends Dexie {
-    conversations!: Table<PersistedConversation, string>;
-    messages!: Table<PersistedMessage, string>;
-    presence!: Table<PersistedPresence, string>;
-    pendingMessages!: Table<PersistedMessage, string>;
+    conversations!: Table<PersistedConversation, ConversationId>;
+    messages!: Table<PersistedMessage, MessageId>;
+    presence!: Table<PersistedPresence, UserId>;
+    pendingMessages!: Table<PersistedMessage, MessageId>;
 
     constructor() {
         super('HaemiChatDB');
@@ -114,6 +117,19 @@ class HaemiChatDatabase extends Dexie {
             presence: 'userId, isOnline, localSyncedAt',
             pendingMessages: 'id, conversationId, createdAt, tempId'
         });
+
+        /**
+         * Schema v3: Critical Index Restoration
+         * - Restored [conversationId+createdAt] compound index omitted in v2.
+         * - This fixes the P0 "KeyPath not indexed" runtime crash.
+         * - Applied parity to pendingMessages for sorting consistency.
+         */
+        this.version(3).stores({
+            conversations: 'id, lastMessageAt, updatedAt, localSyncedAt',
+            messages: 'id, [conversationId+createdAt], conversationId, createdAt, localSyncedAt, tempId',
+            presence: 'userId, isOnline, localSyncedAt',
+            pendingMessages: 'id, [conversationId+createdAt], conversationId, createdAt, tempId'
+        });
     }
 }
 
@@ -127,7 +143,7 @@ const db = new HaemiChatDatabase();
  */
 function toPersistedConversation(c: Conversation): PersistedConversation {
     return {
-        id: c.id,
+        id: c.id as ConversationId,
         isDraft: c.isDraft,
         name: c.name,
         updatedAt: c.updatedAt,
@@ -296,11 +312,10 @@ async function getAllConversations(): Promise<Conversation[]> {
 // ─── 5. PUBLIC API — MESSAGES ─────────────────────────────────────────────────
 
 /**
- * Persists multiple messages in a single bulk operation.
  * The `isMe` flag must be passed separately as it is derived from the
  * authenticated user's ID, which the storage service does not own.
  */
-async function putMessages(messages: Message[], currentUserId: string): Promise<void> {
+async function putMessages(messages: Message[], currentUserId: UserId): Promise<void> {
     try {
         const records = messages.map(m => toPersistedMessage(m, m.senderId === currentUserId));
         await db.messages.bulkPut(records);
@@ -317,7 +332,7 @@ async function putMessages(messages: Message[], currentUserId: string): Promise<
  * Retrieves all messages for a given conversation, sorted by createdAt ASC.
  * Returns an empty array if no messages are found or if an error occurs.
  */
-async function getMessagesByConversation(conversationId: string): Promise<Message[]> {
+async function getMessagesByConversation(conversationId: ConversationId): Promise<Message[]> {
     try {
         const records = await db.messages
             .where('[conversationId+createdAt]')
@@ -341,7 +356,7 @@ async function getMessagesByConversation(conversationId: string): Promise<Messag
  * given conversation. Used as the `since` parameter for delta synchronization.
  * Returns `null` if no messages exist locally for this conversation.
  */
-async function getLastSyncTimestamp(conversationId: string): Promise<string | null> {
+async function getLastSyncTimestamp(conversationId: ConversationId): Promise<string | null> {
     try {
         const last = await db.messages
             .where('[conversationId+createdAt]')
@@ -361,26 +376,30 @@ async function getLastSyncTimestamp(conversationId: string): Promise<string | nu
 }
 
 /**
- * Soft-updates the status of a single message (e.g., 'sent' → 'delivered').
- * This mirrors updates received via Socket.IO without re-fetching from the API.
+ * Institutional Hardening: Batched status updates to resolve sync fractures.
  */
-async function updateMessageStatus(
-    messageId: string,
-    status: Message['status'],
-    readAt?: string,
-): Promise<void> {
+async function markMessagesDelivered(messageIds: MessageId[]): Promise<void> {
     try {
-        const updatePayload: Partial<PersistedMessage> = { status };
-        if (readAt) {
-            updatePayload.readAt = readAt;
-            updatePayload.isRead = true;
-        }
-        await db.messages.update(messageId, updatePayload);
+        await db.messages.where('id').anyOf(messageIds).modify({ status: 'delivered' });
     } catch (e: unknown) {
-        logger.error('[Storage] Failed to update message status in IndexedDB', {
-            error: e instanceof Error ? e.message : String(e),
-            messageId,
-            status,
+        logger.error('[Storage] Failed to bulk update delivery status', { 
+            error: e instanceof Error ? e.message : String(e), 
+            count: messageIds.length 
+        });
+    }
+}
+
+async function markMessagesRead(messageIds: MessageId[], readAt: string): Promise<void> {
+    try {
+        await db.messages.where('id').anyOf(messageIds).modify({ 
+            status: 'read', 
+            readAt, 
+            isRead: true 
+        });
+    } catch (e: unknown) {
+        logger.error('[Storage] Failed to bulk update read status', { 
+            error: e instanceof Error ? e.message : String(e), 
+            count: messageIds.length 
         });
     }
 }
@@ -391,7 +410,7 @@ async function updateMessageStatus(
  * Persists a message to the pending outbox.
  * Occurs BEFORE many network attempts in a "Local-First" architecture.
  */
-async function putPendingMessage(m: Message, currentUserId: string): Promise<void> {
+async function putPendingMessage(m: Message, currentUserId: UserId): Promise<void> {
     try {
         const record = toPersistedMessage(m, m.senderId === currentUserId);
         await db.pendingMessages.put(record);
@@ -423,7 +442,7 @@ async function getPendingMessages(): Promise<Message[]> {
  * Removes a message from the pending outbox.
  * Occurs after successful server acknowledgement.
  */
-async function removePendingMessage(id: string): Promise<void> {
+async function removePendingMessage(id: MessageId): Promise<void> {
     try {
         await db.pendingMessages.delete(id);
         logger.info(`[Storage] 📤 Message ${id} cleared from Outbox`);
@@ -438,7 +457,7 @@ async function removePendingMessage(id: string): Promise<void> {
 /**
  * Soft-updates the status of a pending message (e.g., 'sending' → 'failed').
  */
-async function updatePendingMessageStatus(id: string, status: 'sending' | 'failed'): Promise<void> {
+async function updatePendingMessageStatus(id: MessageId, status: 'sending' | 'failed'): Promise<void> {
     try {
         await db.pendingMessages.update(id, { status });
     } catch (e: unknown) {
@@ -455,14 +474,14 @@ async function updatePendingMessageStatus(id: string, status: 'sending' | 'faile
  * Persists presence state for a set of users.
  */
 async function putPresence(
-    presenceMap: Record<string, { isOnline: boolean; lastActivity: string }>,
+    presenceMap: Record<string, { isOnline: boolean; last_activity: string }>,
 ): Promise<void> {
     try {
         const records: PersistedPresence[] = Object.entries(presenceMap).map(
             ([userId, state]) => ({
-                userId,
+                userId: userId as UserId,
                 isOnline: state.isOnline,
-                lastActivity: state.lastActivity,
+                last_activity: state.last_activity,
                 localSyncedAt: new Date().toISOString(),
             }),
         );
@@ -478,7 +497,7 @@ async function putPresence(
  * Retrieves presence state for a specific user.
  * Returns `null` if not found.
  */
-async function getPresence(userId: string): Promise<PersistedPresence | null> {
+async function getPresence(userId: UserId): Promise<PersistedPresence | null> {
     try {
         return (await db.presence.get(userId)) ?? null;
     } catch (e: unknown) {
@@ -524,7 +543,8 @@ export const storageService = {
     putMessages,
     getMessagesByConversation,
     getLastSyncTimestamp,
-    updateMessageStatus,
+    markMessagesDelivered,
+    markMessagesRead,
     // Presence
     putPresence,
     getPresence,

@@ -184,7 +184,7 @@ export const signup = async (req: Request, res: Response) => {
                     userId: newUser.id,
                     role: UserRoleSchema.parse(newUser.role),
                     loginTime: new Date().toISOString(),
-                    lastActivity: new Date().toISOString(),
+                    last_activity: new Date().toISOString(),
                     status: 'active',
                     ipAddress: req.ip,
                     userAgent: userAgent
@@ -193,7 +193,7 @@ export const signup = async (req: Request, res: Response) => {
                 source: 'backend'
             });
 
-            await pool.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [newUser.id]);
+            await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [newUser.id]);
 
             return sendResponse(res, 201, true, 'User created successfully', {
                 token: accessToken,
@@ -307,8 +307,8 @@ export const login = async (req: Request, res: Response) => {
             return sendError(res, 400, 'Invalid credentials', 'INVALID_CREDENTIALS');
         }
 
-        // Update lastActivity directly so the middleware doesn't instantly invalidate the new session
-        await pool.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        // Update last_activity directly so the middleware doesn't instantly invalidate the new session
+        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
         // Generate Session Identity
         const sessionId = crypto.randomUUID();
@@ -354,7 +354,7 @@ export const login = async (req: Request, res: Response) => {
                 userId: user.id,
                 role: UserRoleSchema.parse(user.role),
                 loginTime: new Date().toISOString(),
-                lastActivity: new Date().toISOString(),
+                last_activity: new Date().toISOString(),
                 status: 'active',
                 ipAddress: req.ip,
                 userAgent: userAgent
@@ -400,7 +400,7 @@ export const login = async (req: Request, res: Response) => {
         //     httpOnly: true,
         //     secure: process.env.NODE_ENV === 'production',
         // Update activity heartbeat on login with explicit UTC SSOT
-        await pool.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        await pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
         const timeoutMinutes = await getSessionTimeoutMinutes();
 
@@ -561,7 +561,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         // 2. Fetch User and Session state
         const userRes = await client.query(
-            'SELECT id, status, token_version, email, role, "lastActivity" FROM users WHERE id = $1',
+            'SELECT id, status, token_version, email, role, last_activity FROM users WHERE id = $1',
             [userId]
         );
         const user = userRes.rows[0] as UserEntity | undefined;
@@ -572,7 +572,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         }
 
         const sessionRes = await client.query(
-            `SELECT refresh_token_jti, previous_refresh_token_jti, jti_rotated_at, "lastActivity",
+            `SELECT refresh_token_jti, previous_refresh_token_jti, jti_rotated_at, last_activity,
              access_token_jti, revoked, expires_at FROM user_sessions WHERE session_id = $1`,
             [sessionId]
         );
@@ -616,7 +616,8 @@ export const refreshToken = async (req: Request, res: Response) => {
                 // On violation: Kill the entire session immediately (Enterprise Guard)
                 await client.query('UPDATE user_sessions SET revoked = TRUE WHERE session_id = $1', [sessionId]);
                 await client.query('COMMIT');
-                return sendResponse(res, 401, false, 'Session revoked due to security violation');
+                // P0 FIX: Institutional Security Violation reporting
+                return sendError(res, 401, 'Session revoked due to security violation', 'SECURITY_VIOLATION');
             }
             
             await client.query('ROLLBACK');
@@ -644,7 +645,7 @@ export const refreshToken = async (req: Request, res: Response) => {
                      refresh_token_jti = $1, 
                      access_token_jti = $2,
                      jti_rotated_at = CURRENT_TIMESTAMP,
-                     "lastActivity" = CURRENT_TIMESTAMP,
+                     last_activity = CURRENT_TIMESTAMP,
                      expires_at = $3
                  WHERE session_id = $4`,
                 [newRefreshJti, newAccessJti, expiresAt, sessionId]
@@ -721,7 +722,7 @@ export const refreshToken = async (req: Request, res: Response) => {
             );
         }
 
-        await client.query('UPDATE users SET "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        await client.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
         await client.query('COMMIT');
 
         const timeoutMinutes = await getSessionTimeoutMinutes();
@@ -766,7 +767,7 @@ export const logout = async (req: Request, res: Response) => {
             // Fallback: Increment token_version for radical invalidation
             // Institutional Fix: Use COALESCE to protect against NULL drifts
             await pool.query(
-                'UPDATE users SET token_version = COALESCE(token_version, 0) + 1, "lastActivity" = CURRENT_TIMESTAMP WHERE id = $1',
+                'UPDATE users SET token_version = COALESCE(token_version, 0) + 1, last_activity = CURRENT_TIMESTAMP WHERE id = $1',
                 [user.id]
             );
 

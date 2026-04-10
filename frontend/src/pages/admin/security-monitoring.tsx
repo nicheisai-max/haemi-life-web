@@ -61,7 +61,7 @@ export const SecurityMonitoring: React.FC = () => {
         }
     ];
 
-    if (loading) return <div className="pt-20"><MedicalLoader message="Analyzing Security Matrix..." /></div>;
+    if (loading) return <MedicalLoader variant="global" message="Analyzing Security Matrix..." />;
 
     return (
         <div className="space-y-8">
@@ -75,7 +75,7 @@ export const SecurityMonitoring: React.FC = () => {
                 <div className="flex items-center gap-3">
                     <Button
                         variant="outline"
-                        className="h-10 px-4 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-semibold transition-all hover:scale-105 active:scale-95 gap-2"
+                        className="h-10 px-4 rounded-[var(--card-radius)] border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-semibold transition-all hover:scale-105 active:scale-95 gap-2"
                         onClick={() => { setRefreshing(true); fetchEvents(); }}
                         disabled={refreshing}
                     >
@@ -139,7 +139,7 @@ export const SecurityMonitoring: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <Badge variant="outline" className={`rounded-lg px-2 py-0.5 text-[9px] font-bold border ${getSeverityColor(event.eventSeverity)}`}>
+                                                <Badge variant="outline" className={`rounded-[var(--card-radius)] px-2 py-0.5 text-[9px] font-bold border ${getSeverityColor(event.eventSeverity)}`}>
                                                     {event.eventSeverity || 'INFO'}
                                                 </Badge>
                                             </td>

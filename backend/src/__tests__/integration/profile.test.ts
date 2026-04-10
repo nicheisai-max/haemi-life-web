@@ -80,7 +80,7 @@ describe('Profile API (Integration)', () => {
                 status: 'ACTIVE',
                 role: 'patient',
                 token_version: 0,
-                lastActivity: new Date(),
+                last_activity: new Date(),
                 minutes_since_activity: 0
             }]
         });
@@ -89,7 +89,7 @@ describe('Profile API (Integration)', () => {
             rows: [{
                 revoked: false,
                 access_token_jti: 'jti-123',
-                lastActivity: new Date()
+                last_activity: new Date()
             }]
         });
         
@@ -139,7 +139,7 @@ describe('Profile API (Integration)', () => {
                 status: 'ACTIVE',
                 role: 'doctor',
                 token_version: 0,
-                lastActivity: new Date(),
+                last_activity: new Date(),
                 minutes_since_activity: 0
             }]
         });
@@ -148,7 +148,7 @@ describe('Profile API (Integration)', () => {
             rows: [{
                 revoked: false,
                 access_token_jti: 'jti-456',
-                lastActivity: new Date()
+                last_activity: new Date()
             }]
         });
         
@@ -203,7 +203,7 @@ describe('Profile API (Integration)', () => {
                 status: 'ACTIVE',
                 role: 'patient',
                 token_version: 0,
-                lastActivity: new Date(),
+                last_activity: new Date(),
                 minutes_since_activity: 0
             }]
         });
@@ -212,7 +212,7 @@ describe('Profile API (Integration)', () => {
             rows: [{
                 revoked: false,
                 access_token_jti: 'jti-123',
-                lastActivity: new Date()
+                last_activity: new Date()
             }]
         });
 

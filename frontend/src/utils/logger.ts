@@ -27,6 +27,7 @@ export type AuditEventType =
     | 'TOKEN_REFRESH_SUCCESS' 
     | 'TOKEN_REFRESH_FAILURE' 
     | 'UNAUTHORIZED_EVENT' 
+    | 'SECURITY_EVENT'
     | 'SESSION_TERMINATED'
     | 'UNHANDLED_ERROR'
     | 'ERROR';

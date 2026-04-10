@@ -13,7 +13,7 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) 
     const location = useLocation();
 
     if (isLoading) {
-        return <MedicalLoader fullPage message="Verifying clinical identity..." />;
+        return <MedicalLoader variant="global" message="Verifying clinical identity..." />;
     }
 
     if (!isAuthenticated || authStatus !== 'authenticated' || !user) {

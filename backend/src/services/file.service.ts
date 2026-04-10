@@ -98,7 +98,14 @@ class FileService {
                 mimeType: tempResult.rows[0].mime || 'application/octet-stream'
             };
         } catch (error: unknown) {
-            logger.error('[FileService] moveStagedFile Failure:', {
+            // INSTITUTIONAL RECOVERY: Check for ENOENT (File Not Found)
+            // Architecture: Resolves race conditions between staged uploads and message delivery.
+            if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+                logger.warn('[FileService] Staged attachment physical file missing (Graceful Skip)', { tempId });
+                return null;
+            }
+
+            logger.error('[FileService] moveStagedFile Systemic Failure:', {
                 error: error instanceof Error ? error.message : String(error),
                 tempId
             });
@@ -165,8 +172,11 @@ class FileService {
                 await fs.unlink(fullPath);
                 logger.info('[FileService] Ghost file purged', { relativePath });
                 return true;
-            } catch {
-                logger.warn('[FileService] Attempted to purge missing file', { relativePath });
+            } catch (error: unknown) {
+                logger.warn('[FileService] Attempted to purge missing file (Graceful)', { 
+                    relativePath,
+                    error: error instanceof Error ? error.message : String(error)
+                });
                 return false;
             }
         } catch (error: unknown) {
@@ -184,6 +194,29 @@ class FileService {
     public getReadStream(relativePath: string): ReadStream {
         const fullPath = getAbsolutePath(relativePath);
         return createReadStream(fullPath);
+    }
+
+    /**
+     * 🩺 INSTITUTIONAL PRE-FLIGHT: Statutory existence & metadata check
+     * Architecture: Resolves race conditions between headers and data streams.
+     */
+    public async getFileStats(relativePath: string): Promise<{ size: number, mtime: Date } | null> {
+        try {
+            const fullPath = getAbsolutePath(relativePath);
+            const stats = await fs.stat(fullPath);
+            return {
+                size: stats.size,
+                mtime: stats.mtime
+            };
+        } catch (error: unknown) {
+            // Institutional Quiet Reject: Return null if file doesn't exist on disk
+            // Logic: Logged as debug info to maintain zero-noise audit trails.
+            logger.debug('[FileService] Pre-flight stat check failed (Normal if file missing)', {
+                path: relativePath,
+                error: error instanceof Error ? error.message : String(error)
+            });
+            return null;
+        }
     }
 }
 

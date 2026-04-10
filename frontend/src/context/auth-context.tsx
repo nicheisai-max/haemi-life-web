@@ -1,11 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import axios from 'axios';
 
 import { logger } from '../utils/logger';
 import { authService } from '../services/auth.service';
-import { setAccessToken, setAppInitialized } from '../services/api';
+import { setAccessToken, setAppInitialized, isBackendConfirmed } from '../services/api';
 import { AuthContext } from './auth-context-def';
-import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
-import { isUser, isJWTPayload, safeParseJSON } from '../utils/type-guards';
+import { isAuthError, type User, type LoginCredentials, type SignupCredentials } from '../types/auth.types';
+import { 
+    isError, 
+    safeParseJSON, 
+    isJWTPayload,
+    isUser 
+} from '../utils/type-guards';
 
 interface AuthState {
     user: User | null;
@@ -29,21 +35,21 @@ const decodeJWT = (token: string | null) => {
     }
 };
 
-// ─── MODULE-LEVEL BOOTSTRAP GUARD ──────────────────────────────────────────
+// ─── MODULE-LEVEL BOOTSTRAP GUARDS ─────────────────────────────────────────
 let hasGlobalBootstrapExecuted = false;
+let hasBootInitiated = false;
+const OPTIMISTIC_TOKEN_MIN_TTL_SECONDS = 30 as const;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // ─── ISOLATED RENDER-SAFE STATE INIT ─────────────────────────────────────
+    // ─── 1. ISOLATED RENDER-SAFE STATE INIT ─────────────────────────────────────
     const [authState, setAuthState] = useState<AuthState>(() => {
         const initialUserJson = sessionStorage.getItem('user');
         const initialToken = sessionStorage.getItem('token');
         const user = initialUserJson ? safeParseJSON(initialUserJson, isUser) : null;
-        
-        // 🩺 HAEMI RESILIENCE: Handle legacy session data missing hasConsent
-        const initialUser = user ? { ...user, hasConsent: user.hasConsent ?? false } : null;
+        const sanitizedUser = user ? { ...user, hasConsent: !!user.hasConsent } : null;
 
         return {
-            user: initialUser,
+            user: sanitizedUser,
             token: initialToken,
             authStatus: 'initializing',
             profileImageVersion: Date.now(),
@@ -52,255 +58,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     });
 
-    // ─── STRICT MODE SAFE INITIALIZATION ─────────────────────────────────────
-    useEffect(() => {
-        if (!hasGlobalBootstrapExecuted) {
-            hasGlobalBootstrapExecuted = true;
-            const token = sessionStorage.getItem('token');
-            if (token) {
-                setAccessToken(token);
-            }
-        }
-    }, []);
-
     const authStateRef = useRef<AuthState>(authState);
     useEffect(() => {
         authStateRef.current = authState;
     }, [authState]);
 
-    // ─── Phase 5, 6 & 7 Hardening: Silent Proactive Refresh (Singleton & Multi-Event)
     const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isTokenNearDeath, setIsTokenNearDeath] = useState(false);
     const isRefreshingRef = useRef<boolean>(false);
     const lastInteractionRef = useRef<number>(Date.now());
 
-    useEffect(() => {
-        const cleanup = () => {
-            if (refreshIntervalRef.current) {
-                clearInterval(refreshIntervalRef.current);
-                refreshIntervalRef.current = null;
-            }
-        };
-
-        cleanup();
-
-        if (authState.authStatus !== 'authenticated' || !authState.token) return;
-
-        const checkRefreshNeeded = async () => {
-            const latestToken = authStateRef.current.token;
-            const decoded = decodeJWT(latestToken);
-            if (!decoded?.exp) return;
-
-            const now = Math.floor((Date.now() + authStateRef.current.serverOffset) / 1000);
-            const timeUntilExpiry = decoded.exp - now;
-
-            // Zero-Trust: 120s buffer adjusted by server-time sync
-            if (timeUntilExpiry < 120) {
-                if (isRefreshingRef.current) return;
-                
-                logger.info(`[Auth] Proactive refresh (exp: ${timeUntilExpiry}s, offset: ${authStateRef.current.serverOffset}ms)`);
-                try {
-                    isRefreshingRef.current = true;
-                    // Use the centralized performRefresh which handles the API call
-                    const { performRefresh } = await import('../services/api');
-                    await performRefresh();
-                } catch (err) {
-                    logger.error('[Auth] Proactive refresh failed', err);
-                } finally {
-                    isRefreshingRef.current = false;
-                }
-            }
-
-            // Phase 3: Idle Detection logic
-            const timeoutMinutes = authStateRef.current.sessionTimeout;
-            if (timeoutMinutes) {
-                const idleLimitMs = timeoutMinutes * 60 * 1000;
-                const timeIdle = Date.now() - lastInteractionRef.current;
-                const timeRemaining = idleLimitMs - timeIdle;
-
-                // Trigger popup 2 minutes before absolute timeout
-                if (timeRemaining > 0 && timeRemaining < 120000) {
-                    window.dispatchEvent(new CustomEvent('auth:session-expiring', { 
-                        detail: { timeLeft: Math.floor(timeRemaining / 1000) } 
-                    }));
-                }
-            }
-        };
-
-        const updateActivity = () => {
-            lastInteractionRef.current = Date.now();
-        };
-
-        // Phase 7: Activity Listeners
-        const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
-        events.forEach(name => window.addEventListener(name, updateActivity));
-
-        // Phase 7: Visibility-Event Refresh (Bypasses background throttling)
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                updateActivity();
-                logger.info('[Auth] Tab visible again. Performing proactive expiry check...');
-                checkRefreshNeeded();
-            }
-        };
-
-        refreshIntervalRef.current = setInterval(checkRefreshNeeded, 15000); 
-        window.addEventListener('visibilitychange', handleVisibilityChange);
-        
-        return () => {
-            cleanup();
-            window.removeEventListener('visibilitychange', handleVisibilityChange);
-            events.forEach(name => window.removeEventListener(name, updateActivity));
-        };
-    }, [authState.authStatus, authState.token]);
-
-    // ─── BroadcastChannel for Cross-Tab Sync ───────────────────────────────
-    useEffect(() => {
-        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-        let authChannel: BroadcastChannel | null = null;
-
-        if (!IS_DEMO_MODE) {
-            authChannel = new BroadcastChannel('haemi_auth_sync');
-
-            const handleMessage = (event: MessageEvent) => {
-                const { type, payload } = event.data;
-                const latestState = authStateRef.current;
-
-                if (type === 'LOGOUT') {
-                    // SECURE SYNC: Only logout if the message targets our current user identity
-                    if (payload?.userId && latestState.user?.id === payload.userId) {
-                        logger.info('[AuthSync] Logout received from other tab (Shared Identity)');
-                        setAccessToken(null);
-                        sessionStorage.removeItem('user');
-                        sessionStorage.removeItem('token');
-                        sessionStorage.removeItem('refreshToken');
-                        setAuthState(prev => ({ 
-                            ...prev,
-                            user: null, 
-                            token: null, 
-                            authStatus: 'unauthenticated'
-                        }));
-                    }
-                } else if (type === 'TOKEN_REFRESHED') {
-                    // MULTI-TAB SYNC: Update credentials only if the message targets our current user identity
-                    if (payload?.token && payload?.refreshToken && payload?.userId === latestState.user?.id) {
-                        logger.info('[AuthSync] Token refresh received from other tab. Synchronizing state...');
-                        setAccessToken(payload.token);
-                        sessionStorage.setItem('token', payload.token);
-                        sessionStorage.setItem('refreshToken', payload.refreshToken);
-                        setAuthState(prev => {
-                            if (prev.token === payload.token) return prev;
-                            return { 
-                                ...prev, 
-                                token: payload.token,
-                                authStatus: prev.authStatus === 'unauthenticated' ? 'authenticated' : prev.authStatus
-                            };
-                        });
-                    }
-                }
-            };
-            authChannel.onmessage = handleMessage;
-        }
-
-        const handleUnauthorized = () => {
-            const currentUserId = authStateRef.current.user?.id;
-            logger.warn('[Auth] Unauthorized event detected');
-            setAccessToken(null);
-            sessionStorage.removeItem('user');
-            sessionStorage.removeItem('token');
-            sessionStorage.removeItem('refreshToken');
-            setAuthState(prev => ({ 
-                ...prev,
-                user: null, 
-                token: null, 
-                authStatus: 'unauthenticated'
-            }));
-            
-            // Broadcast logout ONLY for this specific user ID
-            if (authChannel && currentUserId) {
-                authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
-            }
-        };
-
-        window.addEventListener('auth:unauthorized', handleUnauthorized);
-
-        // Lifecycle Guard: Move token-refreshed event out of render
-        const handleTokenRefreshed = (event: Event) => {
-            const customEvent = event as CustomEvent<{ 
-                token: string, 
-                refreshToken?: string, 
-                serverTime?: string, 
-                sessionTimeout?: number 
-            }>;
-            const { token, refreshToken, serverTime, sessionTimeout } = customEvent.detail;
-            const decoded = decodeJWT(token);
-            if (!decoded) return;
-
-            const serverMs = serverTime ? new Date(serverTime).getTime() : Date.now();
-            const offset = serverMs - Date.now();
-
-            setAuthState(prev => {
-                // EVENT HANDLER HARDENING: Idempotent Token Sync Guard
-                if (prev.token === token) return prev;
-                return {
-                    ...prev,
-                    token,
-                    serverOffset: offset,
-                    sessionTimeout: sessionTimeout || prev.sessionTimeout,
-                    authStatus: prev.authStatus === 'unauthenticated' ? 'authenticated' : prev.authStatus
-                };
-            });
-            
-            sessionStorage.setItem('token', token);
-            if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
-        };
-
-        window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
-
-        // 🛡️ INSTITUTIONAL HARDENING: Storage Event Sync (Secondary Logout Signal)
-        // This ensures background/sleeping tabs also respond to logout via localStorage events.
-        const handleStorageChange = (event: StorageEvent) => {
-            if (event.key === 'haemi_logout_signal' && event.newValue) {
-                const signal = safeParseJSON(event.newValue, (val: unknown): val is { userId: string } => {
-                    return typeof val === 'object' && val !== null && 'userId' in val;
-                });
-                
-                if (signal && signal.userId === authStateRef.current.user?.id) {
-                    logger.info('[AuthSync] Logout signal detected in localStorage. Executing radical invalidation...');
-                    setAccessToken(null);
-                    sessionStorage.clear(); // Nuclear purge
-                    setAuthState(prev => ({ 
-                        ...prev,
-                        user: null, 
-                        token: null, 
-                        authStatus: 'unauthenticated'
-                    }));
-                }
-            }
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-
-        return () => {
-            if (authChannel) authChannel.close();
-            window.removeEventListener('auth:unauthorized', handleUnauthorized);
-            window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
-            window.removeEventListener('storage', handleStorageChange);
-        };
-    }, []); 
-
-    // ─── Phase 7 Hardening: Atomic Identity Guard ──────────────────────────
+    // ─── 2. STABLE IDENTITY CALLBACKS ──────────────────────────────────────────
+    
+    /**
+     * 🛡️ INSTITUTIONAL ATOMICITY GUARD:
+     * Commits auth state to all three layers (Memory, Storage, State) in unison.
+     */
     const commitAuthState = useCallback((
         user: User | null, 
         token: string | null, 
         status: AuthState['authStatus'], 
         refreshToken?: string | null,
-        serverTime?: string,
-        sessionTimeout?: number
+        serverTimeOrOffset?: string | number,
+        sessionTimeout?: number | null
     ) => {
-        // 1. Unified Network Sink (Atomic update outside of render)
         setAccessToken(token);
 
-        // 2. Unified Storage Sink
         if (token && user) {
             sessionStorage.setItem('token', token);
             if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
@@ -311,200 +95,288 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             sessionStorage.removeItem('user');
         }
 
-        // 3. Server Time Sync
-        const serverMs = serverTime ? new Date(serverTime).getTime() : Date.now();
-        const offset = serverMs - Date.now();
+        let offset: number;
+        if (typeof serverTimeOrOffset === 'number') {
+            offset = serverTimeOrOffset;
+        } else {
+            const serverMs = serverTimeOrOffset ? new Date(serverTimeOrOffset).getTime() : Date.now();
+            offset = serverMs - Date.now();
+        }
 
-        // 4. Unified State Sink
         setAuthState(prev => ({
+            ...prev,
             user,
             token,
             authStatus: status,
             profileImageVersion: Date.now(),
             serverOffset: offset,
-            sessionTimeout: sessionTimeout || prev.sessionTimeout
+            sessionTimeout: sessionTimeout !== undefined ? sessionTimeout : prev.sessionTimeout
         }));
         
         logger.info(`[Auth] Identity Commit: ${status} (Offset: ${offset}ms)`);
     }, []);
 
-    // ─── Initial Boot ────────────────────────────────────────────────────────
-    useEffect(() => {
-        const BOOT_TIMEOUT = 15000;
-
-        const initAuth = async () => {
-            const timeoutGuard = setTimeout(() => {
-                if (authStateRef.current.authStatus !== 'app_ready') {
-                    logger.error('[Boot] Boot timeout reached');
-                    setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
-                    setAppInitialized();
-                }
-            }, BOOT_TIMEOUT);
-
-            try {
-                // Keep 'initializing' status during the health check to satisfy tests
-                const isBackendReady = await authService.waitForBackend(5, 1000);
-                if (!isBackendReady) {
-                    commitAuthState(null, null, 'offline');
-                    return;
-                }
-
-                const refreshResult = await authService.refreshToken();
-
-                if (refreshResult.authenticated && refreshResult.token) {
-                    const verifyResult = await authService.verifySession();
-                    commitAuthState(
-                        verifyResult.user, 
-                        refreshResult.token, 
-                        'authenticated', 
-                        refreshResult.refreshToken,
-                        verifyResult.serverTime,
-                        verifyResult.sessionTimeout
-                    );
-                } else {
-                    // PHASE 2 FIX: Graceful Fallback
-                    // Only set to unauthenticated, do NOT purge tokens if they exist in session
-                    commitAuthState(null, null, 'unauthenticated');
-                }
-                
-                // Signal boot completion without overwriting status
-                setAppInitialized();
-
-            } catch (error: unknown) {
-                logger.error('[Boot] Initialization failure', error);
-                
-                // PHASE 2 FIX: Only set status, avoid destructive purge in the boot catch block
-                commitAuthState(null, null, 'unauthenticated');
-                
-                setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
-            } finally {
-                clearTimeout(timeoutGuard);
-                setAppInitialized();
-                window.dispatchEvent(new CustomEvent('auth:ready'));
-            }
-        };
-
-        initAuth();
-    }, [commitAuthState]);
-
-    const login = useCallback(async (credentials: LoginCredentials) => {
-        const result = await authService.login(credentials);
-        commitAuthState(
-            result.user, 
-            result.token, 
-            'authenticated', 
-            result.refreshToken, 
-            result.serverTime, 
-            result.sessionTimeout
-        );
-    }, [commitAuthState]);
-
-    const signup = useCallback(async (credentials: SignupCredentials) => {
-        const result = await authService.signup(credentials);
-        commitAuthState(
-            result.user, 
-            result.token, 
-            'authenticated', 
-            result.refreshToken, 
-            result.serverTime, 
-            result.sessionTimeout
-        );
-    }, [commitAuthState]);
-
     const logout = useCallback(async () => {
         const currentUserId = authStateRef.current.user?.id;
+        const currentRole = authStateRef.current.user?.role;
         
-        // Phase 1: Call logout API FIRST before stripping credentials
-        // Use dynamic import for axios to keep bootstrap light
         try {
             await authService.logout();
             logger.info('[Auth] Remote session invalidated successfully');
         } catch (error: unknown) {
-            // Enterprise Resilience: Handle 401 gracefully during logout
-            const isAxiosError = (err: unknown): err is { isAxiosError: boolean; response?: { status: number } } => {
-                return (
-                    typeof err === 'object' &&
-                    err !== null &&
-                    'isAxiosError' in err &&
-                    (err as { isAxiosError: boolean }).isAxiosError === true
-                );
-            };
-
-            if (isAxiosError(error)) {
+            // P0 FIX: Institutional Axios error handling using imported axios
+            if (axios.isAxiosError(error)) {
                 if (error.response?.status === 401) {
-                    logger.warn('[Auth] Logout: Remote session already void or expired (Idempotent success)');
+                    logger.warn('[Auth] Logout: Remote session already void (Idempotent success)');
                 } else {
-                    logger.error('[Auth] Remote logout failed', { status: error.response?.status });
+                    logger.error('[Auth] Remote logout failure intercepted', { error: error.message });
                 }
             } else {
                 logger.error('[Auth] Unknown error during remote logout', { error: String(error) });
             }
         }
 
-
-        // Phase 2: Broadcast to other tabs (Dual-Channel Propagation)
         const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
         if (!IS_DEMO_MODE && currentUserId) {
             try {
-                // A. BroadcastChannel for active tabs
                 const authChannel = new BroadcastChannel('haemi_auth_sync');
-                authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId } });
+                authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId, role: currentRole } });
                 authChannel.close();
 
-                // B. localStorage signal for background/sleeping tabs
-                localStorage.setItem('haemi_logout_signal', JSON.stringify({ userId: currentUserId, ts: Date.now() }));
-                // Cleanup signal immediately after trigger
+                localStorage.setItem('haemi_logout_signal', JSON.stringify({
+                    userId: currentUserId, role: currentRole, ts: Date.now()
+                }));
                 setTimeout(() => localStorage.removeItem('haemi_logout_signal'), 500);
-
-                logger.info('[AuthSync] Global logout signals emitted.');
             } catch (err) {
                 logger.error('[AuthSync] Logout broadcast failure insulated', { error: String(err) });
             }
         }
 
-        // Phase 3: Final local state purge
         commitAuthState(null, null, 'unauthenticated');
+    }, [commitAuthState]);
+
+    const login = useCallback(async (credentials: LoginCredentials) => {
+        const result = await authService.login(credentials);
+        commitAuthState(result.user, result.token, 'authenticated', result.refreshToken, result.serverTime, result.sessionTimeout);
+    }, [commitAuthState]);
+
+    const signup = useCallback(async (credentials: SignupCredentials) => {
+        const result = await authService.signup(credentials);
+        commitAuthState(result.user, result.token, 'authenticated', result.refreshToken, result.serverTime, result.sessionTimeout);
     }, [commitAuthState]);
 
     const refreshUser = useCallback(async () => {
         try {
-            // Refetch current user profile + consent status
             const { user: verifiedUser } = await authService.verifySession();
-            
-            setAuthState(prev => ({
-                ...prev,
-                user: verifiedUser,
-                profileImageVersion: Date.now()
-            }));
-
-            // Sync with session storage for persistence across reloads
+            setAuthState(prev => ({ ...prev, user: verifiedUser, profileImageVersion: Date.now() }));
             sessionStorage.setItem('user', JSON.stringify(verifiedUser));
-            
-            logger.info(`[Auth] User profile refreshed (Consent: ${verifiedUser.hasConsent})`);
+            logger.info('[Auth] User profile refreshed successfully');
         } catch (error) {
             logger.error('[Auth] Failed to refresh user profile:', error);
         }
     }, []);
 
+    // ─── 3. INSTITUTIONAL EFFECTS ──────────────────────────────────────────────
+
+    useEffect(() => {
+        if (!hasGlobalBootstrapExecuted) {
+            hasGlobalBootstrapExecuted = true;
+            const token = sessionStorage.getItem('token');
+            if (token) setAccessToken(token);
+        }
+    }, []);
+
+    useEffect(() => {
+        const cleanup = () => {
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+                refreshIntervalRef.current = null;
+            }
+        };
+        cleanup();
+
+        if (authState.authStatus !== 'authenticated' || !authState.token) return;
+
+        const checkRefreshNeeded = async () => {
+            const token = authStateRef.current.token;
+            if (!token) return;
+
+            try {
+                const decodedToken = decodeJWT(token);
+                if (!decodedToken) return;
+
+                const now = Math.floor((Date.now() + authStateRef.current.serverOffset) / 1000);
+                const timeUntilExpiry = decodedToken.exp - now;
+
+                setIsTokenNearDeath(timeUntilExpiry < 10);
+
+                if (timeUntilExpiry < 300) {
+                    if (isRefreshingRef.current) return;
+                    isRefreshingRef.current = true;
+                    setIsRefreshing(true);
+                    
+                    try {
+                        const { performRefresh } = await import('../services/api');
+                        const refreshedToken = await performRefresh();
+                        if (!refreshedToken && timeUntilExpiry <= 0) throw new Error('TERM_EXPIRY');
+                    } catch (innerError: unknown) {
+                        const isTerminal = (isError(innerError) && innerError.message === 'TERM_EXPIRY') || timeUntilExpiry <= 0;
+                        if (isTerminal) {
+                            cleanup();
+                            await logout();
+                            return;
+                        }
+                    }
+                }
+            } catch (error: unknown) {
+                logger.error('[Auth] Proactive refresh engine systemic failure', { error: String(error) });
+            } finally {
+                isRefreshingRef.current = false;
+                setIsRefreshing(false);
+            }
+
+            const timeoutMinutes = authStateRef.current.sessionTimeout;
+            if (timeoutMinutes) {
+                const idleLimitMs = timeoutMinutes * 60 * 1000;
+                const timeRemaining = idleLimitMs - (Date.now() - lastInteractionRef.current);
+                if (timeRemaining > 0 && timeRemaining < 120000) {
+                    window.dispatchEvent(new CustomEvent('auth:session-expiring', { detail: { timeLeft: Math.floor(timeRemaining / 1000) } }));
+                }
+            }
+        };
+
+        const updateActivity = () => { lastInteractionRef.current = Date.now(); };
+        const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+        events.forEach(name => window.addEventListener(name, updateActivity));
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') { updateActivity(); checkRefreshNeeded(); }
+        };
+
+        refreshIntervalRef.current = setInterval(checkRefreshNeeded, 15000); 
+        window.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        return () => {
+            cleanup();
+            window.removeEventListener('visibilitychange', handleVisibilityChange);
+            events.forEach(name => window.removeEventListener(name, updateActivity));
+        };
+    }, [authState.authStatus, authState.token, logout]);
+
+    useEffect(() => {
+        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+        let authChannel: BroadcastChannel | null = null;
+
+        if (!IS_DEMO_MODE) {
+            authChannel = new BroadcastChannel('haemi_auth_sync');
+            authChannel.onmessage = (event) => {
+                const { type, payload } = event.data;
+                const latest = authStateRef.current;
+                if (type === 'LOGOUT') {
+                    if (payload?.userId === latest.user?.id && payload?.role === latest.user?.role) {
+                        commitAuthState(null, null, 'unauthenticated');
+                    }
+                } else if (type === 'TOKEN_REFRESHED') {
+                    if (payload.userId === latest.user?.id && payload.role === latest.user?.role) {
+                        commitAuthState(latest.user, payload.token, latest.authStatus === 'unauthenticated' ? 'authenticated' : latest.authStatus, payload.refreshToken, latest.serverOffset, latest.sessionTimeout);
+                    }
+                }
+            };
+        }
+
+        const handleUnauthorized = () => {
+            const user = authStateRef.current.user;
+            if (authChannel && user) authChannel.postMessage({ type: 'LOGOUT', payload: { userId: user.id, role: user.role } });
+            commitAuthState(null, null, 'unauthenticated');
+        };
+
+        const handleTokenRefreshed = (event: Event) => {
+            const { token, refreshToken, serverTime, sessionTimeout } = (event as CustomEvent).detail;
+            setAuthState(prev => {
+                if (prev.token === token) return prev;
+                const offset = (serverTime ? new Date(serverTime).getTime() : Date.now()) - Date.now();
+                return { ...prev, token, serverOffset: offset, sessionTimeout: sessionTimeout || prev.sessionTimeout };
+            });
+            sessionStorage.setItem('token', token);
+            if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
+        };
+
+        const handleStorageChange = (event: StorageEvent) => {
+            if (event.key === 'haemi_logout_signal' && event.newValue) {
+                const signal = safeParseJSON(event.newValue, (v: unknown): v is { userId: string, role: string } => {
+                    return typeof v === 'object' && v !== null && 'userId' in v && 'role' in v;
+                });
+                const user = authStateRef.current.user;
+                if (signal && user && signal.userId === user.id && signal.role === user.role) commitAuthState(null, null, 'unauthenticated');
+            }
+        };
+
+        window.addEventListener('auth:unauthorized', handleUnauthorized);
+        window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
+        window.addEventListener('storage', handleStorageChange);
+
+        return () => {
+            if (authChannel) authChannel.close();
+            window.removeEventListener('auth:unauthorized', handleUnauthorized);
+            window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
+            window.removeEventListener('storage', handleStorageChange);
+        };
+    }, [commitAuthState]); 
+
+    useEffect(() => {
+        if (hasBootInitiated) return;
+        hasBootInitiated = true;
+        const BOOT_TIMEOUT = 5000;
+
+        const initAuth = async () => {
+            const timeoutGuard = setTimeout(() => {
+                if (authStateRef.current.authStatus !== 'app_ready') {
+                    setAuthState(prev => ({ ...prev, authStatus: 'app_ready' }));
+                    setAppInitialized();
+                }
+            }, BOOT_TIMEOUT);
+
+            try {
+                const storedToken = sessionStorage.getItem('token');
+                if (storedToken) {
+                    const decoded = decodeJWT(storedToken);
+                    if (decoded && decoded.exp > (Math.floor(Date.now() / 1000) + OPTIMISTIC_TOKEN_MIN_TTL_SECONDS)) {
+                        const user = safeParseJSON(sessionStorage.getItem('user') || '', isUser);
+                        if (user) commitAuthState(user, storedToken, 'authenticated');
+                    }
+                }
+                const isReady = isBackendConfirmed() || await authService.waitForBackend(2, 500);
+                if (!isReady) { if (!authStateRef.current.token) commitAuthState(null, null, 'offline'); return; }
+                const refreshResult = await authService.refreshToken();
+                if (refreshResult.authenticated && refreshResult.token) {
+                    const verifyResult = await authService.verifySession({ silent: true });
+                    commitAuthState(verifyResult.user, refreshResult.token, 'authenticated', refreshResult.refreshToken, verifyResult.serverTime, verifyResult.sessionTimeout);
+                } else if (!authStateRef.current.token) { commitAuthState(null, null, 'unauthenticated'); }
+            } catch (error: unknown) {
+                // P0 FIX: Unified Identity Error Narrowing using isAuthError and axios.isAxiosError
+                if (isAuthError(error) || (axios.isAxiosError(error) && error.response?.status === 401)) {
+                    logger.info('[Boot] Initialization probe: No valid session found (Graceful fallback)');
+                } else {
+                    logger.error('[Boot] Initialization failure', { error: String(error) });
+                }
+                commitAuthState(null, null, 'unauthenticated');
+            } finally {
+                clearTimeout(timeoutGuard);
+                setAppInitialized();
+                window.dispatchEvent(new CustomEvent('auth:ready'));
+            }
+        };
+        initAuth();
+    }, [commitAuthState]);
+
     return (
         <AuthContext.Provider value={{
-            user: authState.user,
-            token: authState.token,
-            authStatus: authState.authStatus,
-            profileImageVersion: authState.profileImageVersion,
-            login,
-            signup,
-            logout,
-            refreshUser,
-            isLoading: authState.authStatus === 'initializing' ||
-                authState.authStatus === 'auth_check' ||
-                authState.authStatus === 'onboarding_check',
-            isAuthenticated: authState.authStatus === 'authenticated' ||
-                (authState.authStatus === 'app_ready' && !!authState.user),
+            user: authState.user, token: authState.token, authStatus: authState.authStatus, profileImageVersion: authState.profileImageVersion,
+            login, signup, logout, refreshUser, isRefreshing, isTokenNearDeath,
+            isLoading: ['initializing', 'auth_check', 'onboarding_check'].includes(authState.authStatus),
+            isAuthenticated: (authState.authStatus === 'authenticated' || (authState.authStatus === 'app_ready' && !!authState.user)) && !!authState.token && !isTokenNearDeath
         }}>
             {children}
         </AuthContext.Provider>
     );
 };
-
-// AuthContext and useAuth moved to AuthContextDef.ts and useAuth.ts to satisfy Fast Refresh rules.

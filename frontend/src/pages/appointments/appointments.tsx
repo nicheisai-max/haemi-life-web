@@ -129,11 +129,7 @@ export const Appointments: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div className="pt-8 flex justify-center items-center min-h-96">
-                <MedicalLoader message="Syncing clinical appointments..." />
-            </div>
-        );
+        return <MedicalLoader message="Syncing clinical appointments..." />;
     }
 
     return (
@@ -161,9 +157,9 @@ export const Appointments: React.FC = () => {
             )}
 
             {/* Filters */}
-            <TransitionItem className="flex flex-wrap gap-3 p-2 bg-muted/50 rounded-lg border">
+            <TransitionItem className="flex flex-wrap gap-3 p-2 bg-muted/50 rounded-[var(--card-radius)] border">
                 <button
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'all'
+                    className={`px-4 py-2 text-sm font-medium rounded-[var(--card-radius)] transition-all ${filter === 'all'
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:bg-background hover:text-foreground'
                         }`}
@@ -172,7 +168,7 @@ export const Appointments: React.FC = () => {
                     All ({appointments.length})
                 </button>
                 <button
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'upcoming'
+                    className={`px-4 py-2 text-sm font-medium rounded-[var(--card-radius)] transition-all ${filter === 'upcoming'
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:bg-background hover:text-foreground'
                         }`}
@@ -181,7 +177,7 @@ export const Appointments: React.FC = () => {
                     Upcoming ({appointments.filter(a => new Date(a.appointmentDate) >= new Date() && a.status !== 'cancelled').length})
                 </button>
                 <button
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${filter === 'past'
+                    className={`px-4 py-2 text-sm font-medium rounded-[var(--card-radius)] transition-all ${filter === 'past'
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:bg-background hover:text-foreground'
                         }`}
@@ -212,7 +208,7 @@ export const Appointments: React.FC = () => {
                         <Card key={appointment.id} className="group hover:shadow-md transition-all duration-200">
                             <div className="p-6 flex flex-col md:flex-row gap-6">
                                 {/* Date Badge */}
-                                <div className="flex-shrink-0 w-16 h-16 bg-primary/10 rounded-xl flex flex-col items-center justify-center text-primary border border-primary/20">
+                                <div className="flex-shrink-0 w-16 h-16 bg-primary/10 rounded-[var(--card-radius)] flex flex-col items-center justify-center text-primary border border-primary/20">
                                     <span className="text-2xl font-bold leading-none">
                                         {new Date(appointment.appointmentDate).getDate()}
                                     </span>

@@ -48,7 +48,7 @@ export interface MessageAttachment {
  */
 export interface HaemiParticipant extends UserProfile {
     isOnline?: boolean;
-    lastActivity?: Date | string;
+    last_activity?: Date | string;
 }
 
 /**

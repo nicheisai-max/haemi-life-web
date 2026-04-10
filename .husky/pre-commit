@@ -2,7 +2,7 @@
 
 # Master Guard Dispatcher (Branch naming, Schema lock, Identity check, Zero Any, File size)
 echo "🛡️  Enterprise Pre-commit Master Guard..."
-npx tsx scripts/branch_guard.ts --commit || exit 1
+npx tsx scripts/branch-guard.ts --commit || exit 1
 
 # Lint staged files (standard quality gate)
 npx lint-staged || { echo "❌ Lint Staged Failed"; exit 1; }

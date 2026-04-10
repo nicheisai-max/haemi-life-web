@@ -35,7 +35,7 @@ interface CustomTooltipProps {
 const CustomTooltip = ({ active, payload, prefix, suffix }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-popover border border-border shadow-xl rounded-lg p-3 animate-in fade-in-0 zoom-in-95">
+            <div className="bg-popover border border-border shadow-xl rounded-[var(--card-radius)] p-3 animate-in fade-in-0 zoom-in-95">
                 <p className="text-sm font-medium text-popover-foreground mb-1">{payload[0].name}</p>
                 <p className="text-sm font-bold text-primary">
                     {prefix}{payload[0].value?.toLocaleString()}{suffix}

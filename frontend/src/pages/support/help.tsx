@@ -124,11 +124,11 @@ export const Help: React.FC = () => {
         <div className="space-y-8">
             <div className="space-y-4">
                 <button
-                    className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
                     onClick={() => navigate(-1)}
+                    className="group flex items-center gap-2 px-4 py-2 rounded-full bg-card border shadow-sm hover:border-primary/50 transition-all duration-300 active:scale-95"
                 >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
+                    <ArrowLeft className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" strokeWidth={2.5} />
+                    <span className="text-sm font-semibold text-muted-foreground group-hover:text-primary transition-colors">Go Back</span>
                 </button>
                 <div>
                     <h1 className="page-heading !mb-0 transition-all duration-300">Help & Support</h1>
@@ -226,14 +226,14 @@ export const Help: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div className="flex items-start gap-3 p-4 bg-background rounded-lg border shadow-sm">
+                    <div className="flex items-start gap-3 p-4 bg-background rounded-[var(--card-radius)] border shadow-sm">
                         <Mail className="h-5 w-5 text-primary mt-0.5" />
                         <div>
                             <h4 className="font-medium text-foreground">Email Support</h4>
                             <a href="mailto:support@haemi.life" className="text-sm text-primary hover:underline block mt-1">support@haemi.life</a>
                         </div>
                     </div>
-                    <div className="flex items-start gap-3 p-4 bg-background rounded-lg border shadow-sm">
+                    <div className="flex items-start gap-3 p-4 bg-background rounded-[var(--card-radius)] border shadow-sm">
                         <Phone className="h-5 w-5 text-primary mt-0.5" />
                         <div>
                             <h4 className="font-medium text-foreground">Phone Support</h4>

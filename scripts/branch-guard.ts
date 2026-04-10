@@ -1,4 +1,4 @@
-import { run_safe_command } from './agent_watchdog';
+import { run_safe_command } from './agent-watchdog';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -75,7 +75,7 @@ function scanStagedFiles() {
 
     for (const file of files) {
         const fullPath = path.resolve(process.cwd(), file);
-        if (!fs.existsSync(fullPath) || file.includes('node_modules/') || file.includes('branch_guard.ts')) continue;
+        if (!fs.existsSync(fullPath) || file.includes('node_modules/') || file.includes('branch-guard.ts')) continue;
 
         const content = fs.readFileSync(fullPath, 'utf8');
 

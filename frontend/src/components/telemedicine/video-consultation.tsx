@@ -216,7 +216,7 @@ export const VideoConsultation: React.FC = () => {
     if (loading) {
         return (
             <div className="h-screen w-full flex flex-col items-center justify-center bg-background">
-                <MedicalLoader fullPage message="Securing end-to-end encrypted connection..." />
+                <MedicalLoader variant="global" message="Securing end-to-end encrypted connection..." />
             </div>
         );
     }
@@ -365,7 +365,7 @@ export const VideoConsultation: React.FC = () => {
                 {/* Local Video (PiP) */}
                 <div className="absolute top-6 right-6 w-36 h-24 md:w-64 md:h-44 rounded-2xl overflow-hidden shadow-2xl border-4 border-card bg-neutral-900 dark:bg-neutral-950 z-10 transition-all hover:scale-105 ring-1 ring-border/50">
                     <video playsInline muted ref={myVideo} autoPlay className="w-full h-full object-cover transform scale-x-[-1]" />
-                    <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg">
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-[var(--card-radius)]">
                         <User size={12} className="text-primary" />
                         <span className="text-[10px] font-bold uppercase tracking-widest leading-none text-white">
                             {user?.name}

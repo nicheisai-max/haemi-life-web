@@ -19,7 +19,14 @@ export default defineConfig({
     }),
   ],
   optimizeDeps: {
-    include: ['react-is'],
+    include: [
+      'react-is',
+      'react-virtuoso',
+      'recharts',
+      'framer-motion',
+      'lucide-react',
+      'axios'
+    ],
   },
   resolve: {
     alias: {
@@ -30,7 +37,6 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    host: '0.0.0.0',
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

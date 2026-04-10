@@ -136,7 +136,7 @@ export const Signup: React.FC = () => {
                         <AlertDescription>{generalError}</AlertDescription>
                     </Alert>
                 )}
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                             control={form.control}
@@ -319,7 +319,7 @@ const RoleCard: React.FC<RoleCardProps> = ({ icon, title, description, isSelecte
                 onClick();
             }
         }}
-        className={`group interactive-card premium-gradient-border flex flex-col items-center text-center p-6 rounded-2xl cursor-pointer outline-none transition-all ${isSelected ? 'selected-card' : ''}`}
+        className={`group interactive-card premium-gradient-border flex flex-col items-center text-center p-6 rounded-[var(--card-radius)] cursor-pointer outline-none transition-all ${isSelected ? 'selected-card' : ''}`}
     >
         <div className={`mb-4 p-3 rounded-full bg-primary/5 text-primary transition-all transition-duration-[var(--duration-hover)] ease-[var(--ease-premium)] group-hover:scale-[1.08] group-hover:bg-primary group-hover:text-white group-hover:shadow-[0_0_15px_-3px_rgba(27,167,166,0.3)] icon-wrapper`}>
             {icon}

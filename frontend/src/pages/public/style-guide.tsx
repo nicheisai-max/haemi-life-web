@@ -16,7 +16,7 @@ export const StyleGuide: React.FC = () => {
 
             <section className="space-y-6">
                 <h2 className="text-2xl font-semibold border-b pb-2">Branding</h2>
-                <div className="flex gap-8 items-center py-4 bg-muted/20 rounded-lg p-6">
+                <div className="flex gap-8 items-center py-4 bg-muted/20 rounded-[var(--card-radius)] p-6">
                     <Logo size="sm" />
                     <Logo size="md" />
                     <Logo size="lg" />

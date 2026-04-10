@@ -1,4 +1,4 @@
-import { Bell, Check, Info, Zap, CheckCheck } from 'lucide-react';
+import { Bell, Check, Info, Zap, CheckCheck, MessageSquare, Stethoscope, BellRing } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -11,7 +11,20 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { type Notification } from '../../services/notification.service';
 import { useNotifications } from '../../hooks/use-notifications';
 import { decrypt } from '@/utils/security';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+/* ──────────────────────────────────────────────
+   Type Narrowing for Metadata Safety
+────────────────────────────────────────────── */
+interface NotificationMetadata {
+    type?: string;
+    [key: string]: unknown;
+}
+
+const isNotificationMetadata = (meta: unknown): meta is NotificationMetadata => {
+    return typeof meta === 'object' && meta !== null;
+};
 
 /* ──────────────────────────────────────────────
    Decrypted Description
@@ -59,12 +72,31 @@ const getTimeAgo = (dateString: string) => {
 /* ──────────────────────────────────────────────
    Icon & Color helpers
 ────────────────────────────────────────────── */
-const getIcon = (notif: Notification) => {
+const getIcon = (notif: Notification, isAcknowledging = false) => {
+    // 🛡️ INSTITUTIONAL ICON LOGIC: Always show Check if acknowledging or already read
+    if (isAcknowledging || notif.isRead) {
+        return <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />;
+    }
+
+    // 🛡️ TYPE-SAFE METADATA ACCESS (Institutional Standard)
+    const meta = isNotificationMetadata(notif.metadata) ? notif.metadata : null;
+
+    // CATEGORIZATION MAP (Clinical, Chat, System)
     switch (notif.type) {
-        case 'success': return <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />;
-        case 'warning': return <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={3} />;
-        case 'info': return <Zap className="h-4 w-4 text-indigo-600 dark:text-indigo-400" strokeWidth={3} fill="currentColor" />;
-        default: return <Bell className="h-4 w-4 text-slate-600 dark:text-slate-400" />;
+        case 'success':
+            return <Stethoscope className="h-4 w-4 text-emerald-600 dark:text-emerald-400 transition-all duration-300" strokeWidth={2.5} />;
+        case 'warning':
+            return <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={3} />;
+        case 'info':
+            // Logic for 'chat' type (using metadata check as fallback)
+            if (notif.title.toLowerCase().includes('message') || meta?.type === 'chat') {
+                return <MessageSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400 transition-all duration-300" strokeWidth={2.5} />;
+            }
+            return <BellRing className="h-4 w-4 text-indigo-600 dark:text-indigo-400 transition-all duration-300" strokeWidth={2.5} />;
+        case 'error':
+            return <Zap className="h-4 w-4 text-rose-600 dark:text-rose-400" strokeWidth={3} fill="currentColor" />;
+        default:
+            return <Bell className="h-4 w-4 text-slate-600 dark:text-slate-400" strokeWidth={2} />;
     }
 };
 
@@ -87,16 +119,19 @@ interface NotificationItemProps {
 }
 
 const NotificationItem: React.FC<NotificationItemProps> = ({ notif, onRead }) => {
-    const [isSliding, setIsSliding] = useState(false);
+    const [isAcknowledging, setIsAcknowledging] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handleClick = () => {
-        if (notif.isRead || isSliding) return;
+        if (notif.isRead || isAcknowledging) return;
 
-        setIsSliding(true);
+        // 🛡️ INSTITUTIONAL ACKNOWLEDGMENT: Switch icon immediately
+        setIsAcknowledging(true);
+        
+        // Google/Meta Standard Delay for visual confirmation before swipe
         timerRef.current = setTimeout(() => {
             onRead(notif.id);
-        }, 800); // 800ms for animation, then mark as read
+        }, 400); 
     };
 
     useEffect(() => {
@@ -106,44 +141,55 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notif, onRead }) =>
     }, []);
 
     return (
-        <DropdownMenuItem
-            onSelect={(e) => e.preventDefault()}
-            onClick={handleClick}
-            className={`
-                px-5 py-4 cursor-pointer outline-none flex items-start gap-4 
-                border-b border-border/5 last:border-0
-                transition-all duration-200 ease-in-out transform
-                ${isSliding ? 'opacity-0 -translate-x-4 scale-95' : 'opacity-100 translate-x-0 scale-100'}
-                ${!notif.isRead
-                    ? 'bg-primary/[0.03] hover:bg-primary/[0.08] dark:bg-primary/[0.02] dark:hover:bg-primary/[0.05]'
-                    : 'hover:bg-slate-50 dark:hover:bg-white/[0.02]'}
-            `}
+        <motion.div
+            layout
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ 
+                opacity: 0, 
+                x: 100, // 🛡️ SWIPE TO THE RIGHT (Institutional Standard)
+                scale: 0.95,
+                transition: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } 
+            }}
         >
-            <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${getBgColor(notif)}`}>
-                {getIcon(notif)}
-            </div>
-            <div className="flex-1 min-w-0 pr-1">
-                <div className="flex items-start justify-between gap-3 mb-1.5">
-                    <h5 className={`text-[14px] leading-[1.4] tracking-tight ${notif.isRead
-                        ? 'text-slate-600 dark:text-slate-400 font-medium'
-                        : 'text-slate-900 dark:text-white font-bold'
-                    }`}>
-                        {notif.title}
-                    </h5>
-                    {!notif.isRead && (
-                        <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1 shadow-[0_0_8px_rgba(20,140,139,0.4)] animate-pulse" />
-                    )}
+            <DropdownMenuItem
+                onSelect={(e) => e.preventDefault()}
+                onClick={handleClick}
+                className={`
+                    px-5 py-4 cursor-pointer outline-none flex items-start gap-4 
+                    border-b border-border/5 last:border-0
+                    transition-all duration-300
+                    ${!notif.isRead
+                        ? 'bg-primary/[0.03] hover:bg-primary/[0.08] dark:bg-primary/[0.02] dark:hover:bg-primary/[0.05]'
+                        : 'hover:bg-slate-50 dark:hover:bg-white/[0.02]'}
+                `}
+            >
+                <div className={`h-9 w-9 shrink-0 rounded-[var(--card-radius)] flex items-center justify-center transition-colors duration-300 ${getBgColor(notif)}`}>
+                    {getIcon(notif, isAcknowledging)}
                 </div>
-                <p className={`text-[13px] leading-[1.6] whitespace-normal break-all block text-pretty ${
-                    notif.isRead ? 'text-slate-500/90' : 'text-slate-600 dark:text-slate-300'
-                }`}>
-                    <DecryptedDescription text={notif.description} />
-                </p>
-                <span className="mt-2 block text-[10px] text-slate-400 font-semibold tracking-wide uppercase">
-                    {getTimeAgo(notif.createdAt)}
-                </span>
-            </div>
-        </DropdownMenuItem>
+                <div className="flex-1 min-w-0 pr-1">
+                    <div className="flex items-start justify-between gap-3 mb-1.5">
+                        <h5 className={`text-[14px] leading-[1.4] tracking-tight transition-all duration-300 ${notif.isRead || isAcknowledging
+                            ? 'text-slate-500 dark:text-slate-400 font-medium'
+                            : 'text-slate-900 dark:text-white font-bold'
+                        }`}>
+                            {notif.title}
+                        </h5>
+                        {!notif.isRead && !isAcknowledging && (
+                            <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1 shadow-[0_0_8px_rgba(20,140,139,0.4)] animate-pulse" />
+                        )}
+                    </div>
+                    <p className={`text-[13px] leading-[1.6] whitespace-normal break-all block text-pretty transition-all duration-300 ${
+                        notif.isRead || isAcknowledging ? 'text-slate-400/80' : 'text-slate-600 dark:text-slate-300'
+                    }`}>
+                        <DecryptedDescription text={notif.description} />
+                    </p>
+                    <span className="mt-2 block text-[10px] text-slate-400 font-semibold tracking-wide uppercase">
+                        {getTimeAgo(notif.createdAt)}
+                    </span>
+                </div>
+            </DropdownMenuItem>
+        </motion.div>
     );
 };
 
@@ -151,7 +197,11 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notif, onRead }) =>
    All Caught Up Empty State
 ────────────────────────────────────────────── */
 const AllCaughtUp: React.FC = () => (
-    <div className="flex flex-col items-center justify-center h-[280px] p-8 text-center select-none">
+    <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex flex-col items-center justify-center h-[280px] p-8 text-center select-none"
+    >
         <div className="relative mb-5">
             <div className="h-16 w-16 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
                 <CheckCheck className="h-7 w-7 text-primary" strokeWidth={2.5} />
@@ -162,7 +212,7 @@ const AllCaughtUp: React.FC = () => (
         <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[200px]">
             No new notifications. Check back for Haemi health updates.
         </p>
-    </div>
+    </motion.div>
 );
 
 /* ──────────────────────────────────────────────
@@ -171,6 +221,11 @@ const AllCaughtUp: React.FC = () => (
 export const NotificationMenu: React.FC = () => {
     const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications();
     const [isOpen, setIsOpen] = useState(false);
+
+    // 🛡️ INSTITUTIONAL FILTERING: Show only unread or newly marked items to trigger empty state
+    const activeNotifications = useMemo(() => {
+        return notifications.filter(n => !n.isRead);
+    }, [notifications]);
 
     useEffect(() => {
         const handleClose = () => setIsOpen(false);
@@ -196,7 +251,7 @@ export const NotificationMenu: React.FC = () => {
                     className="haemi-nav-action-circle haemi-ignore-click-outside relative text-muted-foreground hover:text-primary transition-all duration-300"
                 >
                     <Bell className={`h-5 w-5 transition-all duration-300 ${hasUnread ? 'text-primary' : ''}`} />
-                    {unreadCount > 0 && (
+                    {hasUnread && (
                         <span className="absolute top-[11px] right-[11px] h-2 w-2 rounded-full bg-red-500 border-2 border-background animate-pulse" />
                     )}
                 </Button>
@@ -204,7 +259,8 @@ export const NotificationMenu: React.FC = () => {
 
             <DropdownMenuContent
                 align="end"
-                className="w-[340px] p-0 overflow-hidden border-border/10 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl"
+                sideOffset={8}
+                className="w-[340px] p-0 overflow-hidden border-border/10 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-[var(--card-radius)] transition-all"
             >
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-border/5 flex items-center justify-between bg-white/50 dark:bg-white/5">
@@ -223,30 +279,38 @@ export const NotificationMenu: React.FC = () => {
 
                 {/* List */}
                 <ScrollArea className="h-[320px]">
-                    <div className="flex flex-col">
-                        {loading && notifications.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground p-8 text-center space-y-3">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                                <p className="text-sm font-medium">Syncing...</p>
-                            </div>
-                        ) : notifications.length === 0 ? (
-                            <AllCaughtUp />
-                        ) : (
-                            <div className="flex flex-col">
-                                {notifications.map((notif) => (
-                                    <NotificationItem
-                                        key={notif.id}
-                                        notif={notif}
-                                        onRead={markAsRead}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                    <div className="flex flex-col min-h-[100px]">
+                        <AnimatePresence mode="popLayout" initial={false}>
+                            {loading && activeNotifications.length === 0 ? (
+                                <motion.div 
+                                    key="loading"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="flex flex-col items-center justify-center h-[280px] text-muted-foreground p-8 text-center space-y-3"
+                                >
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                                    <p className="text-sm font-medium">Syncing...</p>
+                                </motion.div>
+                            ) : activeNotifications.length === 0 ? (
+                                <AllCaughtUp key="empty" />
+                            ) : (
+                                <div className="flex flex-col">
+                                    {activeNotifications.map((notif) => (
+                                        <NotificationItem
+                                            key={notif.id}
+                                            notif={notif}
+                                            onRead={markAsRead}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </ScrollArea>
 
                 {/* Footer */}
-                {notifications.length > 0 && (
+                {activeNotifications.length > 0 && (
                     <div className="p-2 border-t border-border/5">
                         <Button
                             variant="ghost"

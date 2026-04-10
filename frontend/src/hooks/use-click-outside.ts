@@ -52,10 +52,12 @@ export const useClickOutside = <T extends Element>(
         };
 
         // Use Capture Phase to ensure we catch events before stopPropagation() can block them
-        document.addEventListener('pointerdown', listener, true);
+        // 🩺 PERFORMANCE OPTIMIZATION: { passive: true } prevents main-thread blocking
+        const options = { capture: true, passive: true };
+        document.addEventListener('pointerdown', listener, options);
 
         return () => {
-            document.removeEventListener('pointerdown', listener, true);
+            document.removeEventListener('pointerdown', listener, options);
         };
     }, []); // Empty dependency array properly stabilizes the listener
 

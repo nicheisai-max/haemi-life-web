@@ -14,7 +14,7 @@ export const SessionMetadataSchema = z.object({
     userId: z.string().uuid(),
     role: UserRoleSchema,
     loginTime: z.string().datetime(),
-    lastActivity: z.string().datetime(),
+    last_activity: z.string().datetime(),
     status: SessionStatusSchema,
     ipAddress: z.string().optional(),
     userAgent: z.string().optional(),

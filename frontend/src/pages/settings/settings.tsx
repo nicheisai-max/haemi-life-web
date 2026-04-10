@@ -134,7 +134,7 @@ export const Settings: React.FC = () => {
 
                     <div className="space-y-6 flex-1">
                         <div className="flex items-center gap-4">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <div className="p-2 rounded-[var(--card-radius)] bg-primary/10 text-primary">
                                 <User className="h-5 w-5" />
                             </div>
                             <div>
@@ -143,7 +143,7 @@ export const Settings: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <div className="p-2 rounded-[var(--card-radius)] bg-primary/10 text-primary">
                                 <Mail className="h-5 w-5" />
                             </div>
                             <div>
@@ -153,7 +153,7 @@ export const Settings: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <div className="p-2 rounded-[var(--card-radius)] bg-primary/10 text-primary">
                                 <Phone className="h-5 w-5" />
                             </div>
                             <div>
@@ -163,7 +163,7 @@ export const Settings: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <div className="p-2 rounded-[var(--card-radius)] bg-primary/10 text-primary">
                                 <Shield className="h-5 w-5" />
                             </div>
                             <div>

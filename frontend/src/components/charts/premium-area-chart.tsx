@@ -37,7 +37,7 @@ interface CustomTooltipProps {
 const CustomTooltip = ({ active, payload, label, prefix, suffix }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-popover border border-border shadow-xl rounded-lg p-3 animate-in fade-in-0 zoom-in-95">
+            <div className="bg-popover border border-border shadow-xl rounded-[var(--card-radius)] p-3 animate-in fade-in-0 zoom-in-95">
                 <p className="text-sm font-medium text-popover-foreground mb-1">{label}</p>
                 <p className="text-sm font-bold text-primary">
                     {prefix}{payload[0].value?.toLocaleString()}{suffix}
@@ -46,6 +46,18 @@ const CustomTooltip = ({ active, payload, label, prefix, suffix }: CustomTooltip
         );
     }
     return null;
+};
+
+/**
+ * Computes the X-axis tick interval to prevent label collision.
+ *
+ * Strategy: Show at most `maxTicks` labels across all data points.
+ * For <= 10 items: show every label. For > 10: thin to ~7 visible ticks.
+ * This ensures readability from mobile (4 items visible) to large desktop.
+ */
+const computeTickInterval = (dataLength: number, maxTicks: number = 7): number => {
+    if (dataLength <= maxTicks) return 0; // Show all
+    return Math.ceil(dataLength / maxTicks) - 1;
 };
 
 export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
@@ -62,10 +74,13 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
-        // Small delay to ensure parent container (and animations) are ready
+        // Defer render by one frame to ensure parent container layout is resolved.
+        // This prevents Recharts from measuring a zero-width / zero-height container.
         const timer = setTimeout(() => setIsMounted(true), 300);
         return () => clearTimeout(timer);
     }, []);
+
+    const tickInterval = computeTickInterval(data.length);
 
     return (
         <Card className="hover:shadow-md transition-shadow duration-300 overflow-hidden border-border/60">
@@ -73,58 +88,86 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
                 <CardTitle className="text-lg font-bold tracking-tight">{title}</CardTitle>
                 {description && <CardDescription>{description}</CardDescription>}
             </CardHeader>
-            <CardContent>
-                <div style={{ width: '100%', height: height, minHeight: `${height}px`, position: 'relative' }}>
-                    {/* Fixed ResizeObserver crash by gating render until parent is ready */}
+            <CardContent className="px-2 pb-4 sm:px-6">
+                {/*
+                 * Responsive Container Strategy (Phase 14):
+                 *
+                 * - `width="100%"` + `minWidth={0}`: Allows the chart to shrink below
+                 *   its natural content width on mobile without overflow.
+                 * - `debounce={50}`: Prevents excessive re-renders on window resize.
+                 * - Outer div uses `height` prop for a fixed pixel height, ensuring a
+                 *   stable render surface regardless of the parent flex/grid context.
+                 */}
+                <div style={{ width: '100%', height: height, position: 'relative' }}>
                     {isMounted ? (
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+                            <AreaChart
+                                data={data}
+                                margin={{
+                                    top: 10,
+                                    right: 16,
+                                    // Left margin accommodates the YAxis label width on all viewports.
+                                    // Without this, Y-axis tick text clips on narrow screens.
+                                    left: -10,
+                                    // Bottom margin is critical: without it, XAxis tick text is
+                                    // rendered outside the SVG viewport and becomes invisible.
+                                    bottom: 10,
+                                }}
+                            >
+                                <defs>
+                                    <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%"  stopColor={color} stopOpacity={0.25} />
+                                        <stop offset="95%" stopColor={color} stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
 
-                        <AreaChart
-                            data={data}
-                            margin={{
-                                top: 10,
-                                right: 30,
-                                left: 0,
-                                bottom: 0,
-                            }}
-                        >
-                            <defs>
-                                <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={color} stopOpacity={0.25} />
-                                    <stop offset="95%" stopColor={color} stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                            <XAxis
-                                dataKey={categoryKey}
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: '#64748B', fontSize: 12 }}
-                                tickMargin={10}
-                            />
-                            <YAxis
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: '#64748B', fontSize: 12 }}
-                                tickFormatter={(value) => `${valuePrefix}${value}${valueSuffix}`}
-                            />
-                            <Tooltip
-                                content={<CustomTooltip prefix={valuePrefix} suffix={valueSuffix} />}
-                                cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: '4 4' }}
-                            />
-                            <Area
-                                type="monotone"
-                                dataKey={dataKey}
-                                stroke={color}
-                                strokeWidth={3}
-                                fillOpacity={1}
-                                fill="url(#colorGradient)"
-                                animationDuration={1500}
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
+                                <CartesianGrid
+                                    vertical={false}
+                                    strokeDasharray="3 3"
+                                    strokeOpacity={0.1}
+                                />
+
+                                <XAxis
+                                    dataKey={categoryKey}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#64748B', fontSize: 11 }}
+                                    tickMargin={10}
+                                    // Computed interval prevents collision on dense datasets (e.g. 31-day trends).
+                                    // Shows ~7 evenly distributed labels regardless of data length.
+                                    interval={tickInterval}
+                                />
+
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#64748B', fontSize: 11 }}
+                                    // Explicit width reservation prevents Y-axis labels from being
+                                    // clipped on narrow viewports (mobile / tablet breakpoints).
+                                    width={45}
+                                    tickFormatter={(value: number) => `${valuePrefix}${value.toLocaleString()}${valueSuffix}`}
+                                />
+
+                                <Tooltip
+                                    content={<CustomTooltip prefix={valuePrefix} suffix={valueSuffix} />}
+                                    cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: '4 4' }}
+                                />
+
+                                <Area
+                                    type="monotone"
+                                    dataKey={dataKey}
+                                    stroke={color}
+                                    strokeWidth={2.5}
+                                    fillOpacity={1}
+                                    fill="url(#colorGradient)"
+                                    animationDuration={1500}
+                                    dot={false}
+                                    activeDot={{ r: 4, strokeWidth: 0, fill: color }}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/10 animate-pulse rounded-lg">
+                        <div className="w-full h-full flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/10 animate-pulse rounded-[var(--card-radius)]">
                             <span className="text-xs text-slate-400 font-medium tracking-widest uppercase">Calculating Metrics...</span>
                         </div>
                     )}

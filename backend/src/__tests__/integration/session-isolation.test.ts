@@ -57,7 +57,7 @@ describe('Session Isolation (Phase 2)', () => {
         role: string;
         status: string;
         token_version: number;
-        lastActivity: Date;
+        last_activity: Date;
         minutes_since_activity: number;
     }
 
@@ -101,7 +101,7 @@ describe('Session Isolation (Phase 2)', () => {
                 role: 'patient',
                 status: 'ACTIVE',
                 token_version: 1,
-                lastActivity: new Date(),
+                last_activity: new Date(),
                 minutes_since_activity: 5
             },
             session: {

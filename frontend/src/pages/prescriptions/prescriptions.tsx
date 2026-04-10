@@ -6,14 +6,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { getMyPrescriptions, getPrescriptionById, type Prescription } from '../../services/prescription.service';
 import { getMyRecords, type MedicalRecord } from '../../services/record.service';
-import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, UploadCloud, Trash2, Download, Image as ImageIcon, File, Clock, FolderOpen } from 'lucide-react';
+import { AlertCircle, FileText, Pill, Stethoscope, X, User, Calendar, BadgeCheck, Building2, UploadCloud, Trash2, Download, Image as ImageIcon, File, Clock, FolderOpen, CalendarIcon } from 'lucide-react';
+
 import { PremiumLoader } from '@/components/ui/premium-loader';
-import { secureDownload } from '../../services/file.service';
-import { TransitionItem } from '../../components/layout/page-transition';
+import { useToast } from '../../hooks/use-toast';
+import { TransitionItem } from '@/components/layout/page-transition';
+import { secureDownload } from '@/services/file.service';
 import { ClinicalRecordType } from '../../../../shared/clinical-types';
 import { useFileActionHandler } from '@/hooks/use-file-action-handler';
 
 export const Prescriptions: React.FC = () => {
+    const { error: toastError, warning: toastWarning } = useToast();
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [uploadedRecords, setUploadedRecords] = useState<MedicalRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -90,14 +93,20 @@ export const Prescriptions: React.FC = () => {
                 url: `${baseUrl}/api/files/record/${record.id}`,
                 fileName: record.name || `prescription-${record.id}`
             });
-        } catch {
-            setError('Failed to download the clinical document. Please try again later.');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg === 'FILE_TYPE_NOT_SUPPORTED') {
+                toastWarning('Institutional Security: This file type is restricted and cannot be downloaded.');
+            } else {
+                toastError('Failed to download the clinical document. Please try again later.');
+            }
         }
     };
 
+
     const handlePrescriptionClick = async (prescription: Prescription) => {
         setSelectedPrescription(prescription);
-        
+
         if (!prescription.items || prescription.items.length === 0) {
             try {
                 setFetchingDetails(true);
@@ -113,11 +122,7 @@ export const Prescriptions: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div className="flex justify-center items-center min-h-[32rem]">
-                <MedicalLoader message="Loading your prescriptions..." />
-            </div>
-        );
+        return <MedicalLoader message="Loading your prescriptions..." />;
     }
 
     return (
@@ -179,11 +184,11 @@ export const Prescriptions: React.FC = () => {
                                     {prescriptions.map((prescription) => (
                                         <Card
                                             key={prescription.id}
-                                            className={`group p-0 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md border-2 ${selectedPrescription?.id === prescription.id ? 'border-primary ring-1 ring-primary/20' : 'border-transparent hover:border-border'}`}
+                                            className={`group p-0 overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-md ${selectedPrescription?.id === prescription.id ? 'border-2 border-primary ring-1 ring-primary/20' : 'institutional-border'}`}
                                             onClick={() => handlePrescriptionClick(prescription)}
                                         >
                                             <div className="p-5 flex gap-5 items-start">
-                                                <div className="shrink-0 w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300">
+                                                <div className="shrink-0 w-14 h-14 rounded-[var(--card-radius)] bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300">
                                                     <Pill className="h-7 w-7" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
@@ -223,7 +228,7 @@ export const Prescriptions: React.FC = () => {
                                 Uploaded Prescriptions
                             </h2>
                             {uploadedRecords.length === 0 ? (
-                                <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-80 border-dashed rounded-xl bg-muted/5">
+                                <Card className="p-16 flex flex-col items-center justify-center text-center text-muted-foreground min-h-80 border-dashed rounded-[var(--card-radius)] bg-muted/5">
                                     <div className="bg-muted/30 p-6 rounded-full mb-6">
                                         <UploadCloud className="h-12 w-12 opacity-30" />
                                     </div>
@@ -233,12 +238,12 @@ export const Prescriptions: React.FC = () => {
                             ) : (
                                 <div className="flex flex-col gap-4">
                                     {uploadedRecords.map((record) => (
-                                        <Card key={record.id} className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full rounded-xl bg-card">
-                                            <div className="w-full md:w-1.5 h-1.5 md:h-auto bg-blue-500 shrink-0" />
+                                        <Card key={record.id} className="group p-0 overflow-hidden hover:shadow-md transition-all border shadow-sm flex flex-col md:flex-row h-full rounded-[var(--card-radius)] bg-card">
+                                            <div className="w-full md:w-1.5 h-1.5 md:h-auto bg-slate-400 shrink-0" />
 
                                             <div className="flex-1 p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
                                                 <div className="shrink-0">
-                                                    <div className="w-12 h-12 rounded-xl bg-muted/30 flex items-center justify-center text-foreground border shadow-sm">
+                                                    <div className="w-12 h-12 rounded-[var(--card-radius)] bg-muted/30 flex items-center justify-center text-foreground border shadow-sm">
                                                         {getFileIcon(record.fileMime)}
                                                     </div>
                                                 </div>
@@ -267,20 +272,20 @@ export const Prescriptions: React.FC = () => {
                                                 </div>
 
                                                 <div className="flex flex-row items-center gap-3 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-border/50">
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
                                                         className="flex gap-2 h-9 px-4 font-medium transition-all"
                                                         onClick={() => handleDownload(record)}
                                                     >
                                                         <Download className="h-4 w-4" />
                                                         <span>Download</span>
                                                     </Button>
-                                                    
-                                                    <Button 
-                                                        variant="destructive" 
-                                                        size="sm" 
-                                                        className="flex gap-2 h-9 px-4 font-medium shadow-sm transition-all hover:brightness-110 active:scale-95" 
+
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        className="flex gap-2 h-9 px-4 font-medium shadow-sm transition-all hover:brightness-110 active:scale-95"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleDelete({ id: record.id.toString(), name: record.name });
@@ -320,7 +325,7 @@ export const Prescriptions: React.FC = () => {
                                                 <User className="h-3.5 w-3.5" />
                                                 Doctor Information
                                             </h3>
-                                            <div className="bg-muted/30 p-3 rounded-lg border">
+                                            <div className="bg-muted/30 p-3 rounded-[var(--card-radius)] border">
                                                 <div className="text-sm font-medium text-foreground">{selectedPrescription.doctorName || 'Unknown'}</div>
                                                 <div className="text-xs text-muted-foreground">Prescribing Physician</div>
                                             </div>
@@ -328,11 +333,11 @@ export const Prescriptions: React.FC = () => {
 
                                         <div className="space-y-3">
                                             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                                <Calendar className="h-3.5 w-3.5" />
+                                                <CalendarIcon className="h-3.5 w-3.5" />
                                                 Prescription Info
                                             </h3>
                                             <div className="grid grid-cols-2 gap-3">
-                                                <div className="bg-muted/30 p-3 rounded-lg border">
+                                                <div className="bg-muted/30 p-3 rounded-[var(--card-radius)] border">
                                                     <div className="text-xs text-muted-foreground mb-1">Prescribed On</div>
                                                     <div className="text-sm font-medium">
                                                         {new Date(selectedPrescription.createdAt).toLocaleDateString('en-US', {
@@ -342,7 +347,7 @@ export const Prescriptions: React.FC = () => {
                                                         })}
                                                     </div>
                                                 </div>
-                                                <div className="bg-muted/30 p-3 rounded-lg border">
+                                                <div className="bg-muted/30 p-3 rounded-[var(--card-radius)] border">
                                                     <div className="text-xs text-muted-foreground mb-1">Status</div>
                                                     <div className="flex items-center gap-1.5">
                                                         <BadgeCheck className={`h-3.5 w-3.5 ${selectedPrescription.status === 'filled' ? 'text-green-600' :
@@ -359,16 +364,16 @@ export const Prescriptions: React.FC = () => {
                                                 <Pill className="h-3.5 w-3.5" />
                                                 Medications
                                             </h3>
-                                            
+
                                             {fetchingDetails ? (
-                                                <div className="flex flex-col items-center justify-center py-10 bg-muted/20 rounded-lg border border-dashed">
+                                                <div className="flex flex-col items-center justify-center py-10 bg-muted/20 rounded-[var(--card-radius)] border border-dashed">
                                                     <PremiumLoader size="sm" />
                                                     <span className="text-[10px] text-muted-foreground mt-2 uppercase tracking-widest font-bold">Synchronizing Clinical Data...</span>
                                                 </div>
                                             ) : (selectedPrescription.items && selectedPrescription.items.length > 0) ? (
                                                 <div className="space-y-3">
                                                     {selectedPrescription.items.map((item) => (
-                                                        <div key={item.id} className="bg-primary/5 border border-primary/10 rounded-lg p-3 hover:bg-primary/10 transition-colors duration-200">
+                                                        <div key={item.id} className="bg-primary/5 border border-primary/10 rounded-[var(--card-radius)] p-3 hover:bg-primary/10 transition-colors duration-200">
                                                             <div className="flex justify-between items-start mb-1">
                                                                 <div className="text-sm font-bold text-foreground">{item.medicineName || 'Medication'}</div>
                                                                 <div className="text-[10px] font-bold px-2 py-0.5 bg-primary/20 text-primary rounded-full">{item.strength || 'N/A'}</div>
@@ -389,7 +394,7 @@ export const Prescriptions: React.FC = () => {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="bg-muted/30 border border-dashed rounded-lg p-6 text-center">
+                                                <div className="bg-muted/30 border border-dashed rounded-[var(--card-radius)] p-6 text-center">
                                                     <Pill className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                                                     <p className="text-sm text-muted-foreground italic">No medication details available</p>
                                                 </div>

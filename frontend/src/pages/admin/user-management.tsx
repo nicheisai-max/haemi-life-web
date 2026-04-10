@@ -141,11 +141,7 @@ export const UserManagement: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div className="flex justify-center items-center min-h-[400px]">
-                <MedicalLoader message="Retrieving user database..." />
-            </div>
-        );
+        return <MedicalLoader message="Retrieving user database..." />;
     }
 
     return (<div className="space-y-8">

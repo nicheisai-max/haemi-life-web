@@ -175,7 +175,7 @@ export const BookAppointment: React.FC = () => {
 
             {generalError && (
                 <TransitionItem>
-                    <div className="bg-destructive/15 border border-destructive text-destructive p-4 rounded-lg flex items-center gap-3">
+                    <div className="bg-destructive/15 border border-destructive text-destructive p-4 rounded-[var(--card-radius)] flex items-center gap-3">
                         <AlertTriangle className="h-5 w-5" />
                         {generalError}
                     </div>
@@ -462,7 +462,7 @@ export const BookAppointment: React.FC = () => {
                             <li><strong>Limitations:</strong> A video consultation may lack the ability to perform a comprehensive physical examination. If the specialist determines that your condition requires immediate, physical intervention, they will advise you to seek in-person care.</li>
                             <li><strong>Data Retention:</strong> Relevant medical information discussed during the consultation will be recorded in your electronic health record in compliance with the Data Protection Act.</li>
                         </ul>
-                        <div className="mt-6 p-4 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50">
+                        <div className="mt-6 p-4 rounded-[var(--card-radius)] bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50">
                             <p className="text-orange-800 dark:text-orange-300 text-xs font-semibold uppercase tracking-wider mb-1">EMERGENCY NOTICE</p>
                             <p className="text-orange-700 dark:text-orange-400">Do not use telemedicine for medical emergencies. If you are experiencing a life-threatening emergency, call 997 immediately.</p>
                         </div>

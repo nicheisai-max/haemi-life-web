@@ -35,7 +35,7 @@ const HealthIllustration = memo(() => (
             }}
             className="relative z-10"
         >
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] bg-white/40 backdrop-blur-2xl flex items-center justify-center shadow-[0_20px_40px_-10px_rgba(20,140,139,0.2)] ring-1 ring-white/80 ring-inset relative overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/60 before:to-transparent before:opacity-50">
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-[var(--card-radius)] bg-white/40 backdrop-blur-2xl flex items-center justify-center shadow-[0_20px_40px_-10px_rgba(20,140,139,0.2)] ring-1 ring-white/80 ring-inset relative overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/60 before:to-transparent before:opacity-50">
                 <Heart className="w-10 h-10 md:w-14 md:h-14 text-primary drop-shadow-[0_2px_10px_rgba(20,140,139,0.3)] relative z-10" strokeWidth={1.5} />
             </div>
         </motion.div>
@@ -44,7 +44,7 @@ const HealthIllustration = memo(() => (
         <motion.div
             animate={{ y: [-6, 6, -6], rotate: [-2, 2, -2] }}
             transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute top-2 right-10 md:top-8 md:right-20 w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white/50 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/60 ring-inset shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)]"
+            className="absolute top-2 right-10 md:top-8 md:right-20 w-12 h-12 md:w-14 md:h-14 rounded-[var(--card-radius)] bg-white/50 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/60 ring-inset shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)]"
         >
             <Stethoscope className="w-6 h-6 md:w-7 md:h-7 text-primary/90" strokeWidth={1.5} />
         </motion.div>
@@ -52,7 +52,7 @@ const HealthIllustration = memo(() => (
         <motion.div
             animate={{ y: [6, -6, 6], rotate: [2, -2, 2] }}
             transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
-            className="absolute bottom-8 left-6 md:bottom-12 md:left-14 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/60 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/70 ring-inset shadow-[0_8px_16px_-4px_rgba(0,0,0,0.05)]"
+            className="absolute bottom-8 left-6 md:bottom-12 md:left-14 w-10 h-10 md:w-12 md:h-12 rounded-[var(--card-radius)] bg-white/60 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/70 ring-inset shadow-[0_8px_16px_-4px_rgba(0,0,0,0.05)]"
         >
             <FileText className="w-5 h-5 md:w-6 md:h-6 text-primary/80" strokeWidth={1.5} />
         </motion.div>
@@ -60,7 +60,7 @@ const HealthIllustration = memo(() => (
         <motion.div
             animate={{ y: [-4, 4, -4] }}
             transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-            className="absolute top-16 left-6 md:top-24 md:left-14 w-9 h-9 md:w-10 md:h-10 rounded-lg bg-white/40 backdrop-blur-md flex items-center justify-center ring-1 ring-white/50 ring-inset shadow-[0_4px_12px_-2px_rgba(0,0,0,0.04)]"
+            className="absolute top-16 left-6 md:top-24 md:left-14 w-9 h-9 md:w-10 md:h-10 rounded-[var(--card-radius)] bg-white/40 backdrop-blur-md flex items-center justify-center ring-1 ring-white/50 ring-inset shadow-[0_4px_12px_-2px_rgba(0,0,0,0.04)]"
         >
             <CalendarDays className="w-4 h-4 md:w-5 md:h-5 text-primary/70" strokeWidth={1.5} />
         </motion.div>
@@ -83,7 +83,7 @@ const SecurityIllustration = memo(() => (
             }}
             className="relative z-10"
         >
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] bg-white/40 backdrop-blur-2xl flex items-center justify-center shadow-[0_20px_40px_-10px_rgba(79,70,229,0.2)] ring-1 ring-white/80 ring-inset relative overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/60 before:to-transparent before:opacity-50">
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-[var(--card-radius)] bg-white/40 backdrop-blur-2xl flex items-center justify-center shadow-[0_20px_40px_-10px_rgba(79,70,229,0.2)] ring-1 ring-white/80 ring-inset relative overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/60 before:to-transparent before:opacity-50">
                 <Shield className="w-10 h-10 md:w-14 md:h-14 text-indigo-600 drop-shadow-[0_2px_10px_rgba(79,70,229,0.3)] relative z-10" strokeWidth={1.5} />
             </div>
         </motion.div>
@@ -91,7 +91,7 @@ const SecurityIllustration = memo(() => (
         <motion.div
             animate={{ y: [-6, 6, -6], rotate: [2, -2, 2] }}
             transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute top-4 right-10 md:top-10 md:right-20 w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white/50 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/60 ring-inset shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)]"
+            className="absolute top-4 right-10 md:top-10 md:right-20 w-12 h-12 md:w-14 md:h-14 rounded-[var(--card-radius)] bg-white/50 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/60 ring-inset shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)]"
         >
             <Lock className="w-6 h-6 md:w-7 md:h-7 text-indigo-600/90" strokeWidth={1.5} />
         </motion.div>
@@ -99,7 +99,7 @@ const SecurityIllustration = memo(() => (
         <motion.div
             animate={{ y: [6, -6, 6], rotate: [-2, 2, -2] }}
             transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut', delay: 0.7 }}
-            className="absolute bottom-8 left-8 md:bottom-12 md:left-16 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/60 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/70 ring-inset shadow-[0_8px_16px_-4px_rgba(0,0,0,0.05)]"
+            className="absolute bottom-8 left-8 md:bottom-12 md:left-16 w-10 h-10 md:w-12 md:h-12 rounded-[var(--card-radius)] bg-white/60 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/70 ring-inset shadow-[0_8px_16px_-4px_rgba(0,0,0,0.05)]"
         >
             <Fingerprint className="w-5 h-5 md:w-6 md:h-6 text-indigo-600/80" strokeWidth={1.5} />
         </motion.div>
@@ -107,7 +107,7 @@ const SecurityIllustration = memo(() => (
         <motion.div
             animate={{ y: [-4, 4, -4] }}
             transition={{ duration: 4.2, repeat: Infinity, ease: 'easeInOut', delay: 1.2 }}
-            className="absolute top-16 left-8 md:top-24 md:left-16 w-9 h-9 md:w-10 md:h-10 rounded-lg bg-white/40 backdrop-blur-md flex items-center justify-center ring-1 ring-white/50 ring-inset shadow-[0_4px_12px_-2px_rgba(0,0,0,0.04)]"
+            className="absolute top-16 left-8 md:top-24 md:left-16 w-9 h-9 md:w-10 md:h-10 rounded-[var(--card-radius)] bg-white/40 backdrop-blur-md flex items-center justify-center ring-1 ring-white/50 ring-inset shadow-[0_4px_12px_-2px_rgba(0,0,0,0.04)]"
         >
             <ShieldCheck className="w-4 h-4 md:w-5 md:h-5 text-indigo-600/70" strokeWidth={1.5} />
         </motion.div>
@@ -129,7 +129,7 @@ const TelemedicineIllustration = memo(() => (
             }}
             className="relative z-10"
         >
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] bg-white/40 backdrop-blur-2xl flex items-center justify-center shadow-[0_20px_40px_-10px_rgba(16,185,129,0.2)] ring-1 ring-white/80 ring-inset relative overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/60 before:to-transparent before:opacity-50">
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-[var(--card-radius)] bg-white/40 backdrop-blur-2xl flex items-center justify-center shadow-[0_20px_40px_-10px_rgba(16,185,129,0.2)] ring-1 ring-white/80 ring-inset relative overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/60 before:to-transparent before:opacity-50">
                 <Video className="w-10 h-10 md:w-14 md:h-14 text-emerald-600 drop-shadow-[0_2px_10px_rgba(16,185,129,0.3)] relative z-10" strokeWidth={1.5} />
             </div>
         </motion.div>
@@ -137,7 +137,7 @@ const TelemedicineIllustration = memo(() => (
         <motion.div
             animate={{ y: [-6, 6, -6], rotate: [-2, 2, -2] }}
             transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute top-4 right-8 md:top-10 md:right-16 w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-white/50 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/60 ring-inset shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)]"
+            className="absolute top-4 right-8 md:top-10 md:right-16 w-12 h-12 md:w-14 md:h-14 rounded-[var(--card-radius)] bg-white/50 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/60 ring-inset shadow-[0_10px_20px_-5px_rgba(0,0,0,0.05)]"
         >
             <MonitorSmartphone className="w-6 h-6 md:w-7 md:h-7 text-emerald-600/90" strokeWidth={1.5} />
         </motion.div>
@@ -145,7 +145,7 @@ const TelemedicineIllustration = memo(() => (
         <motion.div
             animate={{ y: [6, -6, 6], rotate: [2, -2, 2] }}
             transition={{ duration: 4.7, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
-            className="absolute bottom-8 left-6 md:bottom-14 md:left-14 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/60 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/70 ring-inset shadow-[0_8px_16px_-4px_rgba(0,0,0,0.05)]"
+            className="absolute bottom-8 left-6 md:bottom-14 md:left-14 w-10 h-10 md:w-12 md:h-12 rounded-[var(--card-radius)] bg-white/60 backdrop-blur-xl flex items-center justify-center ring-1 ring-white/70 ring-inset shadow-[0_8px_16px_-4px_rgba(0,0,0,0.05)]"
         >
             <Wifi className="w-5 h-5 md:w-6 md:h-6 text-emerald-600/80" strokeWidth={1.5} />
         </motion.div>
@@ -153,7 +153,7 @@ const TelemedicineIllustration = memo(() => (
         <motion.div
             animate={{ y: [-4, 4, -4] }}
             transition={{ duration: 4.4, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }}
-            className="absolute top-14 left-6 md:top-20 md:left-14 w-9 h-9 md:w-10 md:h-10 rounded-lg bg-white/40 backdrop-blur-md flex items-center justify-center ring-1 ring-white/50 ring-inset shadow-[0_4px_12px_-2px_rgba(0,0,0,0.04)]"
+            className="absolute top-14 left-6 md:top-20 md:left-14 w-9 h-9 md:w-10 md:h-10 rounded-[var(--card-radius)] bg-white/40 backdrop-blur-md flex items-center justify-center ring-1 ring-white/50 ring-inset shadow-[0_4px_12px_-2px_rgba(0,0,0,0.04)]"
         >
             <UserRound className="w-4 h-4 md:w-5 md:h-5 text-emerald-600/70" strokeWidth={1.5} />
         </motion.div>
@@ -245,10 +245,10 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
     const currentSlide = slides[index];
 
     return (
-        <div className="relative w-[95vw] md:w-[75vw] lg:w-[60vw] max-w-[960px] flex flex-col md:flex-row bg-card/95 backdrop-blur-xl rounded-[2rem] md:rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04),_0_30px_60px_rgb(0,0,0,0.08)] border border-white/60 dark:border-border/40 my-4 mx-auto ring-1 ring-black/5 dark:ring-white/10 transition-all duration-500 ease-[var(--ease-premium)]">
+        <div className="relative w-[95vw] md:w-[75vw] lg:w-[60vw] max-w-[960px] flex flex-col md:flex-row bg-card/95 backdrop-blur-xl rounded-[var(--card-radius)] shadow-[0_8px_30px_rgb(0,0,0,0.04),_0_30px_60px_rgb(0,0,0,0.08)] border border-white/60 dark:border-border/40 my-4 mx-auto ring-1 ring-black/5 dark:ring-white/10 transition-all duration-500 ease-[var(--ease-premium)]">
 
             {/* Visual Section (Top on mobile, Left on desktop) - Elevated Bright Canvas */}
-            <div className={`relative w-full min-h-[280px] md:min-h-[360px] shrink-0 md:flex-[0.45] lg:flex-[0.5] bg-gradient-to-br ${currentSlide.gradient} transition-colors duration-1000 flex items-center justify-center overflow-hidden rounded-t-[2rem] md:rounded-tr-none md:rounded-l-[2.5rem]`}>
+            <div className={`relative w-full min-h-[280px] md:min-h-[360px] shrink-0 md:flex-[0.45] lg:flex-[0.5] bg-gradient-to-br ${currentSlide.gradient} transition-colors duration-1000 flex items-center justify-center overflow-hidden rounded-t-[var(--card-radius)] md:rounded-tr-none md:rounded-l-[var(--card-radius)]`}>
 
                 {/* Abstract Light Orbs */}
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/60 blur-[80px] rounded-full translate-x-1/3 -translate-y-1/3" />
@@ -346,14 +346,14 @@ export const OnboardingCarousel: React.FC<OnboardingCarouselProps> = ({ onComple
                             <Button
                                 variant="outline"
                                 onClick={prevStep}
-                                className="rounded-2xl h-12 w-12 md:h-14 md:w-14 p-0 border-border/50 hover:bg-accent/50 transition-colors shadow-sm bg-background/50 backdrop-blur-sm"
+                                className="rounded-[var(--card-radius)] h-12 w-12 md:h-14 md:w-14 p-0 border-border/50 hover:bg-accent/50 transition-colors shadow-sm bg-background/50 backdrop-blur-sm"
                             >
                                 <ChevronLeft className="h-5 w-5 text-foreground" />
                             </Button>
                         )}
                         <Button
                             onClick={nextStep}
-                            className="relative overflow-hidden rounded-2xl h-12 md:h-14 flex-1 md:w-48 md:px-8 bg-primary hover:bg-primary/90 text-white font-semibold text-base transition-all duration-300 shadow-[0_8px_20px_-4px_rgba(20,140,139,0.3)] hover:shadow-[0_12px_25px_-5px_rgba(20,140,139,0.4)] hover:-translate-y-[2px] hover:scale-[1.02] active:scale-[0.98] active:translate-y-[1px]"
+                            className="relative overflow-hidden rounded-[var(--card-radius)] h-12 md:h-14 flex-1 md:w-48 md:px-8 bg-primary hover:bg-primary/90 text-white font-semibold text-base transition-all duration-300 shadow-[0_8px_20px_-4px_rgba(20,140,139,0.3)] hover:shadow-[0_12px_25px_-5px_rgba(20,140,139,0.4)] hover:-translate-y-[2px] hover:scale-[1.02] active:scale-[0.98] active:translate-y-[1px]"
                         >
                             <span className="relative z-10 flex items-center justify-center w-full">
                                 {index === slides.length - 1 ? 'Get Started' : 'Continue'}

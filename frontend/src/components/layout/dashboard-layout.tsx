@@ -57,7 +57,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                 <Sidebar />
 
                 {/* Main Content Area */}
-                <main className="flex-1 w-full min-w-0 lg:pl-[var(--layout-sidebar-width)] flex flex-col min-h-[calc(100vh-var(--layout-header-height))] bg-muted/5 dark:bg-background overflow-x-hidden">
+                <main className="flex-1 w-full min-w-0 lg:pl-[var(--layout-sidebar-width)] flex flex-col min-h-[calc(100vh-var(--layout-header-height))] bg-muted/5 dark:bg-background overflow-x-hidden relative">
                     {/* Content Wrapper: Standardized Mirror-Symmetry Logic */}
                     <div className="flex-1 w-full max-w-[var(--layout-max-width)] px-4 sm:px-6 lg:px-10 pt-6 md:pt-8 transition-all duration-300">
                         {children}

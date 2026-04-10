@@ -13,6 +13,7 @@ import {
     SocketData,
     StrictAuthenticatedSocket
 } from './types/socket.types';
+import { UserId, ConversationId } from './types/chat.types';
 import * as jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 
@@ -93,7 +94,10 @@ app.get('/health', async (_req, res) => {
             version: process.env.npm_package_version || "1.0.0",
             timestamp: new Date().toISOString()
         });
-    } catch {
+    } catch (error: unknown) {
+        logger.error('[HealthProbe] Liveness check failure', { 
+            error: error instanceof Error ? error.message : String(error) 
+        });
         res.status(503).json({
             server: "up",
             database: "disconnected",
@@ -116,7 +120,10 @@ app.get('/api/health/ready', async (_req, res) => {
             return res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
         }
         res.status(503).json({ status: 'initializing', reason: 'socket_not_ready' });
-    } catch {
+    } catch (error: unknown) {
+        logger.error('[HealthProbe] Readiness check failure', { 
+            error: error instanceof Error ? error.message : String(error) 
+        });
         res.status(503).json({ status: 'not_ready', reason: 'db_connection_failed' });
     }
 });
@@ -267,8 +274,10 @@ function setupSockets(io: HaemiServer) {
             // Explicitly extending socket with user data
             socket.data.user = decoded;
             next();
-        } catch (err) {
-            logger.error('Socket authentication failed', { error: err });
+        } catch (err: unknown) {
+            logger.error('Socket authentication failed', { 
+                error: err instanceof Error ? err.message : String(err) 
+            });
             next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid authentication token' })));
         }
     });
@@ -287,7 +296,7 @@ function setupSockets(io: HaemiServer) {
             return;
         }
 
-        const userId = String(user.id);
+        const userId = String(user.id) as UserId;
         socket.join(`user:${userId}`);
 
         // Admin Observability Auto-Join
@@ -295,7 +304,7 @@ function setupSockets(io: HaemiServer) {
             socket.join('admin:observability');
         }
 
-        console.log(`[PRESENCE] Socket ${socket.id} connected for userId=${userId} role=${user.role}`);
+        logger.info(`[PRESENCE] Socket ${socket.id} connected for userId=${userId} role=${user.role}`);
         logger.info(`Socket: ${socket.id} user:${userId}`);
 
         // 1. TARGETED Presence (Deterministic Async)
@@ -316,8 +325,10 @@ function setupSockets(io: HaemiServer) {
                 data: presence,
                 timestamp: new Date().toISOString()
             });
-        } catch (err) {
-            logger.error(`Presence online sync failed for ${userId}:`, err);
+        } catch (error: unknown) {
+            logger.error(`Presence online sync failed for ${userId}:`, { 
+                error: error instanceof Error ? error.message : String(error) 
+            });
         }
 
         // 2. JOIN: Standard Conversational Stream
@@ -329,28 +340,26 @@ function setupSockets(io: HaemiServer) {
         // P0: PURGED 'ackRead' and 'messageRead' to prevent event duplication.
         // All receipts MUST use 'messageRead'.
         socket.on('messageRead', (data: import('./types/socket.types').MessageReadEvent) => {
-            chatReliabilityService.getConversationIdByMessageId(data.messageId).then(conversationId => {
-                if (conversationId) {
-                    // P0 NUCLEAR: Single Channel Emission
-                    // Data is delivered EXCLUSIVELY to the conversation room.
-                    // Redundant per-user 'user:pid' emissions have been purged.
-                    io.to(`conversation:${conversationId}`).emit('messageRead', data);
+            const { conversationId } = data;
+            if (conversationId) {
+                // P0 NUCLEAR: Single Channel Emission
+                // Data is delivered EXCLUSIVELY to the conversation room.
+                io.to(`conversation:${conversationId}`).emit('messageRead', data);
 
-                    // The Governor Mirroring
-                    io.to('admin:observability').emit('adminMirrorEvent', {
-                        event: 'messageRead',
-                        data,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            }).catch(err => logger.error('[Phase 2] messageRead lookup failed:', err));
+                // The Governor Mirroring
+                io.to('admin:observability').emit('adminMirrorEvent', {
+                    event: 'messageRead',
+                    data,
+                    timestamp: new Date().toISOString()
+                });
+            }
         });
 
         // 4. EPHEMERAL STREAMS (Typing/Signaling)
         socket.on('typingStarted', (data) => {
             const payload = {
                 userId: userId,
-                conversationId: data.conversationId,
+                conversationId: data.conversationId as ConversationId,
                 name: user.name || 'Someone'
             };
             socket.to(`conversation:${data.conversationId}`).emit('typingStarted', payload);
@@ -366,7 +375,7 @@ function setupSockets(io: HaemiServer) {
         socket.on('typingStopped', (data) => {
             const payload = {
                 userId: userId,
-                conversationId: data.conversationId,
+                conversationId: data.conversationId as ConversationId,
                 name: user.name || 'Someone'
             };
             socket.to(`conversation:${data.conversationId}`).emit('typingStopped', payload);
@@ -398,8 +407,8 @@ function setupSockets(io: HaemiServer) {
 
         socket.on('disconnect', () => {
             logger.info(`Socket disconnected: ${socket.id}`);
-            statusService.setUserOffline(userId, socket.id).then(async (presence) => {
-                if (presence.status === 'offline') {
+            statusService.setUserOnline(userId, socket.id).then(async (presence) => {
+                if (!presence.isOnline) {
                     // Find all unique partners across all conversations
                     const partnerIds = await chatReliabilityService.getConversationPartners(userId);
 
@@ -415,7 +424,11 @@ function setupSockets(io: HaemiServer) {
                         timestamp: new Date().toISOString()
                     });
                 }
-            }).catch(err => logger.error(`Presence offline sync failed for ${userId}:`, err));
+            }).catch(error => {
+                logger.error(`Presence offline sync failed for ${userId}:`, { 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            });
         });
     });
 }
@@ -426,8 +439,18 @@ export { app, startServer };
 
 // Graceful Shutdown
 const shutdown = () => {
-    logger.info('Shutting down...');
-    pool.end().then(() => process.exit(0));
+    logger.info('Initiating graceful shutdown...');
+    pool.end()
+        .then(() => {
+            logger.info('✅ Database pool closed.');
+            process.exit(0);
+        })
+        .catch((err: unknown) => {
+            logger.error('❌ Error during database pool shutdown', { 
+                error: err instanceof Error ? err.message : String(err) 
+            });
+            process.exit(1);
+        });
 };
 
 process.on('SIGINT', shutdown);

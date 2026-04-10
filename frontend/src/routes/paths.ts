@@ -13,8 +13,8 @@ export const PATHS = {
     NOT_FOUND: '/404',
 
     // Legal / Support
-    PRIVACY: '/privacy',
-    TERMS: '/terms',
+    PRIVACY: '/privacy-policy',
+    TERMS: '/terms-of-service',
     HELP: '/help',
     CONSENT: '/consent',
     TELEMEDICINE: '/telemedicine',
