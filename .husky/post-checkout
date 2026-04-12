@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Master Guard Dispatcher (Branch, Schema, Identity, Code Quality, Size)
-npx tsx scripts/branch_guard.ts --commit || exit 1
+npx tsx scripts/branch-guard.ts --commit || exit 1
 
 # Forensic Hygiene Sync
 npx tsx scripts/repo-hygiene.ts --silent || echo "Hygiene skip."
