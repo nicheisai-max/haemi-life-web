@@ -202,6 +202,7 @@ export interface ClientToServerEvents {
     messageRead: (data: MessageReadEvent) => void;
     typingStarted: (data: TypingStartedPushPayload) => void;
     typingStopped: (data: TypingStartedPushPayload) => void;
+    heartbeat: () => void;
 }
 
 export interface InterServerEvents {

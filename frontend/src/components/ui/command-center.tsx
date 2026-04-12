@@ -76,14 +76,22 @@ export const CommandCenter: React.FC = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const down = (e: KeyboardEvent) => {
-            if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        const handleKeyDown = (e: KeyboardEvent): void => {
+            // P0 STRICT GUARD: Only intercept Cmd/Ctrl + K. 
+            // Broad Meta key capture (like Win+Shift+S) is explicitly ignored to prevent focus fighting.
+            if (e.key?.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                setOpen((open) => !open);
+                setOpen((prev) => !prev);
             }
         };
-        document.addEventListener("keydown", down);
-        return () => document.removeEventListener("keydown", down);
+
+        try {
+            document.addEventListener("keydown", handleKeyDown);
+        } catch (err) {
+            console.error('[CommandCenter] Failed to attach keyboard boundary:', err);
+        }
+
+        return () => document.removeEventListener("keydown", handleKeyDown);
     }, []);
 
     const runCommand = (command: () => void) => {
@@ -101,6 +109,16 @@ export const CommandCenter: React.FC = () => {
 
     return (
         <>
+            {/* Mobile Trigger: Icon-only (Visible < md) */}
+            <button
+                onClick={() => setOpen(true)}
+                className="haemi-nav-search-trigger-mobile flex md:hidden items-center justify-center group transition-all"
+                aria-label="Search Hub"
+            >
+                <Search className="h-5 w-5 text-slate-500 group-hover:text-primary transition-colors" />
+            </button>
+
+            {/* Desktop Trigger: Capsule (Visible >= md) */}
             <button
                 onClick={() => setOpen(true)}
                 className="haemi-nav-action-capsule hidden md:flex items-center gap-3 group w-64 lg:w-80 shadow-inner overflow-hidden bg-slate-100 dark:bg-slate-800"
@@ -170,7 +188,7 @@ export const CommandCenter: React.FC = () => {
                         </CommandItem>
                     </CommandGroup>
                 </CommandList>
-                <div className="pt-4 pb-0 px-0 border-t bg-slate-50 dark:bg-slate-900 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                <div className="pt-4 pb-4 px-5 border-t bg-slate-100 dark:bg-slate-900 flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                     <div className="flex gap-4">
                         <span className="flex items-center gap-1"><kbd className="bg-white dark:bg-slate-800 p-1 rounded border">↵</kbd> Select</span>
                         <span className="flex items-center gap-1"><kbd className="bg-white dark:bg-slate-800 p-1 rounded border">↑↓</kbd> Navigate</span>

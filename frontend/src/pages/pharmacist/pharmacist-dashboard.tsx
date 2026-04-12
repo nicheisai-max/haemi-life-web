@@ -81,19 +81,20 @@ export const PharmacistDashboard = () => {
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
                             size="lg"
-                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
-                            onClick={() => navigate(PATHS.PHARMACIST.DISPENSE)}
-                        >
-                            <QrCode className="h-5 w-5" aria-hidden="true" />
-                            Scan QR Code
-                        </Button>
-                        <Button
-                            size="lg"
-                            className="bg-white/10 hover:bg-white/20 text-white border-none shadow-lg h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
+                            variant="outline"
+                            className="haemi-ignore-click-outside bg-white/10 text-white border-white/20 hover:bg-white hover:text-teal-900 focus-visible:bg-white/10 focus-visible:text-white active:bg-white active:text-teal-900 dark:hover:bg-white/20 dark:hover:text-white dark:focus-visible:bg-white/20 dark:focus-visible:text-white dark:active:bg-white/20 dark:active:text-white shadow-lg h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
                             onClick={() => navigate(PATHS.PHARMACIST.INVENTORY)}
                         >
                             <ClipboardList className="h-5 w-5" aria-hidden="true" />
                             Inventory
+                        </Button>
+                        <Button
+                            size="lg"
+                            className="bg-white text-teal-900 hover:bg-teal-50 border border-transparent dark:bg-primary dark:text-teal-950 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
+                            onClick={() => navigate(PATHS.PHARMACIST.DISPENSE)}
+                        >
+                            <QrCode className="h-5 w-5" aria-hidden="true" />
+                            Scan QR Code
                         </Button>
                     </div>
                 </div>
@@ -106,49 +107,50 @@ export const PharmacistDashboard = () => {
                 </TransitionItem>
             )}
 
+            {/* Stats Grid - Standardized Premium UX (v8.6 Pharmacist Sync) */}
             <section className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
-                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-primary-500/50 dark:hover:border-primary-500/80 hover:shadow-lg hover:shadow-primary-500/10 dark:hover:shadow-primary-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-default" noPadding>
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-primary/50 dark:hover:border-primary/80 hover:shadow-lg hover:shadow-primary/10 dark:hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Receipt} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : pendingOrders.length}
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
+                                {loading ? <PremiumLoader size="sm" className="h-9" /> : pendingOrders.length}
                             </div>
-                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Active Queue</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-primary transition-colors">Active Queue</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={CheckCircle2} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : completedOrdersValue}
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
+                                {loading ? <PremiumLoader size="sm" className="h-9" /> : completedOrdersValue}
                             </div>
-                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Dispensed Today</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">Dispensed Today</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem className="col-span-2 md:col-span-1">
-                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 dark:hover:border-amber-500/80 hover:shadow-lg hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Truck} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : "12"}
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
+                                {loading ? <PremiumLoader size="sm" className="h-9" /> : "12"}
                             </div>
-                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Stock Arrivals</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-amber-500 transition-colors">Stock Arrivals</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
             </section>
 
-            {/* Main Content Split */}
-            <TransitionItem className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8 items-start">
-                {/* Left: Pending Scripts */}
-                <div className="flex flex-col">
-                    <div className="flex items-center justify-between mb-4">
+            {/* Main Content Hub - Institutional Compaction Certification v10.7 */}
+            <TransitionItem className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1.2fr_1fr_0.8fr] gap-8 items-stretch h-[42vh] min-h-[350px]">
+                {/* Column 1: Pending Prescriptions (Synchronized Skeleton) */}
+                <section className="flex flex-col h-full min-h-0 overflow-hidden group/col">
+                    <div className="flex items-center justify-between mb-4 h-8 shrink-0">
                         <h2 className="text-xl font-bold text-foreground">Pending Prescriptions</h2>
                         <div className="flex gap-2">
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Filter prescriptions">
@@ -160,95 +162,108 @@ export const PharmacistDashboard = () => {
                         </div>
                     </div>
 
-                    <div className="space-y-3 flex-1">
+                    <div className="flex-1 min-h-0 h-full overflow-y-auto pr-2 pb-0 scrollbar-thin scrollbar-thumb-border/50">
                         {loading ? (
                             <div className="flex justify-center p-12 h-full items-center">
                                 <PremiumLoader size="md" />
                             </div>
                         ) : pendingOrders.length === 0 ? (
-                            <DashboardCard className="text-center text-muted-foreground flex flex-col items-center justify-center h-[300px] border-dashed">
+                            <DashboardCard className="text-center text-muted-foreground flex flex-col items-center justify-center border-dashed h-full transition-all duration-300 hover:border-primary-500/50 hover:shadow-lg hover:-translate-y-1">
                                 <CheckCircle2 className="h-12 w-12 opacity-20 mb-3" />
-                                <p className="font-medium">All clear!</p>
-                                <p className="text-sm opacity-75 mt-1">No pending prescriptions in the queue.</p>
+                                <p className="font-medium text-sm">All clear!</p>
+                                <p className="text-[12px] opacity-75 mt-1">No pending prescriptions in the queue.</p>
                             </DashboardCard>
                         ) : (
-                            pendingOrders.map((prescription) => (
-                                <DashboardCard key={prescription.id} className="group p-4 flex items-center gap-4 transition-all hover:border-primary-500/50">
-                                    <div className="bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-[var(--card-radius)] p-2 w-16 text-center shrink-0 border border-primary-100 dark:border-primary-900/50">
-                                        <span className="block text-xs font-bold uppercase tracking-wider">New</span>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-semibold truncate text-foreground">{prescription.patientName || 'Patient'}</h3>
-                                        <p className="text-sm text-muted-foreground truncate flex items-center gap-1.5">
-                                            <span>{prescription.medicationCount || 0} item{(prescription.medicationCount || 0) !== 1 ? 's' : ''}</span>
-                                            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                                            <span>{prescription.doctorName || 'N/A'}</span>
-                                        </p>
-                                    </div>
-                                    <Button variant="default" size="sm" className="action-btn shadow-sm" onClick={() => navigate(PATHS.PHARMACIST.PRESCRIPTION_DETAIL(prescription.id))}>
-                                        Process
-                                    </Button>
-                                </DashboardCard>
-                            ))
+                            <div className="space-y-3 pb-4">
+                                {pendingOrders.map((prescription) => (
+                                    <DashboardCard key={prescription.id} className="group p-4 flex items-center gap-4 transition-all duration-300 hover:border-primary-500/50 hover:shadow-md">
+                                        <div className="bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-[var(--card-radius)] p-2 w-16 text-center shrink-0 border border-primary-100 dark:border-primary-900/50">
+                                            <span className="block text-xs font-bold uppercase tracking-wider">New</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-semibold truncate text-foreground">{prescription.patientName || 'Patient'}</h3>
+                                            <p className="text-sm text-muted-foreground truncate flex items-center gap-1.5">
+                                                <span>{(prescription.medicationCount || 0)} item{(prescription.medicationCount || 0) !== 1 ? 's' : ''}</span>
+                                                <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                                                <span>{prescription.doctorName || 'Medical Professional'}</span>
+                                            </p>
+                                        </div>
+                                        <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            className="action-btn shadow-sm" 
+                                            onClick={() => {
+                                                if (prescription.id) {
+                                                    navigate(PATHS.PHARMACIST.PRESCRIPTION_DETAIL(prescription.id));
+                                                }
+                                            }}
+                                        >
+                                            Process
+                                        </Button>
+                                    </DashboardCard>
+                                ))}
+                            </div>
                         )}
                     </div>
-                </div>
+                </section>
 
-                {/* Right: Inventory & Actions */}
-                <div className="space-y-8 flex flex-col">
-                    <section>
+                {/* Column 2: Stock Analysis (Synchronized Skeleton) */}
+                <section className="flex flex-col h-full min-h-0 overflow-hidden">
+                    <div className="flex items-center mb-4 h-8 shrink-0">
+                        <h2 className="text-xl font-bold text-foreground">Stock Analysis</h2>
+                    </div>
+                    <DashboardCard className="flex-1 h-full flex flex-col justify-center p-6 overflow-hidden transition-all duration-300 hover:border-primary-500/50 hover:shadow-lg hover:-translate-y-1">
                         <PremiumPieChart
                             title="Stock Analysis"
                             data={INVENTORY_METRICS}
                             dataKey="value"
                             categoryKey="name"
-                            height={250}
+                            noCard={true}
+                            className="flex-1 w-full h-full min-h-0"
                         />
-                    </section>
+                    </DashboardCard>
+                </section>
 
-                    <section className="flex-1">
-                        <h2 className="text-xl font-bold mb-4 text-foreground">Quick Actions</h2>
-                        <div className="grid grid-cols-2 gap-6">
-                            {[
-                                {
-                                    icon: Pill,
-                                    label: "Stock Check",
-                                    path: PATHS.PHARMACIST.INVENTORY,
-                                    sub: "Inventory Check",
-                                    color: "text-primary-600 bg-primary-50 dark:bg-primary-900/40 dark:text-primary-300",
-                                    hoverBorder: "hover:border-primary-500/50 dark:hover:border-primary-400/80",
-                                    hoverShadow: "hover:shadow-primary-500/10 dark:hover:shadow-primary-500/20",
-                                    hoverText: "group-hover:text-primary-600 dark:group-hover:text-primary-200"
-                                },
-                                {
-                                    icon: History,
-                                    label: "Admin Logs",
-                                    path: PATHS.ADMIN.SYSTEM_LOGS,
-                                    sub: "Activity History",
-                                    color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50 dark:text-slate-300",
-                                    hoverBorder: "hover:border-slate-500/50 dark:hover:border-slate-400/80",
-                                    hoverShadow: "hover:shadow-slate-500/10 dark:hover:shadow-slate-500/20",
-                                    hoverText: "group-hover:text-slate-600 dark:group-hover:text-white"
-                                },
-                            ].map((action, idx) => (
-                                <DashboardCard
-                                    key={idx}
-                                    className={`flex flex-col items-center justify-center gap-3 p-4 cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:shadow-lg h-32 text-center ${action.hoverBorder} ${action.hoverShadow}`}
-                                    noPadding
-                                    onClick={() => navigate(action.path)}
-                                >
-                                    <div className={`p-3 rounded-full ${action.color} group-hover:scale-110 transition-transform duration-300`}>
-                                        <action.icon className="h-6 w-6" />
-                                    </div>
-                                    <div className="flex flex-col items-center gap-0.5">
-                                        <span className={`font-semibold text-slate-700 dark:text-slate-200 text-sm transition-colors ${action.hoverText}`}>{action.label}</span>
-                                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wide">{action.sub}</span>
-                                    </div>
-                                </DashboardCard>
-                            ))}
-                        </div>
-                    </section>
-                </div>
+                {/* Column 3: Quick Actions (Synchronized Skeleton) */}
+                <section className="flex flex-col h-full min-h-0 overflow-hidden">
+                    <div className="flex items-center mb-4 h-8 shrink-0">
+                        <h2 className="text-xl font-bold text-foreground">Quick Actions</h2>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 grid-rows-2 gap-6 flex-1 h-full min-h-0">
+                        {[
+                            {
+                                icon: Pill,
+                                label: "Stock Check",
+                                path: PATHS.PHARMACIST.INVENTORY,
+                                color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20",
+                                hoverBorder: "hover:border-emerald-500/50 dark:hover:border-emerald-500/80",
+                                hoverShadow: "hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20",
+                                hoverText: "group-hover:text-emerald-600"
+                            },
+                            {
+                                icon: History,
+                                label: "Admin Logs",
+                                path: PATHS.ADMIN.SYSTEM_LOGS,
+                                color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+                                hoverBorder: "hover:border-blue-500/50 dark:hover:border-blue-500/80",
+                                hoverShadow: "hover:shadow-blue-500/10 dark:hover:shadow-blue-500/20",
+                                hoverText: "group-hover:text-blue-600"
+                            },
+                        ].map((action, idx) => (
+                            <DashboardCard
+                                key={idx}
+                                className={`flex flex-col items-center justify-center gap-2 p-3 cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:shadow-lg h-full w-full ${action.hoverBorder} ${action.hoverShadow}`}
+                                onClick={() => navigate(action.path)}
+                                noPadding
+                            >
+                                <div className={`p-3 rounded-full ${action.color} group-hover:scale-110 transition-transform duration-300 flex items-center justify-center`}>
+                                    <action.icon className="h-6 w-6 text-current" />
+                                </div>
+                                <span className={`font-bold text-slate-700 dark:text-slate-200 text-[10px] uppercase tracking-widest transition-colors ${action.hoverText} text-center px-2`}>{action.label}</span>
+                            </DashboardCard>
+                        ))}
+                    </div>
+                </section>
             </TransitionItem>
         </div>
     );

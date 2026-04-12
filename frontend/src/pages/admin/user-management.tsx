@@ -5,7 +5,6 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { getAllUsers, updateUserStatus } from '../../services/admin.service';
 import type { UserListItem } from '../../services/admin.service';
@@ -15,6 +14,7 @@ import { PremiumLoader } from '@/components/ui/premium-loader';
 import { getErrorMessage } from '../../lib/error';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<UserListItem[]>([]);
@@ -231,11 +231,11 @@ export const UserManagement: React.FC = () => {
 
         {/* Users Table */}
         <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-                <Table>
+            <div className="hl-table-container">
+                <Table className="hl-table">
                     <TableHeader>
-                        <TableRow className="bg-muted/50">
-                            <TableHead className="w-[300px]">User</TableHead>
+                        <TableRow>
+                            <TableHead className="w-[18.75rem]">User</TableHead>
                             <TableHead>Role</TableHead>
                             <TableHead className="hidden md:table-cell">Contact</TableHead>
                             <TableHead className="hidden md:table-cell">Joined</TableHead>
@@ -276,7 +276,7 @@ export const UserManagement: React.FC = () => {
                                             {user.role}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-sm">
+                                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                                         {user.phoneNumber}
                                     </TableCell>
                                     <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
@@ -316,17 +316,17 @@ export const UserManagement: React.FC = () => {
                         )}
                     </TableBody>
                 </Table>
-                <TablePagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    totalItems={totalItems}
-                    startIndex={startIndex}
-                    endIndex={endIndex}
-                    showPagination={showPagination}
-                    onPageChange={setCurrentPage}
-                    itemLabel="users"
-                />
             </div>
+            <TablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                showPagination={showPagination}
+                onPageChange={setCurrentPage}
+                itemLabel="users"
+            />
         </Card>
     </div>);
 };

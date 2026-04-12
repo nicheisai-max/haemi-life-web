@@ -97,8 +97,10 @@ export const MedicalRecords: React.FC = () => {
             );
 
             setRecords(combined);
-        } catch (error) {
-            console.error('Error fetching records:', error);
+        } catch (error: unknown) {
+            logger.error('[Medical-Records] Record retrieval collapsed', { 
+                error: error instanceof Error ? error.message : String(error) 
+            });
         } finally {
             setLoading(false);
         }
@@ -174,10 +176,15 @@ export const MedicalRecords: React.FC = () => {
             });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            if (msg === 'FILE_TYPE_NOT_SUPPORTED') {
-                toastWarning('Institutional Security: This file type is restricted and cannot be downloaded.');
+            
+            if (msg === 'FILE_TYPE_RESTRICTED') {
+                toastWarning('Institutional Security: This file type is restricted for safety.');
+            } else if (msg === 'ASSET_MISSING') {
+                toastError('Institutional Guard: Clinical asset missing or corrupted. This may be a system-generated demo record.');
+            } else if (msg === 'INTEGRITY_FAILURE') {
+                toastError('Security Gate: Verified file integrity failed. Download blocked for your safety.');
             } else {
-                toastError('Failed to download the clinical document. Please try again later.');
+                toastError('Communication Failure: Backend security protocol rejected the request.');
             }
         }
     };
@@ -277,12 +284,15 @@ export const MedicalRecords: React.FC = () => {
                                     layout
                                 >
                                     <Card className="group p-0 overflow-hidden hover:shadow-md transition-all shadow-sm flex flex-col md:flex-row h-full rounded-[var(--card-radius)]">
-                                        <div className={`w-full md:w-1.5 h-1.5 md:h-auto ${record.recordType === ClinicalRecordType.LabResult ? 'bg-purple-500' :
-                                            record.recordType === ClinicalRecordType.Radiology ? 'bg-blue-500' :
-                                                record.recordType === ClinicalRecordType.Immunization ? 'bg-emerald-500' :
-                                                    record.recordType === ClinicalRecordType.Prescription ? 'bg-slate-400' :
-                                                        'bg-slate-400'
-                                            }`} />
+                                        <div className="w-full md:w-1.5 h-1.5 md:h-auto" style={{ 
+                                            backgroundColor: 
+                                                record.recordType === ClinicalRecordType.LabResult ? 'var(--record-lab)' :
+                                                record.recordType === ClinicalRecordType.Radiology ? 'var(--record-radiology)' :
+                                                record.recordType === ClinicalRecordType.Immunization ? 'var(--record-immunization)' :
+                                                record.recordType === ClinicalRecordType.Prescription ? 'var(--record-prescription)' :
+                                                (record.recordType === ClinicalRecordType.ClinicalNote || record.recordType === ClinicalRecordType.SpecialistReport) ? 'var(--record-notes)' :
+                                                'var(--record-general)'
+                                        }} />
 
                                         <div className="flex-1 p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
                                             <div className="shrink-0">

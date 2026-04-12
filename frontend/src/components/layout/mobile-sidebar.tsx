@@ -16,7 +16,7 @@ export const MobileSidebar: React.FC = () => {
     return (
         <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="lg:hidden mr-2">
+                <Button variant="ghost" size="icon" className="lg:hidden">
                     <Menu className="h-6 w-6" />
                     <span className="sr-only">Open Menu</span>
                 </Button>

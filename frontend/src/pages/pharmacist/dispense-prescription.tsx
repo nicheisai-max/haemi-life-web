@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { DashboardCard } from '@/components/ui/dashboard-card';
-import { IconWrapper } from '@/components/ui/icon-wrapper';
 import { QrCode, Search, Pill, User, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,14 +59,26 @@ export const DispensePrescription: React.FC = () => {
 
     return (
         <main className="space-y-6">
-            <TransitionItem className="relative overflow-hidden rounded-2xl border bg-teal-900 text-white shadow-xl">
+            {/* Hero Section - Institutional Synchronization v8.9 */}
+            <TransitionItem className="relative overflow-hidden rounded-[var(--card-radius)] border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
                 <GradientMesh variant="primary" className="opacity-20" />
-                <div className="relative z-10 p-6 space-y-4">
-                    <div className="flex items-center gap-3">
-                        <IconWrapper icon={QrCode} variant="success" className="bg-white/10" />
-                        <div>
-                            <h1 className="page-heading !text-white !mb-1">Dispense Prescription</h1>
-                            <p className="page-subheading !text-white/70">Verify RX ID or Scan QR to initiate dispensing process.</p>
+                <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div className="space-y-3">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
+                            PHARMACY DISPENSARY
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 rounded-[var(--card-radius)] bg-emerald-500/20 border border-emerald-500/30 backdrop-blur-md shadow-inner group transition-all duration-300">
+                                <QrCode className="h-6 w-6 text-emerald-300 group-hover:scale-110 transition-transform" />
+                            </div>
+                            <div>
+                                <h1 className="page-heading !text-white !mb-0 transition-all duration-300">
+                                    Dispense Prescription
+                                </h1>
+                                <p className="page-subheading !text-white/80 !opacity-100 italic">
+                                    Verify RX ID or Scan QR to initiate dispensing process.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -76,18 +87,18 @@ export const DispensePrescription: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
                     <TransitionItem>
-                        <DashboardCard title="Search & Verify" className="p-6 space-y-4">
+                        <DashboardCard title="Search & Verify" className="p-6 space-y-4 rounded-[var(--card-radius)]">
                             <div className="space-y-2">
                                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Prescription ID</label>
                                 <div className="flex gap-2">
                                     <Input
                                         placeholder="e.g. RX-99283"
-                                        className="font-mono"
+                                        className="font-mono rounded-[var(--card-radius)]"
                                         value={rxId}
                                         onChange={(e) => setRxId(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                     />
-                                    <Button size="icon" onClick={handleSearch} disabled={loading}>
+                                    <Button size="icon" onClick={handleSearch} disabled={loading} className="rounded-[var(--card-radius)]">
                                         {loading ? <PremiumLoader size="xs" /> : <Search className="h-4 w-4" />}
                                     </Button>
                                 </div>

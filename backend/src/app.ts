@@ -226,7 +226,8 @@ function setupSockets(io: HaemiServer) {
             }
 
             const decodedPayload: unknown = jwt.verify(token, secret);
-            logger.info(`[Socket:Handshake] Success for token: ${token.substring(0, 10)}...`);
+            // Fix 4: Log socket.id only — never log token content (not even a prefix)
+            logger.info(`[Socket:Handshake] Auth success for socket: ${socket.id}`);
 
             // P0 PRESENCE FIX: Use centralized type guard to ensure all required fields (id, email, role, tokenVersion, jti, sessionId)
             if (!isJWTPayload(decodedPayload)) {
@@ -307,7 +308,13 @@ function setupSockets(io: HaemiServer) {
         logger.info(`[PRESENCE] Socket ${socket.id} connected for userId=${userId} role=${user.role}`);
         logger.info(`Socket: ${socket.id} user:${userId}`);
 
-        // 1. TARGETED Presence (Deterministic Async)
+        // 1. HEARTBEAT (Meta-Grade Sync)
+        // P0: Zero-hallucination activity tracking.
+        socket.on('heartbeat', async () => {
+             await statusService.updateHeartbeat(userId, socket.id);
+        });
+
+        // 1.5. TARGETED Presence (Deterministic Async)
         try {
             const presence = await statusService.setUserOnline(userId, socket.id);
             const partnerIds = await chatReliabilityService.getConversationPartners(userId);
@@ -406,8 +413,8 @@ function setupSockets(io: HaemiServer) {
         });
 
         socket.on('disconnect', () => {
-            logger.info(`Socket disconnected: ${socket.id}`);
-            statusService.setUserOnline(userId, socket.id).then(async (presence) => {
+            logger.info(`[PRESENCE] Socket disconnected: ${socket.id} for user ${userId}`);
+            statusService.setUserOffline(userId, socket.id).then(async (presence) => {
                 if (!presence.isOnline) {
                     // Find all unique partners across all conversations
                     const partnerIds = await chatReliabilityService.getConversationPartners(userId);
@@ -424,8 +431,8 @@ function setupSockets(io: HaemiServer) {
                         timestamp: new Date().toISOString()
                     });
                 }
-            }).catch(error => {
-                logger.error(`Presence offline sync failed for ${userId}:`, { 
+            }).catch((error: unknown) => {
+                logger.error(`[PRESENCE FAILURE] Offline sync failed for ${userId}:`, { 
                     error: error instanceof Error ? error.message : String(error) 
                 });
             });

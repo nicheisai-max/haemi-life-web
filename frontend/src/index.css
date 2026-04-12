@@ -144,6 +144,26 @@
   --primary-200: #D5F6F1;
   --primary-100: #ECFCFA;
 
+  /* Neutral System (Official Gray Scale) */
+  --gray-900: #0F172A;
+  --gray-800: #1E293B;
+  --gray-700: #334155;
+  --gray-600: #475569;
+  --gray-500: #64748B;
+  --gray-400: #94A3B8;
+  --gray-300: #CBD5E1;
+  --gray-200: #E2E8F0;
+  --gray-100: #F1F5F9;
+  --gray-50: #F8FAFC;
+
+  /* Clinical Record Category Tokens (Light Theme) */
+  --record-lab: var(--primary-600);
+  --record-radiology: var(--primary-800);
+  --record-prescription: var(--primary-500);
+  --record-immunization: var(--primary-700);
+  --record-notes: var(--gray-600);
+  --record-general: var(--gray-400);
+
   /* Typography Scale - Premium Institutional Standard (GLOBAL) - FLUID Implementation */
   /* Formula: clamp(min-size, responsive-formula, max-size) */
   /* Recalibrated: ~30% total reduction ΓÇö 100% zoom matches previous 90%-zoom visual density */
@@ -218,6 +238,14 @@
   --input: rgba(31, 59, 64, 0.4);
   --placeholder: #648285;
   --ring: rgba(63, 194, 181, 0.4);
+
+  /* Clinical Record Category Tokens (Dark Theme) */
+  --record-lab: var(--primary-400);
+  --record-radiology: var(--primary-200);
+  --record-prescription: var(--primary-300);
+  --record-immunization: var(--primary-500);
+  --record-notes: var(--gray-400);
+  --record-general: var(--gray-500);
 
   /* Dark Mode Gradient (Official) */
   --primary-gradient: linear-gradient(135deg, #1BA7A6 0%, #3FC2B5 100%);
@@ -1066,7 +1094,8 @@
   }
 
   .hl-table thead th {
-    padding: 0.875rem 1.5rem;
+    padding: 0.875rem 1.5rem !important;
+    text-align: left !important;
     font-size: 0.6875rem;
     font-weight: 700;
     letter-spacing: 0.07em;
@@ -1101,7 +1130,8 @@
 
   /* --- Table Body Cells --- */
   .hl-table tbody td {
-    padding: 0.875rem 1.5rem;
+    padding: 0.875rem 1.5rem !important;
+    text-align: left !important;
     color: var(--foreground);
     font-size: 0.875rem;
     vertical-align: middle;
@@ -1130,12 +1160,14 @@
   .hl-pagination {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 1rem 1.5rem;
-    border-top: 1px solid var(--border);
+    justify-content: center; /* 🛡️ INSTITUTIONAL CENTERING MANDATE */
+    gap: 1rem; /* 16px Breathing Space (Variable Grid) */
+    padding: 1.25rem; /* 20px Institutional Padding */
+    border-top: 0.0625rem solid var(--border); /* 1px Hardened Line */
     background-color: var(--card);
     flex-wrap: wrap;
     border-radius: 0 0 var(--card-radius) var(--card-radius);
+    transition: all var(--duration-hover) var(--ease-premium);
   }
 
   /* --- Pagination Row Info --- */
@@ -1143,8 +1175,9 @@
     font-size: 0.75rem;
     color: var(--muted-foreground);
     font-weight: 500;
-    margin-right: auto;
+    /* margin-right: auto; -> Purged to allow centering */
     white-space: nowrap;
+    order: 2; /* Mobile First: Text below buttons? No, let's keep centered row. */
   }
 
   /* --- Pagination Ellipsis --- */
@@ -1165,11 +1198,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2rem;
-    height: 2rem;
-    padding: 0 0.375rem;
+    min-width: 2.25rem; /* ~36px */
+    height: 2.25rem; /* ~36px */
+    padding: 0 0.5rem;
     border-radius: 0.35rem;
-    border: 1px solid var(--border);
+    border: 0.0625rem solid var(--border);
     background-color: transparent;
     color: var(--muted-foreground);
     font-size: 0.8125rem;
@@ -1179,6 +1212,7 @@
     transition: all var(--duration-fast) var(--ease-standard);
     line-height: 1;
     outline: none;
+    order: 1; /* Priority Ordering */
   }
 
   /* --- Pagination Button Hover (not disabled) --- */
@@ -1481,31 +1515,31 @@
 
   /* HAEMI OFFICIAL LOGO SYSTEM (Institutional Scale) */
   .official-logo-sm {
-    height: 1.75rem;
+    height: 1.25rem; /* ~20px */
   }
 
   .official-logo-md {
-    height: 2rem;
+    height: 1.5rem; /* ~24px */
   }
 
   .official-logo-nav {
-    height: 3rem;
+    height: 3rem; /* ~48px */
   }
 
   .official-logo-auth {
-    height: 3.75rem;
+    height: 3.25rem; /* ~52px */
   }
 
   .official-logo-lg {
-    height: 4rem;
+    height: 3.5rem; /* ~56px */
   }
 
   .official-logo-xl {
-    height: 6rem;
+    height: 4.5rem; /* ~72px */
   }
 
   .official-logo-xxl {
-    height: 8rem;
+    height: 6rem; /* ~96px */
   }
 
   /* HAEMI INSTITUTIONAL AUTH SURFACES */
@@ -1573,30 +1607,46 @@
     height: 100%;
   }
 
-  .haemi-nav-action-circle {
+  .haemi-nav-action-circle,
+  button[class*="size-navAction"] {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    height: 2.5rem !important;
-    /* System Locked 40px */
-    width: 2.5rem !important;
-    /* System Locked 40px */
+    height: 2.5rem !important; /* System Locked 40px */
+    width: 2.5rem !important; /* System Locked 40px */
     min-width: 2.5rem !important;
     max-width: 2.5rem !important;
     max-height: 2.5rem !important;
     aspect-ratio: 1 / 1 !important;
     border-radius: 9999px !important;
-    /* Force Absolute Circle */
     background-color: transparent !important;
     transition: none !important;
-    /* Zero-Shake Policy */
     transform: none !important;
-    /* Zero-Shake Policy */
     flex-shrink: 0 !important;
     padding: 0 !important;
-    /* FORCE-ZERO PADDING Protocol */
     overflow: hidden !important;
     border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* HAEMI NAV SYNC DROP-DOWN (v8.9 FINAL) */
+  .haemi-nav-dropdown-content {
+    margin-top: 0.625rem !important; /* Exactly 10px stabilization offset */
+    transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+    animation: slide-in-from-top-2 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* 1:1 Institutional Header Synchronization Protocol */
+  .haemi-nav-dropdown-header {
+    padding: 0.875rem 1.25rem !important; /* Total parity with Notification Menu (px-5 py-3.5) */
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.25rem;
+    background-color: rgba(226, 232, 240, 0.8) !important; /* bg-slate-200/80 */
+  }
+
+  .dark .haemi-nav-dropdown-header {
+    background-color: rgba(255, 255, 255, 0.05) !important; /* bg-white/5 */
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important; /* border-white/10 */
   }
 
   /* Synchronized Horizon: Prevent 48px Atmospheric Drift */
@@ -1667,19 +1717,31 @@
     border-color: rgba(255, 255, 255, 0.15);
   }
 
-  /* Responsive Search Shield (Prevents Overlap) */
-  .haemi-nav-search-shield {
-    @apply hidden md:flex flex-1 items-center justify-center min-w-0;
-    max-width: 42rem;
-    /* ~672px */
-    padding: 0 0.5rem;
+  /* Responsive Search System (Google Standard) */
+  .haemi-nav-search-container {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+    padding: 0 0.5rem !important;
+    max-width: 42rem !important; /* ~672px */
+  }
+
+  .haemi-nav-search-trigger-mobile {
+    height: 2.5rem !important; /* System Locked 40px */
+    width: 2.5rem !important; /* System Locked 40px */
+    border-radius: 9999px !important;
+    background-color: var(--nav-action-bg) !important;
+    border: 1px solid var(--nav-action-border) !important;
+    color: var(--muted-foreground) !important;
+    flex-shrink: 0 !important;
   }
 
   @media (min-width: 80rem) {
-
     /* xl */
-    .haemi-nav-search-shield {
-      padding: 0 2rem;
+    .haemi-nav-search-container {
+      padding: 0 2rem !important;
     }
   }
 

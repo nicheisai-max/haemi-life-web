@@ -87,18 +87,19 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   const { isAuthenticated, isLoading, isRefreshing, isTokenNearDeath, token } = useAuth();
   const location = useLocation();
 
-  if (isLoading || isRefreshing) return <LoadingFallback />;
+  // P0 META-GRADE: Decouple initial boot from background refresh.
+  if (isLoading) return <LoadingFallback />;
 
-  // 🩺 INSTITUTIONAL STANDARD: Strict Expiry Guard
-  // P0 FIX: Even if theoretically authenticated, if the token is near death (<10s),
-  // we block mounting to ensure child components don't fire requests with a stale credential.
-  if (isTokenNearDeath && isRefreshing) {
-    const payload = decodeJWT(token);
-    logger.info('[Guard] Critical near-death session intercepted for refresh sync.', { 
-        userId: payload?.id, 
-        exp: payload?.exp 
-    });
-    return <LoadingFallback />;
+  // 🩺 INSTITUTIONAL STANDARD: Transition Guard & Token Observability
+  if (isRefreshing) {
+    if (!isAuthenticated || isTokenNearDeath) {
+      const payload = decodeJWT(token);
+      logger.info('[Guard] Critical session lifecycle sync. Token active for refresh.', { 
+          userId: payload?.id,
+          exp: payload?.exp
+      });
+      return <LoadingFallback />;
+    }
   }
 
   if (!isAuthenticated) {
@@ -112,7 +113,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 /**
  * ⚖️ UNIVERSAL LEGAL SHELL:
  * Wraps legal/support pages in the institutional DashboardLayout ONLY for authenticated users.
- * For non-authenticated users, it returns the raw component to allow public access.
  */
 const UniversalLegalWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -178,7 +178,13 @@ const AppRoutes = () => {
   };
 
   return (
-    <ErrorBoundary onReset={() => window.location.reload()} onError={handleError}>
+    <ErrorBoundary 
+      onReset={() => {
+        logger.info('[ErrorBoundary] System state restoration initiated without hard refresh.');
+        auditLogger.log('SYSTEM_RECOVERY', { method: 'soft_reset', timestamp: Date.now() });
+      }} 
+      onError={handleError}
+    >
       <Suspense fallback={<LoadingFallback />}>
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.key}>
@@ -482,8 +488,24 @@ const AppRoutes = () => {
 };
 
 const App: React.FC = () => {
+  const handleGlobalError = (error: Error, info: React.ErrorInfo): void => {
+    logger.error('[App] Catastrophic top-level failure:', error.message);
+    auditLogger.log('UNHANDLED_ERROR', {
+      message: error.message,
+      stack: info.componentStack || 'unknown',
+      timestamp: Date.now()
+    });
+  };
+
+  const handleGlobalReset = (): void => {
+    logger.info('[App] Institutional recovery initiated. Purging stale state...');
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
+  };
+
   return (
-    <ErrorBoundary onReset={() => window.location.reload()}>
+    <ErrorBoundary onReset={handleGlobalReset} onError={handleGlobalError}>
       <Router>
         <AuthProvider>
           <ThemeProvider>

@@ -31,6 +31,7 @@ import {
     ReactToMessageRequest,
     DeleteMessageRequest
 } from '../types/chat.types';
+import { FileDomain } from '../types/file';
 import { ChatMessage, MessageDeletedPayload } from '../types/socket.types';
 import { JWTPayload } from '../types/express';
 
@@ -56,7 +57,7 @@ export const uploadAttachment = async (req: Request, res: Response) => {
         const originalname = path.basename(req.file.originalname);
 
         // Institutional Save: Non-blocking async write via FileService
-        const relativePath = await fileService.saveFileFromBuffer(buffer, 'chat/temp', originalname);
+        const relativePath = await fileService.saveFileFromBuffer(buffer, FileDomain.CHAT_TEMP, originalname);
 
         // P0 FIX: Storing BOTH relative path and originalName as metadata
         const stagingMetadata = `${relativePath}|${originalname}`;
@@ -467,7 +468,7 @@ export const sendMessage = async (req: Request, res: Response) => {
                 const innerTempId = att.url.split('/').pop();
 
                 // Institutional Move: Atomic staging-to-vault promotion via FileService
-                const metadata = await fileService.moveStagedFile(innerTempId as string, 'chat');
+                const metadata = await fileService.moveStagedFile(innerTempId as string, FileDomain.CHAT);
 
                 if (!metadata) {
                     logger.warn('[ChatController] Staged attachment promotion failed (Physical file missing)', {

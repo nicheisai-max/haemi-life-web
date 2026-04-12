@@ -24,12 +24,15 @@ export const useClickOutside = <T extends Element>(
             if (!savedEnabled.current) return;
             const target = event.target as Node;
 
+            // 🩺 HAEMI STABILITY GUARD: If target is no longer in document, skip (Prevents race conditions)
+            if (!target || !document.body.contains(target)) return;
+
             // Do nothing if clicking ref's element or descendent elements
             if (!ref.current || ref.current.contains(target)) {
                 return;
             }
 
-            // Do nothing if clicking any interaction targets we want to ignore (like trigger buttons)
+            // Do nothing if clicking any interaction targets we want to ignore
             for (const ignoredRef of savedIgnoredRefs.current) {
                 if (ignoredRef.current && ignoredRef.current.contains(target)) {
                     return;
@@ -37,22 +40,23 @@ export const useClickOutside = <T extends Element>(
             }
 
             // 🩺 HAEMI GLOBAL IGNORE PROTOCOL
-            // If the element (or any of its parents) is specifically marked to be ignored
-            // by a global orchestration event, we skip the closure logic.
             if (target instanceof Element && target.closest('.haemi-ignore-click-outside')) {
                 return;
             }
 
-            // Defer execution by 0ms to push it to the end of the event loop,
-            // allowing React's internal Synthetic `onClick` events to clear first.
-            // This surgically eliminates the 488ms "Forced Reflow" Violation.
+            // Defer execution by 0ms to allow React's internal events to process
             setTimeout(() => {
-                savedHandler.current(event);
+                try {
+                    // Final sanity check before calling handler
+                    if (ref.current && savedEnabled.current) {
+                        savedHandler.current(event);
+                    }
+                } catch (error) {
+                    console.error('[HaemiClickOutside] Handler crashed safely intercepted:', error);
+                }
             }, 0);
         };
 
-        // Use Capture Phase to ensure we catch events before stopPropagation() can block them
-        // 🩺 PERFORMANCE OPTIMIZATION: { passive: true } prevents main-thread blocking
         const options = { capture: true, passive: true };
         document.addEventListener('pointerdown', listener, options);
 

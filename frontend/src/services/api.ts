@@ -5,8 +5,16 @@ import type { AuthResponse, ApiResponse } from '../types/auth.types';
 import { isJWTPayload, safeParseJSON } from '../utils/type-guards';
 
 const RAW_URL = import.meta.env.VITE_API_URL?.replace(/\/+$/, '') || '';
+
 // P0: Institutional Determinism - Standardize on 'localhost' for Windows resolution parity
-const BASE_URL = RAW_URL;
+// Root Cause (Forensic Audit): Windows browsers intermittently resolve 'localhost' to ::1 
+// while the Node.js backend might bind to 127.0.0.1 (or vice-versa). 
+// By forcing 'localhost' consistency, we prevent the ERR_CONNECTION_REFUSED 
+// triggered by IPv4/IPv6 endpoint drift.
+const BASE_URL = RAW_URL.includes('127.0.0.1') 
+    ? RAW_URL.replace('127.0.0.1', 'localhost') 
+    : RAW_URL;
+
 const API_URL = BASE_URL ? `${BASE_URL}/api` : '/api';
 
 if (API_URL.includes('/api/api')) {
@@ -352,6 +360,7 @@ const clearAuthSession = () => {
 
     // Atomic state clearing (Memory + Network + Storage)
     setAccessToken(null);
+    
     // P1 Fix — Scoped key removal (replaces sessionStorage.clear()):
     // Preserves non-auth data — theme preference, language, appointment drafts.
     sessionStorage.removeItem('token');
@@ -362,7 +371,11 @@ const clearAuthSession = () => {
     // Deterministic Queue Cleanout
     processQueue(new FatalAuthError('Session terminated'));
 
-    auditLogger.log('LOGOUT', { reason: 'clearAuthSession invoked' });
+    logger.info(`[API] Local session invalidated. Logic: clearAuthSession (Version: ${sessionVersion})`);
+    auditLogger.log('LOGOUT', { 
+        reason: 'clearAuthSession invoked', 
+        details: { version: sessionVersion } 
+    });
 
     // Cross-tab kill-switch broadcast.
     // P0 Fix: Only broadcast when broadcastUserId is a confirmed string.
@@ -376,12 +389,14 @@ const clearAuthSession = () => {
                 payload: {
                     version: sessionVersion,
                     userId: broadcastUserId, // ← always a real user ID, never undefined
-                    role: broadcastRole    // ← always a real role string, never undefined
+                    role: broadcastRole      // ← always a real role string, never undefined
                 }
             });
             syncChannel.close();
+            logger.info('[API] Logout broadcast dispatched to peer tabs', { userId: broadcastUserId, role: broadcastRole });
         } catch (error: unknown) {
             const errMessage = error instanceof Error ? error.message : String(error);
+            logger.error('[API] Logout broadcast failure', { error: errMessage });
             auditLogger.log('UNHANDLED_ERROR', { message: errMessage });
         }
     }
@@ -397,13 +412,17 @@ if (typeof window !== 'undefined') {
         const currentToken = accessToken || sessionStorage.getItem('token');
 
         let currentUserId: string | null = null;
+        let currentRole: string | null = null;
         if (currentToken) {
             try {
                 const base64Url = currentToken.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                 const decoded = safeParseJSON(atob(base64), isJWTPayload);
                 currentUserId = decoded?.id || null;
-            } catch { /* ignore */ }
+                currentRole = decoded?.role || null;
+            } catch (err: unknown) { 
+                logger.error('[API] Auth sync identity extraction failure', { error: String(err) });
+            }
         }
 
         switch (type) {
@@ -423,13 +442,18 @@ if (typeof window !== 'undefined') {
                 //
                 // Root Cause #3: The previous `>=` (greater-than-or-equal) allowed a tab
                 // to process a LOGOUT with the SAME version it just set via clearAuthSession,
-                // creating an escalating loop: Tab A fires, Tab B clears (version 0→1),
-                // rebroadcasts; Tab A receives v=1, sessionVersion_A=1, 1>=1 → loops.
+                // creating an escalating loop. 
                 // Fix: strict `>` means only a newer version triggers clearAuthSession.
                 if (payload.userId
                     && payload.userId === currentUserId
+                    && payload.role === currentRole // Synchronized with active session role
                     && payload.version > sessionVersion) {
-                    logger.warn('[API] Auth sync received: Session terminated for matching identity.');
+                    
+                    sessionVersion = payload.version; // Sync version
+                    logger.warn('[API] Auth sync received: Session terminated by peer tab.', { 
+                        userId: payload.userId, 
+                        role: payload.role 
+                    });
                     clearAuthSession();
                 }
                 break;

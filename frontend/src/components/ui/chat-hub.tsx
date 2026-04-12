@@ -52,28 +52,18 @@ const Avatar: React.FC<{ name: string; initials?: string; image?: string; profil
     // Standardized ID-based Resolution
     const avatarUrl = profileImage ? (profileImage.startsWith('http') ? profileImage : `/api/files/profile/${profileImage}`) : image;
 
-    const [imgError, setImgError] = useState(false);
-    const [isImageLoaded, setIsImageLoaded] = useState(false);
-
     return (
         <div className={`relative shrink-0 ${className}`}>
             <div className={`${sizeMap[size]} rounded-full overflow-hidden premium-avatar-fallback flex items-center justify-center shadow-sm text-white font-bold tracking-wider relative`}>
-                {avatarUrl && !imgError ? (
-                    <>
-                        {/* Premium Loader Overlay - Shown while image is fetching/decoding */}
-                        {!isImageLoaded && (
-                            <div className="premium-loader-overlay">
-                                <PremiumLoader size="nano" bubbleClassName="premium-loader-bubble-white" />
-                            </div>
-                        )}
-                        <img
-                            src={avatarUrl}
-                            alt={name}
-                            className={`h-full w-full object-cover transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
-                            onLoad={() => setIsImageLoaded(true)}
-                            onError={() => setImgError(true)}
-                        />
-                    </>
+                {avatarUrl ? (
+                    <AuthenticatedImage
+                        src={avatarUrl}
+                        alt={name}
+                        className="h-full w-full"
+                        aspectRatio="square"
+                        errorFallback={initials || getInitials(name)}
+                        loadingFallback={<PremiumLoader size="xs" />}
+                    />
                 ) : (
                     initials || getInitials(name)
                 )}
@@ -239,33 +229,53 @@ const MessageItem = React.memo(({
                         {msg.attachments.map((att, i) => (
                             <div key={i} className="relative overflow-hidden rounded-[8px] bg-black/5 dark:bg-white/5 border border-white/10">
                                 {att.type.startsWith('image/') ? (
-                                    <div
-                                        className="chat-thumbnail-container"
-                                        onClick={() => att.id && att.name && onLightbox(att.url.startsWith('blob:') || att.url.startsWith('data:') ? att.url : `/api/files/message/${att.id}`, att.name)}
-                                    >
-                                        <AuthenticatedImage
-                                            src={att.url.startsWith('blob:') || att.url.startsWith('data:') ? att.url : `/api/files/message/${att.id}`}
-                                            alt={att.name || 'Attachment'}
-                                            className="chat-thumbnail-image"
-                                        />
-                                        <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
-                                            <Maximize2 className="text-white opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 drop-shadow-md" />
+                                        <div
+                                            className={`chat-thumbnail-container ${msg.status === 'sending' ? 'cursor-wait opacity-70' : ''}`}
+                                            onClick={() => {
+                                                if (msg.status === 'sending') return;
+                                                if (att.id && att.name) {
+                                                    onLightbox(att.url.startsWith('blob:') || att.url.startsWith('data:') ? att.url : `/api/files/message/${att.id}`, att.name);
+                                                }
+                                            }}
+                                        >
+                                            <AuthenticatedImage
+                                                src={att.url.startsWith('blob:') || att.url.startsWith('data:') ? att.url : `/api/files/message/${att.id}`}
+                                                alt={att.name || 'Attachment'}
+                                                className="chat-thumbnail-image"
+                                                loadingFallback={<PremiumLoader size="sm" />}
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
+                                                {msg.status === 'sending' ? (
+                                                    <Loader2 className="h-6 w-6 text-white animate-spin drop-shadow-md" />
+                                                ) : (
+                                                    <Maximize2 className="text-white opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 drop-shadow-md" />
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
                                 ) : (
                                     <button
-                                        onClick={() => att.id && att.name && onDownload(att.url.startsWith('blob:') ? att.url : `/api/files/message/${att.id}`, att.name, msg.id)}
-                                        disabled={downloadingId === msg.id}
+                                        onClick={() => {
+                                            if (msg.status === 'sending') return;
+                                            if (att.id && att.name) {
+                                                onDownload(att.url.startsWith('blob:') ? att.url : `/api/files/message/${att.id}`, att.name, msg.id);
+                                            }
+                                        }}
+                                        disabled={downloadingId === msg.id || msg.status === 'sending'}
                                         className={`w-full group/file flex items-center gap-[0.75rem] p-[0.75rem] rounded-[var(--card-radius)] border transition-all duration-200 ${
-                                            msg.isMe 
-                                                ? 'bg-white/10 border-white/10 hover:bg-white/20' 
-                                                : 'bg-secondary/50 dark:bg-white/5 border-border/50 hover:border-primary/30'
+                                            msg.status === 'sending' 
+                                                ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-900 border-dashed'
+                                                : msg.isMe 
+                                                    ? 'bg-white/10 border-white/10 hover:bg-white/20' 
+                                                    : 'bg-secondary/50 dark:bg-white/5 border-border/50 hover:border-primary/30'
                                         }`}
                                     >
                                         <div className={`p-[0.5rem] rounded-md transition-colors ${
+                                            msg.status === 'sending' ? 'bg-slate-200 dark:bg-slate-800' :
                                             msg.isMe ? 'bg-white/10' : 'bg-primary/10 text-primary'
                                         }`}>
-                                            {(() => {
+                                            {msg.status === 'sending' ? (
+                                                <Loader2 className="h-[1.25rem] w-[1.25rem] animate-spin" />
+                                            ) : (() => {
                                                 const ext = att.name.split('.').pop()?.toLowerCase();
                                                 if (ext === 'pdf') return <FileText className="h-[1.25rem] w-[1.25rem]" />;
                                                 if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') return <FileSpreadsheet className="h-[1.25rem] w-[1.25rem]" />;
@@ -425,16 +435,22 @@ export const ChatHub: React.FC = () => {
             logger.info('[ChatHub] Institutional download successful.', { fileName, loadingId });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            if (msg === 'FILE_TYPE_NOT_SUPPORTED') {
-                toastWarning('Institutional Security: This file type is restricted and cannot be downloaded.');
+            
+            if (msg === 'FILE_TYPE_RESTRICTED') {
+                toastWarning('Institutional Security: This file type is restricted for safety.');
+            } else if (msg === 'ASSET_MISSING') {
+                toastError('Institutional Guard: Clinical asset missing or corrupted. This may be a system-generated demo record.');
+            } else if (msg === 'INTEGRITY_FAILURE') {
+                toastError('Security Gate: Verified file integrity failed. Download blocked for your safety.');
             } else {
-                toastError('Failed to download the attachment. Please try again later.');
-                logger.error('[ChatHub] Secure download failed:', {
-                    fileName,
-                    loadingId,
-                    error: msg
-                });
+                toastError('Communication Failure: Backend security protocol rejected the request.');
             }
+
+            logger.error('[ChatHub] Secure download failed', {
+                fileName,
+                loadingId,
+                error: msg
+            });
         } finally {
             setDownloadingId(null);
         }
@@ -1301,6 +1317,7 @@ export const ChatHub: React.FC = () => {
                                     src={lightboxImage.src}
                                     alt={lightboxImage.alt}
                                     className="max-w-full max-h-full object-contain rounded-[var(--card-radius)] shadow-2xl shadow-teal-500/10 border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-transparent"
+                                    loadingFallback={<PremiumLoader size="md" />}
                                     errorFallback={
                                         // D4 REMEDIATION: Lightbox error state instead of blank modal.
                                         // Shown when the authenticated blob fetch fails (401, 404, network blip).

@@ -5,6 +5,7 @@ import { pool } from '../config/db';
 import { logger } from '../utils/logger';
 import { mapRecordToResponse } from '../utils/clinical.mapper';
 import { fileService } from '../services/file.service';
+import { FileDomain } from '../types/file';
 import { ClinicalRecordType } from '../../../shared/clinical-types';
 
 /**
@@ -112,7 +113,7 @@ export const uploadRecord = async (req: Request, res: Response) => {
         }
 
         // Institutional Save: Non-blocking async write via FileService
-        const relativePath = await fileService.saveFileFromBuffer(buffer, 'medical_records', originalname);
+        const relativePath = await fileService.saveFileFromBuffer(buffer, FileDomain.MEDICAL_RECORDS, originalname);
 
         try {
             const newRecord = await recordRepository.create({

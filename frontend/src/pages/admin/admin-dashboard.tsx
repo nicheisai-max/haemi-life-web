@@ -124,7 +124,8 @@ export const AdminDashboard: React.FC = () => {
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
                         <Button
                             size="lg"
-                            className="bg-white dark:bg-primary text-teal-900 dark:text-teal-950 hover:bg-teal-50 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95 border-none"
+                            variant="outline"
+                            className="haemi-ignore-click-outside bg-white/10 text-white border-white/20 hover:bg-white hover:text-teal-900 focus-visible:bg-white/10 focus-visible:text-white active:bg-white active:text-teal-900 dark:hover:bg-white/20 dark:hover:text-white dark:focus-visible:bg-white/20 dark:focus-visible:text-white dark:active:bg-white/20 dark:active:text-white shadow-lg h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
                             onClick={() => navigate(PATHS.ADMIN.USERS)}
                         >
                             <Users className="h-5 w-5" aria-hidden="true" />
@@ -132,7 +133,7 @@ export const AdminDashboard: React.FC = () => {
                         </Button>
                         <Button
                             size="lg"
-                            className="bg-white/10 hover:bg-white/20 text-white border-none shadow-lg h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 w-full sm:w-auto transition-all duration-300 backdrop-blur-md"
+                            className="bg-white text-teal-900 hover:bg-teal-50 border border-transparent dark:bg-primary dark:text-teal-950 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
                             onClick={() => navigate(PATHS.ADMIN.SECURITY)}
                         >
                             <ShieldAlert className="h-5 w-5" aria-hidden="true" />
@@ -142,40 +143,40 @@ export const AdminDashboard: React.FC = () => {
                 </div>
             </TransitionItem>
 
-            {/* Stats Grid */}
+            {/* Stats Grid - Standardized Premium UX (v8.5 Sync) */}
             <section className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
-                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-indigo-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-primary/50 dark:hover:border-primary/80 hover:shadow-lg hover:shadow-primary/10 dark:hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Globe} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.totalUsers || "0"}
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
+                                {loading ? <PremiumLoader size="sm" className="h-9" /> : stats?.totalUsers || "0"}
                             </div>
-                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Total Users</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-primary transition-colors">Total Users</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem>
-                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/80 hover:shadow-lg hover:shadow-emerald-500/10 dark:hover:shadow-emerald-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Activity} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : activeSessions}
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
+                                {loading ? <PremiumLoader size="sm" className="h-9" /> : activeSessions}
                             </div>
-                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Live Sessions</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">Live Sessions</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>
 
                 <TransitionItem className="col-span-2 md:col-span-1">
-                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 transition-all duration-300 group cursor-default text-center" noPadding>
+                    <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-amber-500/50 dark:hover:border-amber-500/80 hover:shadow-lg hover:shadow-amber-500/10 dark:hover:shadow-amber-500/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
-                            <div className="text-3xl md:text-4xl font-bold text-foreground">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : stats?.pendingVerifications || "0"}
+                            <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
+                                {loading ? <PremiumLoader size="sm" className="h-9" /> : stats?.pendingVerifications || "0"}
                             </div>
-                            <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest">Verification Queue</div>
+                            <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-amber-500 transition-colors">Verification Queue</div>
                         </div>
                     </DashboardCard>
                 </TransitionItem>

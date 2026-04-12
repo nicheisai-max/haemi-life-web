@@ -16,14 +16,19 @@ class StatusService {
     public async isOnline(userId: string): Promise<boolean> {
         try {
             const id = String(userId);
-            const result = await pool.query<{ exists: boolean }>('SELECT EXISTS(SELECT 1 FROM active_connections WHERE user_id = $1)', [id]);
+            // P0 META-GRADE: Check if any session has pinged in the last 90 seconds
+            const result = await pool.query<{ exists: boolean }>(
+                `SELECT EXISTS(
+                    SELECT 1 FROM active_connections 
+                    WHERE user_id = $1 
+                    AND last_ping > NOW() - INTERVAL '90 seconds'
+                )`, [id]);
             return result.rows[0]?.exists ?? false;
         } catch (error: unknown) {
             logger.error('[StatusService] isOnline DB check failed:', {
                 error: error instanceof Error ? error.message : String(error),
                 userId
             });
-            // P0 NUCLEAR PROTOCOL: NO MEMORY FALLBACK ALLOWED
             return false; 
         }
     }
@@ -59,7 +64,7 @@ class StatusService {
     public async setUserOffline(userId: string, socketId: string): Promise<UserStatusEvent> {
         const id = String(userId);
         
-        // 1. Target Session Record Cleanup
+        // 1. Target Session Record Cleanup (Memory Map)
         const userConnections = this.onlineUsers.get(id);
         if (userConnections) {
             userConnections.delete(socketId);
@@ -70,13 +75,16 @@ class StatusService {
 
         try {
             // 2. Definitive State Retrieval (Pre-deletion last_activity)
-            const last_activity = await this.fetchUserLastActivity(userId) || new Date().toISOString();
+            const last_activity = await this.fetchUserLastActivity(id) || new Date().toISOString();
 
             // 3. Strict Sequential DB Deletion (Source of Truth)
             await pool.query("DELETE FROM active_connections WHERE socket_id = $1", [socketId]);
 
             // 4. Fresh DB query for user-level status AFTER deletion
-            const stillOnlineResult = await pool.query<{ exists: boolean }>('SELECT EXISTS(SELECT 1 FROM active_connections WHERE user_id = $1)', [id]);
+            const stillOnlineResult = await pool.query<{ exists: boolean }>(
+                'SELECT EXISTS(SELECT 1 FROM active_connections WHERE user_id = $1)', 
+                [id]
+            );
             const stillOnline = stillOnlineResult.rows[0]?.exists ?? false;
             
             if (!stillOnline) {
@@ -85,7 +93,9 @@ class StatusService {
                     "UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1",
                     [id]
                 );
-                logger.info('[Phase 1] User definitively offline (DB Truth)', { userId: id });
+                logger.info(`[PRESENCE] User ${id} definitively offline in database truth layer`);
+            } else {
+                logger.info(`[PRESENCE] User ${id} remains online via other active sessions.`);
             }
 
             return {
@@ -94,9 +104,9 @@ class StatusService {
                 last_activity: last_activity
             };
         } catch (error: unknown) {
-            logger.error('[StatusService] Failed to set user offline', {
+            logger.error('[PRESENCE FAILURE] Failed to set user offline', {
                 error: error instanceof Error ? error.message : String(error),
-                userId,
+                userId: id,
                 socketId
             });
             throw error;
@@ -108,6 +118,29 @@ class StatusService {
      * Purges ALL active connections for a user across all tabs/devices.
      * Enforces immediate "Offline" status in the Source of Truth (DB).
      */
+    public async updateHeartbeat(userId: string, socketId: string): Promise<void> {
+        const id = String(userId);
+        try {
+            // P0 PERMANENCE: Update activity timestamp for both session and user record
+            await pool.query(
+                `UPDATE active_connections 
+                 SET last_ping = CURRENT_TIMESTAMP 
+                 WHERE user_id = $1 AND socket_id = $2`,
+                [id, socketId]
+            );
+            await pool.query(
+                "UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1",
+                [id]
+            );
+        } catch (error: unknown) {
+            logger.error('[StatusService] Heartbeat update failed', {
+                error: error instanceof Error ? error.message : String(error),
+                userId: id,
+                socketId
+            });
+        }
+    }
+
     public async purgeUserConnections(userId: string): Promise<UserStatusEvent> {
         const id = String(userId);
         
@@ -145,9 +178,12 @@ class StatusService {
         const results: Record<string, { isOnline: boolean, last_activity: string }> = {};
 
         try {
-            // 1. Query active_connections for ALL requested users (Truth Source)
+            // 1. Query active_connections for ALL requested users
+            // P0 META-GRADE: Filter by activity threshold (90s)
             const onlineResult = await pool.query<{ user_id: string }>(
-                `SELECT DISTINCT user_id FROM active_connections WHERE user_id = ANY($1)`,
+                `SELECT DISTINCT user_id FROM active_connections 
+                 WHERE user_id = ANY($1) 
+                 AND last_ping > NOW() - INTERVAL '90 seconds'`,
                 [userIds]
             );
             const onlineSet = new Set(onlineResult.rows.map(r => r.user_id));
@@ -200,9 +236,9 @@ class StatusService {
     private async persistConnection(userId: string, socketId: string): Promise<void> {
         try {
             await pool.query(
-                `INSERT INTO active_connections (user_id, socket_id) 
-                 VALUES ($1, $2) 
-                 ON CONFLICT (user_id, socket_id) DO UPDATE SET last_activity = CURRENT_TIMESTAMP`,
+                `INSERT INTO active_connections (user_id, socket_id, last_ping) 
+                 VALUES ($1, $2, CURRENT_TIMESTAMP) 
+                 ON CONFLICT (user_id, socket_id) DO UPDATE SET last_ping = CURRENT_TIMESTAMP`,
                 [userId, socketId]
             );
             // which updates the session heartbeat (last_activity and expires_at).

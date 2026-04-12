@@ -3,9 +3,10 @@ import { fileService } from './file.service';
 import { logger } from '../utils/logger';
 
 /**
- * 🩺 HAEMI LIFE — FORENSIC CLEANUP SERVICE (v5.1)
+ * 🩺 HAEMI LIFE — FORENSIC CLEANUP SERVICE (v5.2)
  * Institutional Utility: Identifies and purges abandoned "Ghost Files" 
  * from the chat staging area (uploads/chat/temp).
+ * Now includes Meta-Grade 'Zombie Session' Reaper.
  */
 
 class CleanupService {
@@ -64,15 +65,41 @@ class CleanupService {
     }
 
     /**
+     * 🧟 ZOMBIE SESSION PURGE (Meta-Grade)
+     * Deletes active_connections that haven't pinged in over 90 seconds.
+     * This ensures orphaned sessions from server crashes or network failures
+     * are definitively reaped from the Institutional Truth Layer.
+     */
+    public async purgeZombiePresence(): Promise<void> {
+        try {
+            const result = await pool.query(
+                `DELETE FROM active_connections 
+                 WHERE last_ping < NOW() - INTERVAL '90 seconds'`
+            );
+            if ((result.rowCount || 0) > 0) {
+                logger.info(`[CleanupService] Reaped ${result.rowCount} zombie presence sessions.`);
+            }
+        } catch (error: unknown) {
+            logger.error('[CleanupService] Zombie purge failed:', {
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
+    /**
      * ⏱️ SCHEDULED MAINTENANCE
-     * Runs the cleanup job every 24 hours.
+     * Runs the cleanup jobs at institutional intervals.
      */
     public initialize(): void {
         // Initial run on startup
         this.purgeAbandonedStaging();
+        this.purgeZombiePresence();
 
-        // Daily Cron-like interval
+        // Staging Purge: Daily Cron-like interval
         setInterval(() => this.purgeAbandonedStaging(), 24 * 60 * 60 * 1000);
+
+        // Zombie Reaper: Meta-Grade 5-minute activity window (Institutional Standard)
+        setInterval(() => this.purgeZombiePresence(), 5 * 60 * 1000);
         
         logger.info('[CleanupService] Institutional Cleanup Guardian initialized.');
     }

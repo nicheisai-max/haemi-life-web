@@ -32,8 +32,34 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             setNotifications(pruned);
             setUnreadCount(pruned.filter(n => !n.isRead).length);
         } catch (error: unknown) {
-            logger.error('[NotificationProvider] Failed to fetch notifications:', error instanceof Error ? error.message : String(error));
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            // Phase 4: Silent suppression for expected session-termination errors.
+            // 'No active session' / 'FatalAuthError' are expected during logout transition.
+            // We must NOT log these as errors to keep the console clean for the Investor Demo.
+            const isExpectedSessionError = errorMessage.includes('No active session') ||
+                errorMessage.includes('Session terminated') ||
+                errorMessage.includes('FatalAuthError');
+
+            if (isExpectedSessionError) {
+                logger.info('[NotificationProvider] Fetch suppressed: session not active (expected during logout).');
+            } else {
+                logger.error('[NotificationProvider] Failed to fetch notifications:', errorMessage);
+            }
         } finally {
+            setLoading(false);
+        }
+    }, [isAuthenticated]);
+
+    // Phase 4: Atomic state purge on session exit.
+    // When isAuthenticated drops to false (logout/cross-tab teardown),
+    // we must immediately clear notification state to prevent stale data
+    // from being visible if the login page is briefly rendered before the
+    // Phase 2 hard redirect completes.
+    useEffect(() => {
+        if (!isAuthenticated) {
+            logger.info('[NotificationProvider] Session exited. Purging notification state.');
+            setNotifications([]);
+            setUnreadCount(0);
             setLoading(false);
         }
     }, [isAuthenticated]);
