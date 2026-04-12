@@ -925,8 +925,18 @@ CREATE TABLE IF NOT EXISTS active_connections (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     socket_id VARCHAR(255) NOT NULL,
     connected_at TIMESTAMPTZ DEFAULT NOW(),
-    last_activity TIMESTAMPTZ DEFAULT NOW()
+    last_ping TIMESTAMPTZ DEFAULT NOW(), -- Institutional Heartbeat Tracking
+    last_activity TIMESTAMPTZ DEFAULT NOW() -- Session Interaction Tracking
 );
+
+-- Idempotent Migration: active_connections last_ping
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='active_connections' AND column_name='last_ping') THEN
+        ALTER TABLE active_connections ADD COLUMN last_ping TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_active_connections_user_id ON active_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_active_connections_socket_id ON active_connections(socket_id);
 

@@ -1,3 +1,9 @@
+/**
+ * 🩺 HAEMI LIFE — INSTITUTIONAL FILE DELIVERY SYSTEM (v6.0)
+ * Standard: Google/Meta Strict Type Parity & Zero-Drift Metadata
+ * Protocol: Verified Binary Tunneling with Domain-Aware RBAC
+ */
+
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
 import { JWTPayload } from '../types/express';
@@ -7,21 +13,15 @@ import * as path from 'path';
 import mime from 'mime';
 import { fileService } from '../services/file.service';
 import { pipeline } from 'stream/promises';
-
-/**
- * 🩺 HAEMI LIFE — INSTITUTIONAL FILE DELIVERY SYSTEM (v5.0)
- * Standard: Google/Meta Strict Type Parity & Zero-Drift Metadata
- * Protocol: Verified Binary Tunneling
- */
+import { FileDomain } from '../types/file';
 
 /**
  * 🛡️ INSTITUTIONAL FILENAME SANITIZER
- * Ensures compliance with RFC 6266 while preserving extension integrity.
  */
 function sanitizeFilename(filename: string): string {
     return filename
-        .replace(/["';\r\n]/g, '') // Strip injection characters
-        .replace(/[^\x20-\x7E]/g, '_') // Normalize non-ASCII
+        .replace(/["';\r\n]/g, '')
+        .replace(/[^\x20-\x7E]/g, '_')
         .trim() || 'haemi_clinical_file';
 }
 
@@ -30,11 +30,62 @@ function getValidatedMode(mode: unknown): 'preview' | 'download' {
 }
 
 /**
- * 🩺 HAEMI RESOLVER: Profile Image
+ * 🧬 UNIFIED STREAM RESOLVER
+ * Google/Meta Grade: Centralized header management and stream lifecycle.
+ */
+async function deliverFile(
+    res: Response,
+    relativePath: string,
+    metadata: { name: string; mimeType?: string; domain: FileDomain },
+    mode: 'preview' | 'download' = 'preview'
+): Promise<void> {
+    try {
+        const stats = await fileService.getFileStats(relativePath);
+        if (!stats) {
+            logger.warn('[File-Resolver] Physical asset missing during delivery', { relativePath, domain: metadata.domain });
+            sendError(res, 404, 'Asset not found on storage media');
+            return;
+        }
+
+        // 🛡️ ZERO-BYTE INTEGRITY GATE (Absolute Ghost Prevention)
+        if (stats.size === 0) {
+            logger.error('[Security] Blocked delivery of 0-byte ghost asset', { relativePath, domain: metadata.domain });
+            sendError(res, 404, 'Asset corruption detected: Zero-length file');
+            return;
+        }
+
+        // P0: Infrastructure Headers
+        res.setHeader('Content-Type', metadata.mimeType || mime.getType(relativePath) || 'application/octet-stream');
+        res.setHeader('Content-Length', stats.size);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type, Content-Length');
+
+        if (mode === 'download') {
+            const safeFileName = sanitizeFilename(metadata.name || path.basename(relativePath));
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+        } else {
+            res.setHeader('Content-Disposition', 'inline');
+        }
+
+        const stream = fileService.getReadStream(relativePath);
+        await pipeline(stream, res);
+    } catch (error: unknown) {
+        logger.error('[File-Resolver] Stream pipeline collapsed', { 
+            error: error instanceof Error ? error.message : String(error),
+            relativePath 
+        });
+        if (!res.headersSent) {
+            sendError(res, 500, 'Internal delivery engine failure');
+        }
+    }
+}
+
+/**
+ * 🩺 RESOLVER: Profile Image
  */
 export const getProfileImage = async (req: Request, res: Response): Promise<void> => {
     const userId = req.params.userId as string;
-
     try {
         const query = `
             SELECT profile_image_data, profile_image_mime, profile_image 
@@ -49,71 +100,43 @@ export const getProfileImage = async (req: Request, res: Response): Promise<void
         }>(query, [userId]);
 
         if (result.rows.length === 0) {
-            sendError(res, 404, 'User/Image not found');
+            sendError(res, 404, 'User identity not found');
             return;
         }
 
         const user = result.rows[0];
 
-        // 1. Direct Redirect for external URLs
         if (user.profile_image && user.profile_image.startsWith('http')) {
             res.redirect(user.profile_image);
             return;
         }
 
-        // 🧬 Institutional Header Set
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type, Content-Length');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-
-        // 2. Verified Filesystem Path
         if (user.profile_image && !user.profile_image.startsWith('/api/')) {
-            const relativePath = user.profile_image
-                .replace(/^(\/)?uploads\//i, '')
-                .replace(/^\/+/, '');
-            
-            try {
-                const stats = await fileService.getFileStats(relativePath);
-                if (!stats) {
-                    sendError(res, 404, 'Image file missing on server');
-                    return;
-                }
-
-                res.setHeader('Content-Type', mime.getType(relativePath) || user.profile_image_mime || 'image/jpeg');
-                res.setHeader('Content-Length', stats.size);
-                res.setHeader('Content-Disposition', 'inline');
-                res.setHeader('Cache-Control', 'public, max-age=3600');
-
-                const stream = fileService.getReadStream(relativePath);
-                await pipeline(stream, res);
-                return;
-            } catch (err: unknown) {
-                logger.warn('[File-Resolver] Profile stream failed, falling back to buffer', { 
-                    userId, 
-                    error: err instanceof Error ? err.message : String(err) 
-                });
-            }
+            const relativePath = user.profile_image.replace(/^(\/)?uploads\//i, '').replace(/^\/+/, '');
+            await deliverFile(res, relativePath, { 
+                name: `profile_${userId}`, 
+                mimeType: user.profile_image_mime || undefined,
+                domain: FileDomain.PROFILE 
+            });
+            return;
         }
 
-        // 3. Fallback: Database Binary Buffer
         if (user.profile_image_data) {
             res.setHeader('Content-Type', user.profile_image_mime || 'image/jpeg');
-            res.setHeader('Content-Disposition', 'inline');
-            res.setHeader('Cache-Control', 'public, max-age=3600');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
             res.send(user.profile_image_data);
             return;
         }
 
         res.status(204).end();
     } catch (error: unknown) {
-        logger.error('[File-Resolver] Profile image fetch failed', { error, userId });
-        if (!res.headersSent) {
-            sendError(res, 500, 'Internal Server Error');
-        }
+        logger.error('[File-Resolver] Profile resolution failure', { error, userId });
+        sendError(res, 500, 'Profile engine error');
     }
 };
 
 /**
- * 🩺 HAEMI RESOLVER: Chat Attachments
+ * 🩺 RESOLVER: Chat Attachments
  */
 export const getChatAttachment = async (req: Request, res: Response): Promise<void> => {
     const { attachmentId } = req.params;
@@ -139,52 +162,27 @@ export const getChatAttachment = async (req: Request, res: Response): Promise<vo
         `, [attachmentId, user.id]);
 
         if (accessCheck.rows.length === 0) {
-            sendError(res, 403, 'Access denied or attachment record not found');
+            sendError(res, 403, 'RBAC Denied: Attachment access restricted');
             return;
         }
 
         const attachment = accessCheck.rows[0];
         const relativePath = (attachment.file_path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
-        
-        const stats = await fileService.getFileStats(relativePath);
-        if (!stats) {
-            sendError(res, 404, 'Attachment file not found on server');
-            return;
-        }
-
-        // 🛡️ METADATA PARITY (Institutional Sync)
-        const mimeType = attachment.file_type || mime.getType(relativePath) || 'application/octet-stream';
-        res.setHeader('Content-Type', mimeType);
-        res.setHeader('Content-Length', stats.size);
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        
-        // 🧬 EXPOSE HEADERS: Explicitly allow frontend JS to read meta
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type, Content-Length');
-
         const mode = getValidatedMode(req.query.mode);
-        if (mode === 'download') {
-            const safeFileName = sanitizeFilename(attachment.file_name || path.basename(relativePath));
-            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-        } else {
-            res.setHeader('Content-Disposition', 'inline');
-        }
 
-        const stream = fileService.getReadStream(relativePath);
-        await pipeline(stream, res);
+        await deliverFile(res, relativePath, {
+            name: attachment.file_name || 'chat_attachment',
+            mimeType: attachment.file_type || undefined,
+            domain: FileDomain.CHAT
+        }, mode);
     } catch (error: unknown) {
-        logger.error('[File-Resolver] Chat attachment access failure', { 
-            error: error instanceof Error ? error.message : String(error), 
-            attachmentId 
-        });
-        if (!res.headersSent) {
-            sendError(res, 500, 'Internal Server Error');
-        }
+        logger.error('[File-Resolver] Chat access failure', { error, attachmentId });
+        sendError(res, 500, 'Messaging file engine failure');
     }
 };
 
 /**
- * 🩺 HAEMI RESOLVER: Medical Records & Prescriptions
+ * 🩺 RESOLVER: Medical Records & Prescriptions
  */
 export const getMedicalRecordFile = async (req: Request, res: Response): Promise<void> => {
     const { recordId } = req.params;
@@ -215,57 +213,35 @@ export const getMedicalRecordFile = async (req: Request, res: Response): Promise
         }>(query, [recordId]);
 
         if (result.rows.length === 0) {
-            sendError(res, 403, 'Access denied or record not found');
+            sendError(res, 404, 'Clinical record not found');
             return;
         }
 
         const record = result.rows[0];
 
-        // RBAC validation: Patients only see their own
+        // Strict RBAC: Clinical Isolation
         if (user.role === 'patient' && record.patient_id !== user.id) {
-            sendError(res, 403, 'Unauthorized access attempt logged');
+            logger.warn('[Security] Unauthorized clinical access attempt', { recordId, userId: user.id });
+            sendError(res, 403, 'Access denied: Patient isolation active');
             return;
         }
 
         const relativePath = (record.file_path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
-        
-        const stats = await fileService.getFileStats(relativePath);
-        if (!stats) {
-            sendError(res, 404, 'Clinical document not found on server');
-            return;
-        }
-
-        // 🛡️ INSTITUTIONAL CLARITY
-        const mimeType = record.file_mime || mime.getType(relativePath) || 'application/pdf';
-        res.setHeader('Content-Type', mimeType);
-        res.setHeader('Content-Length', stats.size);
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type, Content-Length');
-
         const mode = getValidatedMode(req.query.mode);
-        if (mode === 'download') {
-            const safeFileName = sanitizeFilename(record.name || path.basename(relativePath));
-            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-        } else {
-            res.setHeader('Content-Disposition', 'inline');
-        }
 
-        const stream = fileService.getReadStream(relativePath);
-        await pipeline(stream, res);
+        await deliverFile(res, relativePath, {
+            name: record.name,
+            mimeType: record.file_mime || undefined,
+            domain: FileDomain.CLINICAL
+        }, mode);
     } catch (error: unknown) {
-        logger.error('[File-Resolver] Clinical record fetch failure', { 
-            error: error instanceof Error ? error.message : String(error), 
-            recordId 
-        });
-        if (!res.headersSent) {
-            sendError(res, 500, 'Internal Server Error');
-        }
+        logger.error('[File-Resolver] Clinical document failure', { error, recordId });
+        sendError(res, 500, 'Clinical engine failure');
     }
 };
 
 /**
- * 🩺 HAEMI RESOLVER: Temporary Attachments
+ * 🩺 RESOLVER: Temporary Attachments
  */
 export const getTempAttachment = async (req: Request, res: Response): Promise<void> => {
     const { tempId } = req.params;
@@ -283,45 +259,22 @@ export const getTempAttachment = async (req: Request, res: Response): Promise<vo
         );
 
         if (tempResult.rows.length === 0) {
-            logger.warn('[File-Resolver] Staged file record not found', { tempId, userId: user.id });
-            sendError(res, 404, 'Temporary file record not found');
+            sendError(res, 404, 'Staged record expired or missing');
             return;
         }
 
         const rawMetadata = tempResult.rows[0].name;
         const tempPath = rawMetadata.includes('|') ? rawMetadata.split('|')[0] : rawMetadata;
         const relativePath = tempPath.replace(/^\/+/, '').replace(/^uploads\//, '');
-        
-        const stats = await fileService.getFileStats(relativePath);
-        if (!stats) {
-            sendError(res, 404, 'Staged file missing on server');
-            return;
-        }
-
-        res.setHeader('Content-Type', tempResult.rows[0].mime || 'image/jpeg');
-        res.setHeader('Content-Length', stats.size);
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type, Content-Length');
-
         const mode = getValidatedMode(req.query.mode);
-        if (mode === 'download') {
-            const safeFileName = sanitizeFilename(tempResult.rows[0].name.split('|').pop() || 'temp_file');
-            res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-        } else {
-            res.setHeader('Content-Disposition', 'inline');
-        }
 
-        const stream = fileService.getReadStream(relativePath);
-        await pipeline(stream, res);
+        await deliverFile(res, relativePath, {
+            name: tempResult.rows[0].name.split('|').pop() || 'temp_file',
+            mimeType: tempResult.rows[0].mime || undefined,
+            domain: FileDomain.CHAT
+        }, mode);
     } catch (error: unknown) {
-        logger.error('[File-Resolver] Temp attachment fetch failure', { 
-            error: error instanceof Error ? error.message : String(error), 
-            tempId 
-        });
-        if (!res.headersSent) {
-            sendError(res, 500, 'Internal Server Error');
-        }
+        logger.error('[File-Resolver] Staging resolution failure', { error, tempId });
+        sendError(res, 500, 'Staging engine failure');
     }
 };
-

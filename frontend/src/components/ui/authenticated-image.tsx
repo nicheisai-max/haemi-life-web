@@ -27,6 +27,11 @@ interface AuthenticatedImageProps {
      * If omitted, the component returns null on error — backward-compatible quiet fail.
      */
     errorFallback?: React.ReactNode;
+    /**
+     * 🧬 INSTITUTIONAL LOADING FALLBACK
+     * Custom loader (e.g., PremiumLoader) used during the authenticated fetch.
+     */
+    loadingFallback?: React.ReactNode;
 }
 
 // D5 REMEDIATION: Bounded, reference-counted blob-URL cache.
@@ -44,6 +49,7 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({
     className,
     aspectRatio = 'square',
     errorFallback,
+    loadingFallback,
 }) => {
     const [imgUrl, setImgUrl] = useState<string | null>(imageCache.get(src) || null);
     const [loading, setLoading] = useState<boolean>(!imageCache.has(src));
@@ -91,13 +97,17 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({
             // may briefly lag, causing a stale-token 401 on the blob fetch.
             const token = getAccessToken();
             
-            const finalUrl = targetSrc;
-            
             // 🩺 HAEMI RESOLVER: Institutional Path Resolution
             // Architecture: Direct tunnel via targetSrc. Relative paths must be resolved by the caller
             // to maintain zero-drift parity between Frontend and Backend FileServices.
+            
+            let finalSrc = targetSrc;
+            if (targetSrc.includes('/api/files/profile/')) {
+                // Ensure profile images are tunneled through the authenticated backend
+                finalSrc = targetSrc.startsWith('/') ? targetSrc : `/${targetSrc}`;
+            }
 
-            const response: AxiosResponse<Blob> = await axios.get<Blob>(finalUrl, {
+            const response: AxiosResponse<Blob> = await axios.get<Blob>(finalSrc, {
                 baseURL: import.meta.env.VITE_API_URL || '',
                 responseType: 'blob',
                 headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -169,7 +179,11 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({
                 ratioClass,
                 className
             )}>
-                <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
+                {loadingFallback !== undefined ? (
+                    loadingFallback
+                ) : (
+                    <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
+                )}
             </div>
         );
     }

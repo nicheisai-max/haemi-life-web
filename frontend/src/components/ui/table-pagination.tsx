@@ -32,20 +32,39 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
     // Build visible page numbers with ellipsis logic
     const getPageNumbers = (): (number | 'ellipsis')[] => {
         const delta = 1; // pages to show around current
+        const range: number[] = [];
         const pages: (number | 'ellipsis')[] = [];
 
-        const rangeStart = Math.max(2, currentPage - delta);
-        const rangeEnd = Math.min(totalPages - 1, currentPage + delta);
+        for (
+            let i = Math.max(2, currentPage - delta);
+            i <= Math.min(totalPages - 1, currentPage + delta);
+            i++
+        ) {
+            range.push(i);
+        }
 
         pages.push(1);
 
-        if (rangeStart > 2) pages.push('ellipsis');
+        if (range.length > 0) {
+            if (range[0] > 2) {
+                // If only one page (2) is missing, show it instead of ellipsis
+                if (range[0] === 3) pages.push(2);
+                else pages.push('ellipsis');
+            }
 
-        for (let i = rangeStart; i <= rangeEnd; i++) {
-            pages.push(i);
+            range.forEach(p => pages.push(p));
+
+            if (range[range.length - 1] < totalPages - 1) {
+                // If only one page (totalPages - 1) is missing, show it instead of ellipsis
+                if (range[range.length - 1] === totalPages - 2) pages.push(totalPages - 1);
+                else pages.push('ellipsis');
+            }
+        } else if (totalPages > 1) {
+            // If totalPages is 3 and current is 1 or 3, range might be empty if we don't handle it
+            // But with delta=1, for totalPages=3, currentPage=1: rangeStart=2, rangeEnd=2, range=[2].
+            // If range is empty, it means we only have 1 and totalPages or just 1.
+            if (totalPages > 2) pages.push('ellipsis');
         }
-
-        if (rangeEnd < totalPages - 1) pages.push('ellipsis');
 
         if (totalPages > 1) pages.push(totalPages);
 

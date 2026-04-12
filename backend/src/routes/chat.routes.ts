@@ -34,7 +34,7 @@ router.put('/conversations/:conversationId/delivered', authenticateToken, markAs
 // React to a message
 router.post('/messages/:messageId/react', authenticateToken, reactToMessage);
 
-// Delete a message
-router.post('/messages/:messageId/delete', authenticateToken, deleteMessage);
+// Delete a message (REST-compliant: DELETE verb)
+router.delete('/messages/:messageId', authenticateToken, deleteMessage);
 
 export default router;

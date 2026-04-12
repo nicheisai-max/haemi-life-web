@@ -18,6 +18,7 @@ export interface ChatContextType {
     loading: boolean;
     typingUsers: UserId[];
     presence: Record<UserId, PresenceRecord>;
+    isHydrated: boolean;
     fetchConversations: () => Promise<void>;
     selectConversation: (conversation: Conversation) => void;
     sendMessage: (

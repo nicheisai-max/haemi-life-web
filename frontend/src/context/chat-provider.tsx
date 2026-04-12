@@ -34,6 +34,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [loading, setLoading] = useState(false);
     const [typingUsers, setTypingUsers] = useState<UserId[]>([]);
     const [presence, setPresence] = useState<Record<UserId, PresenceRecord>>({});
+    const [isHydrated, setIsHydrated] = useState(false);
     // Defensive check to ensure state is in scope for async handlers
     if (typeof typingUsers === 'undefined') {
         logger.warn('[ChatProvider] Emergency state recovery triggered');
@@ -255,9 +256,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (axios.isCancel(err)) return; // Tactical suppression of network aborts
             const errorMessage = err instanceof Error ? err.message : String(err);
             logger.error('[ChatProvider] Failed to fetch conversations:', errorMessage);
-        } finally {
             // P0: Escape hatch to prevent indefinite loading hang on "Securing clinical data..." 
-            if (isMountedRef.current) setLoading(false);
+            if (isMountedRef.current) {
+                setLoading(false);
+                setIsHydrated(true); // P0: Certification of source parity (Meta-Grade)
+            }
         }
     }, [isAuthenticated, fetchPresence, getAbortController]);
 
@@ -681,6 +684,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     }, [isAuthenticated, user, token, fetchConversations]);
 
+    // ─── 🧪 INSTITUTIONAL HEARTBEAT EMITTER (Meta-Grade) ────────────────────
+    // P0: Zero-drift presence synchronization. We emit a heartbeat every 30s
+    // to maintain the backend's active_connections source of truth.
+    // Phase 3 Guard: Heartbeat is strictly gated on isAuthenticated.
+    // If the session is terminated (cross-tab logout), this effect will
+    // self-terminate on the next re-render cycle, preventing ghost emissions.
+    useEffect(() => {
+        if (!isAuthenticated) {
+            logger.info('[ChatProvider] Heartbeat suppressed: session not active.');
+            return;
+        }
+        if (!socketService.isConnected()) return;
+
+        const heartbeatInterval = setInterval(() => {
+            // Institutional double-check: guard before each individual emission
+            if (!socketService.isConnected()) {
+                clearInterval(heartbeatInterval);
+                return;
+            }
+            socketService.emit('heartbeat');
+        }, 30000); // 30s Institutional Heartbeat
+
+        return () => {
+            clearInterval(heartbeatInterval);
+            logger.info('[ChatProvider] Heartbeat cleared on session state change.');
+        };
+    }, [isAuthenticated]);
+
     // ─── Phase 3: Hardened Outbox Sync (Exponential Backoff) ──────────────────
     useEffect(() => {
         if (!isAuthenticated || !user?.id) return;
@@ -942,7 +973,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const previousMessages = [...messages];
         setMessages((prev: Message[]) => prev.filter((msg: Message) => msg.id !== messageId));
         try {
-            await api.post<ApiResponse<void>>(`/chat/messages/${messageId}/delete`, { forEveryone });
+            // Fix 3: REST-compliant DELETE verb (matches backend router.delete('/messages/:messageId'))
+            // Axios DELETE with body uses { data: {} } pattern — no query string needed.
+            await api.delete<ApiResponse<void>>(`/chat/messages/${messageId}`, {
+                data: { forEveryone }
+            });
             // Local sync only, no blind refetch
             setConversations((prev: Conversation[]) => prev.map((c: Conversation) => {
                 // D1 REMEDIATION: Universal sidebar update.
@@ -1019,7 +1054,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return (
         <ChatContext.Provider value={{
-            conversations, activeConversation, messages, loading, typingUsers, presence,
+            conversations, activeConversation, messages, loading, typingUsers, presence, isHydrated,
             fetchConversations, selectConversation, sendMessage, startNewConversation,
             emitTyping, uploadAttachment, deleteMessage, reactToMessage, markAsRead, markMessageAsRead, user
         }}>

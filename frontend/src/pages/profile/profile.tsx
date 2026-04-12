@@ -16,6 +16,7 @@ import { profileUpdateSchema, type ProfileUpdateFormData } from '../../lib/valid
 import { useAuth } from '@/hooks/use-auth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getInitials } from '@/utils/avatar.resolver';
+import { logger } from '@/utils/logger';
 
 
 export const Profile: React.FC = () => {
@@ -75,7 +76,9 @@ export const Profile: React.FC = () => {
             setTimeout(() => setSuccess(null), 3000);
         } catch (err: unknown) {
             const uploadErr = err as { response?: { data?: { message?: string; error?: string } } };
-            console.error('[Profile] Upload error:', err);
+            logger.error('[Profile] Identity asset upload failure', { 
+                error: err instanceof Error ? err.message : String(err) 
+            });
             const errorMsg = uploadErr.response?.data?.message || uploadErr.response?.data?.error || 'Failed to upload image';
             setGeneralError(errorMsg);
         } finally {

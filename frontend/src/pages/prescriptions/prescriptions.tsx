@@ -14,6 +14,7 @@ import { TransitionItem } from '@/components/layout/page-transition';
 import { secureDownload } from '@/services/file.service';
 import { ClinicalRecordType } from '../../../../shared/clinical-types';
 import { useFileActionHandler } from '@/hooks/use-file-action-handler';
+import { logger } from '@/utils/logger';
 
 export const Prescriptions: React.FC = () => {
     const { error: toastError, warning: toastWarning } = useToast();
@@ -95,10 +96,15 @@ export const Prescriptions: React.FC = () => {
             });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            if (msg === 'FILE_TYPE_NOT_SUPPORTED') {
-                toastWarning('Institutional Security: This file type is restricted and cannot be downloaded.');
+
+            if (msg === 'FILE_TYPE_RESTRICTED') {
+                toastWarning('Institutional Security: This file type is restricted for safety.');
+            } else if (msg === 'ASSET_MISSING') {
+                toastError('Institutional Guard: Clinical asset missing or corrupted. This may be a system-generated demo record.');
+            } else if (msg === 'INTEGRITY_FAILURE') {
+                toastError('Security Gate: Verified file integrity failed. Download blocked for your safety.');
             } else {
-                toastError('Failed to download the clinical document. Please try again later.');
+                toastError('Communication Failure: Backend security protocol rejected the request.');
             }
         }
     };
@@ -113,8 +119,11 @@ export const Prescriptions: React.FC = () => {
                 const fullData = await getPrescriptionById(prescription.id);
                 setSelectedPrescription(fullData);
                 setPrescriptions(prev => prev.map(p => p.id === prescription.id ? { ...p, ...fullData } : p));
-            } catch (err) {
-                console.error('[PRESCRIPTION] Detail fetch failure:', err);
+            } catch (err: unknown) {
+                logger.error('[PRESCRIPTION] Detail fetch failure', {
+                    error: err instanceof Error ? err.message : String(err),
+                    prescriptionId: prescription.id
+                });
             } finally {
                 setFetchingDetails(false);
             }

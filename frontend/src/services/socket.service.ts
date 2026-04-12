@@ -95,6 +95,7 @@ export interface ClientToServerEvents {
     messageRead: (data: MessageReadEvent) => void;
     typingStarted: (data: { conversationId: ConversationId; name: string }) => void;
     typingStopped: (data: { conversationId: ConversationId; name: string }) => void;
+    heartbeat: () => void;
 }
 
 /* ---------------- TYPES ---------------- */

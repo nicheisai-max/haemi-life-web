@@ -248,7 +248,7 @@ export const NotificationMenu: React.FC = () => {
                 <Button
                     variant="ghost"
                     size="navAction"
-                    className="haemi-nav-action-circle haemi-ignore-click-outside relative text-muted-foreground hover:text-primary transition-all duration-300"
+                    className="haemi-nav-action-circle p-0 haemi-ignore-click-outside relative text-muted-foreground hover:text-primary transition-all duration-300"
                 >
                     <Bell className={`h-5 w-5 transition-all duration-300 ${hasUnread ? 'text-primary' : ''}`} />
                     {hasUnread && (
@@ -259,18 +259,18 @@ export const NotificationMenu: React.FC = () => {
 
             <DropdownMenuContent
                 align="end"
-                sideOffset={8}
-                className="w-[340px] p-0 overflow-hidden border-border/10 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-[var(--card-radius)] transition-all"
+                onCloseAutoFocus={(e: Event) => e.preventDefault()}
+                className="w-[340px] haemi-nav-dropdown-content p-0 overflow-hidden border-border/10 shadow-2xl bg-card/95 backdrop-blur-xl rounded-[var(--card-radius)] transition-all"
             >
-                {/* Header */}
-                <div className="px-5 py-4 border-b border-border/5 flex items-center justify-between bg-white/50 dark:bg-white/5">
-                    <h4 className="font-bold text-base tracking-tight text-slate-900 dark:text-slate-100">
+                {/* Institutional Header v8.9 - Stability Hardening Alignment */}
+                <div className="px-5 py-3.5 border-b border-slate-300/80 dark:border-white/10 flex items-center justify-between bg-slate-200/80 dark:bg-white/5 relative z-10">
+                    <h4 className="font-bold text-[13px] uppercase tracking-[0.15em] text-slate-800 dark:text-slate-100 opacity-90">
                         Notifications
                     </h4>
                     {unreadCount > 0 && (
                         <Badge
                             variant="secondary"
-                            className="bg-primary/10 text-primary dark:bg-primary/20 rounded-full px-2 py-0 text-[10px] font-bold border-none"
+                            className="bg-primary/20 text-primary dark:bg-primary/20 rounded-full px-2 py-0 text-[10px] font-black border-none"
                         >
                             {unreadCount} NEW
                         </Badge>

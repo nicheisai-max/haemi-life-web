@@ -70,7 +70,7 @@ export const Navbar: React.FC = () => {
         <header className="fixed top-0 left-0 right-0 z-50 h-[var(--layout-header-height)] bg-white/80 dark:bg-background/80 backdrop-blur-md border-b border-border transition-[background-color,color,backdrop-filter,opacity] duration-300">
             <div className="haemi-nav-container">
                 {/* Left: Logo & Hamburger (Bit-for-Bit Sidebar Baseline at 16px) */}
-                <div className="flex items-center h-full gap-4 haemi-nav-logo-offset-fix">
+                <div className="flex items-center h-full gap-1 md:gap-4 haemi-nav-logo-offset-fix">
                     <div className="flex items-center justify-center">
                         <MobileSidebar />
                     </div>
@@ -84,7 +84,7 @@ export const Navbar: React.FC = () => {
                 </div>
 
                 {/* Center: Global Command Center (Synchronized 40px Horizon) */}
-                <div className="haemi-nav-search-shield haemi-nav-action-sync">
+                <div className="haemi-nav-search-container haemi-nav-action-sync">
                     <CommandCenter />
                 </div>
 
@@ -99,27 +99,31 @@ export const Navbar: React.FC = () => {
                         <NotificationMenu />
 
                         <DropdownMenu modal={false}>
-                            <DropdownMenuTrigger asChild>
-                                <Button 
-                                    variant="ghost" 
-                                    size="navAction" 
-                                    className="p-0 border-none shadow-none focus-visible:ring-0"
-                                    aria-label="User account menu"
+                                <DropdownMenuTrigger asChild>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="navAction" 
+                                        className="haemi-nav-action-circle p-0 border-none shadow-none focus-visible:ring-0"
+                                        aria-label="User account menu"
+                                    >
+                                        <Avatar className="shadow-sm">
+                                            <AvatarImage 
+                                                src={getUserImage()} 
+                                                alt={user?.name || 'User'} 
+                                                className="haemi-avatar-full-bleed" 
+                                            />
+                                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                                                {user?.name ? getInitials(user.name) : 'U'}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent 
+                                    align="end" 
+                                    onCloseAutoFocus={(e: Event) => e.preventDefault()}
+                                    className="w-64 haemi-nav-dropdown-content rounded-[var(--card-radius)] p-1.5 bg-card/95 backdrop-blur-xl border-border shadow-2xl transition-all"
                                 >
-                                    <Avatar className="haemi-nav-action-circle shadow-sm">
-                                        <AvatarImage 
-                                            src={getUserImage()} 
-                                            alt={user?.name || 'User'} 
-                                            className="haemi-avatar-full-bleed" 
-                                        />
-                                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                                            {user?.name ? getInitials(user.name) : 'U'}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                </Button>
-                            </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-64 rounded-[var(--card-radius)] p-1.5 bg-card/95 backdrop-blur-xl border-border shadow-2xl mt-2 transition-all">
-                                    <DropdownMenuLabel className="font-normal px-4 py-3.5 border-b border-border/50 mb-1">
+                                    <DropdownMenuLabel className="haemi-nav-dropdown-header font-normal border-b border-border/50 mb-1">
                                         <div className="flex flex-col space-y-1">
                                             <p className="text-sm font-semibold leading-none text-slate-900 dark:text-white capitalize">{user?.name}</p>
                                             <p className="text-xs leading-none text-slate-500 dark:text-slate-400 truncate mt-1">{user?.email}</p>

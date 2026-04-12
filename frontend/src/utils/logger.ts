@@ -30,6 +30,7 @@ export type AuditEventType =
     | 'SECURITY_EVENT'
     | 'SESSION_TERMINATED'
     | 'UNHANDLED_ERROR'
+    | 'SYSTEM_RECOVERY'
     | 'ERROR';
 
 export interface AuditEventPayload {
@@ -37,7 +38,10 @@ export interface AuditEventPayload {
     reason?: string;
     message?: string;
     details?: Record<string, unknown>;
+    method?: string;
+    timestamp?: string | number;
     context?: string;
+    stack?: string;
 }
 
 export const auditLogger = {

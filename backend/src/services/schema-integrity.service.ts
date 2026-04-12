@@ -47,6 +47,31 @@ export class SchemaIntegrityService {
         logger.warn('Institutional Warning: Appointment ID type drift (expected integer).');
       }
 
+      // 4. Verify Unified File Engine Tables (Ghost-Proofing Guard)
+      const fileTablesCheck = await pool.query<{ table_name: string; column_count: string }>(`
+        SELECT table_name, COUNT(column_name) as column_count
+        FROM information_schema.columns 
+        WHERE table_name IN ('message_attachments', 'medical_records', 'temp_attachments')
+        AND column_name IN ('file_path', 'id', 'name')
+        GROUP BY table_name
+      `);
+
+      if (fileTablesCheck.rowCount! < 3) {
+        throw new Error('Institutional Drift Detected: One or more Unified File Engine tables are missing critical columns.');
+      }
+
+      logger.info(`[SchemaIntegrity] Validated ${fileTablesCheck.rowCount} critical file tables.`);
+ 
+      // 5. Verify Presence Infrastructure (Presence Heartbeat Guard)
+      const presenceCheck = await pool.query<{ column_name: string }>(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'active_connections' AND column_name = 'last_ping'
+      `);
+
+      if (presenceCheck.rowCount === 0) {
+        throw new Error('Institutional Drift Detected: Missing critical "last_ping" column in active_connections presence table.');
+      }
       logger.info('✅ Institutional Alignment Verified.');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);

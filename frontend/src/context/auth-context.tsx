@@ -7,7 +7,6 @@ import { setAccessToken, setAppInitialized, isBackendConfirmed } from '../servic
 import { AuthContext } from './auth-context-def';
 import { isAuthError, type User, type LoginCredentials, type SignupCredentials } from '../types/auth.types';
 import { 
-    isError, 
     safeParseJSON, 
     isJWTPayload,
     isUser 
@@ -198,14 +197,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (authState.authStatus !== 'authenticated' || !authState.token) return;
 
         const checkRefreshNeeded = async () => {
-            const token = authStateRef.current.token;
-            if (!token) return;
+            const current = authStateRef.current;
+            if (!current || !current.token) return;
 
             try {
-                const decodedToken = decodeJWT(token);
+                const decodedToken = decodeJWT(current.token);
                 if (!decodedToken) return;
 
-                const now = Math.floor((Date.now() + authStateRef.current.serverOffset) / 1000);
+                const now = Math.floor((Date.now() + current.serverOffset) / 1000);
                 const timeUntilExpiry = decodedToken.exp - now;
 
                 setIsTokenNearDeath(timeUntilExpiry < 10);
@@ -220,7 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         const refreshedToken = await performRefresh();
                         if (!refreshedToken && timeUntilExpiry <= 0) throw new Error('TERM_EXPIRY');
                     } catch (innerError: unknown) {
-                        const isTerminal = (isError(innerError) && innerError.message === 'TERM_EXPIRY') || timeUntilExpiry <= 0;
+                        const isTerminal = (innerError instanceof Error && innerError.message === 'TERM_EXPIRY') || timeUntilExpiry <= 0;
                         if (isTerminal) {
                             cleanup();
                             await logout();
@@ -228,38 +227,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         }
                     }
                 }
+                
+                const timeoutMinutes = current.sessionTimeout;
+                if (timeoutMinutes) {
+                    const idleLimitMs = timeoutMinutes * 60 * 1000;
+                    const elapsed = Date.now() - lastInteractionRef.current;
+                    const timeRemaining = idleLimitMs - elapsed;
+                    if (timeRemaining > 0 && timeRemaining < 120000) {
+                        window.dispatchEvent(new CustomEvent('auth:session-expiring', { detail: { timeLeft: Math.floor(timeRemaining / 1000) } }));
+                    }
+                }
             } catch (error: unknown) {
-                logger.error('[Auth] Proactive refresh engine systemic failure', { error: String(error) });
+                logger.error('[Auth] Proactive refresh engine systemic failure:', error instanceof Error ? error.message : String(error));
             } finally {
                 isRefreshingRef.current = false;
                 setIsRefreshing(false);
             }
-
-            const timeoutMinutes = authStateRef.current.sessionTimeout;
-            if (timeoutMinutes) {
-                const idleLimitMs = timeoutMinutes * 60 * 1000;
-                const timeRemaining = idleLimitMs - (Date.now() - lastInteractionRef.current);
-                if (timeRemaining > 0 && timeRemaining < 120000) {
-                    window.dispatchEvent(new CustomEvent('auth:session-expiring', { detail: { timeLeft: Math.floor(timeRemaining / 1000) } }));
-                }
-            }
         };
 
         const updateActivity = () => { lastInteractionRef.current = Date.now(); };
-        const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
-        events.forEach(name => window.addEventListener(name, updateActivity));
+        
+        type AuthInteractionEvent = 'mousedown' | 'mousemove' | 'keydown' | 'scroll' | 'touchstart';
+        const interactionEvents: AuthInteractionEvent[] = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+        
+        interactionEvents.forEach(name => {
+            try {
+                window.addEventListener(name, updateActivity, { passive: true });
+            } catch (err) {
+                logger.error(`[Auth] Failed to attach global listener: ${name}`, err);
+            }
+        });
 
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') { updateActivity(); checkRefreshNeeded(); }
+            if (document.visibilityState === 'visible') { 
+                updateActivity(); 
+                checkRefreshNeeded().catch(err => logger.error('[Auth] Visibility sync failure', err)); 
+            }
         };
 
-        refreshIntervalRef.current = setInterval(checkRefreshNeeded, 15000); 
+        refreshIntervalRef.current = setInterval(() => {
+            checkRefreshNeeded().catch(err => logger.error('[Auth] Periodic sync failure', err));
+        }, 15000); 
+
         window.addEventListener('visibilitychange', handleVisibilityChange);
         
         return () => {
             cleanup();
             window.removeEventListener('visibilitychange', handleVisibilityChange);
-            events.forEach(name => window.removeEventListener(name, updateActivity));
+            interactionEvents.forEach(name => window.removeEventListener(name, updateActivity));
         };
     }, [authState.authStatus, authState.token, logout]);
 
@@ -272,12 +287,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             authChannel.onmessage = (event) => {
                 const { type, payload } = event.data;
                 const latest = authStateRef.current;
+                
                 if (type === 'LOGOUT') {
+                    // P0 CROSS-TAB TERMINATION: Ensure identity match and version hierarchy
                     if (payload?.userId === latest.user?.id && payload?.role === latest.user?.role) {
+                        logger.warn('[AuthSync] Session termination signal received from peer tab. Initiating hard teardown.');
+                        
+                        // 1. Invalidate local memory state immediately
                         commitAuthState(null, null, 'unauthenticated');
+                        
+                        // 2. FORCE HARD REDIRECT: This is the ONLY way to reliably kill 
+                        // all active clinical providers (Chat, Notifications) from memory.
+                        window.location.href = '/login'; 
                     }
                 } else if (type === 'TOKEN_REFRESHED') {
                     if (payload.userId === latest.user?.id && payload.role === latest.user?.role) {
+                        logger.info('[AuthSync] Token refresh signal received from peer tab. Synchronizing local state.');
                         commitAuthState(latest.user, payload.token, latest.authStatus === 'unauthenticated' ? 'authenticated' : latest.authStatus, payload.refreshToken, latest.serverOffset, latest.sessionTimeout);
                     }
                 }
@@ -292,11 +317,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const handleTokenRefreshed = (event: Event) => {
             const { token, refreshToken, serverTime, sessionTimeout } = (event as CustomEvent).detail;
+            
+            // P0 IDEPOTENCY GUARD: Prevent redundant state commits 
+            // from the same tab or identical updates
+            if (authStateRef.current.token === token) return;
+
+            logger.info('[Auth] Silent token synchronization committed');
+            
             setAuthState(prev => {
-                if (prev.token === token) return prev;
                 const offset = (serverTime ? new Date(serverTime).getTime() : Date.now()) - Date.now();
                 return { ...prev, token, serverOffset: offset, sessionTimeout: sessionTimeout || prev.sessionTimeout };
             });
+            
             sessionStorage.setItem('token', token);
             if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
         };

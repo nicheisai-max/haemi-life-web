@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Search, Monitor, RefreshCw } from 'lucide-react';
+import { Search, Monitor, RefreshCw, History } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { getAuditLogs } from '../../services/admin.service';
@@ -10,6 +10,7 @@ import { MedicalLoader } from '@/components/ui/medical-loader';
 import { getErrorMessage } from '../../lib/error';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export const SystemLogs: React.FC = () => {
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -72,6 +73,47 @@ export const SystemLogs: React.FC = () => {
         return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400';
     };
 
+    /**
+     * 🛡️ INSTITUTIONAL RENDERING PROTOCOL
+     * Transforms raw JSONB metadata into human-readable clinical summaries.
+     */
+    const renderLogDetails = (log: AuditLog) => {
+        if (!log.details) return 'System event record';
+
+        let details: Record<string, unknown> = {};
+        if (typeof log.details === 'string') {
+            try {
+                details = JSON.parse(log.details);
+            } catch {
+                return log.details;
+            }
+        } else {
+            details = log.details as Record<string, unknown>;
+        }
+
+        if (Object.keys(details).length === 0) return 'System event record';
+
+        // Semantic mapping for known institutional actions
+        switch (log.action) {
+            case 'VERIFY_DOCTOR':
+                return `Verification: ${details.verified ? 'Approved' : 'Rejected'}`;
+            case 'UPDATE_USER_STATUS':
+                return `Account Status: ${details.status || 'Updated'}`;
+            case 'LOGIN_SUCCESS':
+                return `Authentication: Session Established`;
+            case 'LOGIN_FAILURE':
+                return `Security: Unsuccessful Login Attempt`;
+            default:
+                // Generic formatting: Key-Value pairing with readable capitalization
+                return Object.entries(details)
+                    .map(([key, val]) => {
+                        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                        return `${label}: ${val}`;
+                    })
+                    .join(', ');
+        }
+    };
+
     if (loading) {
         return <MedicalLoader message="Syncing System Logs..." />;
     }
@@ -94,8 +136,9 @@ export const SystemLogs: React.FC = () => {
                     <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     Refresh
                 </Button>
-                <div className="h-10 px-4 flex items-center justify-center rounded-xl bg-muted/50 border border-muted-foreground/20 text-muted-foreground text-sm font-bold min-w-[100px]">
-                    {logs.length} events
+                <div className="h-10 px-4 flex items-center justify-center rounded-[var(--card-radius)] bg-muted/50 border border-muted-foreground/20 text-muted-foreground text-sm font-bold min-w-[124px] gap-2">
+                    <History className="h-4 w-4" />
+                    {logs.length} Events
                 </div>
             </div>
         </div>
@@ -114,32 +157,32 @@ export const SystemLogs: React.FC = () => {
 
         <Card className="overflow-hidden border shadow-sm">
             <div className="hl-table-container">
-                <table className="hl-table">
-                    <thead>
-                        <tr>
-                            <th>Event</th>
-                            <th>User</th>
-                            <th>Details</th>
-                            <th>Technical</th>
-                            <th className="text-right">Timestamp</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <Table className="hl-table">
+                    <TableHeader>
+                        <TableRow className="bg-muted/50">
+                            <TableHead className="text-left">Event</TableHead>
+                            <TableHead className="text-left">User</TableHead>
+                            <TableHead className="text-left">Details</TableHead>
+                            <TableHead className="text-left">Technical</TableHead>
+                            <TableHead className="text-left">Timestamp</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                         {paginatedLogs.length === 0 ? (
-                            <tr>
-                                <td colSpan={5} className="text-center text-muted-foreground" style={{ padding: '3rem 1.5rem' }}>
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center text-muted-foreground py-12 px-6">
                                     No logs found matching your criteria
-                                </td>
-                            </tr>
+                                </TableCell>
+                            </TableRow>
                         ) : (
                             paginatedLogs.map((log) => (
-                                <tr key={log.id}>
-                                    <td>
-                                        <Badge variant="secondary" className={`font-mono text-[10px] uppercase ${getActionColor(log.action)}`}>
+                                <TableRow key={log.id} className="hover:bg-muted/50">
+                                    <TableCell>
+                                        <Badge variant="secondary" className={`text-[10px] uppercase ${getActionColor(log.action)}`}>
                                             {log.action}
                                         </Badge>
-                                    </td>
-                                    <td>
+                                    </TableCell>
+                                    <TableCell>
                                         <div className="flex items-center gap-2">
                                             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
                                                 {(log.userName || 'Sys').charAt(0).toUpperCase()}
@@ -149,18 +192,18 @@ export const SystemLogs: React.FC = () => {
                                                 <span className="text-xs text-muted-foreground">{log.userEmail}</span>
                                             </div>
                                         </div>
-                                    </td>
-                                    <td className="max-w-xs truncate text-muted-foreground" title={JSON.stringify(log.details)}>
-                                        {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
-                                    </td>
-                                    <td className="text-muted-foreground font-mono text-xs">
+                                    </TableCell>
+                                    <TableCell className="max-w-xs truncate text-muted-foreground" title={JSON.stringify(log.details)}>
+                                        {renderLogDetails(log)}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-xs">
                                         <div className="flex items-center gap-2">
                                             <Monitor className="h-3 w-3" />
                                             {log.ipAddress || '127.0.0.1'}
                                         </div>
-                                    </td>
-                                    <td className="text-right whitespace-nowrap">
-                                        <div className="flex flex-col items-end">
+                                    </TableCell>
+                                    <TableCell className="text-left whitespace-nowrap">
+                                        <div className="flex flex-col items-start">
                                             <span className="text-sm font-medium text-foreground">
                                                 {new Date(log.createdAt).toLocaleDateString()}
                                             </span>
@@ -168,12 +211,12 @@ export const SystemLogs: React.FC = () => {
                                                 {new Date(log.createdAt).toLocaleTimeString()}
                                             </span>
                                         </div>
-                                    </td>
-                                </tr>
+                                    </TableCell>
+                                </TableRow>
                             ))
                         )}
-                    </tbody>
-                </table>
+                    </TableBody>
+                </Table>
             </div>
             <TablePagination
                 currentPage={currentPage}
