@@ -31,9 +31,10 @@ interface DownloadOptions {
  */
 export const secureDownload = async (options: DownloadOptions): Promise<void> => {
   const { url, fileName: providedFileName, domain } = options;
+  const correlationId = Math.random().toString(36).substring(7);
 
   if (!url) {
-    logger.error('[Security] Blocked download request without URL');
+    logger.error('[Security] Blocked download request without URL', { correlationId });
     throw new Error('DOWNLOAD_URL_MISSING');
   }
 
@@ -44,7 +45,8 @@ export const secureDownload = async (options: DownloadOptions): Promise<void> =>
     if (isLocalResource) {
       logger.info('[FileService] Local resource detected. Triggering native tunnel.', { 
         providedFileName, 
-        domain 
+        domain,
+        correlationId
       });
       triggerAnchorDownload(url, providedFileName || 'haemi_file');
       return;
@@ -56,19 +58,25 @@ export const secureDownload = async (options: DownloadOptions): Promise<void> =>
       ? `${normalizedUrl}&mode=download` 
       : `${normalizedUrl}?mode=download`;
 
-    logger.info('[FileService] Initiating verified binary stream download', { domain, url: normalizedUrl });
+    logger.info('[FileService] Initiating verified binary stream download', { domain, url: normalizedUrl, correlationId });
 
+    // P2: Execution with Infrastructure Observability
     const response: AxiosResponse<Blob> = await api.get(downloadUrlQuery, {
       responseType: 'blob',
       headers: {
         'Accept': '*/*',
         'Cache-Control': 'no-cache',
-        'X-Client-Domain': domain || 'unknown'
-      }
+        'X-Client-Domain': domain || 'unknown',
+        'X-Correlation-ID': correlationId
+      },
+      validateStatus: (status) => status >= 200 && status < 300 // Strict success gate
     });
 
-    // P2: Forensic Filename Extraction
+    // P3: Forensic Filename Extraction
     const disposition = response.headers['content-disposition'];
+    const haemiError = response.headers['x-haemi-error'];
+    const assetId = response.headers['x-haemi-asset-id'];
+    
     let finalFileName: string = providedFileName;
 
     if (disposition && typeof disposition === 'string' && disposition.includes('filename=')) {
@@ -79,16 +87,12 @@ export const secureDownload = async (options: DownloadOptions): Promise<void> =>
       }
     }
 
-    // P3: Institutional Security Guard
-    const rawContentType = response.headers['content-type'];
+    // P4: Institutional Security Guard & Zero-Drift Validation
+    const rawContentType = response.headers['content-type'] as string | undefined;
     const contentType: string = (typeof rawContentType === 'string' ? rawContentType : response.data.type || '').toLowerCase();
     const size: number = response.data.size;
-    const etag: string | undefined = response.headers['etag'];
     
-    // Sensitivity Rules: Block executables and system-critical extensions
-    const sensitiveExtensions = ['.exe', '.bat', '.msi', '.sh', '.bin', '.dll'];
-    
-    const isJsonError: boolean = contentType.includes('application/json');
+    const isJsonError: boolean = contentType.includes('application/json') || !!haemiError;
     const isHtmlError: boolean = contentType.includes('text/html');
 
     // Architecture: Prevents 'Ghost IDs' from becoming filenames (Institutional Standard)
@@ -96,35 +100,28 @@ export const secureDownload = async (options: DownloadOptions): Promise<void> =>
     if (!finalFileName || uuidRegex.test(finalFileName)) {
       const urlParts = url.split('?')[0].split('/');
       const lastPart = urlParts[urlParts.length - 1];
-      finalFileName = (!lastPart || uuidRegex.test(lastPart)) ? 'haemi_attachment.bin' : lastPart;
+      // Google/Meta Grade: Never fallback to a UUID; use domain-aware default if extraction fails
+      finalFileName = (!lastPart || uuidRegex.test(lastPart)) 
+        ? `haemi_${domain || 'clinical'}_artifact.bin` 
+        : lastPart;
     }
 
-    const isSensitiveType: boolean = sensitiveExtensions.some(ext => finalFileName.toLowerCase().endsWith(ext));
-
-    if (isSensitiveType) {
-      logger.warn('[Security] Blocked sensitive file download attempt', { finalFileName, contentType });
-      throw new Error('FILE_TYPE_RESTRICTED');
-    }
-
-    // P4: FINAL INTEGRITY GATE (Google/Meta Standard)
-    if (size === 0 || isJsonError || isHtmlError) {
-      if (isJsonError) {
-          const errorMsg = await extractErrorMessage(response.data);
-          logger.error('[Security] Blocked malformed download (Ghost File Prevention)', { 
-              errorMsg,
-              url,
-              etag 
-          });
-          throw new Error(errorMsg || 'SERVER_INTEGRITY_FAILURE');
-      }
-
+    // P5: FINAL INTEGRITY GATE (Google/Meta Standard)
+    if (size === 0 || isJsonError || isHtmlError || haemiError) {
+      const errorMsg = isJsonError ? await extractErrorMessage(response.data) : null;
+      
       logger.error('[Security] Blocked malformed download (Ghost File Prevention)', { 
-        contentType, 
-        size, 
-        url,
-        etag 
+          errorMsg: errorMsg || haemiError || 'UNEXPECTED_CONTENT_TYPE',
+          url,
+          assetId,
+          contentType,
+          size,
+          correlationId 
       });
-      throw new Error('SERVER_INTEGRITY_FAILURE');
+
+      if (haemiError === 'ASSET_NOT_FOUND') throw new Error('ASSET_MISSING');
+      if (haemiError === 'CORRUPT_ASSET_ZERO_BYTE') throw new Error('INTEGRITY_FAILURE');
+      throw new Error(errorMsg || (typeof haemiError === 'string' ? haemiError : null) || 'SERVER_INTEGRITY_FAILURE');
     }
 
     const downloadUrl: string = window.URL.createObjectURL(response.data);
@@ -133,7 +130,8 @@ export const secureDownload = async (options: DownloadOptions): Promise<void> =>
     logger.info('[FileService] Download successfully committed to browser', { 
         finalFileName, 
         size,
-        etag 
+        assetId,
+        correlationId 
     });
 
     // Institutional Memory Buffer: Ensures UI/native sync
@@ -145,22 +143,26 @@ export const secureDownload = async (options: DownloadOptions): Promise<void> =>
     if (error instanceof Error) {
         finalErrorMsg = error.message;
     } else if (typeof error === 'object' && error !== null && 'response' in error) {
-        // Axios Error with Blob Response
         const axiosError = error as { response: AxiosResponse<Blob> };
-        if (axiosError.response?.data instanceof Blob) {
-            finalErrorMsg = await extractErrorMessage(axiosError.response.data) || 'UNKNOWN_SERVER_ERROR';
+        const haemiHeaderError = axiosError.response?.headers?.['x-haemi-error'];
+        
+        if (haemiHeaderError) {
+          finalErrorMsg = haemiHeaderError;
+        } else if (axiosError.response?.data instanceof Blob) {
+          finalErrorMsg = await extractErrorMessage(axiosError.response.data) || 'UNKNOWN_SERVER_ERROR';
         }
     }
 
     logger.error('[FileService] Secure download pipeline collapsed', { 
         url, 
         domain, 
-        error: finalErrorMsg 
+        error: finalErrorMsg,
+        correlationId
     });
     
     // Maintain semantic error codes for UI mapping
-    if (finalErrorMsg.toLowerCase().includes('not found')) throw new Error('ASSET_MISSING');
-    if (finalErrorMsg.toLowerCase().includes('corruption')) throw new Error('INTEGRITY_FAILURE');
+    if (finalErrorMsg.toLowerCase().includes('not found') || finalErrorMsg === 'ASSET_MISSING') throw new Error('ASSET_MISSING');
+    if (finalErrorMsg.toLowerCase().includes('corruption') || finalErrorMsg === 'INTEGRITY_FAILURE') throw new Error('INTEGRITY_FAILURE');
     
     throw new Error(finalErrorMsg);
   }

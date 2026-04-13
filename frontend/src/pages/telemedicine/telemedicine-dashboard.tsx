@@ -58,7 +58,7 @@ export const TelemedicineDashboard: React.FC = () => {
                             </div>
                         </div>
                         <Button
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                                 e.stopPropagation();
                                 navigate(PATHS.PATIENT.BOOK_APPOINTMENT);
                             }}

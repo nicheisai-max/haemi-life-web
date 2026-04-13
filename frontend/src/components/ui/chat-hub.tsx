@@ -426,30 +426,34 @@ export const ChatHub: React.FC = () => {
             return;
         }
 
+        const correlationId = Math.random().toString(36).substring(7);
+
         try {
             setDownloadingId(loadingId);
 
             // P0 FRONTEND HARDENING: Secure asset resolution via verified pipeline
-            // Synchronized with FileService v4.0 (Origin-Aware Engine)
+            // Synchronized with FileService v6.0 (Zero-Drift Standard)
             await secureDownload({ url, fileName });
-            logger.info('[ChatHub] Institutional download successful.', { fileName, loadingId });
+            logger.info('[ChatHub] Institutional download successful.', { fileName, loadingId, correlationId });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             
+            // Meta-Grade Response Mapping
             if (msg === 'FILE_TYPE_RESTRICTED') {
-                toastWarning('Institutional Security: This file type is restricted for safety.');
+                toastWarning('Institutional Security: This file type is restricted for clinical safety.');
             } else if (msg === 'ASSET_MISSING') {
-                toastError('Institutional Guard: Clinical asset missing or corrupted. This may be a system-generated demo record.');
-            } else if (msg === 'INTEGRITY_FAILURE') {
-                toastError('Security Gate: Verified file integrity failed. Download blocked for your safety.');
+                toastError('Clinical Integrity: Asset missing on storage media. This may occur for legacy/demo records.');
+            } else if (msg === 'INTEGRITY_FAILURE' || msg === 'SERVER_INTEGRITY_FAILURE') {
+                toastError('Security Gate: Verified file integrity failed (Ghost Asset Blocked). Please contact support.');
             } else {
-                toastError('Communication Failure: Backend security protocol rejected the request.');
+                toastError(`Communication Failure: System-level gate rejected request (${msg}).`);
             }
 
             logger.error('[ChatHub] Secure download failed', {
                 fileName,
                 loadingId,
-                error: msg
+                error: msg,
+                correlationId
             });
         } finally {
             setDownloadingId(null);
@@ -619,11 +623,19 @@ export const ChatHub: React.FC = () => {
         const other = participants.find(p => String(p.id) !== currentId);
 
         if (!other) {
+            // P0: Soft-Failure Strategy - Try to use conversation name before reverting to global fallback
+            const fallbackName = conversation.name && conversation.name !== 'Direct Chat' ? conversation.name : 'Medical Team';
+            
+            logger.debug('[ChatHub] Institutional participant drift detected, applying fallback', { 
+                conversationId: conversation.id,
+                fallbackName 
+            });
+
             return {
                 id: 'unknown' as UserId,
-                name: 'Haemi Member',
-                role: 'User',
-                initials: 'HM',
+                name: fallbackName,
+                role: 'Health Professional',
+                initials: resolveInitials(fallbackName),
                 profileImage: undefined,
                 isGroup: false
             };
@@ -634,7 +646,7 @@ export const ChatHub: React.FC = () => {
         return {
             ...other,
             name: displayName,
-            profileImage: other.id,
+            profileImage: String(other.id), // Ensure it maps to the profile image API trigger
             initials: resolveInitials(displayName),
             isGroup: false
         };
