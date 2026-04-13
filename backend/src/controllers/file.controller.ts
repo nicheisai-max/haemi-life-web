@@ -36,46 +36,75 @@ function getValidatedMode(mode: unknown): 'preview' | 'download' {
 async function deliverFile(
     res: Response,
     relativePath: string,
-    metadata: { name: string; mimeType?: string; domain: FileDomain },
+    metadata: { name: string; mimeType?: string; domain: FileDomain; assetId?: string },
     mode: 'preview' | 'download' = 'preview'
 ): Promise<void> {
+    const correlationId = Math.random().toString(36).substring(7);
     try {
         const stats = await fileService.getFileStats(relativePath);
         if (!stats) {
-            logger.warn('[File-Resolver] Physical asset missing during delivery', { relativePath, domain: metadata.domain });
+            logger.warn('[File-Resolver] Physical asset missing during delivery', { 
+                relativePath, 
+                domain: metadata.domain,
+                assetId: metadata.assetId,
+                correlationId
+            });
+            res.setHeader('X-Haemi-Error', 'ASSET_NOT_FOUND');
             sendError(res, 404, 'Asset not found on storage media');
             return;
         }
 
         // 🛡️ ZERO-BYTE INTEGRITY GATE (Absolute Ghost Prevention)
         if (stats.size === 0) {
-            logger.error('[Security] Blocked delivery of 0-byte ghost asset', { relativePath, domain: metadata.domain });
+            logger.error('[Security] Blocked delivery of 0-byte ghost asset', { 
+                relativePath, 
+                domain: metadata.domain,
+                assetId: metadata.assetId,
+                correlationId
+            });
+            res.setHeader('X-Haemi-Error', 'CORRUPT_ASSET_ZERO_BYTE');
             sendError(res, 404, 'Asset corruption detected: Zero-length file');
             return;
         }
 
+        const safeFileName = sanitizeFilename(metadata.name || path.basename(relativePath));
+        const contentType = metadata.mimeType || mime.getType(relativePath) || 'application/octet-stream';
+
         // P0: Infrastructure Headers
-        res.setHeader('Content-Type', metadata.mimeType || mime.getType(relativePath) || 'application/octet-stream');
+        res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Length', stats.size);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type, Content-Length');
+        res.setHeader('X-Haemi-Asset-ID', metadata.assetId || 'unknown');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type, Content-Length, X-Haemi-Asset-ID, X-Haemi-Error');
 
         if (mode === 'download') {
-            const safeFileName = sanitizeFilename(metadata.name || path.basename(relativePath));
             res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
         } else {
-            res.setHeader('Content-Disposition', 'inline');
+            // Institutional Standard: Even for preview, we provide the filename hint
+            res.setHeader('Content-Disposition', `inline; filename="${safeFileName}"`);
         }
 
         const stream = fileService.getReadStream(relativePath);
         await pipeline(stream, res);
-    } catch (error: unknown) {
-        logger.error('[File-Resolver] Stream pipeline collapsed', { 
-            error: error instanceof Error ? error.message : String(error),
-            relativePath 
+        
+        logger.info('[File-Resolver] Delivery successful', { 
+            assetId: metadata.assetId,
+            mode,
+            size: stats.size,
+            correlationId 
         });
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error('[File-Resolver] Stream pipeline collapsed', { 
+            error: errorMessage,
+            relativePath,
+            assetId: metadata.assetId,
+            correlationId
+        });
+
         if (!res.headersSent) {
+            res.setHeader('X-Haemi-Error', 'DELIVERY_PIPELINE_FAILURE');
             sendError(res, 500, 'Internal delivery engine failure');
         }
     }
@@ -112,11 +141,13 @@ export const getProfileImage = async (req: Request, res: Response): Promise<void
         }
 
         if (user.profile_image && !user.profile_image.startsWith('/api/')) {
-            const relativePath = user.profile_image.replace(/^(\/)?uploads\//i, '').replace(/^\/+/, '');
+            // Meta-Grade Path Normalization: Handles legacy and absolute prefix variations
+            const relativePath = user.profile_image.replace(/^(\/)?(uploads\/)?/i, '').replace(/^\/+/, '').replace(/\\/g, '/');
             await deliverFile(res, relativePath, { 
                 name: `profile_${userId}`, 
                 mimeType: user.profile_image_mime || undefined,
-                domain: FileDomain.PROFILE 
+                domain: FileDomain.PROFILE,
+                assetId: String(userId)
             });
             return;
         }
@@ -162,21 +193,27 @@ export const getChatAttachment = async (req: Request, res: Response): Promise<vo
         `, [attachmentId, user.id]);
 
         if (accessCheck.rows.length === 0) {
+            logger.warn('[Security] RBAC violation blocked for attachment access', { attachmentId, userId: user.id });
             sendError(res, 403, 'RBAC Denied: Attachment access restricted');
             return;
         }
 
         const attachment = accessCheck.rows[0];
-        const relativePath = (attachment.file_path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
+        // Meta-Grade Path Normalization (Handles legacy and absolute prefix variations)
+        const relativePath = (attachment.file_path || '').replace(/^(\/)?(uploads\/)?/i, '').replace(/\\/g, '/');
         const mode = getValidatedMode(req.query.mode);
 
         await deliverFile(res, relativePath, {
             name: attachment.file_name || 'chat_attachment',
             mimeType: attachment.file_type || undefined,
-            domain: FileDomain.CHAT
+            domain: FileDomain.CHAT,
+            assetId: String(attachmentId)
         }, mode);
     } catch (error: unknown) {
-        logger.error('[File-Resolver] Chat access failure', { error, attachmentId });
+        logger.error('[File-Resolver] Chat access failure', { 
+            error: error instanceof Error ? error.message : String(error), 
+            attachmentId 
+        });
         sendError(res, 500, 'Messaging file engine failure');
     }
 };
@@ -226,16 +263,21 @@ export const getMedicalRecordFile = async (req: Request, res: Response): Promise
             return;
         }
 
-        const relativePath = (record.file_path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
+        // Meta-Grade Path Normalization
+        const relativePath = (record.file_path || '').replace(/^(\/)?(uploads\/)?/i, '').replace(/\\/g, '/');
         const mode = getValidatedMode(req.query.mode);
 
         await deliverFile(res, relativePath, {
             name: record.name,
             mimeType: record.file_mime || undefined,
-            domain: FileDomain.CLINICAL
+            domain: FileDomain.CLINICAL,
+            assetId: String(recordId)
         }, mode);
     } catch (error: unknown) {
-        logger.error('[File-Resolver] Clinical document failure', { error, recordId });
+        logger.error('[File-Resolver] Clinical document failure', { 
+            error: error instanceof Error ? error.message : String(error), 
+            recordId 
+        });
         sendError(res, 500, 'Clinical engine failure');
     }
 };
@@ -265,16 +307,22 @@ export const getTempAttachment = async (req: Request, res: Response): Promise<vo
 
         const rawMetadata = tempResult.rows[0].name;
         const tempPath = rawMetadata.includes('|') ? rawMetadata.split('|')[0] : rawMetadata;
-        const relativePath = tempPath.replace(/^\/+/, '').replace(/^uploads\//, '');
+        
+        // Meta-Grade Path Normalization
+        const relativePath = tempPath.replace(/^(\/)?(uploads\/)?/i, '').replace(/\\/g, '/');
         const mode = getValidatedMode(req.query.mode);
 
         await deliverFile(res, relativePath, {
             name: tempResult.rows[0].name.split('|').pop() || 'temp_file',
             mimeType: tempResult.rows[0].mime || undefined,
-            domain: FileDomain.CHAT
+            domain: FileDomain.CHAT,
+            assetId: String(tempId)
         }, mode);
     } catch (error: unknown) {
-        logger.error('[File-Resolver] Staging resolution failure', { error, tempId });
+        logger.error('[File-Resolver] Staging resolution failure', { 
+            error: error instanceof Error ? error.message : String(error), 
+            tempId 
+        });
         sendError(res, 500, 'Staging engine failure');
     }
 };

@@ -179,14 +179,18 @@ export const getConversations = async (req: Request, res: Response) => {
              FROM conversation_participants cp
              JOIN users u ON cp.user_id = u.id
              WHERE cp.conversation_id = ANY($1) AND cp.user_id != $2`,
-            [convIds, userId]
+            [convIds, String(userId)]
         );
 
         const partMap = new Map<string, ChatParticipant[]>();
         partResult.rows.forEach((r): void => {
             if (!partMap.has(r.conversation_id)) partMap.set(r.conversation_id, []);
             partMap.get(r.conversation_id)!.push({
-                id: r.id as UserId, name: r.name, role: r.role, initials: r.initials, profileImage: r.profile_image
+                id: r.id as UserId, 
+                name: r.name || 'Unknown Professional', 
+                role: r.role || 'user', 
+                initials: r.initials || '??', 
+                profileImage: r.profile_image
             });
         });
 

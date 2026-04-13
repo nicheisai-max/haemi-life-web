@@ -29,8 +29,8 @@ const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024; // 1 MB
 // ─── Core Logic ─────────────────────────────────────────────────────────────
 
 function verifyBranch() {
-    const branchName = run_safe_command('git rev-parse --abbrev-ref HEAD')?.trim();
-    if (!branchName) return;
+    const branchName = run_safe_command('git rev-parse --abbrev-ref HEAD', true);
+    if (!branchName || typeof branchName !== 'string') return;
 
     const isMain = branchName === 'main';
     const isAISandbox = branchName.startsWith('ai-sandbox') || branchName.startsWith('ai/sandbox');
@@ -70,8 +70,8 @@ function verifySchema() {
 }
 
 function scanStagedFiles() {
-    const output = run_safe_command('git diff --cached --name-only --diff-filter=ACM');
-    const files = (output || '').split('\n').filter(Boolean);
+    const output = run_safe_command('git diff --cached --name-only --diff-filter=ACM', true);
+    const files = (typeof output === 'string' ? output : '').split('\n').filter(Boolean);
 
     for (const file of files) {
         const fullPath = path.resolve(process.cwd(), file);

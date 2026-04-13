@@ -119,23 +119,37 @@ class StatusService {
      * Enforces immediate "Offline" status in the Source of Truth (DB).
      */
     public async updateHeartbeat(userId: string, socketId: string): Promise<void> {
-        const id = String(userId);
+        const tidiedUserId = String(userId);
         try {
             // P0 PERMANENCE: Update activity timestamp for both session and user record
-            await pool.query(
+            const result = await pool.query<{ id: string; last_ping: Date }>(
                 `UPDATE active_connections 
                  SET last_ping = CURRENT_TIMESTAMP 
-                 WHERE user_id = $1 AND socket_id = $2`,
-                [id, socketId]
+                 WHERE user_id = $1 AND socket_id = $2
+                 RETURNING id, last_ping`,
+                [tidiedUserId, socketId]
             );
+
+            if (result.rowCount === 0) {
+                logger.warn(`[StatusService] Heartbeat received for missing session: user=${tidiedUserId}, socket=${socketId}`);
+                // Institutional Self-Healing: Re-persist if missing but sending heartbeats
+                await this.persistConnection(tidiedUserId, socketId);
+            } else {
+                logger.info(`[StatusService] Heartbeat confirmed: user=${tidiedUserId}, socket=${socketId}`, { 
+                    sessionId: result.rows[0].id,
+                    lastPing: result.rows[0].last_ping 
+                });
+            }
+
             await pool.query(
                 "UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1",
-                [id]
+                [tidiedUserId]
             );
         } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             logger.error('[StatusService] Heartbeat update failed', {
-                error: error instanceof Error ? error.message : String(error),
-                userId: id,
+                error: errorMessage,
+                userId: tidiedUserId,
                 socketId
             });
         }
@@ -234,19 +248,27 @@ class StatusService {
     /* ---------------- PRIVATE HELPERS (NON-BLOCKING) ---------------- */
 
     private async persistConnection(userId: string, socketId: string): Promise<void> {
+        const tidiedUserId = String(userId);
         try {
-            await pool.query(
-                `INSERT INTO active_connections (user_id, socket_id, last_ping) 
-                 VALUES ($1, $2, CURRENT_TIMESTAMP) 
-                 ON CONFLICT (user_id, socket_id) DO UPDATE SET last_ping = CURRENT_TIMESTAMP`,
-                [userId, socketId]
+            const result = await pool.query<{ id: string; connected_at: Date }>(
+                `INSERT INTO active_connections (user_id, socket_id, last_ping, last_activity) 
+                 VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
+                 ON CONFLICT (user_id, socket_id) 
+                 DO UPDATE SET last_ping = CURRENT_TIMESTAMP, last_activity = CURRENT_TIMESTAMP
+                 RETURNING id, connected_at`,
+                [tidiedUserId, socketId]
             );
-            // which updates the session heartbeat (last_activity and expires_at).
-            // Ensure last_activity is updated to track active interaction
-            await pool.query("UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1", [userId]);
+
+            logger.info(`[StatusService] Connection persisted: user=${tidiedUserId}, socket=${socketId}`, {
+                sessionId: result.rows[0].id,
+                isNew: result.rows[0].connected_at.getTime() > (Date.now() - 5000)
+            });
+
+            await pool.query("UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1", [tidiedUserId]);
         } catch (error: unknown) {
-            logger.error(`[StatusService] persistConnection DB error for userId = ${userId}`, {
-                error: error instanceof Error ? error.message : String(error),
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logger.error(`[StatusService] persistConnection DB error for userId = ${tidiedUserId}`, {
+                error: errorMessage,
                 socketId
             });
             throw error;

@@ -201,6 +201,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [isAuthenticated, user?.id, syncPresenceFallback]);
 
+    // ─── Phase 16: Institutional Heartbeat (Zero-Drift Sync) ────────────────
+    // Keeps the connection alive in the backend 'active_connections' table.
+    // Rule: Meta-Grade 30s interval to stay within the 90s reaper threshold.
+    useEffect(() => {
+        if (!isAuthenticated || !user?.id) return;
+
+        const heartbeatInterval = setInterval(() => {
+            if (socketService.isConnected()) {
+                socketService.emit('heartbeat');
+            }
+        }, 30000); // 30s Institutional Window
+
+        return () => {
+            clearInterval(heartbeatInterval);
+        };
+    }, [isAuthenticated, user?.id]);
+
     const internalFetchConversations = useCallback(async (): Promise<Conversation[] | void> => {
         if (!isAuthenticated) return;
         const controller = getAbortController('fetchConversations');
@@ -355,10 +372,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
         const onUserStatus: ServerToClientEvents["userStatus"] = (data) => {
-            setPresence(prev => ({
-                ...prev,
-                [data.userId]: { isOnline: data.isOnline, last_activity: data.last_activity }
-            }));
+            if (!data.userId) return;
+
+            setPresence(prev => {
+                const existing = prev[data.userId as UserId];
+                // P0: Non-Destructive Merge: Ensure we never overwrite metadata with null activities
+                return {
+                    ...prev,
+                    [data.userId as UserId]: { 
+                        isOnline: data.isOnline, 
+                        last_activity: data.last_activity || existing?.last_activity || new Date().toISOString() 
+                    }
+                };
+            });
+            
+            logger.debug('[ChatProvider] Presence heartbeat synchronized', { 
+                userId: data.userId, 
+                isOnline: data.isOnline 
+            });
         };
 
         const syncMissedMessages = async () => {
