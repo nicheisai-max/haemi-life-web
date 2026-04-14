@@ -2,7 +2,8 @@ import React, { useEffect, Suspense } from 'react';
 import type { ReactNode } from 'react';
 import { Navbar } from './navbar';
 import { NotificationSimulator } from '../utils/notification-simulator.deprecated';
-import { OverlayProvider, useOverlay } from '@/context/overlay-context';
+import { OverlayProvider } from '@/context/overlay-context';
+import { useOverlay } from '@/hooks/use-overlay';
 import { logger } from '@/utils/logger';
 
 interface DashboardLayoutProps {

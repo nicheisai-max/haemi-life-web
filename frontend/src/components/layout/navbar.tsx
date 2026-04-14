@@ -5,7 +5,7 @@ import { Logo } from '../ui/logo';
 import { ThemeToggle } from '../ui/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { LanguageSelector } from '../ui/language-selector';
-import { useOverlay } from '@/context/overlay-context';
+import { useOverlay } from '@/hooks/use-overlay';
 import {
     DropdownMenu,
     DropdownMenuContent,

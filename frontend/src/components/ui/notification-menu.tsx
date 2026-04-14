@@ -13,7 +13,7 @@ import { useNotifications } from '../../hooks/use-notifications';
 import { decrypt } from '@/utils/security';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useOverlay } from '@/context/overlay-context';
+import { useOverlay } from '@/hooks/use-overlay';
 import { logger } from '@/utils/logger';
 
 /* ──────────────────────────────────────────────
