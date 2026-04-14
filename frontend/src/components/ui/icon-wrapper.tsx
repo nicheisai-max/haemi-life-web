@@ -26,7 +26,7 @@ export const IconWrapper: React.FC<IconWrapperProps> = ({
 
     return (
         <div className={cn(
-            "flex items-center justify-center w-12 h-12 rounded-xl shrink-0 transition-colors",
+            "flex items-center justify-center w-12 h-12 rounded-[var(--card-radius)] shrink-0 transition-colors",
             variantStyles[variant],
             className
         )}>

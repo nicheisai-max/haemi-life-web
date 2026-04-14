@@ -526,6 +526,22 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         newMessage.attachments = normalizedAttachments;
 
+        // P0: INSTITUTIONAL PRE-COMMIT VERIFICATION (Investor Demo Hardening)
+        // Ensure all promoted assets are definitively accessible before committing the DB transaction.
+        for (const fa of finalAttachments) {
+            if (fa.filePath) {
+                const stats = await fileService.getFileStats(fa.filePath);
+                if (!stats) {
+                    logger.error('[ChatController] Pre-commit verification failed: Physical file missing', {
+                        filePath: fa.filePath,
+                        messageId: newMessage.id,
+                        senderId
+                    });
+                    throw new Error('Institutional Integrity Failure: Clinical asset lost during promotion');
+                }
+            }
+        }
+
         await client.query(
             'UPDATE conversations SET last_message_id = $1, preview_text = $2, last_message_at = NOW(), updated_at = NOW() WHERE id = $3',
             [newMessage.id, (decodedPreview || '') as string, conversationId as string]

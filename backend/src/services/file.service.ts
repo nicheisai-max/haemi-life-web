@@ -134,11 +134,24 @@ class FileService {
             // Trigger Atomic Promotion
             await this.atomicMove(fullTempPath, fullPermanentPath);
             
+            // P1: ZERO-GHOST VERIFICATION (Google/Meta Standard)
+            // Ensure the physical asset is definitively written to the vault before committing to DB
+            await fs.access(fullPermanentPath);
             const stats = await fs.stat(fullPermanentPath);
             
-            logger.info('[FileService] Staged file promoted to Vault', { 
+            if (stats.size === 0) {
+                logger.error('[Security] Blocked promotion of 0-byte ghost asset from staging', {
+                    tempId,
+                    permanentRelativePath,
+                    correlationId
+                });
+                throw new Error('CORRUPT_STAGED_ASSET_ZERO_BYTE');
+            }
+
+            logger.info('[FileService] Staged file promoted to Vault (Verified)', { 
                 tempId, 
                 permanentRelativePath,
+                size: stats.size,
                 correlationId 
             });
 

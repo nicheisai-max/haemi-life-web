@@ -27,12 +27,12 @@ describe('Global Axios Interceptors (api.ts)', () => {
         // We verify that the interceptor rejected it and didn't fall into an infinite loop.
     });
 
-    it('should force logout on 403 Forbidden', async () => {
+    it('should NOT force logout on 403 Forbidden (Institutional Standard)', async () => {
         // Mock a 403 response
         mock.onGet('/admin-dashboard').reply(403);
-        setAccessToken('mock-session-token'); // Institutional sync: ensure we have a session to clear
+        setAccessToken('mock-session-token'); 
 
-        // Listen to custom event to prove clearAuthSession fired
+        // Listen to custom event - we expect this NOT to be called for 403
         const spyEvent = vi.fn();
         window.addEventListener('auth:unauthorized', spyEvent);
 
@@ -43,7 +43,8 @@ describe('Global Axios Interceptors (api.ts)', () => {
             expect(err.response?.status).toBe(403);
         }
 
-        expect(spyEvent).toHaveBeenCalled();
+        // Institutional Parity: 403 is Forbidden, but NOT an identity failure (Unauthorized)
+        expect(spyEvent).not.toHaveBeenCalled();
         window.removeEventListener('auth:unauthorized', spyEvent);
     });
 

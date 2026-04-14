@@ -5,6 +5,7 @@ import { Button } from './button';
 import { useLocation } from 'react-router-dom';
 import { useClickOutside } from '../../hooks/use-click-outside';
 import api from '../../services/api';
+import { logger } from '@/utils/logger';
 
 /**
  * 🩺 HAEMI LIFE | INSTITUTIONAL AI COPILOT (FRONTEND)
@@ -165,8 +166,7 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
 
     useEffect(() => {
         if (isOpen) {
-            window.dispatchEvent(new CustomEvent('haemi-close-chathub'));
-            window.dispatchEvent(new CustomEvent('haemi-close-notifications'));
+            logger.debug('[ClinicalCopilot] Overlay active: copilot');
         }
     }, [isOpen]);
 

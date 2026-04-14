@@ -1,16 +1,127 @@
 import { pool } from '../config/db';
 import { fileService } from './file.service';
 import { logger } from '../utils/logger';
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import { UPLOADS_ROOT } from '../utils/path.util';
 
 /**
- * 🩺 HAEMI LIFE — FORENSIC CLEANUP SERVICE (v5.2)
+ * 🩺 HAEMI LIFE — FORENSIC CLEANUP SERVICE (v6.0)
  * Institutional Utility: Identifies and purges abandoned "Ghost Files" 
- * from the chat staging area (uploads/chat/temp).
+ * from the chat staging area (uploads/chat/temp) and orphaned assets in vault.
  * Now includes Meta-Grade 'Zombie Session' Reaper.
  */
 
 class CleanupService {
     private isRunning = false;
+
+    /**
+     * 🕵️‍♂️ PURGE ORPHANED PHYSICAL ASSETS
+     * Scans the institutional uploads directory and purges files
+     * that have no corresponding record in the database.
+     * Aligned with Investor Demo 'Zero-Ghost' requirement.
+     */
+    public async purgeOrphanedAssets(): Promise<void> {
+        if (this.isRunning) return;
+        this.isRunning = true;
+
+        const client = await pool.connect();
+        try {
+            logger.info('[CleanupService] Starting deep forensic scan for orphaned assets...');
+
+            // 1. Collect all valid paths from the Source of Truth (Database)
+            const [
+                attachments,
+                records,
+                prescriptions,
+                profiles
+            ] = await Promise.all([
+                client.query<{ file_path: string }>('SELECT file_path FROM message_attachments WHERE deleted_at IS NULL'),
+                client.query<{ file_path: string }>('SELECT file_path FROM medical_records WHERE deleted_at IS NULL'),
+                client.query<{ file_path: string }>('SELECT file_path FROM prescription_files'),
+                client.query<{ profile_image: string }>('SELECT profile_image FROM users WHERE profile_image IS NOT NULL')
+            ]);
+
+            const validPaths = new Set<string>();
+            const addPath = (p: string | null) => {
+                if (!p || p === 'DB_ONLY' || p.startsWith('http')) return;
+                // Normalize path to match filesystem (strip /api/ profiles prefix if present)
+                const normalized = p.replace(/^(\/)?(uploads\/)?/i, '').replace(/\\/g, '/');
+                if (normalized) validPaths.add(normalized);
+            };
+
+            attachments.rows.forEach(r => addPath(r.file_path));
+            records.rows.forEach(r => addPath(r.file_path));
+            prescriptions.rows.forEach(r => addPath(r.file_path));
+            profiles.rows.forEach(r => addPath(r.profile_image));
+
+            logger.info(`[CleanupService] Identified ${validPaths.size} active clinical assets in DB.`);
+
+            // 2. Recursive Scan of Uploads Directory
+            const orphanedFiles: string[] = [];
+            const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+
+            const walk = async (dir: string) => {
+                const entries = await fs.readdir(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                    const fullPath = path.resolve(dir, entry.name);
+                    if (entry.isDirectory()) {
+                        // Skip system folders and quarantine
+                        if (entry.name !== '_quarantine' && entry.name !== 'temp') { 
+                            await walk(fullPath);
+                        }
+                    } else {
+                        const stats = await fs.stat(fullPath);
+                        // Institutional Safety: Skip files modified in the last 5 minutes
+                        if (stats.mtimeMs > fiveMinutesAgo) continue;
+
+                        const relativePath = path.relative(UPLOADS_ROOT, fullPath).replace(/\\/g, '/');
+                        if (!validPaths.has(relativePath)) {
+                            orphanedFiles.push(relativePath);
+                        }
+                    }
+                }
+            };
+
+            try {
+                await fs.access(UPLOADS_ROOT);
+                await walk(UPLOADS_ROOT);
+            } catch (error: unknown) {
+                logger.warn('[CleanupService] Uploads directory missing or inaccessible during scan.', {
+                    error: error instanceof Error ? error.message : String(error)
+                });
+                return;
+            }
+
+            if (orphanedFiles.length === 0) {
+                logger.info('[CleanupService] Zero orphaned assets detected. Infrastructure is clean.');
+                return;
+            }
+
+            logger.info(`[CleanupService] Identified ${orphanedFiles.length} orphaned files for purging.`);
+
+            // 3. Purge Orphaned Files
+            for (const file of orphanedFiles) {
+                try {
+                    await fileService.deletePhysicalFile(file);
+                    logger.debug(`[CleanupService] Purged orphaned asset: ${file}`);
+                } catch (err) {
+                    logger.error(`[CleanupService] Failed to purge orphaned file: ${file}`, { 
+                        error: err instanceof Error ? err.message : String(err) 
+                    });
+                }
+            }
+
+            logger.info('[CleanupService] Orphaned asset purge cycle completed.');
+        } catch (error) {
+            logger.error('[CleanupService] Critical failure during orphaned asset scan:', {
+                error: error instanceof Error ? error.message : String(error)
+            });
+        } finally {
+            this.isRunning = false;
+            client.release();
+        }
+    }
 
     /**
      * 🗑️ PURGE ABANDONED STAGING ASSETS
@@ -25,7 +136,7 @@ class CleanupService {
             logger.info('[CleanupService] Starting forensic purge of abandoned staging assets...');
 
             // Institutional Standard: 24-hour expiration for un-promoted staging files
-            const result = await client.query<{ id: number, name: string }>(
+            const result = await client.query<{ id: string, name: string }>(
                 `SELECT id, name FROM temp_attachments 
                  WHERE (created_at < NOW() - INTERVAL '24 hours')`
             );
@@ -51,13 +162,17 @@ class CleanupService {
                     // Database Purge
                     await client.query('DELETE FROM temp_attachments WHERE id = $1', [row.id]);
                 } catch (rowErr) {
-                    logger.error(`[CleanupService] Failed to purge individual asset ID ${row.id}:`, rowErr);
+                    logger.error(`[CleanupService] Failed to purge individual asset ID ${row.id}:`, {
+                        error: rowErr instanceof Error ? rowErr.message : String(rowErr)
+                    });
                 }
             }
 
             logger.info('[CleanupService] Purge cycle completed.');
         } catch (error) {
-            logger.error('[CleanupService] Critical failure during purge cycle:', error);
+            logger.error('[CleanupService] Critical failure during purge cycle:', {
+                error: error instanceof Error ? error.message : String(error)
+            });
         } finally {
             this.isRunning = false;
             client.release();
@@ -92,8 +207,13 @@ class CleanupService {
      */
     public initialize(): void {
         // Initial run on startup
-        this.purgeAbandonedStaging();
-        this.purgeZombiePresence();
+        this.purgeOrphanedAssets().then(() => {
+            this.purgeAbandonedStaging();
+            this.purgeZombiePresence();
+        });
+
+        // Deep Scan: Weekly institutional audit
+        setInterval(() => this.purgeOrphanedAssets(), 7 * 24 * 60 * 60 * 1000);
 
         // Staging Purge: Daily Cron-like interval
         setInterval(() => this.purgeAbandonedStaging(), 24 * 60 * 60 * 1000);

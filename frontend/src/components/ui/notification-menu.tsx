@@ -13,6 +13,8 @@ import { useNotifications } from '../../hooks/use-notifications';
 import { decrypt } from '@/utils/security';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useOverlay } from '@/context/overlay-context';
+import { logger } from '@/utils/logger';
 
 /* ──────────────────────────────────────────────
    Type Narrowing for Metadata Safety
@@ -218,32 +220,35 @@ const AllCaughtUp: React.FC = () => (
 /* ──────────────────────────────────────────────
    Main Notification Menu
 ────────────────────────────────────────────── */
+/* ──────────────────────────────────────────────
+   Main Notification Menu
+────────────────────────────────────────────── */
 export const NotificationMenu: React.FC = () => {
     const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications();
-    const [isOpen, setIsOpen] = useState(false);
+    const { activeOverlay, setOverlay, closeOverlay } = useOverlay();
 
     // 🛡️ INSTITUTIONAL FILTERING: Show only unread or newly marked items to trigger empty state
     const activeNotifications = useMemo(() => {
         return notifications.filter(n => !n.isRead);
     }, [notifications]);
 
-    useEffect(() => {
-        const handleClose = () => setIsOpen(false);
-        window.addEventListener('haemi-close-notifications', handleClose);
-        return () => window.removeEventListener('haemi-close-notifications', handleClose);
-    }, []);
-
-    useEffect(() => {
-        if (isOpen) {
-            window.dispatchEvent(new CustomEvent('haemi-close-chathub'));
-            window.dispatchEvent(new CustomEvent('haemi-close-copilot'));
+    const handleOpenChange = (open: boolean) => {
+        if (open) {
+            logger.debug('[NotificationMenu] Requesting overlay shift: notifications');
+            setOverlay('notifications');
+        } else if (activeOverlay === 'notifications') {
+            closeOverlay();
         }
-    }, [isOpen]);
+    };
 
     const hasUnread = unreadCount > 0;
 
     return (
-        <DropdownMenu modal={false} open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenu 
+            modal={false} 
+            open={activeOverlay === 'notifications'} 
+            onOpenChange={handleOpenChange}
+        >
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="ghost"
@@ -326,3 +331,4 @@ export const NotificationMenu: React.FC = () => {
         </DropdownMenu>
     );
 };
+

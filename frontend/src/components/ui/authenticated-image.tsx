@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios, { AxiosResponse } from 'axios';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ImageOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getAccessToken } from '../../services/api';
 import { logger } from '../../utils/logger';
@@ -190,9 +190,23 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({
 
     if (error || !imgUrl) {
         // If the caller provides a fallback node, render it (e.g. lightbox error state).
-        // Otherwise preserve the original quiet-fail behaviour (returns null) so the
-        // message grid collapses cleanly without visual noise.
-        return errorFallback !== undefined ? <>{errorFallback}</> : null;
+        // Otherwise provide a professional clinical placeholder to maintain UI integrity.
+        return (
+            <div className={cn(
+                "flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 gap-2 overflow-hidden rounded-[inherit]",
+                ratioClass,
+                className
+            )}>
+                {errorFallback !== undefined ? (
+                    errorFallback
+                ) : (
+                    <>
+                        <ImageOff className="h-6 w-6 opacity-30" />
+                        <span className="text-[10px] uppercase font-semibold tracking-wider opacity-50">Clinical Asset Unavailable</span>
+                    </>
+                )}
+            </div>
+        );
     }
 
     return (

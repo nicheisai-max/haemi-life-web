@@ -10,6 +10,7 @@ import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckChe
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat, type Conversation, type Message } from '../../hooks/use-chat';
 import { useAuth } from '@/hooks/use-auth';
+import { useOverlay } from '@/hooks/use-overlay';
 import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
 import api from '../../services/api';
 import type { DoctorProfile } from '../../services/doctor.service';
@@ -359,9 +360,19 @@ import { useToast } from '@/hooks/use-toast';
 export const ChatHub: React.FC = () => {
     const { error: toastError, warning: toastWarning } = useToast();
     const { user } = useAuth();
+    const { activeOverlay, setOverlay, closeOverlay } = useOverlay();
     const location = useLocation(); // Hook for route changes
+
+    // 🧬 INSTITUTIONAL VISIBILITY: Sync with Global Overlay Policy
+    const isOpen = activeOverlay === 'chat';
+
     // Close on click outside using robust capture-phase hook
-    const containerRef = useClickOutside<HTMLDivElement>(() => setIsOpen(false));
+    const containerRef = useClickOutside<HTMLDivElement>(() => {
+        if (isOpen) {
+            logger.debug('[ChatHub] Click-outside detected, closing overlay');
+            closeOverlay();
+        }
+    });
 
     const {
         conversations,
@@ -382,7 +393,6 @@ export const ChatHub: React.FC = () => {
 
     // IntersectionObserver for Read Receipts replaced by Virtuoso rangeChanged in Phase 3
 
-    const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
     const [view, setView] = useState<'contacts' | 'conversation' | 'new-chat'>('contacts');
     const [newMessage, setNewMessage] = useState('');
@@ -482,9 +492,12 @@ export const ChatHub: React.FC = () => {
     // Re-fetch when the window is explicitly opened to ensure sync
     useEffect(() => {
         if (isOpen) {
-            // Controlled Refresh removed - redundant with socket-driven state
+            // Re-sync unread state when opening
+            if (activeConversation) {
+                markAsRead(activeConversation.id);
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, activeConversation, markAsRead]);
 
     // P1 Fix: Periodic polling to keep the unread badge fresh even if
     // sockets are dropped or browser tab was inactive.
@@ -533,25 +546,18 @@ export const ChatHub: React.FC = () => {
 
     // Auto-close on route change
     useEffect(() => {
-        setIsOpen(false);
-    }, [location.pathname]);
+        if (isOpen) closeOverlay();
+    }, [location.pathname, isOpen, closeOverlay]);
 
     const toggleChat = () => {
-        if (!isOpen) {
-            // Close clinical copilot if it's open
-            window.dispatchEvent(new CustomEvent('haemi-close-copilot'));
+        if (isOpen) {
+            closeOverlay();
+        } else {
+            logger.debug('[ChatHub] Activating overlay: chat');
+            setOverlay('chat');
+            setIsMinimized(false);
         }
-        setIsOpen(!isOpen);
     };
-
-    // Coordination: Listen for event to close chathub (e.g. from ClinicalCopilot)
-    useEffect(() => {
-        const handleCloseChatHub = () => {
-            setIsOpen(false);
-        };
-        window.addEventListener('haemi-close-chathub', handleCloseChatHub);
-        return () => window.removeEventListener('haemi-close-chathub', handleCloseChatHub);
-    }, []);
 
     const handleSelectConversation = (conversation: Conversation) => {
         selectConversation(conversation);

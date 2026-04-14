@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import {
     BarChart,
     Bar,
@@ -5,20 +6,18 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer
+    ResponsiveContainer,
+    Cell
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { logger } from '../../utils/logger';
 
-interface ChartDataItem {
-    [key: string]: string | number | undefined;
-}
-
-interface PremiumBarChartProps {
+interface PremiumBarChartProps<T extends object> {
     title: string;
     description?: string;
-    data: ChartDataItem[];
-    dataKey: string;
-    categoryKey: string;
+    data: T[];
+    dataKey: keyof T & string;
+    categoryKey: keyof T & string;
     color?: string;
     height?: number;
     valuePrefix?: string;
@@ -33,13 +32,13 @@ interface CustomTooltipProps {
     suffix?: string;
 }
 
-const CustomTooltip = ({ active, payload, label, prefix, suffix }: CustomTooltipProps) => {
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, prefix, suffix }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-popover border border-border shadow-xl rounded-[var(--card-radius)] p-3 animate-in fade-in-0 zoom-in-95">
-                <p className="text-sm font-medium text-popover-foreground mb-1">{label}</p>
-                <p className="text-sm font-bold text-primary">
-                    {prefix}{payload[0].value?.toLocaleString()}{suffix}
+            <div className="bg-popover border border-border shadow-xl rounded-[var(--card-radius)] p-3 animate-in fade-in-0 zoom-in-95 backdrop-blur-md">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+                <p className="text-sm font-black text-primary">
+                    {prefix}{Number(payload[0].value).toLocaleString()}{suffix}
                 </p>
             </div>
         );
@@ -47,60 +46,97 @@ const CustomTooltip = ({ active, payload, label, prefix, suffix }: CustomTooltip
     return null;
 };
 
-export const PremiumBarChart: React.FC<PremiumBarChartProps> = ({
+/**
+ * Institutional Bar Chart (Google/Meta Grade)
+ * 
+ * - Generic Type Support
+ * - SVG Linear Gradients for depth
+ * - Rounded top corners (8px)
+ * - Theme-aware styling (Light/Dark)
+ */
+export const PremiumBarChart = <T extends object>({
     title,
     description,
     data,
     dataKey,
     categoryKey,
-    color = '#0E6B74', // Primary-800 from brand
+    color = '#148C8B', // Primary-700
     height = 350,
     valuePrefix = '',
     valueSuffix = ''
-}) => {
+}: PremiumBarChartProps<T>) => {
+    // Audit check for institutional data integrity
+    useMemo(() => {
+        if (!data || data.length === 0) {
+            logger.warn(`[Charts] PremiumBarChart('${title}') received null/empty data set.`);
+        }
+    }, [data, title]);
+
     return (
-        <Card className="hover:shadow-md transition-shadow duration-300 overflow-hidden border-border/60">
+        <Card className="hover:shadow-lg transition-all duration-500 overflow-hidden border-border/60 hover:border-primary/30 group">
             <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-bold tracking-tight">{title}</CardTitle>
-                {description && <CardDescription>{description}</CardDescription>}
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-100">{title}</CardTitle>
+                {description && <CardDescription className="text-xs text-slate-500 font-medium">{description}</CardDescription>}
             </CardHeader>
             <CardContent>
                 <div style={{ width: '100%', height: height, minHeight: '300px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                             data={data}
-                            margin={{
-                                top: 10,
-                                right: 30,
-                                left: 0,
-                                bottom: 0,
-                            }}
+                            margin={{ top: 20, right: 30, left: -20, bottom: 0 }}
+                            barGap={8}
                         >
-                            <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
+                            <defs>
+                                <linearGradient id={`barGradient-${String(dataKey)}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%"   stopColor={color} stopOpacity={1} />
+                                    <stop offset="100%" stopColor={color} stopOpacity={0.6} />
+                                </linearGradient>
+                            </defs>
+                            
+                            <CartesianGrid 
+                                vertical={false} 
+                                strokeDasharray="3 3" 
+                                strokeOpacity={0.1} 
+                                className="stroke-slate-300 dark:stroke-slate-700"
+                            />
+                            
                             <XAxis
-                                dataKey={categoryKey}
+                                dataKey={categoryKey as string}
                                 axisLine={false}
                                 tickLine={false}
-                                tick={{ fill: '#64748B', fontSize: 12 }}
-                                tickMargin={10}
+                                tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 500 }}
+                                tickMargin={12}
+                                className="text-slate-400 dark:text-slate-500"
                             />
+                            
                             <YAxis
                                 axisLine={false}
                                 tickLine={false}
-                                tick={{ fill: '#64748B', fontSize: 12 }}
-                                tickFormatter={(value) => `${valuePrefix}${value}${valueSuffix}`}
+                                tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 500 }}
+                                tickFormatter={(value) => `${valuePrefix}${value.toLocaleString()}${valueSuffix}`}
+                                className="text-slate-400 dark:text-slate-500"
                             />
+                            
                             <Tooltip
                                 content={<CustomTooltip prefix={valuePrefix} suffix={valueSuffix} />}
-                                cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                                cursor={{ fill: 'currentColor', opacity: 0.05 }}
                             />
+                            
                             <Bar
-                                dataKey={dataKey}
-                                fill={color}
-                                radius={[6, 6, 0, 0]}
-                                barSize={40}
-                                animationDuration={1500}
-                            />
+                                dataKey={dataKey as string}
+                                radius={[8, 8, 0, 0]}
+                                barSize={32}
+                                animationDuration={1800}
+                                animationEasing="ease-in-out"
+                            >
+                                {data.map((_, index) => (
+                                    <Cell 
+                                        key={`cell-${index}`} 
+                                        fill={`url(#barGradient-${String(dataKey)})`}
+                                        className="transition-all duration-300 hover:opacity-80"
+                                    />
+                                ))}
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

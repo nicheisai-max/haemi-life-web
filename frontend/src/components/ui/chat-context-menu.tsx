@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Trash2, XCircle, Copy, Reply } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useClickOutside } from '../../hooks/use-click-outside';
 
 interface ChatContextMenuProps {
     x: number;
@@ -38,16 +39,7 @@ export const ChatContextMenu: React.FC<ChatContextMenuProps> = ({
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            const target = event.target;
-            if (menuRef.current && target instanceof Node && !menuRef.current.contains(target)) {
-                onClose();
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [onClose]);
+    useClickOutside(onClose);
 
     // Dimensions - Using sleek, responsive sizing
     const menuWidth = isMobile ? window.innerWidth : 300;

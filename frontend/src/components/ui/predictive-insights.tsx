@@ -37,7 +37,7 @@ export const PredictiveInsights: React.FC<PredictiveInsightsProps> = ({ insights
                         transition={{ delay: index * 0.1 }}
                         className="h-full"
                     >
-                        <div className="relative group h-full overflow-hidden rounded-card bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all duration-300">
+                        <div className="relative group h-full overflow-hidden rounded-[var(--card-radius)] bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-primary/30 dark:hover:border-primary/30 transition-all duration-300">
                             {/* Subtle Gradient Overlay */}
                             <div className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-500 bg-gradient-to-br ${insight.variant === 'primary' ? 'from-emerald-500 to-teal-500' :
                                 insight.variant === 'secondary' ? 'from-blue-500 to-indigo-500' :
@@ -46,7 +46,7 @@ export const PredictiveInsights: React.FC<PredictiveInsightsProps> = ({ insights
 
                             <div className="relative p-6 flex flex-col justify-between h-full space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <div className={`p-3 rounded-xl shadow-sm transition-transform group-hover:scale-110 ${insight.variant === 'primary' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                                    <div className={`p-3 rounded-[var(--card-radius)] shadow-sm transition-transform group-hover:scale-110 ${insight.variant === 'primary' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' :
                                         insight.variant === 'secondary' ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400' :
                                             'bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
                                         }`}>

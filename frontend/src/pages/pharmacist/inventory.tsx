@@ -265,38 +265,38 @@ export const Inventory: React.FC = () => {
 
             {/* Stats Cards */}
             <TransitionItem className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <Card>
+                <Card className="hover:border-primary/50 dark:hover:border-primary/80 hover:shadow-lg hover:shadow-primary/10 dark:hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 group cursor-pointer">
                     <CardContent className="p-6 flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                        <div className="w-12 h-12 rounded-[var(--card-radius)] bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
                             <Package className="h-6 w-6" />
                         </div>
                         <div>
-                            <div className="text-h3">{inventory.length}</div>
-                            <div className="text-sm text-muted-foreground font-medium">Total Items</div>
+                            <div className="text-h3 transition-all duration-300 group-hover:scale-105 origin-left">{inventory.length}</div>
+                            <div className="text-sm text-muted-foreground font-bold uppercase tracking-widest group-hover:text-primary transition-colors">Total Items</div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="hover:border-red-500/50 dark:hover:border-red-500/80 hover:shadow-lg hover:shadow-red-500/10 dark:hover:shadow-red-500/20 hover:-translate-y-1 transition-all duration-300 group cursor-pointer">
                     <CardContent className="p-6 flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
+                        <div className="w-12 h-12 rounded-[var(--card-radius)] bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400 group-hover:scale-110 transition-transform duration-300">
                             <AlertTriangle className="h-6 w-6" />
                         </div>
                         <div>
-                            <div className="text-h3">{lowStockItems.length}</div>
-                            <div className="text-sm text-muted-foreground font-medium">Low Stock Alerts</div>
+                            <div className="text-h3 transition-all duration-300 group-hover:scale-105 origin-left">{lowStockItems.length}</div>
+                            <div className="text-sm text-muted-foreground font-bold uppercase tracking-widest group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">Low Stock Alerts</div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="hover:border-green-500/50 dark:hover:border-green-500/80 hover:shadow-lg hover:shadow-green-500/10 dark:hover:shadow-green-500/20 hover:-translate-y-1 transition-all duration-300 group cursor-pointer">
                     <CardContent className="p-6 flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+                        <div className="w-12 h-12 rounded-[var(--card-radius)] bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform duration-300">
                             <TrendingUp className="h-6 w-6" />
                         </div>
                         <div>
-                            <div className="text-h3">{uniqueCategoriesInStock.length}</div>
-                            <div className="text-sm text-muted-foreground font-medium">Categories</div>
+                            <div className="text-h3 transition-all duration-300 group-hover:scale-105 origin-left">{uniqueCategoriesInStock.length}</div>
+                            <div className="text-sm text-muted-foreground font-bold uppercase tracking-widest group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">Categories</div>
                         </div>
                     </CardContent>
                 </Card>

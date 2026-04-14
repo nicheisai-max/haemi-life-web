@@ -81,14 +81,30 @@ export interface SystemStats {
     totalUsers: number; 
 }
 
+export interface PaginatedResponse<T> {
+    users: T[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    };
+}
+
 // Named exports for components that expect direct imports
 export const getAuditLogs = async (limit = 50, offset = 0): Promise<AuditLog[]> => {
     const response = await api.get<ApiResponse<AuditLog[]>>('/admin/audit-logs', { params: { limit, offset } });
     return normalizeResponse(response);
 };
 
-export const getAllUsers = async (params?: { role?: string; status?: string; search?: string }): Promise<UserListItem[]> => {
-    const response = await api.get<ApiResponse<UserListItem[]>>('/admin/users', { params });
+export const getAllUsers = async (params?: { 
+    role?: string; 
+    status?: string; 
+    search?: string; 
+    page?: number; 
+    limit?: number 
+}): Promise<PaginatedResponse<UserListItem>> => {
+    const response = await api.get<ApiResponse<PaginatedResponse<UserListItem>>>('/admin/users', { params });
     return normalizeResponse(response);
 };
 
