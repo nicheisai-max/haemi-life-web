@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { logger } from './logger';
 
 const ALGORITHM_GCM = 'aes-256-gcm';
 const ALGORITHM_CBC = 'aes-256-cbc';
@@ -9,6 +10,8 @@ const ENCRYPTED_PREFIX = 'enc:';
 const GCM_PREFIX = 'gcm:';
 const LEGACY_IV_LENGTH = 16; // For CBC fallback
 
+let derivedKeyCache: Buffer | null = null;
+
 function isCipherGCM(cipher: unknown): cipher is crypto.CipherGCM {
     return typeof cipher === 'object' && cipher !== null && 'getAuthTag' in cipher;
 }
@@ -17,15 +20,23 @@ function isDecipherGCM(decipher: unknown): decipher is crypto.DecipherGCM {
     return typeof decipher === 'object' && decipher !== null && 'setAuthTag' in decipher;
 }
 
-// Helper to ensure key is 32 bytes
-// Standardized to PBKDF2 for production-grade compatibility with Web Crypto API (Frontend)
-function getKey() {
+/**
+ * Institutional Key Derivation (Standardized to PBKDF2)
+ * Optimized with process-level caching to prevent CPU-intensive redundant hashing.
+ */
+function getKey(): Buffer {
+    if (derivedKeyCache) return derivedKeyCache;
+
     let keyData: Buffer | string = ENCRYPTION_KEY;
     if (/^[0-9a-fA-F]+$/.test(ENCRYPTION_KEY)) {
         keyData = Buffer.from(ENCRYPTION_KEY, 'hex');
     }
     const salt = process.env.SECURITY_SALT || 'haemi_salt_legacy_fallback';
-    return crypto.pbkdf2Sync(keyData, salt, 100000, 32, 'sha256');
+    
+    // 🛡️ INSTITUTIONAL LOCKDOWN: 100k iterations (Google Standard)
+    derivedKeyCache = crypto.pbkdf2Sync(keyData, salt, 100000, 32, 'sha256');
+    logger.debug('[Security] Encryption key derived and cached');
+    return derivedKeyCache;
 }
 
 /**
@@ -46,10 +57,11 @@ export const encrypt = (text: string): string => {
         encrypted += cipher.final('hex');
         const authTag = cipher.getAuthTag().toString('hex');
 
-
         return `${ENCRYPTED_PREFIX}${GCM_PREFIX}${iv.toString('hex')}:${authTag}:${encrypted}`;
     } catch (error) {
-        console.error('[Security] GCM Encryption failed:', error);
+        logger.error('[Security] GCM Encryption failed:', {
+            error: error instanceof Error ? error.message : String(error)
+        });
         return text;
     }
 };
@@ -64,6 +76,7 @@ export const decrypt = (text: string): string => {
 
     try {
         let result: string = text;
+        
         // Mode A: AES-256-GCM
         if (data.startsWith(GCM_PREFIX)) {
             const parts = data.slice(GCM_PREFIX.length).split(':');
@@ -98,11 +111,14 @@ export const decrypt = (text: string): string => {
         }
 
         return result;
-        } catch (error) {
-            console.error('[Security] Decryption failed:', error);
-            // Institutional Hardening: Return sanitized placeholder for corrupted/legacy records
-            return '[Encrypted Message]';
-        }
+    } catch (error) {
+        logger.error('[Security] Decryption failed:', {
+            error: error instanceof Error ? error.message : String(error),
+            inputLength: text.length
+        });
+        // Institutional Hardening: Return sanitized placeholder for corrupted/legacy records
+        return '[Encrypted Message]';
+    }
 };
 
 // Blind Index helper (Deterministic HMAC for searchable PII)

@@ -1,7 +1,13 @@
 import { useEffect, useRef } from 'react';
+import { logger } from '../utils/logger';
 
 type Handler = (event: MouseEvent | TouchEvent | PointerEvent) => void;
 
+/**
+ * 🩺 HAEMI LIFE | INSTITUTIONAL INTERACTION HOOK
+ * Optimizes click-outside detection for medical dashboards.
+ * Features: Started-outside validation, Capture-phase execution, Zero-lag orchestration.
+ */
 export const useClickOutside = <T extends Element>(
     handler: Handler,
     ignoredRefs: readonly React.RefObject<Element | null>[] = [],
@@ -11,8 +17,11 @@ export const useClickOutside = <T extends Element>(
     const savedHandler = useRef(handler);
     const savedIgnoredRefs = useRef(ignoredRefs);
     const savedEnabled = useRef(enabled);
+    
+    // Tracking start of the interaction to ensure robust "Complete-Click-Outside" validation
+    const startedOutside = useRef(false);
 
-    // Update saved handler and ignored refs to always use latest props without recycling the listener
+    // Update saved state to ensure latest props without recycled listeners
     useEffect(() => {
         savedHandler.current = handler;
         savedIgnoredRefs.current = ignoredRefs;
@@ -20,50 +29,70 @@ export const useClickOutside = <T extends Element>(
     }, [handler, ignoredRefs, enabled]);
 
     useEffect(() => {
-        const listener = (event: MouseEvent | TouchEvent | PointerEvent) => {
+        const handleStart = (event: PointerEvent) => {
             if (!savedEnabled.current) return;
             const target = event.target as Node;
 
-            // 🩺 HAEMI STABILITY GUARD: If target is no longer in document, skip (Prevents race conditions)
-            if (!target || !document.body.contains(target)) return;
-
-            // Do nothing if clicking ref's element or descendent elements
-            if (!ref.current || ref.current.contains(target)) {
-                return;
-            }
-
-            // Do nothing if clicking any interaction targets we want to ignore
+            // Check if interaction started inside the primary container or ignored refs
+            const isInsidePrimary = ref.current && ref.current.contains(target);
+            let isInsideIgnored = false;
+            
             for (const ignoredRef of savedIgnoredRefs.current) {
                 if (ignoredRef.current && ignoredRef.current.contains(target)) {
-                    return;
+                    isInsideIgnored = true;
+                    break;
                 }
             }
 
-            // 🩺 HAEMI GLOBAL IGNORE PROTOCOL
-            if (target instanceof Element && target.closest('.haemi-ignore-click-outside')) {
-                return;
+            // Global protocol check
+            const isIgnoredClass = target instanceof Element && target.closest('.haemi-ignore-click-outside');
+
+            startedOutside.current = !isInsidePrimary && !isInsideIgnored && !isIgnoredClass;
+        };
+
+        const handleEnd = (event: PointerEvent) => {
+            if (!savedEnabled.current || !startedOutside.current) return;
+            const target = event.target as Node;
+
+            // Validation: Interaction must persist as "Outside" during the entire lifecycle
+            if (!target || !document.body.contains(target)) return;
+
+            // Final containment check for the end-target
+            const isInsidePrimary = ref.current && ref.current.contains(target);
+            let isInsideIgnored = false;
+            
+            for (const ignoredRef of savedIgnoredRefs.current) {
+                if (ignoredRef.current && ignoredRef.current.contains(target)) {
+                    isInsideIgnored = true;
+                    break;
+                }
             }
 
-            // Defer execution by 0ms to allow React's internal events to process
-            setTimeout(() => {
+            const isIgnoredClass = target instanceof Element && target.closest('.haemi-ignore-click-outside');
+
+            if (!isInsidePrimary && !isInsideIgnored && !isIgnoredClass) {
                 try {
-                    // Final sanity check before calling handler
-                    if (ref.current && savedEnabled.current) {
-                        savedHandler.current(event);
-                    }
+                    // P0 STABILITY: Atomic execution without event-loop delay
+                    savedHandler.current(event);
                 } catch (error) {
-                    console.error('[HaemiClickOutside] Handler crashed safely intercepted:', error);
+                    logger.error('[HaemiClickOutside] Orchestration failed safely:', { 
+                        error: error instanceof Error ? error.message : String(error)
+                    });
                 }
-            }, 0);
+            }
         };
 
         const options = { capture: true, passive: true };
-        document.addEventListener('pointerdown', listener, options);
+        
+        // Listen for pointer events (Unified Mouse/Touch standard)
+        document.addEventListener('pointerdown', handleStart, options);
+        document.addEventListener('pointerup', handleEnd, options);
 
         return () => {
-            document.removeEventListener('pointerdown', listener, options);
+            document.removeEventListener('pointerdown', handleStart, options);
+            document.removeEventListener('pointerup', handleEnd, options);
         };
-    }, []); // Empty dependency array properly stabilizes the listener
+    }, []); // Empty dependency array stabilizes the listeners
 
     return ref;
 };

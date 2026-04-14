@@ -10,7 +10,6 @@ import {
 import { GradientMesh } from '@/components/ui/gradient-mesh';
 import { getSystemStats, getRevenueStats, getActiveSessions, getSecurityEvents } from '../../services/admin.service';
 import type { SystemStats, RevenueStat } from '../../services/admin.service';
-import { PremiumAreaChart, type ChartDataItem } from '@/components/charts/premium-area-chart';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { PremiumLoader } from '@/components/ui/premium-loader';
@@ -18,6 +17,8 @@ import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { PATHS } from '../../routes/paths';
+import { PremiumBarChart } from '@/components/charts/premium-bar-chart';
+import { InstitutionalComposedChart } from '@/components/charts/institutional-composed-chart';
 
 // Realistic Growth Data for a National Platform
 interface GrowthDataPoint { name: string; users: number;[key: string]: string | number | undefined; }
@@ -190,9 +191,9 @@ export const AdminDashboard: React.FC = () => {
             {/* Growth & Revenue Analytics Visualization */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <TransitionItem>
-                    <PremiumAreaChart
+                    <PremiumBarChart
                         title="Platform Growth"
-                        description="New user registrations over the last 6 months"
+                        description="New institutional registrations (Last 6 Months)"
                         data={SYSTEM_GROWTH_DATA}
                         dataKey="users"
                         categoryKey="name"
@@ -202,13 +203,15 @@ export const AdminDashboard: React.FC = () => {
                     />
                 </TransitionItem>
                 <TransitionItem>
-                    <PremiumAreaChart
+                    <InstitutionalComposedChart
                         title="Revenue Analytics"
                         description="Monthly institutional revenue vs operating expenses"
-                        data={revenueData as (RevenueStat & ChartDataItem)[]}
-                        dataKey="revenue"
+                        data={revenueData}
+                        areaKey="revenue"
+                        lineKey="expenses"
                         categoryKey="name"
-                        color="#6366f1" // Indigo-500
+                        areaColor="#148C8B" // Primary-700
+                        lineColor="#2563EB" // Info-500
                         valueSuffix=" BWP"
                         height={350}
                     />

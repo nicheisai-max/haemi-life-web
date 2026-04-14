@@ -1,7 +1,10 @@
-import React, { type ReactNode, useState, useEffect, Suspense } from 'react';
+import React, { useEffect, Suspense } from 'react';
+import type { ReactNode } from 'react';
 import { Navbar } from './navbar';
 import { NotificationSimulator } from '../utils/notification-simulator.deprecated';
-
+import { OverlayProvider } from '@/context/overlay-context';
+import { useOverlay } from '@/hooks/use-overlay';
+import { logger } from '@/utils/logger';
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -13,22 +16,22 @@ import { Footer } from './footer';
 import { Sidebar } from './sidebar';
 import { useAuth } from '@/hooks/use-auth';
 
-export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
+// 🩺 HAEMI STABILITY LAYER: Inner layout to access OverlayContext
+const DashboardLayoutInner: React.FC<DashboardLayoutProps> = ({ children }) => {
     const { user } = useAuth();
+    const { activeOverlay, setOverlay, closeOverlay } = useOverlay();
     const isAdmin = user?.role === 'admin';
-    const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
-    // COORDINATION: Global Orchestration for AI Copilot
+    // COORDINATION: Global Orchestration for AI Copilot (Legacy Compatibility Bridge)
+    // We keep these listeners temporarily to bridge legacy dispatchers to the new context.
     useEffect(() => {
         const handleOpen = () => {
-            if (!isCopilotOpen) {
-                // Mutual Exclusion: Close others when opening copilot
-                window.dispatchEvent(new CustomEvent('haemi-close-chathub'));
-                window.dispatchEvent(new CustomEvent('haemi-close-notifications'));
-                setIsCopilotOpen(true);
+            if (activeOverlay !== 'copilot') {
+                logger.debug('[DashboardLayout] Reactive trigger: Opening Clinical Copilot (Legacy-Event Bridge)');
+                setOverlay('copilot');
             }
         };
-        const handleClose = () => setIsCopilotOpen(false);
+        const handleClose = () => closeOverlay();
 
         window.addEventListener('haemi-open-copilot', handleOpen);
         window.addEventListener('haemi-close-copilot', handleClose);
@@ -37,12 +40,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             window.removeEventListener('haemi-open-copilot', handleOpen);
             window.removeEventListener('haemi-close-copilot', handleClose);
         };
-    }, [isCopilotOpen]);
+    }, [activeOverlay, setOverlay, closeOverlay]);
 
-    // MASTER LAYOUT ARCHITECTURE
-    // 1. Navbar: Fixed Top (72px)
-    // 2. Sidebar: Fixed Left (260px)
-    // 3. Main: Fluid with Max Width 1800px
+    // COORDINATION: ChatHub Closing (Legacy Compatibility Bridge)
+    useEffect(() => {
+        const handleCloseChat = () => {
+            if (activeOverlay === 'chat') {
+                logger.debug('[DashboardLayout] Reactive trigger: Closing ChatHub (Legacy-Event Bridge)');
+                closeOverlay();
+            }
+        };
+        window.addEventListener('haemi-close-chathub', handleCloseChat);
+        return () => window.removeEventListener('haemi-close-chathub', handleCloseChat);
+    }, [activeOverlay, closeOverlay]);
 
     return (
         <div className="portal-layout-root min-h-screen bg-background text-foreground flex flex-col">
@@ -75,8 +85,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                     </Suspense>
                     <Suspense fallback={null}>
                         <ClinicalCopilot 
-                            isOpen={isCopilotOpen} 
-                            onClose={() => setIsCopilotOpen(false)} 
+                            isOpen={activeOverlay === 'copilot'} 
+                            onClose={closeOverlay} 
                         />
                     </Suspense>
                 </>
@@ -84,3 +94,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         </div>
     );
 };
+
+export const DashboardLayout: React.FC<DashboardLayoutProps> = (props) => {
+    return (
+        <OverlayProvider>
+            <DashboardLayoutInner {...props} />
+        </OverlayProvider>
+    );
+};
+

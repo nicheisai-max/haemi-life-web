@@ -12,81 +12,74 @@ import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope,
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { getErrorMessage } from '../../lib/error';
-import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
+import { logger } from '../../utils/logger';
+
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<UserListItem[]>([]);
-    const [filteredUsers, setFilteredUsers] = useState<UserListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [processing, setProcessing] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
     const { confirm } = useConfirm();
 
-    // Must be called unconditionally before any early returns — React Rules of Hooks.
-    const {
-        currentPage,
-        setCurrentPage,
-        resetPage,
-        totalPages,
-        paginatedData: paginatedUsers,
-        showPagination,
-        totalItems,
-        startIndex,
-        endIndex,
-    } = usePagination(filteredUsers);
-
-    const applyFilters = useCallback(() => {
-        let filtered = users;
-
-        if (searchTerm) {
-            filtered = filtered.filter(user =>
-                user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                user.phoneNumber.includes(searchTerm)
-            );
-        }
-
-        if (roleFilter !== 'all') {
-            filtered = filtered.filter(user => user.role === roleFilter);
-        }
-
-        if (statusFilter !== 'all') {
-            const isActive = statusFilter === 'active';
-            filtered = filtered.filter(user => (user.status === 'ACTIVE') === isActive);
-        }
-
-        setFilteredUsers(filtered);
-    }, [users, searchTerm, roleFilter, statusFilter]);
-
-    // Reset to page 1 whenever any filter changes. resetPage is stable (see usePagination).
+    // Debounce search term to prevent institutional API spam
     useEffect(() => {
-        resetPage();
-    }, [searchTerm, roleFilter, statusFilter, resetPage]);
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setCurrentPage(1); // Reset to page 1 on new search
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    useEffect(() => {
-        applyFilters();
-    }, [searchTerm, roleFilter, statusFilter, users, applyFilters]);
-
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         try {
             setLoading(true);
-            const data = await getAllUsers();
-            setUsers(data);
+            logger.debug('[Admin] Fetching users page', {
+                page: currentPage,
+                role: roleFilter,
+                status: statusFilter,
+                search: debouncedSearch
+            });
+
+            const data = await getAllUsers({
+                page: currentPage,
+                limit: 10,
+                role: roleFilter,
+                status: statusFilter,
+                search: debouncedSearch
+            });
+
+            setUsers(data.users);
+            setTotalItems(data.pagination.total);
+            setTotalPages(data.pagination.totalPages);
+            setError(null);
         } catch (err: unknown) {
-            setError(getErrorMessage(err, 'Failed to load users'));
+            const msg = getErrorMessage(err, 'Failed to load users');
+            setError(msg);
+            logger.error('[Admin] User fetch failed', { error: err });
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentPage, roleFilter, statusFilter, debouncedSearch]);
+
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
+
+    // Derived values for pagination UI
+    const itemsPerPage = 10;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+    const showPagination = totalItems > itemsPerPage;
 
     const handleToggleStatus = async (userId: string, currentActive: boolean, userName: string) => {
         const action = currentActive ? 'deactivate' : 'activate';
@@ -104,7 +97,9 @@ export const UserManagement: React.FC = () => {
                     await updateUserStatus(userId, newStatus);
                     await fetchUsers();
                 } catch (err: unknown) {
-                    setError(getErrorMessage(err, 'Failed to update user status'));
+                    const msg = getErrorMessage(err, 'Failed to update user status');
+                    setError(msg);
+                    logger.error('[Admin] Status update failed', { userId, error: err });
                 } finally {
                     setProcessing(null);
                 }
@@ -244,14 +239,14 @@ export const UserManagement: React.FC = () => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {paginatedUsers.length === 0 ? (
+                        {users.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                                     No users found matching your filters
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            paginatedUsers.map(user => (
+                            users.map(user => (
                                 <TableRow key={user.id} className="hover:bg-muted/50">
                                     <TableCell>
                                         <div className="flex items-center gap-3">

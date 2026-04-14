@@ -99,46 +99,81 @@ export const verifyDoctor = async (req: Request, res: Response) => {
     }
 };
 
-// Get all users with filters (Admin only)
+/**
+ * Get all users with server-side pagination and filters (Admin only)
+ * Optimized for institutional scale and diagnostic performance.
+ */
 export const getAllUsers = async (req: Request, res: Response) => {
+    const { originalUrl, ip } = req;
     try {
-        const { role, status, search } = req.query;
+        const { role, status, search, page = '1', limit = '10' } = req.query;
+        
+        const pageNum = parseInt(page as string, 10);
+        const limitNum = parseInt(limit as string, 10);
+        const offset = (pageNum - 1) * limitNum;
 
-        let query = 'SELECT id, name, email, phone_number, profile_image, role, status, initials, created_at FROM users WHERE 1=1';
+        logger.debug('[Admin] Executing paginated user fetch', { 
+            url: originalUrl, 
+            from: ip, 
+            params: { role, status, search, page: pageNum, limit: limitNum } 
+        });
+
+        let query = `
+            SELECT 
+                id, name, email, phone_number, profile_image, role, status, initials, created_at,
+                COUNT(*) OVER() as total_count
+            FROM users 
+            WHERE 1=1
+        `;
         const params: (string | number | boolean | null)[] = [];
 
-        if (typeof role === 'string') {
+        if (typeof role === 'string' && role !== 'all') {
             params.push(role);
             query += ` AND role = $${params.length}`;
         }
 
-        if (typeof status === 'string') {
-            params.push(status);
+        if (typeof status === 'string' && status !== 'all') {
+            params.push(status.toUpperCase());
             query += ` AND status = $${params.length}`;
         }
 
-        if (typeof search === 'string') {
-            params.push(`%${search}%`);
+        if (typeof search === 'string' && search.trim() !== '') {
+            params.push(`%${search.trim()}%`);
             const idx = params.length;
             query += ` AND (name ILIKE $${idx} OR email ILIKE $${idx} OR phone_number ILIKE $${idx})`;
         }
 
-        query += ' ORDER BY created_at DESC';
+        query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+        params.push(limitNum, offset);
 
-        const result = await pool.query<UserEntity>(query, params);
-        const users = result.rows.map((row: UserEntity) => {
+        const result = await pool.query<UserEntity & { total_count: string }>(query, params);
+        
+        const totalItems = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+        
+        const users = result.rows.map((row) => {
             return mapUserToResponse({
                 ...row,
                 phone_number: row.phone_number ? decrypt(row.phone_number) : '',
                 id_number: row.id_number ? decrypt(row.id_number) : null
             });
         });
-        return sendResponse(res, 200, true, 'Users fetched', users);
-    } catch (error: unknown) {
-        logger.error('Error fetching users:', {
-            error: error instanceof Error ? error.message : String(error)
+
+        return sendResponse(res, 200, true, 'Users fetched successfully', {
+            users,
+            pagination: {
+                total: totalItems,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(totalItems / limitNum)
+            }
         });
-        return sendError(res, 500, 'Error fetching users');
+    } catch (error: unknown) {
+        logger.error('[Admin] Forensic Audit: Failed to fetch users', {
+            url: originalUrl,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+        });
+        return sendError(res, 500, 'Internal Server Error: Failed to retrieve user database');
     }
 };
 

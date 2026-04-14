@@ -14,9 +14,12 @@ import { logger } from '../utils/logger';
  */
 export enum FileDomain {
   CHAT = 'chat',
+  CHAT_TEMP = 'chat/temp',
   CLINICAL = 'clinical',
-  PROFILE = 'profile',
-  SYSTEM = 'system'
+  MEDICAL_RECORDS = 'medical_records',
+  PROFILE = 'profiles',
+  SYSTEM = 'system',
+  MISC = 'misc'
 }
 
 interface DownloadOptions {
