@@ -48,11 +48,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isMountedRef = useRef(true);
     const syncRetryCountRef = useRef<number>(0);
     const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // BUG-8 FIX: conversationsRef allows syncPresenceFallback to read the current
+    // conversations list WITHOUT being included in its dependency array.
+    const conversationsRef = useRef<Conversation[]>([]);
+    // BUG-5 FIX: Ref-backed debouncer for fetchConversations triggered by unknown
+    // conversation discovery. Absorbs rapid message bursts.
+    const fetchConversationsDebouncedRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         isMountedRef.current = true;
         return () => { isMountedRef.current = false; };
     }, []);
+
+    // BUG-8 FIX: Keep conversationsRef in sync with conversations state.
+    useEffect(() => {
+        conversationsRef.current = conversations;
+    }, [conversations]);
 
     const getAbortController = useCallback((key: string) => {
         if (abortControllersRef.current.has(key)) {
@@ -176,17 +187,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // When the socket is disconnected (NAT blip, server restart), presence data
     // goes stale. This effect provides a 15-30s polling window as a secondary
     // transport, only active when socketService.isConnected() is false.
-    const syncPresenceFallback = useCallback(() => {
+    // BUG-8 FIX: syncPresenceFallback now reads participant IDs from conversationsRef
+    // instead of the conversations state prop, removing it from the dependency array.
+    // Previously: conversations in deps => callback recreated on every message =>
+    // 30s polling interval reset on every message => polling never fired during active chat.
+    const syncPresenceFallback = useCallback((): void => {
         if (!isAuthenticated || !user?.id) return;
         
         if (!socketService.isConnected()) {
-            const participantIds = [...new Set(conversations.flatMap(c => c.participants.map(p => p.id as UserId)))];
+            const participantIds: UserId[] = [...new Set(
+                conversationsRef.current.flatMap((c: Conversation) => c.participants.map((p) => p.id as UserId))
+            )];
             if (participantIds.length > 0) {
                 fetchPresence(participantIds);
                 logger.info(`[ChatProvider] Reactive presence sync triggered (${participantIds.length} users)`);
             }
         }
-    }, [isAuthenticated, user, conversations, fetchPresence]);
+    }, [isAuthenticated, user, fetchPresence]); // conversations intentionally removed
 
     useEffect(() => {
         if (!isAuthenticated || !user?.id) return;
@@ -203,12 +220,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [isAuthenticated, user?.id, syncPresenceFallback]);
 
     // ─── Phase 16: Institutional Heartbeat (Zero-Drift Sync) ────────────────
-    // Keeps the connection alive in the backend 'active_connections' table.
-    // Rule: Meta-Grade 30s interval to stay within the 90s reaper threshold.
+    // BUG-7 FIX: Only ONE heartbeat interval is permitted. The duplicate previously
+    // at the bottom of this file has been removed. That variant gated on
+    // socketService.isConnected() at SETUP TIME which caused the heartbeat to never
+    // start if the socket connected after the effect ran (common during reconnect).
+    // This variant is authoritative: starts unconditionally when authenticated and
+    // checks connection state inside each tick (correct pattern — no false starts).
     useEffect(() => {
         if (!isAuthenticated || !user?.id) return;
 
-        const heartbeatInterval = setInterval(() => {
+        const heartbeatInterval = setInterval((): void => {
             if (socketService.isConnected()) {
                 socketService.emit('heartbeat');
             }
@@ -216,6 +237,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         return () => {
             clearInterval(heartbeatInterval);
+            logger.info('[ChatProvider] Heartbeat interval cleared on auth state change.');
         };
     }, [isAuthenticated, user?.id]);
 
@@ -396,17 +418,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
         };
 
-        const syncMissedMessages = async () => {
+        const syncMissedMessages = async (): Promise<void> => {
             try {
                 const res = await api.get<{ data: Message[] } | Message[]>(`/chat/sync?since=${lastSyncRef.current}`);
                 // P0 FIX: Hardened unwrapping for explicit JSON envelope normalization
                 const payload = res.data;
 
                 if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { data: unknown }).data)) {
-                    throw new Error("Invalid sync response")
+                    throw new Error('Invalid sync response');
                 }
 
-                const missedMessages = (payload as { data: Message[] }).data;
+                const missedMessages: Message[] = (payload as { data: Message[] }).data;
 
                 if (missedMessages.length > 0) {
                     for (const msg of missedMessages) {
@@ -414,6 +436,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }
                     logger.info(`[ChatProvider] Recovered ${missedMessages.length} missed messages.`);
                 }
+                // BUG-9 FIX: Advance the sync cursor AFTER successful processing.
+                // Previously lastSyncRef was NEVER updated, causing every reconnect to
+                // replay ALL messages since component mount. On long sessions this payload
+                // grew indefinitely and caused duplicate message processing and re-renders.
+                lastSyncRef.current = new Date().toISOString();
+                logger.debug('[ChatProvider] Sync cursor advanced.', { cursor: lastSyncRef.current });
             } catch (err: unknown) {
                 logger.error('[ChatProvider] Offline recovery failed', err instanceof Error ? err.message : String(err));
             }
@@ -428,12 +456,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
 
-        const onMessageRead = ({ conversationId, messageIds }: MessageReadEvent) => {
-            if (activeConversationRef.current?.id === conversationId) {
-                setMessages(prev => prev.map(msg =>
-                    messageIds.includes(msg.id) ? { ...msg, status: 'read', isRead: true } : msg
-                ));
-            }
+        // BUG-3 FIX: activeConversationRef guard REMOVED.
+        // setMessages is always safe to call: .map() over a list with no matching
+        // message IDs is a no-op — zero side effects when conversation is not active.
+        const onMessageRead = ({ messageIds }: MessageReadEvent): void => {
+            setMessages((prev: Message[]) => prev.map((msg: Message) =>
+                messageIds.includes(msg.id) ? { ...msg, status: 'read' as const, isRead: true } : msg
+            ));
             // Batched sync to storage
             storageService.markMessagesRead(messageIds, new Date().toISOString());
         };
@@ -574,9 +603,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const lastMsgPreview = decryptedContent || (message.attachments && message.attachments.length > 0 ? '📎 Attachment' : 'New message');
                 
                 if (index === -1) {
-                    // Phase 12: Atomic Discovery - schedule full sync but return prev to avoid jumpiness
-                    // The backend fetchConversations call will merge this new thread correctly.
-                    fetchConversations();
+                    // BUG-5 FIX: Unknown conversation discovered. Schedule debounced full-sync
+                    // (500ms window) to absorb rapid burst scenarios (multiple messages from
+                    // same new thread). Ref-backed debouncer prevents N concurrent fetches.
+                    logger.info('[ChatProvider] Unknown conversation discovered. Scheduling debounced sync.', {
+                        conversationId: message.conversationId
+                    });
+                    if (fetchConversationsDebouncedRef.current !== null) {
+                        clearTimeout(fetchConversationsDebouncedRef.current);
+                    }
+                    fetchConversationsDebouncedRef.current = setTimeout((): void => {
+                        fetchConversationsDebouncedRef.current = null;
+                        fetchConversations();
+                    }, 500);
                     return prev;
                 }
 
@@ -717,6 +756,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 deferredFetchListener = null;
             }
 
+            // Removed Duplicate Heartbeat. See top of file for the authoritative version.
             // P0: Physical Disconnection on unmount/auth-loss
             // This ensures the backend disconnect event fires immediately.
             socketService.disconnect();
@@ -1083,17 +1123,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [user, isAuthenticated]);
 
-    const markAsRead = useCallback(async (conversationId: ConversationId) => {
+    const markAsRead = useCallback(async (conversationId: ConversationId): Promise<void> => {
         if (!isAuthenticated) return;
-        const now = Date.now();
-        const lastRead = lastReadRequestRef.current[conversationId as string] || 0;
+        const now: number = Date.now();
+        const lastRead: number = lastReadRequestRef.current[conversationId as string] ?? 0;
 
-        // ENTERPRISE THROTTLING: Max 1 request per 2 seconds per conversation for read status
+        // ENTERPRISE THROTTLING: Max 1 request per 2 seconds per conversation
         if (now - lastRead < 2000) return;
 
         try {
             lastReadRequestRef.current[conversationId as string] = now;
             await api.put<void>(`/chat/conversations/${conversationId}/read`);
+
+            // BUG-2 FIX: Locally update non-sender message statuses to 'read' immediately
+            // after PUT succeeds. Eliminates visible grey-tick delay window.
+            setMessages((prev: Message[]) => prev.map((m: Message) =>
+                !m.isMe ? { ...m, status: 'read' as const, isRead: true } : m
+            ));
 
             // Standardize unread badge sync locally
             setConversations((prev: Conversation[]) => prev.map((c: Conversation) =>

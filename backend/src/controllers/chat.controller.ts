@@ -112,8 +112,11 @@ export const getConversations = async (req: Request, res: Response) => {
              LEFT JOIN messages m ON c.id = m.conversation_id AND m.is_deleted = false
              WHERE cp.user_id = $1
                AND (
-                     -- D7 REMEDIATION: Exclude ghost conversations (0 messages) older than
-                     -- 10 minutes. Using EXISTS (not COUNT) for optimal query plan.
+                     -- D7 REMEDIATION: Exclude ghost conversations (0 messages) that are
+                     -- older than 24 hours. 10 minutes was too short for clinical workflows
+                     -- (e.g., user opens a consultation thread, gets interrupted, comes back)
+                     -- and caused silent conversation disappearance. 24 hours aligns with
+                     -- standard clinical response SLAs.
                      -- DB is the SSOT: the row still exists in "conversations"; we only
                      -- filter the read projection so the sidebar stays clean.
                      EXISTS (
@@ -121,9 +124,9 @@ export const getConversations = async (req: Request, res: Response) => {
                          WHERE msg.conversation_id = c.id
                            AND msg.is_deleted = false
                      )
-                     -- 10-minute grace: allows freshly-created threads to appear in the
-                     -- sidebar immediately so the new-chat UX flow is not broken.
-                     OR c.created_at > NOW() - INTERVAL '10 minutes'
+                     -- 24-hour grace: allows freshly-created threads to appear in the
+                     -- sidebar immediately, covering all realistic clinical draft windows.
+                     OR c.created_at > NOW() - INTERVAL '24 hours'
                    )
              ORDER BY c.id, m.created_at DESC NULLS LAST`,
             // TS-STRICT: String() strips the branded UserId type → resolves to the
@@ -968,9 +971,16 @@ export const deleteMessage = async (req: Request, res: Response) => {
                             createdAt: fallback.created_at.toISOString()
                         };
                     } else {
-                        // Empty thread now
+                        // BUG-6 FIX: Empty thread — set preview_text to empty string sentinel
+                        // (not NULL). NULL propagates through the JSON API as `null` which
+                        // violates the frontend Conversation.lastMessage contract and renders
+                        // as a ghost preview entry in the sidebar.
                         await client.query(
-                            'UPDATE conversations SET last_message_id = NULL, preview_text = NULL WHERE id = $1',
+                            `UPDATE conversations
+                             SET last_message_id = NULL,
+                                 preview_text = '',
+                                 last_message_at = NOW()
+                             WHERE id = $1`,
                             [conversationId]
                         );
                     }

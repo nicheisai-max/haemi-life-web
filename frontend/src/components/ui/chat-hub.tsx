@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button } from './button';
-import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus, FileText, File, FileSpreadsheet, ImageOff } from 'lucide-react';
+import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus, FileText, File, FileSpreadsheet, ImageOff, Clock, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat, type Conversation, type Message } from '../../hooks/use-chat';
 import { useAuth } from '@/hooks/use-auth';
@@ -152,8 +152,15 @@ const ConversationItem = React.memo(({
                             profileImage={other.profileImage ?? undefined}
                             size="md"
                         />
-                        {isOnline && (
-                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 group-hover:scale-110 transition-transform haemi-status-pulse" />
+                        {/* BUG-10 FIX: 3-state presence dot (online/offline/unknown) */}
+                        {presence[other.id as UserId] !== undefined ? (
+                            isOnline ? (
+                                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 group-hover:scale-110 transition-transform haemi-status-pulse" />
+                            ) : (
+                                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-slate-400 border-2 border-white dark:border-slate-900 transition-colors" />
+                            )
+                        ) : (
+                            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-slate-600/50 border-2 border-white dark:border-slate-900" />
                         )}
                     </>
                 )}
@@ -369,12 +376,12 @@ const MessageItem = React.memo(({
                 <div className={`flex items-center justify-end gap-1.5 mt-1 pt-1 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
                     <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
                     {msg.isMe && (
-                        <div className={`message-status-ticks ${msg.isRead ? 'read' : ''}`}>
-                            {msg.isRead ? (
-                                <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />
-                            ) : (
-                                <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />
-                            )}
+                        <div className={`message-status-ticks ${msg.status === 'read' ? 'read' : ''}`}>
+                            {msg.status === 'sending' && <Clock className="h-3.5 w-3.5 opacity-50" />}
+                            {msg.status === 'sent' && <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />}
+                            {msg.status === 'delivered' && <CheckCheck className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />}
+                            {msg.status === 'read' && <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />}
+                            {msg.status === 'failed' && <AlertCircle className="h-3.5 w-3.5 text-red-500" strokeWidth={3} />}
                         </div>
                     )}
                 </div>
@@ -950,7 +957,7 @@ export const ChatHub: React.FC = () => {
                                     const other = getOtherParticipant(activeConversation);
                                     const userPresence = presence[other.id as UserId];
                                     const isOnline = !other.isGroup && !!userPresence?.isOnline;
-                                    const last_activity = !other.isGroup && userPresence?.last_activity ? getFormattedTime(userPresence.last_activity) : 'Unknown';
+                                    const last_activity = !other.isGroup && userPresence?.last_activity ? getFormattedTime(userPresence.last_activity) : undefined;
 
                                     return (
                                         <div className="flex items-center gap-3 min-w-0">
@@ -967,7 +974,12 @@ export const ChatHub: React.FC = () => {
                                                             profileImage={other.profileImage}
                                                             size="sm"
                                                         />
-                                                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-[#1a1c23] rounded-full transition-colors duration-300 ${isOnline ? 'bg-emerald-500 haemi-status-pulse' : 'bg-slate-400'}`}></span>
+                                                        {/* BUG-10 FIX: 3-state presence dot */}
+                                                        {userPresence !== undefined ? (
+                                                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-[#1a1c23] rounded-full transition-colors duration-300 ${isOnline ? 'bg-emerald-500 haemi-status-pulse' : 'bg-slate-400'}`}></span>
+                                                        ) : (
+                                                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-[#1a1c23] rounded-full bg-slate-600/50"></span>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -976,7 +988,12 @@ export const ChatHub: React.FC = () => {
                                                     {other.name}
                                                 </h3>
                                                 <span className="text-[11px] text-teal-100/80 dark:text-slate-400 font-medium truncate leading-tight capitalize">
-                                                    {other.isGroup ? 'Multi-Professional Case Group' : (isOnline ? 'Online' : `Last seen at ${last_activity}`)}
+                                                    {/* BUG-10 FIX: 3-state text */}
+                                                    {other.isGroup 
+                                                        ? 'Multi-Professional Case Group' 
+                                                        : (isOnline 
+                                                            ? 'Online' 
+                                                            : (last_activity ? `Last seen at ${last_activity}` : 'Offline'))}
                                                 </span>
                                             </div>
                                         </div>

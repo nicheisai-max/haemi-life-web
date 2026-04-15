@@ -110,7 +110,7 @@ export interface Conversation {
     name?: string;
     updatedAt: string;
     lastMessageAt: string;
-    lastMessage: string;
+    lastMessage?: string; // Optional: undefined when all messages deleted (last_message_id = NULL in DB)
     lastMessageId: MessageId;
     participants: ChatParticipant[];
     unreadCount: number;
