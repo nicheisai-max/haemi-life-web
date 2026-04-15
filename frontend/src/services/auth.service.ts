@@ -127,18 +127,24 @@ export const authService = {
     refreshToken: async (): Promise<{ token?: string; refreshToken?: string; authenticated: boolean }> => {
         try {
             const { performRefresh } = await import('./api');
-            const token = await performRefresh();
+            const token: string | null = await performRefresh();
 
-            if (token) {
+            if (token !== null) {
+                // P0.1 FIX: Read refreshToken from localStorage (canonical key).
+                // Legacy sessionStorage key retained as migration fallback.
+                const storedRefreshToken: string | null =
+                    localStorage.getItem('haemi_refresh_token') ??
+                    sessionStorage.getItem('refreshToken') ?? // Legacy fallback
+                    null;
                 return {
                     token,
-                    refreshToken: sessionStorage.getItem('refreshToken') || undefined,
+                    refreshToken: storedRefreshToken ?? undefined,
                     authenticated: true
                 };
             }
             return { authenticated: false };
         } catch (error: unknown) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
+            const errorMsg: string = error instanceof Error ? error.message : String(error);
             logger.error('[AuthService] Refresh token logic failure', { error: errorMsg });
             return { authenticated: false };
         }
