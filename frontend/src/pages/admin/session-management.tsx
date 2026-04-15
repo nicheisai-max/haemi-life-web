@@ -125,7 +125,7 @@ export const SessionManagement: React.FC = () => {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold ring-2 ring-background ring-offset-2">
-                                                        {session.userName.charAt(0).toUpperCase()}
+                                                        {(session.userName || '?').charAt(0).toUpperCase()}
                                                     </div>
                                                     <div className="flex flex-col">
                                                         <span className="font-bold text-foreground text-xs">{session.userName}</span>

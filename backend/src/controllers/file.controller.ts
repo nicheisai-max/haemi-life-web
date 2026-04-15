@@ -171,9 +171,12 @@ export const getProfileImage = async (req: Request, res: Response): Promise<void
  */
 export const getChatAttachment = async (req: Request, res: Response): Promise<void> => {
     const { attachmentId } = req.params;
-    const user = req.user as JWTPayload | undefined;
 
     try {
+        // req.user is populated by authenticateToken middleware,
+        // which now supports both Authorization header and ?token= query param.
+        const user = req.user as JWTPayload | undefined;
+
         if (!user) {
             sendError(res, 401, 'Unauthorized');
             return;

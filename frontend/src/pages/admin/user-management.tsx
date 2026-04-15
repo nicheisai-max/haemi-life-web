@@ -6,8 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { getAllUsers, updateUserStatus } from '../../services/admin.service';
-import type { UserListItem } from '../../services/admin.service';
+import { getAllUsers, updateUserStatus, getSystemStats } from '../../services/admin.service';
+import type { UserListItem, SystemStats } from '../../services/admin.service';
 import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail, CheckCircle2, CircleOff, Filter } from 'lucide-react';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { PremiumLoader } from '@/components/ui/premium-loader';
@@ -29,6 +29,7 @@ export const UserManagement: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
+    const [stats, setStats] = useState<SystemStats | null>(null);
     const { confirm } = useConfirm();
 
     // Debounce search term to prevent institutional API spam
@@ -50,17 +51,21 @@ export const UserManagement: React.FC = () => {
                 search: debouncedSearch
             });
 
-            const data = await getAllUsers({
-                page: currentPage,
-                limit: 10,
-                role: roleFilter,
-                status: statusFilter,
-                search: debouncedSearch
-            });
+            const [data, statsData] = await Promise.all([
+                getAllUsers({
+                    page: currentPage,
+                    limit: 10,
+                    role: roleFilter,
+                    status: statusFilter,
+                    search: debouncedSearch
+                }),
+                getSystemStats()
+            ]);
 
             setUsers(data.users);
             setTotalItems(data.pagination.total);
             setTotalPages(data.pagination.totalPages);
+            setStats(statsData);
             setError(null);
         } catch (err: unknown) {
             const msg = getErrorMessage(err, 'Failed to load users');
@@ -149,11 +154,11 @@ export const UserManagement: React.FC = () => {
             {/* Stats */}
             <div className="flex gap-4">
                 <Card className="px-4 py-2 flex flex-col items-center justify-center min-w-[100px]">
-                    <span className="text-2xl font-bold text-primary leading-none">{users.length}</span>
+                    <span className="text-2xl font-bold text-primary leading-none">{totalItems}</span>
                     <span className="text-xs text-muted-foreground font-medium mt-1">Total Users</span>
                 </Card>
                 <Card className="px-4 py-2 flex flex-col items-center justify-center w-24">
-                    <span className="text-2xl font-bold text-green-600 leading-none">{users.filter(u => u.status === 'ACTIVE').length}</span>
+                    <span className="text-2xl font-bold text-green-600 leading-none">{stats?.activeUsers || 0}</span>
                     <span className="text-xs text-muted-foreground font-medium mt-1">Active</span>
                 </Card>
             </div>

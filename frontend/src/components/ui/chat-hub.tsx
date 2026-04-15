@@ -26,6 +26,7 @@ import { getInitials as resolveInitials } from '@/utils/avatar.resolver';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { useToast } from '@/hooks/use-toast';
 
 // Override helper to get images
 const getDoctorImage = (name: string) => {
@@ -50,22 +51,39 @@ const Avatar: React.FC<{ name: string; initials?: string; image?: string; profil
 
     const getInitials = (n: string) => resolveInitials(n) || '?';
 
-    // Standardized ID-based Resolution
-    const avatarUrl = profileImage ? (profileImage.startsWith('http') ? profileImage : `/api/files/profile/${profileImage}`) : image;
+    // API-served profile image (requires auth headers)
+    const apiAvatarUrl = profileImage
+        ? (profileImage.startsWith('http') ? profileImage : `/api/files/profile/${profileImage}`)
+        : null;
+
+    // Static Vite-bundled asset (doctor01, patient images, etc.) — no auth needed
+    const staticImageUrl = !apiAvatarUrl ? image : null;
 
     return (
         <div className={`relative shrink-0 ${className}`}>
             <div className={`${sizeMap[size]} rounded-full overflow-hidden premium-avatar-fallback flex items-center justify-center shadow-sm text-white font-bold tracking-wider relative`}>
-                {avatarUrl ? (
+                {apiAvatarUrl ? (
+                    // ✅ API URLs go through AuthenticatedImage (adds auth headers)
                     <AuthenticatedImage
-                        src={avatarUrl}
+                        src={apiAvatarUrl}
                         alt={name}
                         className="h-full w-full"
                         aspectRatio="square"
                         errorFallback={initials || getInitials(name)}
                         loadingFallback={<PremiumLoader size="xs" />}
                     />
+                ) : staticImageUrl ? (
+                    // ✅ Static assets use plain <img> — no auth headers, no 404
+                    <img
+                        src={staticImageUrl}
+                        alt={name}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                    />
                 ) : (
+                    // ✅ Initials fallback
                     initials || getInitials(name)
                 )}
             </div>
@@ -183,9 +201,12 @@ const MessageItem = React.memo(({
     onScrollToReply: (replyToId: MessageId) => void;
     downloadingId: string | null;
     getFormattedTime: (d: string) => string;
-}) => (
-    <div className="px-4 py-2">
-        <motion.div
+}) => {
+    // 🧬 META-GRADE STYLED COMPONENT
+
+    return (
+    <div className="px-4 pt-2 pb-7 overflow-visible">
+            <motion.div
             layout
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -240,7 +261,15 @@ const MessageItem = React.memo(({
                                             }}
                                         >
                                             <AuthenticatedImage
-                                                src={att.url.startsWith('blob:') || att.url.startsWith('data:') ? att.url : `/api/files/message/${att.id}`}
+                                                src={
+                                                    // For committed messages (att.id exists), always use the stable API URL
+                                                    // Blob/data URLs are only for optimistic (sending) state
+                                                    (att.url.startsWith('blob:') || att.url.startsWith('data:')) && msg.status === 'sending'
+                                                        ? att.url
+                                                        : att.id
+                                                            ? `/api/files/message/${att.id}`
+                                                            : att.url
+                                                }
                                                 alt={att.name || 'Attachment'}
                                                 className="chat-thumbnail-image"
                                                 loadingFallback={<PremiumLoader size="sm" />}
@@ -317,10 +346,10 @@ const MessageItem = React.memo(({
                     {msg.content}
                 </p>
 
-                {/* Reactions */}
+                {/* WhatsApp-Style Reaction Attachment */}
                 {msg.reactions && msg.reactions.length > 0 && (
                     <div
-                        className={`absolute -bottom-3 ${msg.isMe ? '-right-1' : '-left-1'} flex items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-md border border-slate-200/50 dark:border-slate-700/50 z-[20] transition-all hover:scale-105 cursor-pointer group/reaction`}
+                        className="absolute -bottom-3 -left-1 flex items-center bg-white dark:bg-slate-800 rounded-full px-1.5 py-0.5 shadow-md border border-slate-200 dark:border-slate-700 z-[150] transition-all hover:scale-105 cursor-pointer select-none"
                     >
                         <div className="flex -space-x-1">
                             {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
@@ -337,7 +366,7 @@ const MessageItem = React.memo(({
                     </div>
                 )}
 
-                <div className={`flex items-center justify-end gap-1.5 mt-2 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
+                <div className={`flex items-center justify-end gap-1.5 mt-1 pt-1 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
                     <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
                     {msg.isMe && (
                         <div className={`message-status-ticks ${msg.isRead ? 'read' : ''}`}>
@@ -350,11 +379,10 @@ const MessageItem = React.memo(({
                     )}
                 </div>
             </div>
-        </motion.div>
-    </div>
-));
-
-import { useToast } from '@/hooks/use-toast';
+            </motion.div>
+        </div>
+    );
+});
 
 // --- Main Chat Hub ---
 export const ChatHub: React.FC = () => {
@@ -472,15 +500,27 @@ export const ChatHub: React.FC = () => {
 
 
     // Handlers for Context Menu
-    const handleDeleteMessage = (messageId: MessageId, forEveryone: boolean) => {
-        deleteMessage(messageId, forEveryone);
+    const handleDeleteMessage = useCallback(async (messageId: MessageId, forEveryone: boolean) => {
+        logger.info('[ChatHub] Forensic Audit: Initiating message deletion', { messageId, forEveryone });
         setContextMenu(prev => ({ ...prev, isOpen: false }));
-    };
+        try {
+            await deleteMessage(messageId, forEveryone);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes('403') || msg.toLowerCase().includes('only sender')) {
+                toastError('Permission Denied: Only the original sender can delete for everyone.');
+            } else {
+                toastError('Delete failed. Please try again.');
+            }
+            logger.error('[ChatHub] Delete failed', { messageId, forEveryone, error: msg });
+        }
+    }, [deleteMessage, toastError]);
 
-    const handleReaction = (messageId: MessageId, reactionType: string) => {
+    const handleReaction = useCallback((messageId: MessageId, reactionType: string) => {
+        logger.info('[ChatHub] Forensic Audit: Initiating message reaction', { messageId, reactionType });
         reactToMessage(messageId, reactionType);
         setContextMenu(prev => ({ ...prev, isOpen: false }));
-    };
+    }, [reactToMessage]);
 
     // Initial Load ΓÇö fetch immediately when user/token is ready
     useEffect(() => {
@@ -517,21 +557,10 @@ export const ChatHub: React.FC = () => {
         if (view === 'new-chat') {
             const loadDoctors = async () => {
                 try {
-                    const res = await api.get<DoctorProfile[] | { data: DoctorProfile[] }>('/doctor');
-
-                    // P0: Strict Type Narrowing (Zero 'as unknown' fallback)
-                    let doctorData: DoctorProfile[] = [];
-
-                    if (Array.isArray(res.data)) {
-                        doctorData = res.data;
-                    } else if (res.data && typeof res.data === 'object' && 'data' in res.data) {
-                        const potentialData = res.data.data;
-                        if (Array.isArray(potentialData)) {
-                            doctorData = potentialData;
-                        }
-                    }
-
-                    setDoctors(doctorData);
+                   const res = await api.get<{ data: DoctorProfile[]; success: boolean } | DoctorProfile[]>('/doctor');
+                   // Guard: API may return wrapped { data: [...] } or raw array
+                   const payload = Array.isArray(res.data) ? res.data : (res.data as { data: DoctorProfile[] }).data;
+                   setDoctors(Array.isArray(payload) ? payload : []);
                 } catch (err: unknown) {
                     const errorMessage = err instanceof Error ? err.message : String(err);
                     logger.error('[ChatHub.loadDoctors] Failed to retrieve medical specialists:', { error: errorMessage });
@@ -544,12 +573,24 @@ export const ChatHub: React.FC = () => {
 
     // Auto-scroll handled by Virtuoso followOutput in Phase 3
 
-    // Auto-close on route change
+    // Phase 17: Institutional Route-Change Guard
+    // Standard: Google/Meta Grade (Atomic Path Tracking)
+    // Goal: Close active chat only when a REAL navigation event occurs.
+    const lastPathRef = useRef(location.pathname);
     useEffect(() => {
-        if (isOpen) closeOverlay();
+        if (location.pathname !== lastPathRef.current) {
+            if (isOpen) {
+                logger.debug('[ChatHub] Closing overlay due to route change', {
+                    from: lastPathRef.current,
+                    to: location.pathname
+                });
+                closeOverlay();
+            }
+            lastPathRef.current = location.pathname;
+        }
     }, [location.pathname, isOpen, closeOverlay]);
 
-    const toggleChat = () => {
+    const toggleChat = useCallback(() => {
         if (isOpen) {
             closeOverlay();
         } else {
@@ -557,14 +598,14 @@ export const ChatHub: React.FC = () => {
             setOverlay('chat');
             setIsMinimized(false);
         }
-    };
+    }, [isOpen, closeOverlay, setOverlay]);
 
-    const handleSelectConversation = (conversation: Conversation) => {
+    const handleSelectConversation = useCallback((conversation: Conversation) => {
         selectConversation(conversation);
         setView('conversation');
-    };
+    }, [selectConversation]);
 
-    const handleStartNewChat = async (doctor: DoctorProfile) => {
+    const handleStartNewChat = useCallback(async (doctor: DoctorProfile) => {
         // optimistically check if conversation exists
         const existing = conversations.find((c: Conversation) =>
             c.participants && Array.isArray(c.participants) &&
@@ -582,17 +623,42 @@ export const ChatHub: React.FC = () => {
             });
             setView('conversation');
         }
-    };
+    }, [conversations, handleSelectConversation, startNewConversation]);
 
 
-    const handleSendMessage = () => {
+    const handleSendMessage = useCallback(() => {
         if (!newMessage.trim() || !activeConversation) return;
         sendMessage(newMessage, activeConversation.id, [], replyingTo?.id);
         setNewMessage('');
         setReplyingTo(null);
         // Keep focus
         setTimeout(() => inputRef.current?.focus(), 10);
-    };
+    }, [newMessage, activeConversation, sendMessage, replyingTo]);
+
+    const handleMsgContextMenu = useCallback((e: React.MouseEvent, msgId: MessageId, isMe: boolean) => {
+        e.preventDefault();
+        // 🧬 RESTORED BUBBLING: Removed stopPropagation to fix context menu invisibility.
+
+        if (chatWindowRef.current) {
+            const rect = chatWindowRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            logger.debug('[ChatHub] Context menu triggered', { msgId, x, y });
+
+            setContextMenu({
+                isOpen: true,
+                x,
+                y,
+                messageId: msgId,
+                isMe: isMe,
+                parentWidth: rect.width,
+                parentHeight: rect.height
+            });
+        } else {
+            logger.warn('[ChatHub] Context menu failed: chatWindowRef is null');
+        }
+    }, [chatWindowRef]);
 
     const getOtherParticipant = useCallback((conversation: Conversation) => {
         const currentId = String(user?.id || '');
@@ -695,11 +761,9 @@ export const ChatHub: React.FC = () => {
 
 
 
-    // Close on click outside using robust capture-phase hook
-
-
-
-    // --- Render Minimized State ---
+    // --- Conditional Returns - PERFORMED LAST TO ADHERE TO RULES OF HOOKS ---
+    
+    // 1. Minimized Floating Bubble View
     if (!isOpen && !isMinimized) {
         return (
             <motion.div
@@ -715,7 +779,7 @@ export const ChatHub: React.FC = () => {
 
                 <Button
                     onClick={toggleChat}
-                    className="relative h-16 w-16 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 shadow-2xl shadow-teal-500/40 p-0 flex items-center justify-center group border border-white/20 dark:border-white/10 overflow-hidden"
+                    className="relative h-16 w-16 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 shadow-2xl shadow-teal-500/40 p-0 flex items-center justify-center group border border-white/20 dark:border-white/10 overflow-hidden haemi-ignore-click-outside"
                     aria-label="Open chat"
                 >
                     {/* Inner Glow */}
@@ -739,6 +803,7 @@ export const ChatHub: React.FC = () => {
         );
     }
 
+    // 2. Avatar-Bubble Minimized View
     if (isMinimized) {
         return (
             <motion.div
@@ -751,7 +816,7 @@ export const ChatHub: React.FC = () => {
             >
                 <Button
                     onClick={() => setIsMinimized(false)}
-                    className="h-16 w-16 rounded-full bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/50 p-0 flex items-center justify-center group border border-slate-200 dark:border-slate-700 overflow-hidden"
+                    className="h-16 w-16 rounded-full bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/50 p-0 flex items-center justify-center group border border-slate-200 dark:border-slate-700 overflow-hidden haemi-ignore-click-outside"
                 >
                     {activeConversation ? (
                         <Avatar
@@ -864,7 +929,7 @@ export const ChatHub: React.FC = () => {
                     animate={{ y: 0, opacity: 1, scale: 1 }}
                     exit={{ y: 20, opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-[var(--card-radius)] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-full sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col overflow-hidden ring-1 ring-black/5 relative"
+                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-[var(--card-radius)] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-full sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col ring-1 ring-black/5 relative"
                     ref={chatWindowRef}
                 >
                     {/* --- Helper: Header --- */}
@@ -1119,39 +1184,25 @@ export const ChatHub: React.FC = () => {
                                                     }
                                                 }}
                                                 itemContent={(index, msg) => (
-                                                    <MessageItem
-                                                        msg={msg}
-                                                        index={index}
-                                                        onContextMenu={(e, msgId: MessageId, isMe) => {
-                                                            e.preventDefault();
-                                                            if (chatWindowRef.current) {
-                                                                const rect = chatWindowRef.current.getBoundingClientRect();
-                                                                setContextMenu({
-                                                                    isOpen: true,
-                                                                    x: e.clientX - rect.left,
-                                                                    y: e.clientY - rect.top,
-                                                                    messageId: msgId,
-                                                                    isMe: isMe,
-                                                                    parentWidth: rect.width,
-                                                                    parentHeight: rect.height
-                                                                });
-                                                            }
-                                                        }}
-                                                        onDownload={handleDownload}
-                                                        onLightbox={(src, alt) => setLightboxImage({ src, alt })}
-                                                        onScrollToReply={(replyToId) => {
-                                                            const targetIdx = messages.findIndex(m => m.id === replyToId);
-                                                            if (targetIdx !== -1) {
-                                                                virtuosoRef.current?.scrollToIndex({
-                                                                    index: targetIdx,
-                                                                    align: 'center',
-                                                                    behavior: 'smooth'
-                                                                });
-                                                            }
-                                                        }}
-                                                        downloadingId={downloadingId}
-                                                        getFormattedTime={getFormattedTime}
-                                                    />
+                                                        <MessageItem
+                                                            msg={msg}
+                                                            index={index}
+                                                            onContextMenu={handleMsgContextMenu}
+                                                            onDownload={handleDownload}
+                                                            onLightbox={(src, alt) => setLightboxImage({ src, alt })}
+                                                            onScrollToReply={(replyToId) => {
+                                                                const targetIdx = messages.findIndex(m => m.id === replyToId);
+                                                                if (targetIdx !== -1) {
+                                                                    virtuosoRef.current?.scrollToIndex({
+                                                                        index: targetIdx,
+                                                                        align: 'center',
+                                                                        behavior: 'smooth'
+                                                                    });
+                                                                }
+                                                            }}
+                                                            downloadingId={downloadingId}
+                                                            getFormattedTime={getFormattedTime}
+                                                        />
                                                 )}
                                             />
                                         )}
