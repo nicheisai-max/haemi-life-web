@@ -364,9 +364,10 @@ const clearAuthSession = () => {
     // P1 Fix — Scoped key removal (replaces sessionStorage.clear()):
     // Preserves non-auth data — theme preference, language, appointment drafts.
     sessionStorage.removeItem('token');
-    sessionStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('refreshToken'); // P0.1: Legacy key (migration safety)
     sessionStorage.removeItem('user');
-    localStorage.removeItem('token'); // Phase 2: Ultimate purge guarantee
+    localStorage.removeItem('token');                 // Legacy purge guarantee
+    localStorage.removeItem('haemi_refresh_token');   // P0.1: Canonical refresh token key
 
     // Deterministic Queue Cleanout
     processQueue(new FatalAuthError('Session terminated'));
@@ -404,62 +405,71 @@ const clearAuthSession = () => {
     window.dispatchEvent(new CustomEvent('auth:unauthorized'));
 };
 
-// ─── Phase 11: Multi-Tab Synchronicity Bridge ──────────────────────────────
-if (typeof window !== 'undefined') {
+// ─── P0.3 + P0.5: Multi-Tab Token Sync Bridge (SSOT) ──────────────────────────
+// P0.5 FIX: IS_DEMO_MODE guard now applied here to match auth-context.tsx.
+// P0.3 FIX: LOGOUT case removed — cross-tab logout is now exclusively via the
+//   localStorage 'storage' event (haemi_logout_signal key). This eliminates:
+//   • Root Cause D: duplicate BC LOGOUT receiver in auth-context.tsx (now removed)
+//   • Root Cause E: auth-context sent LOGOUT with no 'version' field, so api.ts
+//     rejected it (undefined > 0 === false). localStorage events are version-free.
+// This handler is now the TOKEN_REFRESHED SSOT only.
+if (typeof window !== 'undefined' && !IS_DEMO_MODE) {
     const authSyncChannel = new BroadcastChannel('haemi_auth_sync');
-    authSyncChannel.onmessage = (event) => {
-        const { type, payload } = event.data;
-        const currentToken = accessToken || sessionStorage.getItem('token');
+    authSyncChannel.onmessage = (event: MessageEvent): void => {
+        const messageData = event.data as { type: string; payload: Record<string, unknown> };
+        const { type, payload } = messageData;
+        const currentToken: string | null = accessToken ?? sessionStorage.getItem('token');
 
+        // Decode current tab's identity from JWT for role-scoped matching
         let currentUserId: string | null = null;
-        let currentRole: string | null = null;
-        if (currentToken) {
+        if (currentToken !== null) {
             try {
-                const base64Url = currentToken.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const base64Url: string = currentToken.split('.')[1];
+                const base64: string = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                 const decoded = safeParseJSON(atob(base64), isJWTPayload);
-                currentUserId = decoded?.id || null;
-                currentRole = decoded?.role || null;
-            } catch (err: unknown) { 
-                logger.error('[API] Auth sync identity extraction failure', { error: String(err) });
+                currentUserId = decoded?.id ?? null;
+            } catch (decodeErr: unknown) {
+                logger.error('[API] Auth sync identity extraction failure', {
+                    error: decodeErr instanceof Error ? decodeErr.message : String(decodeErr)
+                });
             }
         }
 
-        switch (type) {
-            case 'TOKEN_REFRESHED':
-                if (payload.userId === currentUserId && payload.version >= sessionVersion) {
-                    logger.info('[API] Auth sync received: Token refreshed in matching tab.');
-                    setAccessToken(payload.token, payload.refreshToken);
-                    processQueue(null, payload.token);
-                }
-                break;
-            case 'LOGOUT':
-                // P0 Multi-Role Fix — Root Cause #2 + #3:
-                //
-                // Root Cause #2: The previous `!payload.userId` evaluated to `true` for
-                // `undefined`, so ALL tabs matched and logged out when any tab fired
-                // clearAuthSession with an undefined userId. Fix: require userId present.
-                //
-                // Root Cause #3: The previous `>=` (greater-than-or-equal) allowed a tab
-                // to process a LOGOUT with the SAME version it just set via clearAuthSession,
-                // creating an escalating loop. 
-                // Fix: strict `>` means only a newer version triggers clearAuthSession.
-                if (payload.userId
-                    && payload.userId === currentUserId
-                    && payload.role === currentRole // Synchronized with active session role
-                    && payload.version > sessionVersion) {
-                    
-                    sessionVersion = payload.version; // Sync version
-                    logger.warn('[API] Auth sync received: Session terminated by peer tab.', { 
-                        userId: payload.userId, 
-                        role: payload.role 
-                    });
-                    clearAuthSession();
-                }
-                break;
+        if (type === 'TOKEN_REFRESHED') {
+            const tokenPayload = payload as {
+                userId?: unknown;
+                version?: unknown;
+                token?: unknown;
+                refreshToken?: unknown;
+            };
+            // Strict type narrowing — no any, no unsafe cast
+            const payloadUserId: string | null = typeof tokenPayload.userId === 'string'
+                ? tokenPayload.userId : null;
+            const payloadVersion: number | null = typeof tokenPayload.version === 'number'
+                ? tokenPayload.version : null;
+            const payloadToken: string | null = typeof tokenPayload.token === 'string'
+                ? tokenPayload.token : null;
+            const payloadRefreshToken: string | null = typeof tokenPayload.refreshToken === 'string'
+                ? tokenPayload.refreshToken : null;
+
+            if (
+                payloadUserId !== null &&
+                payloadUserId === currentUserId &&
+                payloadVersion !== null &&
+                payloadVersion >= sessionVersion &&
+                payloadToken !== null
+            ) {
+                logger.info('[API] Auth sync received: Token refreshed in matching tab.');
+                setAccessToken(payloadToken, payloadRefreshToken ?? undefined);
+                processQueue(null, payloadToken);
+            }
         }
+        // LOGOUT intentionally not handled here.
+        // Cross-tab logout: auth-context.tsx logout() → localStorage 'haemi_logout_signal'
+        //                   → storage event → handleStorageChange → commitAuthState.
     };
 }
+
 
 /**
  * Validates that a JWT token has sufficient TTL before it is reused from the
@@ -539,9 +549,15 @@ const executeRefresh = async (retryCount = 0): Promise<string | null> => {
     const currentVersion = sessionVersion;
 
     try {
-        const currentRefreshToken = sessionStorage.getItem('refreshToken');
-        if (!currentRefreshToken) {
-            logger.info('[API] No refresh token found. Draining queue.');
+        // P0.1 FIX: Refresh token read from localStorage (origin-scoped, survives new tabs).
+        // Legacy sessionStorage key included as fallback for in-flight migration safety.
+        // Once commitAuthState() runs after a successful refresh, the sessionStorage key is evicted.
+        const currentRefreshToken: string | null =
+            localStorage.getItem('haemi_refresh_token') ??
+            sessionStorage.getItem('refreshToken'); // Legacy fallback: remove after one release cycle
+
+        if (currentRefreshToken === null) {
+            logger.info('[API] No refresh token found in storage. Draining queue.');
             processQueue(new FatalAuthError('No active session'), null);
             isRefreshing = false;
             return null;
@@ -572,7 +588,12 @@ const executeRefresh = async (retryCount = 0): Promise<string | null> => {
 
         setAccessToken(newToken, newRefreshToken, serverTime, sessionTimeout);
         sessionStorage.setItem('token', newToken);
-        if (newRefreshToken) sessionStorage.setItem('refreshToken', newRefreshToken);
+        // P0.1 FIX: Write refreshToken to localStorage (canonical key).
+        // Evict the legacy sessionStorage key to enforce single-source-of-truth.
+        if (typeof newRefreshToken === 'string' && newRefreshToken.length > 0) {
+            localStorage.setItem('haemi_refresh_token', newRefreshToken);
+            sessionStorage.removeItem('refreshToken'); // Evict legacy key
+        }
 
         logger.info('[API] Token refresh successful');
         auditLogger.log('TOKEN_REFRESH_SUCCESS');

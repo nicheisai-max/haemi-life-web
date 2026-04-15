@@ -86,11 +86,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (token && user) {
             sessionStorage.setItem('token', token);
-            if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
+            // P0.1: Refresh token canonical key moved to localStorage (origin-scoped).
+            // sessionStorage is tab-scoped — a new tab or DevTools "Empty Cache & Hard Reset"
+            // wipes it entirely, destroying the refresh token and forcing re-login.
+            // localStorage survives tab creation, hard refreshes, and cache resets.
+            if (refreshToken) {
+                localStorage.setItem('haemi_refresh_token', refreshToken);
+                sessionStorage.removeItem('refreshToken'); // Evict legacy key on every commit
+            }
             sessionStorage.setItem('user', JSON.stringify(user));
         } else {
             sessionStorage.removeItem('token');
-            sessionStorage.removeItem('refreshToken');
+            localStorage.removeItem('haemi_refresh_token'); // P0.1: Canonical key
+            sessionStorage.removeItem('refreshToken');      // P0.1: Legacy key eviction
             sessionStorage.removeItem('user');
         }
 
@@ -115,39 +123,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logger.info(`[Auth] Identity Commit: ${status} (Offset: ${offset}ms)`);
     }, []);
 
-    const logout = useCallback(async () => {
-        const currentUserId = authStateRef.current.user?.id;
-        const currentRole = authStateRef.current.user?.role;
+    const logout = useCallback(async (): Promise<void> => {
+        // Capture identity BEFORE clearing — snapshot is stable even if state is nulled mid-async
+        const currentUserId: string | undefined = authStateRef.current.user?.id;
+        const currentRole: string | undefined = authStateRef.current.user?.role;
         
         try {
             await authService.logout();
             logger.info('[Auth] Remote session invalidated successfully');
         } catch (error: unknown) {
-            // P0 FIX: Institutional Axios error handling using imported axios
             if (axios.isAxiosError(error)) {
                 if (error.response?.status === 401) {
                     logger.warn('[Auth] Logout: Remote session already void (Idempotent success)');
                 } else {
-                    logger.error('[Auth] Remote logout failure intercepted', { error: error.message });
+                    logger.error('[Auth] Remote logout failure intercepted', {
+                        error: error.message
+                    });
                 }
             } else {
-                logger.error('[Auth] Unknown error during remote logout', { error: String(error) });
+                logger.error('[Auth] Unknown error during remote logout', {
+                    error: error instanceof Error ? error.message : String(error)
+                });
             }
         }
 
-        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-        if (!IS_DEMO_MODE && currentUserId) {
+        // P0.3 FIX: Cross-tab logout now exclusively via localStorage 'storage' event.
+        // Removed BroadcastChannel postMessage — the previous implementation had two bugs:
+        //   Bug 1: The BC message had no 'version' field; api.ts listener checked
+        //          'payload.version > sessionVersion' → undefined > 0 === false → SILENTLY IGNORED.
+        //   Bug 2: auth-context also had a BC RECEIVER (duplicate of api.ts's SSOT handler),
+        //          causing double-processing and a hard window.location.href redirect.
+        // The localStorage 'storage' event fires in ALL other same-origin tabs reliably.
+        const IS_DEMO_MODE: boolean = import.meta.env.VITE_DEMO_MODE === 'true';
+        if (!IS_DEMO_MODE && typeof currentUserId === 'string' && typeof currentRole === 'string') {
             try {
-                const authChannel = new BroadcastChannel('haemi_auth_sync');
-                authChannel.postMessage({ type: 'LOGOUT', payload: { userId: currentUserId, role: currentRole } });
-                authChannel.close();
-
-                localStorage.setItem('haemi_logout_signal', JSON.stringify({
-                    userId: currentUserId, role: currentRole, ts: Date.now()
-                }));
-                setTimeout(() => localStorage.removeItem('haemi_logout_signal'), 500);
-            } catch (err) {
-                logger.error('[AuthSync] Logout broadcast failure insulated', { error: String(err) });
+                const signal = JSON.stringify({
+                    userId: currentUserId,
+                    role: currentRole,
+                    ts: Date.now()
+                });
+                localStorage.setItem('haemi_logout_signal', signal);
+                // Self-cleanup: prevents signal replay if tab is restored from bfcache
+                setTimeout((): void => localStorage.removeItem('haemi_logout_signal'), 500);
+                logger.info('[Auth] Cross-tab logout signal dispatched', {
+                    userId: currentUserId,
+                    role: currentRole
+                });
+            } catch (syncErr: unknown) {
+                logger.error('[Auth] Cross-tab logout signal failure (insulated)', {
+                    error: syncErr instanceof Error ? syncErr.message : String(syncErr)
+                });
             }
         }
 
@@ -278,68 +303,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [authState.authStatus, authState.token, logout]);
 
-    useEffect(() => {
-        const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-        let authChannel: BroadcastChannel | null = null;
+    // P0.3 FIX: Removed duplicate BroadcastChannel receiver from auth-context.
+    // api.ts is the SSOT for all BC operations (token refresh sync, LOGOUT processing).
+    // Cross-module bridge uses:  auth:unauthorized (custom window event) — api.ts → auth-context
+    // Cross-tab logout uses:     haemi_logout_signal (localStorage storage event) — tab A → tab B
+    // Cross-tab token sync uses: haemi_auth_sync BroadcastChannel in api.ts only.
+    useEffect((): (() => void) => {
 
-        if (!IS_DEMO_MODE) {
-            authChannel = new BroadcastChannel('haemi_auth_sync');
-            authChannel.onmessage = (event) => {
-                const { type, payload } = event.data;
-                const latest = authStateRef.current;
-                
-                if (type === 'LOGOUT') {
-                    // P0 CROSS-TAB TERMINATION: Ensure identity match and version hierarchy
-                    if (payload?.userId === latest.user?.id && payload?.role === latest.user?.role) {
-                        logger.warn('[AuthSync] Session termination signal received from peer tab. Initiating hard teardown.');
-                        
-                        // 1. Invalidate local memory state immediately
-                        commitAuthState(null, null, 'unauthenticated');
-                        
-                        // 2. FORCE HARD REDIRECT: This is the ONLY way to reliably kill 
-                        // all active clinical providers (Chat, Notifications) from memory.
-                        window.location.href = '/login'; 
-                    }
-                } else if (type === 'TOKEN_REFRESHED') {
-                    if (payload.userId === latest.user?.id && payload.role === latest.user?.role) {
-                        logger.info('[AuthSync] Token refresh signal received from peer tab. Synchronizing local state.');
-                        commitAuthState(latest.user, payload.token, latest.authStatus === 'unauthenticated' ? 'authenticated' : latest.authStatus, payload.refreshToken, latest.serverOffset, latest.sessionTimeout);
-                    }
-                }
-            };
-        }
-
-        const handleUnauthorized = () => {
-            const user = authStateRef.current.user;
-            if (authChannel && user) authChannel.postMessage({ type: 'LOGOUT', payload: { userId: user.id, role: user.role } });
+        // Triggered by api.ts clearAuthSession() via window.dispatchEvent('auth:unauthorized')
+        const handleUnauthorized = (): void => {
+            // api.ts has already: cleared tokens, incremented sessionVersion, broadcast to peers.
+            // We only need to commit the React state here — no extra BC needed.
+            logger.warn('[Auth] Unauthorized event received — terminating local session.');
             commitAuthState(null, null, 'unauthenticated');
         };
 
-        const handleTokenRefreshed = (event: Event) => {
-            const { token, refreshToken, serverTime, sessionTimeout } = (event as CustomEvent).detail;
-            
-            // P0 IDEPOTENCY GUARD: Prevent redundant state commits 
-            // from the same tab or identical updates
+        // Triggered by api.ts setAccessToken() via window.dispatchEvent('auth:token-refreshed')
+        const handleTokenRefreshed = (event: Event): void => {
+            const customEvent = event as CustomEvent<{
+                token: string;
+                refreshToken: string | null | undefined;
+                serverTime: string | undefined;
+                sessionTimeout: number | undefined;
+            }>;
+            const { token, refreshToken, serverTime, sessionTimeout } = customEvent.detail;
+
+            // Idempotency guard: skip if this tab already has the same token
             if (authStateRef.current.token === token) return;
 
-            logger.info('[Auth] Silent token synchronization committed');
-            
-            setAuthState(prev => {
-                const offset = (serverTime ? new Date(serverTime).getTime() : Date.now()) - Date.now();
-                return { ...prev, token, serverOffset: offset, sessionTimeout: sessionTimeout || prev.sessionTimeout };
+            logger.info('[Auth] Silent token synchronization committed.');
+
+            setAuthState((prev: AuthState): AuthState => {
+                const serverMs: number = serverTime
+                    ? new Date(serverTime).getTime()
+                    : Date.now();
+                return {
+                    ...prev,
+                    token,
+                    serverOffset: serverMs - Date.now(),
+                    sessionTimeout: sessionTimeout ?? prev.sessionTimeout
+                };
             });
-            
+
             sessionStorage.setItem('token', token);
-            if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
+            // P0.1: Write refreshToken to localStorage (canonical storage)
+            if (typeof refreshToken === 'string' && refreshToken.length > 0) {
+                localStorage.setItem('haemi_refresh_token', refreshToken);
+                sessionStorage.removeItem('refreshToken'); // Evict legacy key
+            }
         };
 
-        const handleStorageChange = (event: StorageEvent) => {
-            if (event.key === 'haemi_logout_signal' && event.newValue) {
-                const signal = safeParseJSON(event.newValue, (v: unknown): v is { userId: string, role: string } => {
-                    return typeof v === 'object' && v !== null && 'userId' in v && 'role' in v;
+        // Triggered when logout() sets haemi_logout_signal in localStorage.
+        // The 'storage' event fires in OTHER tabs only (not the sender) — correct by spec.
+        const handleStorageChange = (event: StorageEvent): void => {
+            if (event.key !== 'haemi_logout_signal' || event.newValue === null) return;
+
+            type LogoutSignal = Readonly<{ userId: string; role: string; ts: number }>;
+            const isLogoutSignal = (v: unknown): v is LogoutSignal =>
+                typeof v === 'object' &&
+                v !== null &&
+                typeof (v as Record<string, unknown>).userId === 'string' &&
+                typeof (v as Record<string, unknown>).role === 'string';
+
+            const signal: LogoutSignal | null = safeParseJSON(event.newValue, isLogoutSignal);
+            const currentUser = authStateRef.current.user;
+
+            if (
+                signal !== null &&
+                currentUser !== null &&
+                signal.userId === currentUser.id &&
+                signal.role === currentUser.role
+            ) {
+                logger.warn('[Auth] localStorage logout signal received — terminating peer session.', {
+                    userId: signal.userId,
+                    role: signal.role
                 });
-                const user = authStateRef.current.user;
-                if (signal && user && signal.userId === user.id && signal.role === user.role) commitAuthState(null, null, 'unauthenticated');
+                commitAuthState(null, null, 'unauthenticated');
             }
         };
 
@@ -347,13 +386,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
         window.addEventListener('storage', handleStorageChange);
 
-        return () => {
-            if (authChannel) authChannel.close();
+        return (): void => {
             window.removeEventListener('auth:unauthorized', handleUnauthorized);
             window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
             window.removeEventListener('storage', handleStorageChange);
         };
-    }, [commitAuthState]); 
+    }, [commitAuthState]);
 
     useEffect(() => {
         if (hasBootInitiated) return;
@@ -385,13 +423,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     commitAuthState(verifyResult.user, refreshResult.token, 'authenticated', refreshResult.refreshToken, verifyResult.serverTime, verifyResult.sessionTimeout);
                 } else if (!authStateRef.current.token) { commitAuthState(null, null, 'unauthenticated'); }
             } catch (error: unknown) {
-                // P0 FIX: Unified Identity Error Narrowing using isAuthError and axios.isAxiosError
-                if (isAuthError(error) || (axios.isAxiosError(error) && error.response?.status === 401)) {
-                    logger.info('[Boot] Initialization probe: No valid session found (Graceful fallback)');
+
+                // P0.2 FIX: Discriminated error handling — only logout on confirmed auth failures.
+                // Network errors (ECONNABORTED, ERR_NETWORK), 5xx, and unexpected responses
+                // must NOT clear an already-established optimistic session.
+                // Logging: all paths use logger — no console.* calls.
+                const isConfirmedAuthFailure: boolean =
+                    isAuthError(error) ||
+                    (axios.isAxiosError(error) && error.response?.status === 401);
+
+                if (isConfirmedAuthFailure) {
+                    logger.info('[Boot] Initialization probe: No active session confirmed. Transitioning to unauthenticated.');
+                    commitAuthState(null, null, 'unauthenticated');
                 } else {
-                    logger.error('[Boot] Initialization failure', { error: String(error) });
+                    // Non-auth failure: preserve any optimistic session set from sessionStorage.
+                    // If the user had a valid token in sessionStorage, they remain authenticated.
+                    // Only fall back to unauthenticated if NO token was ever established.
+                    const errorMessage: string = error instanceof Error ? error.message : String(error);
+                    logger.error('[Boot] Non-auth initialization failure — preserving existing session state', {
+                        error: errorMessage,
+                        hasExistingToken: authStateRef.current.token !== null
+                    });
+                    if (authStateRef.current.token === null) {
+                        commitAuthState(null, null, 'unauthenticated');
+                    }
                 }
-                commitAuthState(null, null, 'unauthenticated');
             } finally {
                 clearTimeout(timeoutGuard);
                 setAppInitialized();
@@ -403,10 +459,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return (
         <AuthContext.Provider value={{
-            user: authState.user, token: authState.token, authStatus: authState.authStatus, profileImageVersion: authState.profileImageVersion,
-            login, signup, logout, refreshUser, isRefreshing, isTokenNearDeath,
+            user: authState.user,
+            token: authState.token,
+            authStatus: authState.authStatus,
+            profileImageVersion: authState.profileImageVersion,
+            login,
+            signup,
+            logout,
+            refreshUser,
+            isRefreshing,
+            isTokenNearDeath,
             isLoading: ['initializing', 'auth_check', 'onboarding_check'].includes(authState.authStatus),
-            isAuthenticated: (authState.authStatus === 'authenticated' || (authState.authStatus === 'app_ready' && !!authState.user)) && !!authState.token && !isTokenNearDeath
+            // P0.4 FIX: isAuthenticated must NOT be falsified by isTokenNearDeath.
+            // When a token is within 10s of expiry, the background refresh interval fires.
+            // If isAuthenticated became false here, ProtectedRoute would redirect to /login
+            // BEFORE the refresh completes — a race condition that logs out valid users.
+            // isTokenNearDeath is exposed separately so ProtectedRoute can show a loader
+            // while refreshing, without triggering a redirect. API calls are gated in api.ts.
+            isAuthenticated: (
+                authState.authStatus === 'authenticated' ||
+                (authState.authStatus === 'app_ready' && authState.user !== null)
+            ) && authState.token !== null
         }}>
             {children}
         </AuthContext.Provider>
