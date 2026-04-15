@@ -112,7 +112,7 @@ export const CommandCenter: React.FC = () => {
             {/* Mobile Trigger: Icon-only (Visible < md) */}
             <button
                 onClick={() => setOpen(true)}
-                className="haemi-nav-search-trigger-mobile flex md:hidden items-center justify-center group transition-all"
+                className="haemi-nav-search-trigger-mobile flex md:hidden items-center justify-center group transition-all haemi-ignore-click-outside"
                 aria-label="Search Hub"
             >
                 <Search className="h-5 w-5 text-slate-500 group-hover:text-primary transition-colors" />
@@ -121,7 +121,7 @@ export const CommandCenter: React.FC = () => {
             {/* Desktop Trigger: Capsule (Visible >= md) */}
             <button
                 onClick={() => setOpen(true)}
-                className="haemi-nav-action-capsule hidden md:flex items-center gap-3 group w-64 lg:w-80 shadow-inner overflow-hidden bg-slate-100 dark:bg-slate-800"
+                className="haemi-nav-action-capsule hidden md:flex items-center gap-3 group w-64 lg:w-80 shadow-inner overflow-hidden bg-slate-100 dark:bg-slate-800 haemi-ignore-click-outside"
             >
                 <Search className="h-4 w-4 text-slate-500 group-hover:text-primary transition-colors" />
                 <span className="text-sm font-bold text-slate-500 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Search Hub...</span>

@@ -86,7 +86,14 @@ const validateJwtPayload = (decoded: unknown): decoded is JwtPayloadStrict => {
 export const authenticateToken = async (inputReq: Request, res: Response, next: NextFunction) => {
     const req = inputReq as AuthenticatedRequest;
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+
+    // 🛡️ ENTERPRISE DOWNLOAD GATE: Accept ?token= query param as fallback.
+    // When the browser navigates directly to a file URL (e.g., "Save to Device"),
+    // no Authorization header is sent. The ?token= query param allows direct navigation
+    // while preserving the full verification chain below (DB check, session, role).
+    // Security: Same JWT_SECRET, same DB checks — no privileges bypassed.
+    const token = (authHeader && authHeader.split(' ')[1])
+        || (typeof req.query.token === 'string' ? req.query.token : undefined);
 
     if (!token) {
         logger.info('[Auth.Middleware] Anonymous access attempt blocked.');

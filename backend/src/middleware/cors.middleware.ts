@@ -24,9 +24,9 @@ export const corsMiddleware = (req: Request, res: Response, next: NextFunction) 
     }
 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Range, Cache-Control, Pragma, Expires, Accept, Origin, x-client-domain');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Range, Cache-Control, Pragma, Expires, Accept, Origin, x-client-domain, X-Client-Domain, X-Correlation-ID');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type, Content-Disposition, Content-Range, X-Content-Type-Options');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type, Content-Disposition, Content-Range, X-Content-Type-Options, X-Haemi-Error, X-Haemi-Asset-ID');
 
     // 2. Security Headers (Enterprise Hardening)
     res.setHeader('X-Content-Type-Options', 'nosniff');

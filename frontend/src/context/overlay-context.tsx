@@ -4,6 +4,7 @@ import { logger } from '@/utils/logger';
 import { OverlayContext } from './overlay-context-registry';
 import type { ActiveOverlay } from './overlay-context-registry';
 
+
 /**
  * 🩺 HAEMI LIFE | OVERLAY ORCHESTRATION PROVIDER
  * Standard: Google/Meta Grade TypeScript (Component Isolation)

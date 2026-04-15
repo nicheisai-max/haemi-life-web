@@ -114,7 +114,7 @@ export const Navbar: React.FC = () => {
                                 <Button 
                                     variant="ghost" 
                                     size="navAction" 
-                                    className="haemi-nav-action-circle p-0 border-none shadow-none focus-visible:ring-0"
+                                    className="haemi-nav-action-circle p-0 haemi-ignore-click-outside border-none shadow-none focus-visible:ring-0"
                                     aria-label="User account menu"
                                 >
                                     <Avatar className="shadow-sm">

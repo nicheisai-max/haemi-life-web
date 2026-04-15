@@ -72,7 +72,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const pendingPresenceIdsRef = useRef<Set<UserId>>(new Set());
 
     const fetchPresence = useCallback(async (userIds: UserId[]) => {
-        if (!userIds || userIds.length === 0) return;
+        if (!isAuthenticated || !userIds || userIds.length === 0) return;
 
         // 1. Add to pending queue
         // P0 PROTOCOL: EXACT ID MATCHING (NO NORMALIZATION)
@@ -83,6 +83,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // 3. Set new timeout — 300ms debounce window
         fetchPresenceTimeoutRef.current = setTimeout(async () => {
+            if (!isAuthenticated) return;
             // 4. Guard: If a request is already in flight, yield
             if (activePresenceRequestRef.current) return;
 
@@ -132,7 +133,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 activePresenceRequestRef.current = null;
             }
         }, 300);
-    }, []);
+    }, [isAuthenticated]);
     // ─── 2. HYDRATION: Local-First Strategy ─────────────────────────
     useEffect(() => {
         if (!isAuthenticated || !user?.id) return;
@@ -255,6 +256,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
 
             setConversations(uniqueConversations);
+            setIsHydrated(true); // ✅ Certification of source parity (Meta-Grade)
+            setLoading(false); // ✅ Ensure global loader resolves on success
 
             // ─── PERSISTENCE ─────────────────────────────────────────
             // Update local IndexedDB with latest server state
@@ -286,6 +289,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [internalFetchConversations]);
 
     const loadMessages = useCallback(async (conversationId: ConversationId) => {
+        if (!isAuthenticated) return;
         setLoading(true);
         const controller = getAbortController(`loadMessages:${conversationId}`);
         
@@ -364,7 +368,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } finally {
             setLoading(false);
         }
-    }, [user, getAbortController]);
+    }, [user, getAbortController, isAuthenticated]);
 
     useEffect(() => {
         if (!isAuthenticated || !token || !user?.id) return;
@@ -437,7 +441,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const onMessageDelivered = ({ conversationId, messageIds }: { conversationId: ConversationId; messageIds: MessageId[] }) => {
             if (activeConversationRef.current?.id === conversationId) {
                 setMessages(prev => prev.map(msg =>
-                    messageIds.includes(msg.id) ? { ...msg, status: 'delivered' } : msg
+                    messageIds.includes(msg.id) 
+                        ? { ...msg, status: 'delivered' as const } // ATOMIC MERGE
+                        : msg
                 ));
             }
             // Batched sync to storage
@@ -445,7 +451,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         const onMessageDeleted: ServerToClientEvents["messageDeleted"] = ({ messageId, conversationId, newLastMessage }) => {
-            // P6: Propagation of deletion across thread + sidebar
+            // 🧬 ATOMIC DELETE GUARD: Ensure state is only updated if not already optimistically removed
             setMessages(prev => prev.filter(m => m.id !== messageId));
             setConversations(prev => prev.map(c => {
                 if (c.id === conversationId && c.lastMessageId === messageId) {
@@ -466,6 +472,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             conversationId,
             newLastMessage
         }) => {
+            // 🧬 ATOMIC DELETE GUARD: Avoid re-adding if already optimistically removed
             setMessages(prev => prev.filter(m => m.id !== messageId));
             // Mirror the sidebar preview update so every tab stays consistent.
             setConversations(prev =>
@@ -485,9 +492,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const onMessageReaction: ServerToClientEvents["messageReaction"] = (data) => {
             setMessages(prev => prev.map(msg => {
                 if (msg.id === data.messageId) {
-                    const reactions = msg.reactions || [];
+                    const reactions = [...(msg.reactions || [])];
                     if (data.action === 'added') {
-                        // Avoid duplicates
                         const exists = reactions.some(r => r.userId === data.userId && r.type === data.reactionType);
                         if (exists) return msg;
                         return { ...msg, reactions: [...reactions, { type: data.reactionType, userId: data.userId }] };
@@ -531,8 +537,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // Exact ID match check
                     const exists = prev.some((m: Message) => m.id === message.id);
                     if (exists) {
-                        // Update status if it's our own optimistic message coming back
-                        return prev.map((m: Message) => m.id === message.id ? { ...m, status: message.status } : m);
+                        // 🧬 DEEP MERGE GUARD (Meta-Grade): Update status but PRESERVE reactions
+                        return prev.map((m: Message) => m.id === message.id 
+                            ? { ...m, status: message.status, reactions: m.reactions || [] } 
+                            : m
+                        );
                     }
 
                 // SEARCH MATCH: Check for optimistic message that matches by sequence and sender
@@ -748,6 +757,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!isAuthenticated || !user?.id) return;
 
         const syncOutbox = async () => {
+            if (!isAuthenticated) return;
             if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
             const pending = await storageService.getPendingMessages();
@@ -799,7 +809,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const finalDelay = baseDelay + jitter;
 
                 logger.info(`[ChatProvider] Next outbox sync in ${Math.round(finalDelay/1000)}s...`);
-                syncTimeoutRef.current = setTimeout(syncOutbox, finalDelay);
+                // Final session guard before scheduling next retry
+                if (isAuthenticated) {
+                    syncTimeoutRef.current = setTimeout(syncOutbox, finalDelay);
+                }
             }
         };
 
@@ -813,13 +826,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [isAuthenticated, user?.id]);
 
-    const sendMessage = async (
+    const sendMessage = useCallback(async (
         content: string,
         conversationId: ConversationId,
         attachments: Attachment[] = [],
         replyToId?: string
     ) => {
-        if (!user?.id) return;
+        if (!user?.id || !isAuthenticated) return;
 
         // Phase 3: Optimistic UUID generation for Local-First tracking
         const tempId = `opt-${crypto.randomUUID()}`;
@@ -912,9 +925,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 m.id === tempId ? { ...m, status: 'failed' } : m
             ));
         }
-    };
+    }, [user, isAuthenticated, conversations]);
 
-    const selectConversation = (conversation: Conversation) => {
+    const selectConversation = useCallback((conversation: Conversation) => {
         // P0 RACE CONDITION FIX: Update ref IMMEDIATELY to prevent duplicate selection/load
         if (activeConversationRef.current?.id === conversation.id) return;
 
@@ -930,9 +943,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const otherIds = conversation.participants.map(p => p.id).filter(id => id !== user?.id);
         if (otherIds.length > 0) fetchPresence(otherIds);
-    };
+    }, [user, fetchPresence, loadMessages]);
 
-    const startNewConversation = async (participantId: string, _meta?: ParticipantMetadata) => {
+    const startNewConversation = useCallback(async (participantId: string, _meta?: ParticipantMetadata) => {
+        if (!isAuthenticated) return;
         try {
             const res = await api.post<ChatApiResponse<Conversation>>('/chat/conversations', { participantId });
             
@@ -953,9 +967,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (err: unknown) {
             logger.error('[ChatProvider] Failed to start conversation:', err instanceof Error ? err.message : String(err));
         }
-    };
+    }, [isAuthenticated, selectConversation]);
 
-    const emitTyping = (conversationId: ConversationId, isTyping: boolean) => {
+    const emitTyping = useCallback((conversationId: ConversationId, isTyping: boolean) => {
         if (!user || !isAuthenticated) return;
 
         // Enterprise Throttling: Start immediately, stop after inactivity
@@ -977,11 +991,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 socketService.emit('typingStopped', { conversationId, name: user.name || 'User' });
             }
         }
-    };
+    }, [user, isAuthenticated]);
 
-
-
-    const uploadAttachment = async (file: File): Promise<AttachmentDTO | null> => {
+    const uploadAttachment = useCallback(async (file: File): Promise<AttachmentDTO | null> => {
+        if (!isAuthenticated) return null;
         const formData = new FormData();
         formData.append('file', file);
         try {
@@ -998,22 +1011,25 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             logger.error('[ChatProvider] Failed to upload:', err instanceof Error ? err.message : String(err));
             return null;
         }
-    };
+    }, [isAuthenticated]);
 
-    const deleteMessage = async (messageId: MessageId, forEveryone: boolean) => {
-        const previousMessages = [...messages];
-        setMessages((prev: Message[]) => prev.filter((msg: Message) => msg.id !== messageId));
+    const deleteMessage = useCallback(async (messageId: MessageId, forEveryone: boolean) => {
+        if (!isAuthenticated) return;
+        
+        let previousMessages: Message[] = [];
+        setMessages((prev: Message[]) => {
+            previousMessages = [...prev];
+            return prev.filter((msg: Message) => msg.id !== messageId);
+        });
+
         try {
             // Fix 3: REST-compliant DELETE verb (matches backend router.delete('/messages/:messageId'))
-            // Axios DELETE with body uses { data: {} } pattern — no query string needed.
             await api.delete<ApiResponse<void>>(`/chat/messages/${messageId}`, {
                 data: { forEveryone }
             });
-            // Local sync only, no blind refetch
+            
+            // ✅ PERSIST SIDEBAR: Sync the last message preview to reflect the deletion
             setConversations((prev: Conversation[]) => prev.map((c: Conversation) => {
-                // D1 REMEDIATION: Universal sidebar update.
-                // We update the snippet regardless of activeConversation state to ensure
-                // consistency across all threads in the sidebar.
                 if (c.lastMessageId === messageId) {
                     return { ...c, lastMessage: 'Message deleted' };
                 }
@@ -1021,34 +1037,54 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }));
         }
         catch (err: unknown) {
-            logger.error('[ChatProvider] Delete failed:', err instanceof Error ? err.message : String(err));
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            logger.error('[ChatProvider] Forensic Audit: Delete failed', {
+                messageId,
+                forEveryone,
+                error: errorMsg
+            });
+            // REVERT: Only on fatal API failure
             setMessages(previousMessages);
         }
-    };
+    }, [isAuthenticated]);
 
-    const reactToMessage = async (messageId: MessageId, reactionType: string) => {
-        const previousMessages = [...messages];
-        setMessages((prev: Message[]) => prev.map((msg: Message) => {
-            if (msg.id === messageId) {
-                const reactions = msg.reactions || [];
-                const currentUserId = user?.id as UserId;
-                const existing = reactions.find(r => r.userId === currentUserId && r.type === reactionType);
-                if (existing) return { ...msg, reactions: reactions.filter(r => r.userId !== currentUserId) };
-                const withoutMyReactions = reactions.filter(r => r.userId !== currentUserId);
-                return { ...msg, reactions: [...withoutMyReactions, { type: reactionType, userId: currentUserId }] };
-            }
-            return msg;
-        }));
+    const reactToMessage = useCallback(async (messageId: MessageId, reactionType: string) => {
+        if (!user || !isAuthenticated) return;
+
+        let previousMessages: Message[] = [];
+        setMessages((prev: Message[]) => {
+            previousMessages = [...prev];
+            return prev.map((msg: Message) => {
+                if (msg.id === messageId) {
+                    const reactions = msg.reactions || [];
+                    const currentUserId = user.id as UserId;
+                    const existing = reactions.find(r => r.userId === currentUserId && r.type === reactionType);
+                    if (existing) return { ...msg, reactions: reactions.filter(r => r.userId !== currentUserId) };
+                    const withoutMyReactions = reactions.filter(r => r.userId !== currentUserId);
+                    return { ...msg, reactions: [...withoutMyReactions, { type: reactionType, userId: currentUserId }] };
+                }
+                return msg;
+            });
+        });
+
         try {
             await api.post<ApiResponse<void>>(`/chat/messages/${messageId}/react`, { reactionType });
+            // SUCCESS: No further action needed as optimistic state is already applied
         }
         catch (err: unknown) {
-            logger.error('[ChatProvider] Reaction failed:', err instanceof Error ? err.message : String(err));
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            logger.error('[ChatProvider] Forensic Audit: Reaction failed', {
+                messageId,
+                reactionType,
+                error: errorMsg
+            });
+            // REVERT: Critical for preventing "Ghost Reactions"
             setMessages(previousMessages);
         }
-    };
+    }, [user, isAuthenticated]);
 
-    const markAsRead = async (conversationId: ConversationId) => {
+    const markAsRead = useCallback(async (conversationId: ConversationId) => {
+        if (!isAuthenticated) return;
         const now = Date.now();
         const lastRead = lastReadRequestRef.current[conversationId as string] || 0;
 
@@ -1067,9 +1103,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             logger.error('[ChatProvider] Failed to mark read:', err instanceof Error ? err.message : String(err));
             lastReadRequestRef.current[conversationId as string] = 0;
         }
-    };
+    }, [isAuthenticated]);
 
-    const markMessageAsRead = async (messageId: MessageId) => {
+    const markMessageAsRead = useCallback(async (messageId: MessageId) => {
         if (!user || !isAuthenticated) return;
         try {
             socketService.emit('messageRead', { 
@@ -1081,7 +1117,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (err: unknown) {
             logger.error('[ChatProvider] Failed to emit messageRead', err instanceof Error ? err.message : String(err));
         }
-    };
+    }, [user, isAuthenticated]);
 
     return (
         <ChatContext.Provider value={{
