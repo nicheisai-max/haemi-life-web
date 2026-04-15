@@ -42,6 +42,17 @@ const DashboardLayoutInner: React.FC<DashboardLayoutProps> = ({ children }) => {
         };
     }, [activeOverlay, setOverlay, closeOverlay]);
 
+    // COORDINATION: ChatHub Closing (Legacy Compatibility Bridge)
+    useEffect(() => {
+        const handleCloseChat = () => {
+            if (activeOverlay === 'chat') {
+                logger.debug('[DashboardLayout] Reactive trigger: Closing ChatHub (Legacy-Event Bridge)');
+                closeOverlay();
+            }
+        };
+        window.addEventListener('haemi-close-chathub', handleCloseChat);
+        return () => window.removeEventListener('haemi-close-chathub', handleCloseChat);
+    }, [activeOverlay, closeOverlay]);
 
     return (
         <div className="portal-layout-root min-h-screen bg-background text-foreground flex flex-col">
