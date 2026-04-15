@@ -1,7 +1,10 @@
 #!/bin/sh
 
-# Master Guard Dispatcher (Branch, Schema, Identity, Code Quality, Size)
-npx tsx scripts/branch-guard.ts --commit || exit 1
+# Master Guard Dispatcher — checkout mode only (branch convention validation, no commit policy)
+# Root Cause Fix: --commit was incorrectly passed here, setting MODE.COMMIT=true on every
+# branch switch. post-checkout fires on 'git checkout <branch>' — not on git commit.
+# Fix: --checkout mode validates branch naming convention only; commit guards are skipped.
+npx tsx scripts/branch-guard.ts --checkout || exit 1
 
 # Forensic Hygiene Sync
 npx tsx scripts/repo-hygiene.ts --silent || echo "Hygiene skip."
