@@ -122,9 +122,13 @@ async function start() {
 
     const orchestrator = spawn('npx', ['concurrently', ...concurrentlyArgs], {
         cwd: path.resolve(__dirname, '..'),
-        stdio: 'inherit',
+        stdio: 'pipe',
         shell: true
     });
+
+    // Pipe output so both terminal and AI tools (Claude Preview, etc.) capture it
+    orchestrator.stdout?.pipe(process.stdout);
+    orchestrator.stderr?.pipe(process.stderr);
 
     children.push(orchestrator);
 
