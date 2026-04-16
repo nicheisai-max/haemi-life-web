@@ -88,6 +88,39 @@ export function isJWTPayload(value: unknown): value is JWTPayload {
     );
 }
 
+/**
+ * P1.0 FIX: Refresh Token Payload Guard.
+ *
+ * Refresh tokens carry a SUBSET of the access token claims — notably
+ * they lack `email` and `role`. A full `isJWTPayload` check therefore
+ * rejects valid refresh tokens, breaking zombie-detection and mismatch
+ * guards that decode them.
+ *
+ * This guard validates the minimal shape required for cross-tab
+ * ownership checks: `id` (user identity) and `exp` (expiry).
+ */
+export interface RefreshTokenPayload {
+    readonly id: string;
+    readonly tokenVersion: number;
+    readonly sessionId: string;
+    readonly jti: string;
+    readonly exp: number;
+    readonly iat: number;
+}
+
+export function isRefreshTokenPayload(value: unknown): value is RefreshTokenPayload {
+    if (!isObject(value)) return false;
+    const v = value as Record<string, unknown>;
+    return (
+        isString(v.id) &&
+        isNumber(v.tokenVersion) &&
+        isString(v.sessionId) &&
+        isString(v.jti) &&
+        isNumber(v.exp) &&
+        isNumber(v.iat)
+    );
+}
+
 export function isHealthStatus(value: unknown): value is { status: string } {
     if (typeof value !== 'object' || value === null) return false;
     return 'status' in value && typeof (value as { status: unknown }).status === 'string';

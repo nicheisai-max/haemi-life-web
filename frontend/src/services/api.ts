@@ -2,7 +2,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig, type AxiosResponse 
 import { logger, auditLogger, intrusionDetector } from '../utils/logger';
 import { NetworkError, AuthError, RefreshFailureError, FatalAuthError, isAuthError, isNetworkError } from '../types/auth.types';
 import type { AuthResponse, ApiResponse } from '../types/auth.types';
-import { isJWTPayload, safeParseJSON } from '../utils/type-guards';
+import { isJWTPayload, isRefreshTokenPayload, safeParseJSON } from '../utils/type-guards';
 
 const RAW_URL = import.meta.env.VITE_API_URL?.replace(/\/+$/, '') || '';
 
@@ -561,6 +561,65 @@ const executeRefresh = async (retryCount = 0): Promise<string | null> => {
             processQueue(new FatalAuthError('No active session'), null);
             isRefreshing = false;
             return null;
+        }
+
+        // ── P1.3 FIX: Refresh Token User Mismatch Detection ────────────────
+        // Before sending the refresh token to the backend, validate that it
+        // belongs to the same user as the current tab's access token.
+        //
+        // Root cause (Forensic Finding #1): All tabs share a single
+        // `haemi_refresh_token` key in localStorage. Sequential logins from
+        // different roles overwrite each other. When a tab's access token
+        // expires, the proactive refresh uses whatever token is in localStorage
+        // — potentially returning a DIFFERENT user's credentials.
+        //
+        // This guard aborts the refresh and clears the stale session, forcing
+        // re-login rather than silently switching to the wrong role.
+        const currentSessionToken: string | null = accessToken ?? sessionStorage.getItem('token');
+        if (currentSessionToken !== null) {
+            try {
+                const sessionParts: readonly string[] = currentSessionToken.split('.');
+                const refreshParts: readonly string[] = currentRefreshToken.split('.');
+
+                if (sessionParts.length === 3 && refreshParts.length === 3) {
+                    const sessionPayload = safeParseJSON(
+                        atob(sessionParts[1].replace(/-/g, '+').replace(/_/g, '/')),
+                        isJWTPayload
+                    );
+                    const refreshPayload = safeParseJSON(
+                        atob(refreshParts[1].replace(/-/g, '+').replace(/_/g, '/')),
+                        isRefreshTokenPayload
+                    );
+
+                    if (
+                        sessionPayload !== null &&
+                        refreshPayload !== null &&
+                        sessionPayload.id !== refreshPayload.id
+                    ) {
+                        logger.warn('[API] Refresh token user mismatch — aborting to prevent role confusion.', {
+                            sessionUserId: sessionPayload.id,
+                            sessionRole: sessionPayload.role,
+                            refreshTokenUserId: refreshPayload.id
+                        });
+                        auditLogger.log('SECURITY_EVENT', {
+                            reason: 'REFRESH_TOKEN_USER_MISMATCH',
+                            userId: sessionPayload.id,
+                            details: {
+                                sessionRole: sessionPayload.role,
+                                refreshTokenOwnerId: refreshPayload.id
+                            }
+                        });
+                        processQueue(new FatalAuthError('Session user mismatch'), null);
+                        isRefreshing = false;
+                        clearAuthSession();
+                        return null;
+                    }
+                }
+            } catch (mismatchErr: unknown) {
+                logger.error('[API] Token comparison failure during refresh validation', {
+                    error: mismatchErr instanceof Error ? mismatchErr.message : String(mismatchErr)
+                });
+            }
         }
 
         logger.info(`[API] Initiating synchronized token refresh (Attempt ${retryCount + 1})`);
