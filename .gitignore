@@ -177,3 +177,12 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLAUDE CODE LOCAL STATE (CLI tooling — never commit)
+# ─────────────────────────────────────────────────────────────────────────────
+# .claude/ holds Claude Code's per-project config, worktrees, and local settings.
+# CLAUDE.md at repo root is INTENTIONALLY tracked (project intelligence + governance rules).
+# The negation rule defends against future tooling placing CLAUDE.md elsewhere.
+.claude/
+!CLAUDE.md
