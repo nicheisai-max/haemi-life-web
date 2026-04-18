@@ -108,9 +108,14 @@ coverage/
 *.rar
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AI / ANALYSIS ARTIFACTS
+# AI / AGENT GENERATED FILES (Zero-Pollution Policy)
 # ─────────────────────────────────────────────────────────────────────────────
 .ai-system/
+.agent/
+ai-rules/
+ai/
+CLAUDE.md
+Haemi_Forensic_Audit.js
 *.analysis.json
 *.ai-log
 *.ai-report.md
@@ -182,7 +187,5 @@ yarn-error.log*
 # CLAUDE CODE LOCAL STATE (CLI tooling — never commit)
 # ─────────────────────────────────────────────────────────────────────────────
 # .claude/ holds Claude Code's per-project config, worktrees, and local settings.
-# CLAUDE.md at repo root is INTENTIONALLY tracked (project intelligence + governance rules).
-# The negation rule defends against future tooling placing CLAUDE.md elsewhere.
+# All AI-specific metadata is now strictly ignored to prevent tool contention.
 .claude/
-!CLAUDE.md
