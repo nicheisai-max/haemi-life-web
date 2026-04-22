@@ -26,6 +26,7 @@ import { chatReliabilityService } from './services/chat-reliability.service';
 import { env } from './config/env';
 import { schemaIntegrityService } from './services/schema-integrity.service';
 import { cleanupService } from './services/cleanup.service';
+import { StorageBootstrapper } from './services/storage-bootstrapper.service';
 import { corsMiddleware } from './middleware/cors.middleware';
 import { statusService } from './services/status.service';
 import { isJWTPayload } from './utils/type-guards';
@@ -47,6 +48,7 @@ import fileRoutes from './routes/file.routes';
 import consentRoutes from './routes/consent.routes';
 import profileRoutes from './routes/profile.routes';
 import aiRoutes from './routes/ai.routes';
+import pharmacistRoutes from './routes/pharmacist.routes';
 
 const app = express();
 
@@ -146,6 +148,7 @@ app.use('/api/common', commonRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/pharmacist', pharmacistRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -163,6 +166,7 @@ const startServer = async () => {
         // Phase 3: Strict DB Verification
         await checkConnection();
         await schemaIntegrityService.validate();
+        await StorageBootstrapper.initialize(); // Ensure physical assets
         cleanupService.initialize(); // Institutional Cleanup Guardian (v5.1)
         logger.info('✅ Database, Schema, and Cleanup Guardian verified.');
 

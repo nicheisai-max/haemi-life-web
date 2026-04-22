@@ -16,7 +16,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const INIT_SQL_PATH = path.resolve(__dirname, '../backend/src/db/init.sql');
 const MIGRATIONS_DIR = path.resolve(__dirname, '../backend/src/db/migrations');
-const HASH_FILE = path.resolve(__dirname, '.init_sql_sha256');
+const HASH_FILE = path.resolve(__dirname, '../tmp/.init_sql_sha256');
 const ARCHIVE_DIR = path.resolve(__dirname, '../institutional_archives');
 
 // ─── Forensic SHA256 Core ───────────────────────────────────────────
@@ -49,6 +49,8 @@ function verifySchemaLock(): void {
 
     if (!fs.existsSync(HASH_FILE)) {
         console.log('📜 Initializing new SHA256 baseline fingerprint...');
+        const hashDir = path.dirname(HASH_FILE);
+        if (!fs.existsSync(hashDir)) fs.mkdirSync(hashDir, { recursive: true });
         fs.writeFileSync(HASH_FILE, currentHash);
         return;
     }
@@ -71,6 +73,8 @@ function verifySchemaLock(): void {
         }
 
         console.log(`📝 Migration Proof Found. Synchronizing Lock...`);
+        const hashDir = path.dirname(HASH_FILE);
+        if (!fs.existsSync(hashDir)) fs.mkdirSync(hashDir, { recursive: true });
         fs.writeFileSync(HASH_FILE, currentHash);
         console.log('🔄 SHA256 Lock Synchronized.');
     }

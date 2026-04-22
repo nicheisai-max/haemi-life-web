@@ -84,7 +84,7 @@ export default {
                 "2xl": "0.35rem",
                 "3xl": "0.35rem",
                 "4xl": "0.35rem",
-                card: "0.35rem",
+                card: "var(--card-radius)",
             },
             keyframes: {
                 "accordion-down": {
