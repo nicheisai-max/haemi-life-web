@@ -11,10 +11,13 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- Required for digest/blind indexing
 
--- 1.5 Clean Start (Prevent Schema Drift)
--- Non-critical tables can be dropped if schema changed significantly
-DROP TABLE IF EXISTS analytics_daily_visits CASCADE;
-DROP TABLE IF EXISTS revenue_stats CASCADE;
+-- Institutional Safety: Non-critical drops disabled to prevent data loss in real-time environments.
+-- DROP TABLE IF EXISTS analytics_daily_visits CASCADE;
+-- Table 'revenue_stats' is now persistent for real-time history
+-- DROP TABLE IF EXISTS revenue_stats CASCADE;
+-- DROP TABLE IF EXISTS orders CASCADE;
+-- DROP TABLE IF EXISTS order_items CASCADE;
+-- DROP TABLE IF EXISTS pharmacy_inventory CASCADE;
 -- Table 'medical_records' should stay persistent for files
 -- DROP TABLE IF EXISTS medical_records CASCADE;
 -- DROP TABLE IF EXISTS prescription_items CASCADE;
@@ -471,7 +474,7 @@ CREATE TABLE IF NOT EXISTS analytics_daily_visits (
 -- Analytics: Revenue Stats
 CREATE TABLE IF NOT EXISTS revenue_stats (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    month VARCHAR(20) NOT NULL, -- e.g., 'Jan 2026'
+    month VARCHAR(20) NOT NULL UNIQUE, -- e.g., 'Jan 2026' (Institutional Unique Constraint)
     revenue DECIMAL(10, 2) NOT NULL,
     expenses DECIMAL(10, 2) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -497,6 +500,13 @@ CREATE TABLE IF NOT EXISTS medical_records (
     deleted_at TIMESTAMPTZ
 );
 
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_records' AND column_name='deleted_at') THEN
+        ALTER TABLE medical_records ADD COLUMN deleted_at TIMESTAMPTZ;
+    END IF;
+END $$;
+
 -- Medical Record Files (Separated Document Pipeline — Platinum v4.0)
 CREATE TABLE IF NOT EXISTS medical_record_files (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -507,6 +517,14 @@ CREATE TABLE IF NOT EXISTS medical_record_files (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   deleted_at TIMESTAMPTZ
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_record_files' AND column_name='deleted_at') THEN
+        ALTER TABLE medical_record_files ADD COLUMN deleted_at TIMESTAMPTZ;
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_rec_att_rid ON medical_record_files(record_id);
 CREATE INDEX IF NOT EXISTS idx_medical_record_files_deleted_at ON medical_record_files(deleted_at);
 
@@ -540,7 +558,8 @@ CREATE OR REPLACE PROCEDURE sp_create_user(
     p_password_hash VARCHAR,
     p_role VARCHAR,
     p_id_number VARCHAR DEFAULT NULL,
-    p_profile_image VARCHAR DEFAULT NULL
+    p_profile_image VARCHAR DEFAULT NULL,
+    p_id UUID DEFAULT uuid_generate_v4()
 )
 LANGUAGE plpgsql
 AS $$
@@ -548,11 +567,11 @@ BEGIN
     -- This procedure simulates the application logic for seeding
     -- In a real scenario, the app handles encryption, but for demo seeding:
     INSERT INTO users (
-        name, email, phone_number, password, role, id_number, is_verified, profile_image,
+        id, name, email, phone_number, password, role, id_number, is_verified, profile_image,
         phone_blind_index, id_blind_index
     )
     VALUES (
-        p_name, p_email, p_phone, p_password_hash, p_role, p_id_number, true, p_profile_image,
+        p_id, p_name, p_email, p_phone, p_password_hash, p_role, p_id_number, true, p_profile_image,
         encode(digest(lower(trim(p_phone)), 'sha256'), 'hex'), -- Simplified blind index for SQL seed
         encode(digest(lower(trim(p_id_number)), 'sha256'), 'hex')
     )
@@ -643,7 +662,7 @@ BEGIN
     END IF;
 
     -- 3. Create Admin User
-    CALL sp_create_user('Admin Kgosi', 'admin@haemilife.com', '+26771234567', p_password_hash, 'admin', NULL, '/uploads/admin/admin.png');
+    CALL sp_create_user('Admin Kgosi', 'admin@haemilife.com', '+26771234567', p_password_hash, 'admin', NULL, '/uploads/admin/admin.png', 'a1111111-1111-4111-a111-111111111111');
 
     -- 4. Create Specialists (The Advanced Medical Network)
     -- Dr. Thabo (Cardiologist - Gaborone)
@@ -675,7 +694,7 @@ BEGIN
     ON CONFLICT (user_id) DO NOTHING;
 
     -- Dr. Mpho (Existing General Practitioner - Gaborone)
-    CALL sp_create_user('Dr. Mpho Modise', 'doctor@haemilife.com', '+26772123456', p_password_hash, 'doctor', NULL, '/uploads/doctors/doctor_01.jpg');
+    CALL sp_create_user('Dr. Mpho Modise', 'doctor@haemilife.com', '+26772123456', p_password_hash, 'doctor', NULL, '/uploads/doctors/doctor_01.jpg', 'd2222222-2222-4222-a222-222222222222');
     SELECT id INTO v_doctor_id FROM users WHERE email = 'doctor@haemilife.com';
     INSERT INTO doctor_profiles (user_id, specialization, license_number, years_of_experience, consultation_fee, is_verified, bio)
     VALUES (v_doctor_id, 'General Practitioner', 'BW-GP-2018-1234', 6, 250.00, true, 'Senior GP focused on family medicine and preventive care.')
@@ -689,10 +708,10 @@ BEGIN
     (v_doctor_id, 5, '08:00'::TIME, '17:00'::TIME); -- Friday
 
     -- 5. Create Pharmacist (Keitumetse)
-    CALL sp_create_user('Keitumetse Gaosekwe', 'pharmacist@haemilife.com', '+26775123456', p_password_hash, 'pharmacist', NULL, '/uploads/pharmacies/pharmacy_01.jpg');
+    CALL sp_create_user('Keitumetse Gaosekwe', 'pharmacist@haemilife.com', '+26775123456', p_password_hash, 'pharmacist', NULL, '/uploads/pharmacies/pharmacy_01.jpg', '5b34c926-381e-4453-bcc0-9ce303b37e25');
 
     -- 6. Create Patient (Tebogo)
-    CALL sp_create_user('Tebogo Motswana', 'patient@haemilife.com', '+26773123456', p_password_hash, 'patient', '123456789', '/uploads/patients/patient_01.jpg');
+    CALL sp_create_user('Tebogo Motswana', 'patient@haemilife.com', '+26773123456', p_password_hash, 'patient', '123456789', '/uploads/patients/patient_01.jpg', 'e4444444-4444-4444-a444-444444444444');
     SELECT id INTO v_patient_id FROM users WHERE email = 'patient@haemilife.com';
 
     -- 7. Create Appointment
@@ -821,7 +840,7 @@ BEGIN
         JOIN conversation_participants p1 ON c.id = p1.conversation_id AND p1.user_id = v_patient_id
         JOIN conversation_participants p2 ON c.id = p2.conversation_id AND p2.user_id = v_doctor_id
         GROUP BY c.id
-        HAVING COUNT(user_id) = 2; -- Must be exactly 2 participants
+        HAVING COUNT(*) = 2; -- Must be exactly 2 participants
 
         IF v_demo_conv_id IS NULL THEN
             -- Create fresh conversation
@@ -855,6 +874,74 @@ BEGIN
             (v_final_admin_id, 'SECURITY_HUB_ACTIVATION', '{"feature": "Forensic Observability", "status": "Active"}', NOW() - INTERVAL '20 days'),
             (v_final_admin_id, 'CLINICAL_NETWORK_ESTABLISHED', '{"region": "Botswana", "hospitals": ["Princess Marina", "Bokamoso"]}', NOW() - INTERVAL '15 days'),
             (v_final_admin_id, 'VERIFICATION_AUDIT', '{"verified": true, "audit_id": "BW-MD-AUDIT-2026"}', NOW() - INTERVAL '1 day');
+        END IF;
+    END;
+
+    -- 12. PHARMACIST DASHBOARD SEEDING (Botswana Launch)
+    DECLARE
+        v_pharmacy_id INTEGER;
+        v_order_id UUID;
+        v_panado_id INTEGER;
+        v_amoxil_id INTEGER;
+    BEGIN
+        -- Ensure Pharmacy Exists
+        IF NOT EXISTS (SELECT 1 FROM pharmacies LIMIT 1) THEN
+            INSERT INTO pharmacies (name, location_id, address, phone_number, email)
+            VALUES ('Haemi Central Pharmacy', (SELECT id FROM locations WHERE city = 'Gaborone' LIMIT 1), 'Plot 123, CBD, Gaborone', '+2673900000', 'pharmacy@haemilife.com')
+            RETURNING id INTO v_pharmacy_id;
+        ELSE
+            SELECT id INTO v_pharmacy_id FROM pharmacies LIMIT 1;
+        END IF;
+
+        -- Get Medicine IDs
+        SELECT id INTO v_panado_id FROM medicines WHERE name = 'Panado Extra' LIMIT 1;
+        SELECT id INTO v_amoxil_id FROM medicines WHERE name = 'Amoxil 500' LIMIT 1;
+
+        -- Seed Inventory
+        IF v_pharmacy_id IS NOT NULL THEN
+            -- Low Stock Alert (Reorder needed)
+            INSERT INTO pharmacy_inventory (pharmacy_id, medicine_id, price, stock_quantity, dispensed_today, reorder_level, expiry_date)
+            VALUES (v_pharmacy_id, v_panado_id, 35.00, 8, 25, 20, CURRENT_DATE + INTERVAL '1 year')
+            ON CONFLICT (pharmacy_id, medicine_id) DO UPDATE SET stock_quantity = 8, dispensed_today = 25, reorder_level = 20;
+
+            -- Expiry Alert (Expiring next month)
+            INSERT INTO pharmacy_inventory (pharmacy_id, medicine_id, price, stock_quantity, dispensed_today, reorder_level, expiry_date)
+            VALUES (v_pharmacy_id, v_amoxil_id, 120.00, 50, 5, 20, CURRENT_DATE + INTERVAL '1 month')
+            ON CONFLICT (pharmacy_id, medicine_id) DO UPDATE SET stock_quantity = 50, expiry_date = CURRENT_DATE + INTERVAL '1 month';
+
+            -- Seed Direct Orders
+            IF NOT EXISTS (SELECT 1 FROM orders WHERE pharmacy_id = v_pharmacy_id) THEN
+                -- OTC Order (No prescription, Collect)
+                INSERT INTO orders (patient_id, pharmacy_id, status, total_amount, is_prescription_required, delivery_mode)
+                VALUES (v_patient_id, v_pharmacy_id, 'Pending', 70.00, false, 'COLLECT')
+                RETURNING id INTO v_order_id;
+
+                INSERT INTO order_items (order_id, medicine_id, quantity, unit_price)
+                VALUES (v_order_id, v_panado_id, 2, 35.00);
+
+                -- Prescription Order (Attached PDF, Delivery)
+                INSERT INTO orders (patient_id, pharmacy_id, status, total_amount, is_prescription_required, prescription_url, delivery_mode)
+                VALUES (v_patient_id, v_pharmacy_id, 'Pending', 120.00, true, 'uploads/medical_records/demo_prescription.pdf', 'HAEMI_DELIVERY')
+                RETURNING id INTO v_order_id;
+
+                INSERT INTO order_items (order_id, medicine_id, quantity, unit_price)
+                VALUES (v_order_id, v_amoxil_id, 1, 120.00);
+
+                -- Government Subsidized Orders
+                INSERT INTO orders (patient_id, pharmacy_id, status, total_amount, is_prescription_required, delivery_mode, is_government_subsidized, omang_number, hospital_origin)
+                VALUES (v_patient_id, v_pharmacy_id, 'Pending', 0.00, true, 'COLLECT', true, '439218312', 'Princess Marina')
+                RETURNING id INTO v_order_id;
+
+                INSERT INTO order_items (order_id, medicine_id, quantity, unit_price)
+                VALUES (v_order_id, v_amoxil_id, 1, 0.00);
+
+                INSERT INTO orders (patient_id, pharmacy_id, status, total_amount, is_prescription_required, delivery_mode, is_government_subsidized, omang_number, hospital_origin)
+                VALUES (v_patient_id, v_pharmacy_id, 'Pending', 0.00, true, 'COLLECT', true, '782910392', 'Nyangabgwe Referral')
+                RETURNING id INTO v_order_id;
+
+                INSERT INTO order_items (order_id, medicine_id, quantity, unit_price)
+                VALUES (v_order_id, v_panado_id, 1, 0.00);
+            END IF;
         END IF;
     END;
 
@@ -973,6 +1060,13 @@ CREATE TABLE IF NOT EXISTS pharmacy_inventory (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(pharmacy_id, medicine_id)
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'pharmacy_inventory_pharmacy_id_medicine_id_key') THEN
+        ALTER TABLE pharmacy_inventory ADD CONSTRAINT pharmacy_inventory_pharmacy_id_medicine_id_key UNIQUE (pharmacy_id, medicine_id);
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_inventory_pharmacy_medicine ON pharmacy_inventory(pharmacy_id, medicine_id);
 
 -- 3. Institutional Metadata (Lifecycle Audit)
@@ -998,5 +1092,40 @@ CREATE TABLE IF NOT EXISTS knex_migrations_lock (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_conversation 
 ON conversations (participants_hash) 
 WHERE (is_redundant = false AND participants_hash IS NOT NULL);
+
+-- 5. Pharmacist Dashboard Upgrades (Botswana Launch)
+DO $$
+BEGIN
+    -- Alter pharmacy_inventory
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pharmacy_inventory' AND column_name='dispensed_today') THEN
+        ALTER TABLE pharmacy_inventory ADD COLUMN dispensed_today INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pharmacy_inventory' AND column_name='reorder_level') THEN
+        ALTER TABLE pharmacy_inventory ADD COLUMN reorder_level INTEGER DEFAULT 10;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pharmacy_inventory' AND column_name='expiry_date') THEN
+        ALTER TABLE pharmacy_inventory ADD COLUMN expiry_date DATE;
+    END IF;
+
+    -- Alter orders
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='prescription_url') THEN
+        ALTER TABLE orders ADD COLUMN prescription_url TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='is_prescription_required') THEN
+        ALTER TABLE orders ADD COLUMN is_prescription_required BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='delivery_mode') THEN
+        ALTER TABLE orders ADD COLUMN delivery_mode VARCHAR(50) DEFAULT 'COLLECT';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='is_government_subsidized') THEN
+        ALTER TABLE orders ADD COLUMN is_government_subsidized BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='omang_number') THEN
+        ALTER TABLE orders ADD COLUMN omang_number VARCHAR(50);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='hospital_origin') THEN
+        ALTER TABLE orders ADD COLUMN hospital_origin VARCHAR(100);
+    END IF;
+END $$;
 
 COMMIT;

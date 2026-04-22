@@ -41,7 +41,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const toggleTheme = useCallback(() => {
         if (isAuthPage(location.pathname)) return; // Prevent toggling on auth pages
+
+        // Google/GitHub pattern: flash .theme-transitioning for 200ms ONLY
+        const root = window.document.documentElement;
+        root.classList.add('theme-transitioning');
         setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+        window.setTimeout(() => root.classList.remove('theme-transitioning'), 210);
     }, [location.pathname]);
 
     const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);

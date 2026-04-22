@@ -44,7 +44,7 @@ const MODE: ExecutionMode = {
 
 // ─── Configuration ─────────────────────────────────────────────────────────
 const INIT_SQL_PATH = path.resolve(process.cwd(), 'backend/src/db/init.sql');
-const HASH_FILE = path.resolve(__dirname, '.init_sql_sha256');
+const HASH_FILE = path.resolve(__dirname, '../tmp/.init_sql_sha256');
 const FORBIDDEN_IDENTIFIERS = ['actor_id', 'actor_user_id', 'actorUserId'];
 const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024; // 1 MB
 

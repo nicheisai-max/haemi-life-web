@@ -9,6 +9,7 @@ export const inventorySchema = z.object({
     stock: z.coerce.number().min(0, "Stock cannot be negative"),
     minStock: z.coerce.number().min(0, "Minimum stock cannot be negative"),
     price: z.coerce.number().min(0.01, "Price must be at least 0.01"),
+    expiryDate: z.string().optional(),
 });
 
 export type InventoryFormData = z.infer<typeof inventorySchema>;

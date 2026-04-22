@@ -12,12 +12,14 @@ interface MedicalLoaderProps {
      */
     variant?: 'global' | 'viewport';
     className?: string;
+    size?: 'sm' | 'md' | 'nav' | 'auth' | 'lg' | 'xl' | 'xxl';
 }
 
 export const MedicalLoader: React.FC<MedicalLoaderProps> = ({
     message = "Securing clinical data...",
     variant = 'global',
-    className
+    className,
+    size
 }) => {
     const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 
@@ -32,7 +34,7 @@ export const MedicalLoader: React.FC<MedicalLoaderProps> = ({
 
                 {/* Main Logo Container: Mirrored symmetry logic */}
                 <div className="relative bg-background rounded-[calc(var(--card-radius)*0.5)] p-6 border border-border shadow-2xl ring-1 ring-black/5">
-                    <Logo size="auth" />
+                    <Logo size={size || "auth"} />
                 </div>
 
                 {/* Status Indicator (Subtle Pulse) */}

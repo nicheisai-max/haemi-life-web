@@ -253,17 +253,26 @@
 
 @layer base {
 
-  /* Targeted Border/Outline Defaults: 
-     🛡️ INSTITUTIONAL HARDENING: Borders transition at 0ms to prevent the "White-Halo" flash 
-     during theme toggle while background and opacity maintain their premium transitions.
+  /* 🛡️ THEME TRANSITION SYSTEM (Google/Meta Standard)
+     Rule: NEVER apply transitions to every DOM node via wildcard selector.
+     Solution: Use a .theme-transitioning class applied programmatically
+     ONLY during the theme toggle instant, then removed.
+     This is the exact pattern used by Google Workspace and GitHub.
   */
   *,
   ::before,
   ::after {
     border-color: var(--border);
     outline-color: var(--ring);
-    /* 🛡️ INSTITUTIONAL RADIUS LOCKDOWN: Instant border-color swap to prevent "White-Halo" flash */
-    transition-property: background-color, color, opacity, box-shadow, transform, filter, backdrop-filter !important;
+  }
+
+  /* Applied ONLY during theme toggle (100-200ms window) via ThemeProvider */
+  .theme-transitioning *,
+  .theme-transitioning ::before,
+  .theme-transitioning ::after {
+    transition-property: background-color, color, border-color, fill, stroke;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* 🛡️ INSTITUTIONAL BORDER UTILITY
@@ -1745,19 +1754,20 @@
     }
   }
 
-}
 
-  /* ?? HAEMI INSTITUTIONAL LOADING (End-to-End Dominance) */
+  /* 🩺 HAEMI INSTITUTIONAL LOADING (End-to-End Dominance) */
   .haemi-institutional-loader {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    z-index: var(--z-loader) !important;
-    background-color: var(--background) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    backdrop-filter: blur(12px) !important;
-    transition: opacity var(--duration-state) var(--ease-premium) !important;
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    z-index: var(--z-loader);
+    background-color: var(--background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(12px);
+    transition: opacity var(--duration-state) var(--ease-premium);
   }
+
+}

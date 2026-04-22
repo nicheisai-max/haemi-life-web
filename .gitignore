@@ -144,8 +144,9 @@ frontend_backup/
 # ─────────────────────────────────────────────────────────────────────────────
 # PROTECTED — Ensure these directories are always tracked
 # ─────────────────────────────────────────────────────────────────────────────
-!backend/db/
-!backend/scripts/
+!backend/src/db/
+!backend/src/scripts/
+!backend/src/db/migrations/**/*.sql
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HAEMI LIFE: AUTOMATIC LOCKDOWN (v10.6)

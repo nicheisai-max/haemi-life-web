@@ -72,6 +72,7 @@ async function setupDatabase() {
 
     } catch (error) {
         if (client) await client.query('ROLLBACK');
+        console.error('FULL ERROR:', error);
         logger.error('❌ Institutional Restoration Failed:', { error: error instanceof Error ? error.message : String(error) });
         process.exit(1);
     } finally {
