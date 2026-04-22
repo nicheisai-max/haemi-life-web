@@ -4,36 +4,7 @@ import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import type { PharmacyInventoryEntity, OrderEntity, DashboardStats } from '../types/pharmacist.types';
 
-// ─── Institutional Guard: Column-Safe Stats Query ─────────────────────────────
-// Root Cause: If `ALTER TABLE ADD COLUMN` has not been applied yet (new DB setup
-// without running db:setup), the columns dispensed_today / reorder_level /
-// expiry_date do not exist and cause a 500. This query uses information_schema
-// to conditionally aggregate only existing columns, providing graceful degradation.
-// Once db:setup is run and columns exist, full real-time data is returned.
-const SAFE_STATS_QUERY = `
-    SELECT
-        -- Safe aggregation: fallback to stock < 10 if reorder_level column absent
-        (
-            SELECT COUNT(*) FROM pharmacy_inventory pi2
-            JOIN medicines m2 ON pi2.medicine_id = m2.id
-            WHERE EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'pharmacy_inventory' AND column_name = 'reorder_level'
-            ) AND pi2.stock_quantity <= COALESCE(
-                (SELECT pi3.reorder_level FROM pharmacy_inventory pi3 WHERE pi3.id = pi2.id),
-                10
-            )
-        ) AS low_stock_count,
-        (
-            SELECT COALESCE(SUM(
-                CASE WHEN EXISTS (
-                    SELECT 1 FROM information_schema.columns
-                    WHERE table_name = 'pharmacy_inventory' AND column_name = 'dispensed_today'
-                ) THEN 0 ELSE 0 END
-            ), 0)
-        ) AS total_dispensed,
-        0 AS expiring_soon_count
-`;
+// ─── Institutional Guard: Dashboard Logic ─────────────────────────────
 
 export const getDashboardStats = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -272,7 +243,7 @@ export const addInventory = async (req: Request, res: Response): Promise<void> =
         await client.query('BEGIN');
 
         // Step 1: Ensure medicine exists (Institutional master list sync)
-        let medicineResult = await client.query<{ id: number }>(
+        const medicineResult = await client.query<{ id: number }>(
             'SELECT id FROM medicines WHERE LOWER(name) = LOWER($1)',
             [name]
         );
