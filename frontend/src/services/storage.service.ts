@@ -38,6 +38,7 @@ export interface PersistedConversation {
     lastMessageId: MessageId;
     /** Stored as JSON string because Dexie cannot index nested objects */
     participantsJson: string;
+    participantsHash: string;
     unreadCount: number;
     messageCount: number;
     sequenceCounter: number;
@@ -151,6 +152,7 @@ function toPersistedConversation(c: Conversation): PersistedConversation {
         lastMessage: c.lastMessage ?? '',
         lastMessageId: c.lastMessageId ?? '',
         participantsJson: JSON.stringify(c.participants),
+        participantsHash: c.participantsHash,
         unreadCount: c.unreadCount,
         messageCount: c.messageCount,
         sequenceCounter: c.sequenceCounter,
@@ -182,6 +184,7 @@ function fromPersistedConversation(p: PersistedConversation): Conversation {
         lastMessage: p.lastMessage,
         lastMessageId: p.lastMessageId,
         participants,
+        participantsHash: p.participantsHash,
         unreadCount: p.unreadCount,
         messageCount: p.messageCount,
         sequenceCounter: p.sequenceCounter,

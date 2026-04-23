@@ -112,6 +112,7 @@ export const mapConversationToResponse = (conversation: DbConversation): Convers
         lastMessage: conversation.last_message || null,
         lastMessageId: conversation.last_message_id || null,
         participants: (conversation.participants || []),
+        participantsHash: conversation.participants_hash,
         unreadCount: Number(conversation.unread_count || 0),
         messageCount: Number(conversation.message_count || 0),
         sequenceCounter: Number(conversation.sequence_counter || 0)

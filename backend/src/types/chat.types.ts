@@ -74,7 +74,7 @@ export interface DbConversation {
     unread_count: number | string;
     message_count: number | string;
     sequence_counter: number | string;
-    participants_hash?: string;
+    participants_hash: string;
 }
 
 export interface ConversationResponse {
@@ -85,6 +85,7 @@ export interface ConversationResponse {
     lastMessage?: string | null;
     lastMessageId?: MessageId | null;
     participants: ChatParticipant[];
+    participantsHash: string;
     unreadCount: number;
     messageCount: number;
     sequenceCounter: number;
