@@ -126,7 +126,7 @@ export const getConversations = async (req: Request, res: Response) => {
                      )
                      -- 24-hour grace: allows freshly-created threads to appear in the
                      -- sidebar immediately, covering all realistic clinical draft windows.
-                     OR c.created_at > NOW() - INTERVAL '24 hours'
+                     OR c.created_at > NOW() - INTERVAL '10 minutes'
                    )
              ORDER BY c.id, m.created_at DESC NULLS LAST`,
             // TS-STRICT: String() strips the branded UserId type → resolves to the
@@ -626,14 +626,17 @@ export const startConversation = async (req: Request, res: Response) => {
         return sendError(res, 400, 'Self-messaging is currently not permitted');
     }
 
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN');
+        
         // Deterministic Hash Generation (Institutional Grade)
         const sortedIds = [userId.toLowerCase(), participantId.toLowerCase()].sort();
         const hashBase = sortedIds.join(':');
         const participantsHash = crypto.createHash('sha256').update(hashBase).digest('hex');
 
-        // ON CONFLICT requires the UNIQUE constraint added in init.sql v4.0
-        const insertResult = await pool.query(
+        // ON CONFLICT requires the UNIQUE constraint added in forensic remediation
+        const insertResult = await client.query(
             `INSERT INTO conversations (participants_hash, last_message_at) 
              VALUES ($1, NOW()) 
              ON CONFLICT (participants_hash) DO NOTHING 
@@ -646,7 +649,7 @@ export const startConversation = async (req: Request, res: Response) => {
         if (insertResult.rows.length > 0) {
             conversationId = insertResult.rows[0].id as ConversationId;
             // Atomic participant linking
-            await pool.query(
+            await client.query(
                 `INSERT INTO conversation_participants (conversation_id, user_id) 
                  SELECT $1, u.id FROM users u WHERE u.id IN ($2, $3)
                  ON CONFLICT DO NOTHING`,
@@ -654,7 +657,7 @@ export const startConversation = async (req: Request, res: Response) => {
             );
             logger.info('[ChatController] New conversation created', { conversationId, participants: [userId, participantId] });
         } else {
-            const existing = await pool.query(
+            const existing = await client.query(
                 'SELECT id FROM conversations WHERE participants_hash = $1',
                 [participantsHash]
             );
@@ -663,6 +666,8 @@ export const startConversation = async (req: Request, res: Response) => {
             }
             conversationId = existing.rows[0].id as ConversationId;
         }
+
+        await client.query('COMMIT');
 
         // D8 OPTIMIZATION: Return full conversation DTO instead of just ID
         const convResult = await pool.query<{
@@ -732,12 +737,15 @@ export const startConversation = async (req: Request, res: Response) => {
         return sendResponse(res, 201, true, 'Conversation established', response);
 
     } catch (error: unknown) {
+        if (client) await client.query('ROLLBACK');
         logger.error('[ChatController] startConversation forensic failure:', {
             error: error instanceof Error ? error.message : String(error),
             userId,
             participantId
         });
         return sendError(res, 500, 'Institutional server error during conversation establishment');
+    } finally {
+        if (client) client.release();
     }
 };
 

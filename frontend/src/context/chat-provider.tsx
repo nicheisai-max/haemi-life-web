@@ -272,10 +272,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }))
             );
 
-            // P0: Self-Healing Guard - ensure zero duplicate threads enter global state
-            const uniqueConversations: Conversation[] = Array.from(
-                new Map<string, Conversation>(decryptedConversations.map((c: Conversation) => [c.id, c])).values()
-            );
+            // P0: Forensic Deduplication by Participant Hash (Double Guard)
+            // Ensures that even if the backend returns duplicate threads, the UI only shows
+            // the most active one per participant pair.
+            const uniqueByHash = new Map<string, Conversation>();
+            decryptedConversations.forEach((c: Conversation) => {
+                const hash = c.participantsHash;
+                const existing = uniqueByHash.get(hash);
+                if (!existing || (new Date(c.lastMessageAt).getTime() > new Date(existing.lastMessageAt).getTime())) {
+                    uniqueByHash.set(hash, c);
+                }
+            });
+            const uniqueConversations = Array.from(uniqueByHash.values());
 
             setConversations(uniqueConversations);
             setIsHydrated(true); // ✅ Certification of source parity (Meta-Grade)
