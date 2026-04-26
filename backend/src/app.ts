@@ -49,6 +49,7 @@ import consentRoutes from './routes/consent.routes';
 import profileRoutes from './routes/profile.routes';
 import aiRoutes from './routes/ai.routes';
 import pharmacistRoutes from './routes/pharmacist.routes';
+import screeningRoutes from './routes/screening.routes';
 
 const app = express();
 
@@ -149,6 +150,7 @@ app.use('/api/files', fileRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/pharmacist', pharmacistRoutes);
+app.use('/api/screening', screeningRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -178,8 +180,8 @@ const startServer = async () => {
                 methods: ["GET", "POST", "OPTIONS"],
                 allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
             },
-            transports: ["polling", "websocket"], // P0: Institutional Handshake protocol (Polling -> WS Upgrade)
-            allowEIO3: true,
+            transports: ["websocket"], // P0: Google/Meta Grade Direct WebSocket (Zero-Handshake Loop)
+            allowEIO3: false,
             pingTimeout: 60000,
             pingInterval: 25000
         });

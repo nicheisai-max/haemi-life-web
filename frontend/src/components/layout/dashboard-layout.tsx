@@ -1,7 +1,6 @@
 import React, { useEffect, Suspense } from 'react';
 import type { ReactNode } from 'react';
 import { Navbar } from './navbar';
-import { NotificationSimulator } from '../utils/notification-simulator.deprecated';
 import { OverlayProvider } from '@/context/overlay-context';
 import { useOverlay } from '@/hooks/use-overlay';
 import { logger } from '@/utils/logger';
@@ -58,8 +57,6 @@ const DashboardLayoutInner: React.FC<DashboardLayoutProps> = ({ children }) => {
         <div className="portal-layout-root min-h-screen bg-background text-foreground flex flex-col">
             {/* Top Navigation - Fixed */}
             <Navbar />
-
-            <NotificationSimulator />
 
             {/* App Shell w/ Sidebar Offset */}
             <div className="flex flex-1 pt-[var(--layout-header-height)]">

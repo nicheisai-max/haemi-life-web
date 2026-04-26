@@ -4,9 +4,7 @@ import type {
     Message, 
     Attachment, 
     AttachmentDTO, 
-    PresenceRecord, 
     ParticipantMetadata,
-    UserId,
     MessageId,
     ConversationId
 } from '../types/chat';
@@ -16,8 +14,6 @@ export interface ChatContextType {
     activeConversation: Conversation | null;
     messages: Message[];
     loading: boolean;
-    typingUsers: UserId[];
-    presence: Record<UserId, PresenceRecord>;
     isHydrated: boolean;
     fetchConversations: () => Promise<void>;
     selectConversation: (conversation: Conversation) => void;
@@ -28,7 +24,7 @@ export interface ChatContextType {
         replyToId?: string
     ) => Promise<void>;
     startNewConversation: (participantId: string, meta?: ParticipantMetadata) => Promise<void>;
-    emitTyping: (conversationId: ConversationId, isTyping: boolean) => void;
+
     uploadAttachment: (file: File) => Promise<AttachmentDTO | null>;
     deleteMessage: (messageId: MessageId, forEveryone: boolean) => Promise<void>;
     reactToMessage: (messageId: MessageId, reactionType: string) => Promise<void>;

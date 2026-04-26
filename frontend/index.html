@@ -17,7 +17,7 @@
   <meta name="msapplication-TileImage" content="/favicons/mstile-150x150.png" />
   <meta name="theme-color" content="#1BA7A6" />
 
-  
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
     content="Haemi Life - Premium Digital Health Platform. Botswana's leading telemedicine and digital health ecosystem." />
@@ -30,6 +30,65 @@
     // FIX: simple-peer requires 'global' to be defined in Vite/Modern environments
     window.global = window;
 
+    // INSTITUTIONAL ERROR SUPPRESSION (GOOGLE/META GRADE)
+    // 🩺 Ensures browser extension noise (chrome-extension://) doesn't pollute the 
+    // clinical audit stream while preserving absolute visibility for app errors.
+    
+    (function() {
+      const suppressPatterns = [
+        'Unchecked runtime.lastError',
+        'Could not establish connection',
+        'Receiving end does not exist',
+        'chrome-extension://',
+        'moz-extension://'
+      ];
+
+      const createProxy = (original) => {
+        return function() {
+          const args = Array.from(arguments);
+          const msg = args.join(' ');
+          if (suppressPatterns.some(p => msg.includes(p))) return;
+          return original.apply(this, args);
+        };
+      };
+
+      // PHASE 3: MULTI-LAYER INTERCEPTION (GOOGLE/META STYLE)
+      // 1. Event Level (Catches exceptions before they hit the console)
+      const handleNoise = (msg) => {
+        if (!msg || typeof msg !== 'string') return false;
+        return suppressPatterns.some(p => msg.includes(p));
+      };
+
+      window.addEventListener('error', (e) => {
+        if (handleNoise(e.message)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+
+      window.addEventListener('unhandledrejection', (e) => {
+        const msg = (e.reason && (e.reason.message || e.reason)) || '';
+        if (handleNoise(msg)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+
+      // 2. Console Level (Catches direct browser-internal logs)
+      // Use standard assignment to avoid React DevTools defineProperty conflicts
+      ['log', 'warn', 'error', 'debug'].forEach(method => {
+        const original = console[method];
+        if (typeof original !== 'function') return;
+        
+        console[method] = function() {
+          const args = Array.from(arguments);
+          const msg = args.join(' ');
+          if (handleNoise(msg)) return;
+          return original.apply(this, arguments);
+        };
+      });
+    })();
+
     // ZERO-FLASH THEME ENGINE
     (function () {
       try {
@@ -39,11 +98,9 @@
         const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
         if (isAuthPage) {
-          // Force LIGHT for Botswana Healthcare Branding on Auth Pages
           document.documentElement.classList.add('light');
           document.documentElement.classList.remove('dark');
         } else {
-          // Standard Theme Logic for Dashboard
           if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
             document.documentElement.classList.add('dark');
             document.documentElement.classList.remove('light');

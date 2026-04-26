@@ -40,6 +40,7 @@ export const bookAppointment = async (data: {
     appointmentTime: string;
     consultationType: string;
     reason: string;
+    screeningRecordId?: string; // Link to the clinical screening record
 }): Promise<Appointment> => {
     const response = await api.post<ApiResponse<Appointment>>('/appointments', data);
     return normalizeResponse(response);

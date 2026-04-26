@@ -14,7 +14,7 @@ const pruneToMax = (notifications: Notification[]): Notification[] => {
 };
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -134,7 +134,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             socketService.off('notificationDelete', handleNotificationDelete);
             socketService.off('messageDeleted', handleMessageDeleted);
         };
-    }, [isAuthenticated, fetchNotifications]);
+    }, [isAuthenticated, user?.id, fetchNotifications]);
 
     const markAsRead = async (id: string) => {
         try {

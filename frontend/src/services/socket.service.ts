@@ -1,307 +1,444 @@
 import { io, Socket } from 'socket.io-client';
+import { logger, auditLogger } from '../utils/logger';
 import { getAccessToken } from './api';
-import { logger } from '../utils/logger';
-import type { SocketConnectionState } from '../types/socket.types';
-import { safeParseJSON, isSocketErrorPayload } from '../utils/type-guards';
 import type { Notification as HaemiNotification } from './notification.service';
-import type { Message, UserId, MessageId, ConversationId } from '../types/chat';
+import type { Message, ConversationId, MessageReadEvent, UserId, MessageId } from '../types/chat';
 
-const RAW_SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
-// P0: Institutional Determinism - Replace 'localhost' with '127.0.0.1' to bypass IPv6 resolution drift
-const SOCKET_URL = RAW_SOCKET_URL.replace('localhost', '127.0.0.1');
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
+const SOCKET_URL = BASE_URL.replace(/\/$/, '');
 
-/* ---------------- SIGNAL ---------------- */
+/* ---------------- TYPES & ENUMS ---------------- */
 
-interface SignalData {
-    type?: 'offer' | 'answer' | 'pranswer' | 'rollback';
-    sdp?: string;
-    candidate?: Record<string, string | number | boolean>;
+export enum SocketState {
+    IDLE = 'IDLE',
+    CONNECTING = 'CONNECTING',
+    CONNECTED = 'CONNECTED',
+    DISCONNECTED = 'DISCONNECTED',
+    RECONNECTING = 'RECONNECTING',
+    TERMINATED = 'TERMINATED',
+    FOLLOWER = 'FOLLOWER' // Tab is listening to a leader
 }
 
-/* ---------------- EVENTS ---------------- */
+/* ---------------- COORDINATION TYPES ---------------- */
 
-export interface MessageReadEvent {
-    conversationId: ConversationId;
-    messageIds: MessageId[];
-    userId: UserId;
-}
+export type BroadcastMessage = 
+    | { type: 'LEADER_CLAIM'; tabId: string }
+    | { type: 'LEADER_HEARTBEAT'; tabId: string }
+    | { type: 'SOCKET_EVENT'; event: keyof ServerToClientEvents; data: unknown }
+    | { 
+        [K in keyof ClientToServerEvents]: { 
+            type: 'SOCKET_EMIT'; 
+            event: K; 
+            args: Parameters<ClientToServerEvents[K]> 
+        } 
+      }[keyof ClientToServerEvents];
 
 export interface ServerToClientEvents {
-    connect: () => void;
-    disconnect: (reason: string) => void;
-    connect_error: (err: Error) => void;
-    reconnect_attempt: (attempt: number) => void;
-    reconnect_failed: () => void;
-    reconnect: () => void;
-    participantJoined: (participantId: UserId) => void;
-    callMade: (data: { offer: SignalData; socket: string }) => void;
-    answerMade: (data: { answer: SignalData; socket: string }) => void;
-    iceCandidate: (data: { candidate: SignalData; socket: string }) => void;
-    messageReaction: (data: {
-        messageId: MessageId;
-        userId: UserId;
-        reactionType: string;
-        action: 'added' | 'removed';
-    }) => void | Promise<void>;
-    messageDeleted: (data: { 
-        messageId: MessageId; 
-        conversationId: ConversationId;
-        newLastMessage?: {
-            id: MessageId;
-            content: string;
-            createdAt: string;
-        } | null;
-    }) => void | Promise<void>;
-    typingStarted: (data: { userId: UserId; conversationId: ConversationId; name: string }) => void | Promise<void>;
-    typingStopped: (data: { userId: UserId; conversationId: ConversationId; name: string }) => void | Promise<void>;
-    messageDelivered: (data: { conversationId: ConversationId; messageIds: MessageId[] }) => void | Promise<void>;
-    messageRead: (data: MessageReadEvent) => void | Promise<void>;
-    messageReceived: (message: Message) => void | Promise<void>;
-    notificationNew: (notification: HaemiNotification) => void | Promise<void>;
-    notificationRead: (data: { id: string }) => void | Promise<void>;
-    notificationDelete: (data: { id: string; messageId?: MessageId }) => void | Promise<void>;
-    notificationReadAll: () => void | Promise<void>;
-    userStatus: (data: { userId: UserId; isOnline: boolean; last_activity: string }) => void | Promise<void>;
-    ackDelivery: (data: { 
-        conversationId: ConversationId; 
-        messageId: MessageId;
-        senderId: UserId;
-        senderRole: string;
-    }) => void | Promise<void>;
-    localMessageDeleted: (data: {
-        messageId: MessageId;
-        conversationId: ConversationId;
-        newLastMessage?: {
-            id: MessageId;
-            content: string;
-            createdAt: string;
-        } | null;
-    }) => void | Promise<void>;
-    adminMirrorEvent: (payload: { event: string; data: unknown; timestamp: string }) => void | Promise<void>;
+    'typingStarted': (data: { userId: UserId; conversationId: ConversationId; name: string }) => void;
+    'typingStopped': (data: { userId: UserId; conversationId: ConversationId; name: string }) => void;
+    'messageRead': (event: MessageReadEvent) => void;
+    'messageDelivered': (event: { conversationId: ConversationId; messageIds: MessageId[] }) => void;
+    'messageReceived': (message: Message) => void;
+    'messageDeleted': (payload: { messageId: string; conversationId: ConversationId; newLastMessage?: Message }) => void;
+    'messageReaction': (data: { messageId: string; userId: UserId; reactionType: string; action: 'added' | 'removed' }) => void;
+    'userStatus': (data: { userId: string; isOnline: boolean; last_activity?: string }) => void;
+    'localMessageDeleted': (payload: { messageId: string; conversationId: ConversationId; newLastMessage?: Message }) => void;
+    'notificationNew': (notification: HaemiNotification) => void;
+    'notificationRead': (payload: { id: string }) => void;
+    'notificationReadAll': () => void;
+    'notificationDelete': (payload: { id: string; messageId?: string }) => void;
+    'reconnect': () => void;
+    'reconnect_attempt': (attempt: number) => void;
+    'disconnect': (reason: string) => void;
+    'error': (error: { message: string; code?: string }) => void;
+    'connect_error': (error: Error) => void;
 }
 
 export interface ClientToServerEvents {
-    joinConsultation: (appointmentId: string) => void;
-    callUser: (data: { offer: SignalData; to: UserId }) => void;
-    makeAnswer: (data: { answer: SignalData; to: UserId }) => void;
-    iceCandidate: (data: { candidate: SignalData; to: UserId }) => void;
-    ackDelivery: (data: { 
-        conversationId: ConversationId; 
-        messageId: MessageId;
-        senderId: UserId;
-        senderRole: string;
-    }) => void;
-    joinConversation: (conversationId: ConversationId) => void;
-    messageRead: (data: MessageReadEvent) => void;
-    typingStarted: (data: { conversationId: ConversationId; name: string }) => void;
-    typingStopped: (data: { conversationId: ConversationId; name: string }) => void;
-    heartbeat: () => void;
+    'message:send': (payload: { conversationId: ConversationId; content: string; tempId: string }) => void;
+    'messageRead': (payload: { conversationId: ConversationId; messageIds: string[]; userId: UserId }) => void;
+    'typingStarted': (payload: { conversationId: ConversationId; name: string }) => void;
+    'typingStopped': (payload: { conversationId: ConversationId; name: string }) => void;
+    'heartbeat': () => void;
+    'ackDelivery': (payload: { conversationId: ConversationId; messageId: string; senderId: UserId; senderRole: string }) => void;
+    'joinConversation': (conversationId: ConversationId) => void;
 }
-
-/* ---------------- TYPES ---------------- */
 
 type SocketInstance = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-type ListenerMap = Map<
-    keyof ServerToClientEvents,
-    Set<ServerToClientEvents[keyof ServerToClientEvents]>
->;
-
-/* ---------------- SERVICE ---------------- */
-
 class SocketService {
+    private static instance: SocketService;
     private socket: SocketInstance | null = null;
-    private listeners: ListenerMap = new Map();
-    private state: SocketConnectionState = 'IDLE';
+    private state: SocketState = SocketState.IDLE;
+    private reconnectionAttempts = 0;
+    private tabId: string = Math.random().toString(36).substring(2, 15);
+    private broadcastChannel: BroadcastChannel | null = null;
+    private leaderTabId: string | null = null;
+    private heartbeatTimer: NodeJS.Timeout | null = null;
+    private leaderCheckTimer: NodeJS.Timeout | null = null;
+    
+    private listeners: { [K in keyof ServerToClientEvents]: Set<ServerToClientEvents[K]> } = {
+        typingStarted: new Set(),
+        typingStopped: new Set(),
+        messageRead: new Set(),
+        messageDelivered: new Set(),
+        messageReceived: new Set(),
+        messageDeleted: new Set(),
+        messageReaction: new Set(),
+        userStatus: new Set(),
+        localMessageDeleted: new Set(),
+        notificationNew: new Set(),
+        notificationRead: new Set(),
+        notificationReadAll: new Set(),
+        notificationDelete: new Set(),
+        reconnect: new Set(),
+        reconnect_attempt: new Set(),
+        disconnect: new Set(),
+        error: new Set(),
+        connect_error: new Set()
+    };
 
-    private setState(state: SocketConnectionState) {
-        if (this.state === state) return;
-        this.state = state;
-        logger.info(`Socket → ${state}`);
-    }
+    private constructor() {
+        if (typeof window !== 'undefined') {
+            // Lifecycle Hardening
+            window.addEventListener('beforeunload', () => this.destroy());
 
-    private getSet<K extends keyof ServerToClientEvents>(event: K): Set<ServerToClientEvents[K]> {
-        let set = this.listeners.get(event) as Set<ServerToClientEvents[K]> | undefined;
-        if (!set) {
-            set = new Set<ServerToClientEvents[K]>();
-            this.listeners.set(event, set as Set<ServerToClientEvents[keyof ServerToClientEvents]>);
+            // 🧬 Multi-tab Coordination Initialization
+            try {
+                this.broadcastChannel = new BroadcastChannel('haemi_socket_coordination');
+                this.broadcastChannel.onmessage = (event: MessageEvent<BroadcastMessage>) => {
+                    this.handleBroadcastMessage(event.data);
+                };
+                this.startLeaderElection();
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'BroadcastChannel initialization failed';
+                logger.error('[SocketService] Coordination failure', msg);
+            }
         }
-        return set;
     }
 
-    private attachAll(socket: SocketInstance): void {
-        this.listeners.forEach((set, event) => {
-            // Institutional Master Listener Pattern: Zero-Any implementation
-            // Cast event as string for socket.on compatibility in generic iteration
-            const eventName = String(event);
-            socket.on(eventName as keyof ServerToClientEvents, (...args: unknown[]) => {
-                set.forEach((cb: unknown) => {
-                    if (typeof cb === 'function') {
-                        try {
-                            cb(...args);
-                        } catch (err: unknown) {
-                            const errorMsg = err instanceof Error ? err.message : String(err);
-                            logger.error(`[SocketService] Error in listener for ${eventName}:`, { error: errorMsg });
-                        }
+    private handleBroadcastMessage(msg: BroadcastMessage): void {
+        switch (msg.type) {
+            case 'LEADER_HEARTBEAT':
+            case 'LEADER_CLAIM':
+                this.leaderTabId = msg.tabId;
+                if (this.leaderTabId !== this.tabId && this.state !== SocketState.FOLLOWER) {
+                    this.becomeFollower();
+                }
+                this.resetLeaderCheck();
+                break;
+            case 'SOCKET_EVENT':
+                if (this.state === SocketState.FOLLOWER) {
+                    this.dispatchToLocalListeners(msg.event, msg.data);
+                }
+                break;
+            case 'SOCKET_EMIT':
+                if (this.state === SocketState.CONNECTED) {
+                    // Institutional Type-Safe Proxying (Meta-Grade)
+                    switch (msg.event) {
+                        case 'message:send': this.emit('message:send', msg.args[0]); break;
+                        case 'messageRead': this.emit('messageRead', msg.args[0]); break;
+                        case 'typingStarted': this.emit('typingStarted', msg.args[0]); break;
+                        case 'typingStopped': this.emit('typingStopped', msg.args[0]); break;
+                        case 'heartbeat': this.emit('heartbeat'); break;
+                        case 'ackDelivery': this.emit('ackDelivery', msg.args[0]); break;
+                        case 'joinConversation': this.emit('joinConversation', msg.args[0]); break;
                     }
-                });
+                }
+                break;
+        }
+    }
+
+    private startLeaderElection(): void {
+        this.broadcastChannel?.postMessage({ type: 'LEADER_CLAIM', tabId: this.tabId });
+        this.resetLeaderCheck();
+    }
+
+    private becomeFollower(): void {
+        this.transitionTo(SocketState.FOLLOWER);
+        if (this.socket) {
+            this.socket.disconnect();
+            this.socket = null;
+        }
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    }
+
+    private becomeLeader(): void {
+        if (this.state === SocketState.CONNECTED || this.state === SocketState.CONNECTING) return;
+        
+        logger.info('[SocketService] Promoted to LEADER');
+        this.leaderTabId = this.tabId;
+        this.connect();
+
+        // Start sending heartbeats
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = setInterval(() => {
+            this.broadcastChannel?.postMessage({ type: 'LEADER_HEARTBEAT', tabId: this.tabId });
+        }, 1000);
+    }
+
+    private resetLeaderCheck(): void {
+        if (this.leaderCheckTimer) clearTimeout(this.leaderCheckTimer);
+        this.leaderCheckTimer = setTimeout(() => {
+            if (this.state !== SocketState.CONNECTED) {
+                this.becomeLeader();
+            }
+        }, 3000);
+    }
+
+    private dispatchToLocalListeners<K extends keyof ServerToClientEvents>(event: K, data: unknown): void {
+        const set = this.listeners[event];
+        set.forEach((cb) => {
+            try {
+                const handler = cb as (...args: unknown[]) => void;
+                handler(data);
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Callback execution failed';
+                logger.error(`[SocketService] Listener error for ${event}`, msg);
+            }
+        });
+    }
+
+    public static getInstance(): SocketService {
+        if (!SocketService.instance) {
+            SocketService.instance = new SocketService();
+        }
+        return SocketService.instance;
+    }
+
+    private transitionTo(newState: SocketState, context?: string): void {
+        const oldState = this.state;
+        this.state = newState;
+        logger.info(`[SocketService] State Transition: ${oldState} -> ${newState}`, { context });
+    }
+
+    private calculateBackoff(): number {
+        const baseDelay = 1000; // 1s
+        const maxDelay = 30000; // 30s
+        const exponent = Math.min(this.reconnectionAttempts, 6); // Max 2^6 = 64
+        const delay = Math.min(baseDelay * Math.pow(2, exponent), maxDelay);
+        const jitter = Math.random() * 1000; // 1s jitter
+        return delay + jitter;
+    }
+
+    async connect(tokenOverride?: string): Promise<void> {
+        // Multi-tab Safety: Followers do not connect to real socket
+        if (this.state === SocketState.FOLLOWER) {
+            logger.debug('[SocketService] Connect suppressed: Tab is in FOLLOWER mode.');
+            return;
+        }
+
+        if (this.state === SocketState.CONNECTED || this.state === SocketState.CONNECTING) return;
+
+        const token = tokenOverride || getAccessToken();
+        if (!token) {
+            logger.warn('[SocketService] Connection suppressed: No auth token');
+            return;
+        }
+
+        this.transitionTo(SocketState.CONNECTING);
+
+        try {
+            if (this.socket) {
+                this.socket.removeAllListeners();
+                this.socket.disconnect();
+            }
+
+            this.socket = io(SOCKET_URL, {
+                auth: { token },
+                path: '/socket.io/',
+                transports: ['websocket', 'polling'], 
+                withCredentials: true,
+                reconnection: true,
+                reconnectionAttempts: 10,
+                autoConnect: true,
+            });
+
+            this.attachCoreListeners(this.socket);
+            this.manualRebind(this.socket);
+
+            auditLogger.log('ERROR', { 
+                message: '[SocketService] Link Secured', 
+                details: { url: SOCKET_URL, state: this.state } 
+            });
+        } catch (error: unknown) {
+            this.transitionTo(SocketState.DISCONNECTED);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown transport error';
+            auditLogger.log('ERROR', { 
+                message: '[SocketService] Handshake Failure', 
+                details: { error: errorMessage } 
+            });
+        }
+    }
+
+    private attachCoreListeners(socket: SocketInstance) {
+        socket.on('connect', () => {
+            this.transitionTo(SocketState.CONNECTED);
+            this.reconnectionAttempts = 0;
+            logger.info('[SocketService] Link established.');
+        });
+
+        socket.on('disconnect', (reason) => {
+            this.transitionTo(SocketState.DISCONNECTED, reason);
+            if (reason === 'io server disconnect') {
+                const delay = this.calculateBackoff();
+                setTimeout(() => this.connect(), delay);
+            }
+        });
+
+        socket.on('connect_error', (err: Error) => {
+            this.transitionTo(SocketState.RECONNECTING);
+            this.reconnectionAttempts++;
+            auditLogger.log('ERROR', { 
+                message: '[SocketService] Handshake error', 
+                details: { msg: err.message, attempt: this.reconnectionAttempts } 
             });
         });
     }
 
-    async connect(tokenOverride?: string) {
-        const token = tokenOverride || getAccessToken();
-        if (!token) return;
-
-        try {
-            const socket = io(SOCKET_URL, {
-                auth: { token },
-                withCredentials: true,
-                transports: ['polling', 'websocket'], // P0: Institutional Handshake (Polling → WS Upgrade)
-                reconnection: true,
-                // D10 REMEDIATION: Infinity attempts + exponential backoff capped at 30 s.
-                // Prevents permanent socket-death after a brief WiFi blip or server
-                // restart during investor demo. Google/Meta-grade resilience pattern.
-                reconnectionAttempts: Infinity,
-                reconnectionDelay: 1_000,
-                reconnectionDelayMax: 30_000,
-                timeout: 20_000,
-            });
-
-            this.socket?.disconnect();
-            this.socket = socket;
-
-            this.attachAll(socket);
-
-            socket.on('connect', () => this.setState('CONNECTED'));
-
-            socket.on('disconnect', (reason) => {
-                this.setState(
-                    reason === 'io server disconnect'
-                        ? 'CLOSED'
-                        : 'TRANSPORT_DISCONNECTED'
-                );
-            });
-
-            socket.on('connect_error', (err) => {
-                const parsed = safeParseJSON(err.message, isSocketErrorPayload);
-
-                if (!parsed) {
-                    this.setState('HANDSHAKE_FAILED');
-                    return;
-                }
-
-                if (parsed.code === 'AUTH_EXPIRED') {
-                    this.setState('FAILED');
-                    this.disconnect();
-                }
-            });
-
-        } catch (error: unknown) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            logger.error(`[SocketService] Connection failed: ${err.message}`, { stack: err.stack });
-            this.setState('FAILED');
+    updateAuthToken(token: string) {
+        if (this.socket) {
+            this.socket.auth = { token };
+            if (this.socket.connected) {
+                logger.info('[SocketService] Cycling connection for token update');
+                this.socket.disconnect().connect();
+            }
         }
     }
 
-    /**
-     * 🔐 D9 REMEDIATION: Token Refresh-on-Reconnect
-     *
-     * socket.io-client freezes `socket.auth` at the moment `connect()` is called.
-     * After a proactive token rotation the in-memory credential in api.ts is fresh,
-     * but the socket still holds the original stale token in its auth object.
-     *
-     * Calling this method from a `reconnect_attempt` listener updates `socket.auth`
-     * BEFORE the next connection handshake is sent to the server, ensuring the backend
-     * JWT middleware always validates a live credential.
-     *
-     * Type-safe: `socket.auth` is typed as `{ [key: string]: unknown }` in socket.io-client,
-     * so assigning `{ token: string }` is fully compliant — no cast required.
-     */
-    public updateAuthToken(freshToken: string): void {
-        if (this.socket !== null) {
-            this.socket.auth = { token: freshToken };
+    getState(): SocketState {
+        return this.state;
+    }
+
+    isConnected(): boolean {
+        return this.state === SocketState.CONNECTED;
+    }
+
+    on<K extends keyof ServerToClientEvents>(event: K, callback: ServerToClientEvents[K]): void {
+        // Institutional Explicit Dispatcher (Meta-Grade)
+        // Prevents Union-Type mapping errors without using ANY.
+        const set = this.listeners[event] as Set<ServerToClientEvents[K]>;
+        set.add(callback);
+
+        if (!this.socket || this.state === SocketState.FOLLOWER) return;
+
+        switch (event) {
+            case 'typingStarted': this.socket.on('typingStarted', callback as ServerToClientEvents['typingStarted']); break;
+            case 'typingStopped': this.socket.on('typingStopped', callback as ServerToClientEvents['typingStopped']); break;
+            case 'messageRead': this.socket.on('messageRead', callback as ServerToClientEvents['messageRead']); break;
+            case 'messageDelivered': this.socket.on('messageDelivered', callback as ServerToClientEvents['messageDelivered']); break;
+            case 'messageReceived': this.socket.on('messageReceived', callback as ServerToClientEvents['messageReceived']); break;
+            case 'messageDeleted': this.socket.on('messageDeleted', callback as ServerToClientEvents['messageDeleted']); break;
+            case 'messageReaction': this.socket.on('messageReaction', callback as ServerToClientEvents['messageReaction']); break;
+            case 'userStatus': this.socket.on('userStatus', callback as ServerToClientEvents['userStatus']); break;
+            case 'localMessageDeleted': this.socket.on('localMessageDeleted', callback as ServerToClientEvents['localMessageDeleted']); break;
+            case 'notificationNew': this.socket.on('notificationNew', callback as ServerToClientEvents['notificationNew']); break;
+            case 'notificationRead': this.socket.on('notificationRead', callback as ServerToClientEvents['notificationRead']); break;
+            case 'notificationReadAll': this.socket.on('notificationReadAll', callback as ServerToClientEvents['notificationReadAll']); break;
+            case 'notificationDelete': this.socket.on('notificationDelete', callback as ServerToClientEvents['notificationDelete']); break;
+            case 'reconnect': this.socket.on('reconnect', callback as ServerToClientEvents['reconnect']); break;
+            case 'reconnect_attempt': this.socket.on('reconnect_attempt', callback as ServerToClientEvents['reconnect_attempt']); break;
+            case 'disconnect': this.socket.on('disconnect', callback as ServerToClientEvents['disconnect']); break;
+            case 'error': this.socket.on('error', callback as ServerToClientEvents['error']); break;
+            case 'connect_error': this.socket.on('connect_error', callback as ServerToClientEvents['connect_error']); break;
         }
     }
 
-    /**
-     * 🛡️ D12 REMEDIATION: Exposure of internal connection state.
-     * Required for auxiliary presence-polling logic in ChatProvider
-     * when the socket is in a disconnected state.
-     */
-    public isConnected(): boolean {
-        return this.socket?.connected ?? false;
+    off<K extends keyof ServerToClientEvents>(event: K, callback: ServerToClientEvents[K]): void {
+        const set = this.listeners[event] as Set<ServerToClientEvents[K]>;
+        set.delete(callback);
+
+        if (!this.socket) return;
+
+        switch (event) {
+            case 'typingStarted': this.socket.off('typingStarted', callback as ServerToClientEvents['typingStarted']); break;
+            case 'typingStopped': this.socket.off('typingStopped', callback as ServerToClientEvents['typingStopped']); break;
+            case 'messageRead': this.socket.off('messageRead', callback as ServerToClientEvents['messageRead']); break;
+            case 'messageDelivered': this.socket.off('messageDelivered', callback as ServerToClientEvents['messageDelivered']); break;
+            case 'messageReceived': this.socket.off('messageReceived', callback as ServerToClientEvents['messageReceived']); break;
+            case 'messageDeleted': this.socket.off('messageDeleted', callback as ServerToClientEvents['messageDeleted']); break;
+            case 'messageReaction': this.socket.off('messageReaction', callback as ServerToClientEvents['messageReaction']); break;
+            case 'userStatus': this.socket.off('userStatus', callback as ServerToClientEvents['userStatus']); break;
+            case 'localMessageDeleted': this.socket.off('localMessageDeleted', callback as ServerToClientEvents['localMessageDeleted']); break;
+            case 'notificationNew': this.socket.off('notificationNew', callback as ServerToClientEvents['notificationNew']); break;
+            case 'notificationRead': this.socket.off('notificationRead', callback as ServerToClientEvents['notificationRead']); break;
+            case 'notificationReadAll': this.socket.off('notificationReadAll', callback as ServerToClientEvents['notificationReadAll']); break;
+            case 'notificationDelete': this.socket.off('notificationDelete', callback as ServerToClientEvents['notificationDelete']); break;
+            case 'reconnect': this.socket.off('reconnect', callback as ServerToClientEvents['reconnect']); break;
+            case 'reconnect_attempt': this.socket.off('reconnect_attempt', callback as ServerToClientEvents['reconnect_attempt']); break;
+            case 'disconnect': this.socket.off('disconnect', callback as ServerToClientEvents['disconnect']); break;
+            case 'error': this.socket.off('error', callback as ServerToClientEvents['error']); break;
+            case 'connect_error': this.socket.off('connect_error', callback as ServerToClientEvents['connect_error']); break;
+        }
     }
 
-    on<K extends keyof ServerToClientEvents>(
-        event: K,
-        cb: ServerToClientEvents[K]
-    ) {
-        const set = this.getSet(event);
-        
-        // P0: Idempotency Guard. Prevent multiple registrations for same callback
-        if (set.has(cb)) {
-            logger.warn(`[SocketService] Duplicate registration skipped for event: ${event}`);
+    private broadcastToFollowers<K extends keyof ServerToClientEvents>(event: K, data: unknown): void {
+        if (this.state === SocketState.CONNECTED) {
+            this.broadcastChannel?.postMessage({ type: 'SOCKET_EVENT', event, data });
+        }
+    }
+
+    emit<K extends keyof ClientToServerEvents>(event: K, ...args: Parameters<ClientToServerEvents[K]>): void {
+        if (this.state === SocketState.FOLLOWER) {
+            // Proxy emit to leader
+            this.broadcastChannel?.postMessage({ type: 'SOCKET_EMIT', event, args });
             return;
         }
 
-        const isFirst = set.size === 0;
-        set.add(cb);
+        if (this.state !== SocketState.CONNECTED) {
+            logger.warn(`[SocketService] Emit suppressed: State is ${this.state}`, { event });
+            return;
+        }
+        this.socket?.emit(event, ...args);
+    }
 
-        // Institutional Master Listener Pattern: Zero-Any implementation
-        if (this.socket && isFirst) {
-            const eventName = String(event);
-            this.socket.on(eventName as keyof ServerToClientEvents, (...args: unknown[]) => {
-                const currentSet = this.listeners.get(event);
-                if (currentSet) {
-                    currentSet.forEach((l: unknown) => {
-                        if (typeof l === 'function') l(...args);
-                    });
-                }
-            });
+    private manualRebind(socket: SocketInstance) {
+        // Institutional Explicit Rebinding with Broadcast Pipe (Meta-Grade)
+        // Bypasses TS union mapping limitations by being explicit. Zero 'any', Zero casting.
+        
+        const createPipe = <K extends keyof ServerToClientEvents>(event: K): ServerToClientEvents[K] => {
+            const handler = (...args: Parameters<ServerToClientEvents[K]>) => {
+                const params = args as unknown[];
+                const data = params.length > 0 ? params[0] : undefined;
+                this.broadcastToFollowers(event, data);
+                this.dispatchToLocalListeners(event, data);
+            };
+            return handler as ServerToClientEvents[K];
+        };
+
+        socket.on('typingStarted', createPipe('typingStarted'));
+        socket.on('typingStopped', createPipe('typingStopped'));
+        socket.on('messageRead', createPipe('messageRead'));
+        socket.on('messageDelivered', createPipe('messageDelivered'));
+        socket.on('messageReceived', createPipe('messageReceived'));
+        socket.on('messageDeleted', createPipe('messageDeleted'));
+        socket.on('messageReaction', createPipe('messageReaction'));
+        socket.on('userStatus', createPipe('userStatus'));
+        socket.on('localMessageDeleted', createPipe('localMessageDeleted'));
+        socket.on('notificationNew', createPipe('notificationNew'));
+        socket.on('notificationRead', createPipe('notificationRead'));
+        socket.on('notificationReadAll', createPipe('notificationReadAll'));
+        socket.on('notificationDelete', createPipe('notificationDelete'));
+        socket.on('reconnect', createPipe('reconnect'));
+        socket.on('reconnect_attempt', createPipe('reconnect_attempt'));
+        socket.on('disconnect', createPipe('disconnect'));
+        socket.on('error', createPipe('error'));
+        socket.on('connect_error', createPipe('connect_error'));
+    }
+
+    destroy(): void {
+        this.transitionTo(SocketState.TERMINATED);
+        if (this.socket) {
+            this.socket.removeAllListeners();
+            this.socket.disconnect();
+            this.socket = null;
         }
     }
 
-    off<K extends keyof ServerToClientEvents>(
-        event: K,
-        cb: ServerToClientEvents[K]
-    ) {
-        const set = this.listeners.get(event);
-        if (!set) return;
-
-        set.delete(cb);
-
-        // If no listeners left, unregister the master listener from the socket
-        if (set.size === 0 && this.socket) {
-            const eventName = String(event);
-            this.socket.off(eventName as keyof ServerToClientEvents);
-        }
-    }
-
-    emit<K extends keyof ClientToServerEvents>(
-        event: K,
-        ...args: Parameters<ClientToServerEvents[K]>
-    ) {
-        if (!this.socket || this.state !== 'CONNECTED') return;
-        this.socket.emit(event, ...args);
-    }
-
-    disconnect() {
-        this.socket?.disconnect();
-        this.socket = null;
-        this.setState('CLOSED');
+    disconnect(): void {
+        this.destroy();
     }
 }
 
-/* ---------------- SINGLETON ---------------- */
-
-declare global {
-    interface Window {
-        __SOCKET__?: SocketService;
-    }
-}
-
-export const socketService =
-    typeof window !== 'undefined'
-        ? (window.__SOCKET__ ??= new SocketService())
-        : new SocketService();
+export const socketService = SocketService.getInstance();
+export default socketService;

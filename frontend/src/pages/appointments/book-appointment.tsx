@@ -24,6 +24,7 @@ import { DateScroller } from '@/components/ui/date-scroller';
 import { TimeGrid } from '@/components/ui/time-grid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TransitionItem } from '@/components/layout/page-transition';
+import { PATHS } from '../../routes/paths';
 
 export const BookAppointment: React.FC = () => {
     const navigate = useNavigate();
@@ -145,7 +146,7 @@ export const BookAppointment: React.FC = () => {
         }));
 
         setShowConsentModal(false);
-        navigate('/consent');
+        navigate(PATHS.CONSENT);
     };
 
     const selectedDoctorData = doctors.find(d => d.id === watchedDoctorId);

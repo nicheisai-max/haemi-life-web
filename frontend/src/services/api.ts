@@ -101,7 +101,7 @@ export const setAppInitialized = (): void => {
 export const isBackendConfirmed = (): boolean => appInitialized;
 
 // ─── Native API Instance ───────────────────────────────────────────────────
-const api = axios.create({
+export const api = axios.create({
     baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
@@ -142,6 +142,8 @@ export const normalizeResponse = <T>(
         !('success' in response.data) ||
         !('data' in response.data)
     ) {
+        const keys = typeof response.data === 'object' && response.data !== null ? Object.keys(response.data) : 'none';
+        logger.error(`[API] Invalid response structure. URL: ${response.config.url}, Keys found: ${JSON.stringify(keys)}`);
         throw new Error('Invalid API response structure');
     }
 

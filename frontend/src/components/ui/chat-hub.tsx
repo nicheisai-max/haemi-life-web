@@ -9,6 +9,7 @@ import { Button } from './button';
 import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus, FileText, File, FileSpreadsheet, ImageOff, Clock, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat, type Conversation, type Message } from '../../hooks/use-chat';
+import { usePresence } from '../../hooks/use-presence';
 import { useAuth } from '@/hooks/use-auth';
 import { useOverlay } from '@/hooks/use-overlay';
 import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
@@ -212,52 +213,51 @@ const MessageItem = React.memo(({
     // 🧬 META-GRADE STYLED COMPONENT
 
     return (
-    <div className="px-4 pt-2 pb-7 overflow-visible">
+        <div className="px-4 pt-2 pb-7 overflow-visible">
             <motion.div
-            layout
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            key={msg.id || index}
-            id={`msg-${msg.id}`}
-            className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
-        >
-            <div
-                onContextMenu={(e) => onContextMenu(e, msg.id, !!msg.isMe)}
-                className={`max-w-[85%] p-3 rounded-[var(--card-radius)] shadow-sm text-sm relative cursor-context-menu group ${msg.isMe
-                    ? 'bg-teal-600 text-white rounded-tr-none'
-                    : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
-                    }`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                key={msg.id || index}
+                id={`msg-${msg.id}`}
+                className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'} group`}
             >
-                {/* Reply Preview */}
-                {msg.replyTo && (
-                    <div
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onScrollToReply(msg.replyToId!);
-                        }}
-                        className={`mb-2 p-2 rounded-xl border-l-[3px] text-[11px] cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${msg.isMe
-                            ? 'bg-black/10 border-white/40 text-teal-50'
-                            : 'bg-slate-50 dark:bg-slate-900/50 border-teal-500 text-slate-600 dark:text-slate-400'
-                            }`}
-                    >
-                        <div className="flex items-center justify-between mb-0.5">
-                            <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
-                                {msg.replyTo.senderName}
+                <div
+                    onContextMenu={(e) => onContextMenu(e, msg.id, !!msg.isMe)}
+                    className={`max-w-[85%] p-3 rounded-[var(--card-radius)] shadow-sm text-sm relative cursor-context-menu group ${msg.isMe
+                        ? 'bg-teal-600 text-white rounded-tr-none'
+                        : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
+                        }`}
+                >
+                    {/* Reply Preview */}
+                    {msg.replyTo && (
+                        <div
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onScrollToReply(msg.replyToId!);
+                            }}
+                            className={`mb-2 p-2 rounded-xl border-l-[3px] text-[11px] cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${msg.isMe
+                                ? 'bg-black/10 border-white/40 text-teal-50'
+                                : 'bg-slate-50 dark:bg-slate-900/50 border-teal-500 text-slate-600 dark:text-slate-400'
+                                }`}
+                        >
+                            <div className="flex items-center justify-between mb-0.5">
+                                <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
+                                    {msg.replyTo.senderName}
+                                </p>
+                                <Reply className="h-2.5 w-2.5 opacity-60" />
+                            </div>
+                            <p className="line-clamp-2 opacity-80 italic">
+                                {msg.replyTo.content}
                             </p>
-                            <Reply className="h-2.5 w-2.5 opacity-60" />
                         </div>
-                        <p className="line-clamp-2 opacity-80 italic">
-                            {msg.replyTo.content}
-                        </p>
-                    </div>
-                )}
+                    )}
 
-                {/* Institutional Multi-Attachment Pipeline (P3: Grid Layout) */}
-                {msg.attachments && msg.attachments.length > 0 && (
-                    <div className={`mb-2 -mx-1 -mt-1 grid gap-1 ${msg.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                        {msg.attachments.map((att, i) => (
-                            <div key={i} className="relative overflow-hidden rounded-[8px] bg-black/5 dark:bg-white/5 border border-white/10">
-                                {att.type.startsWith('image/') ? (
+                    {/* Institutional Multi-Attachment Pipeline (P3: Grid Layout) */}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                        <div className={`mb-2 -mx-1 -mt-1 grid gap-1 ${msg.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                            {msg.attachments.map((att, i) => (
+                                <div key={i} className="relative overflow-hidden rounded-[8px] bg-black/5 dark:bg-white/5 border border-white/10">
+                                    {att.type.startsWith('image/') ? (
                                         <div
                                             className={`chat-thumbnail-container ${msg.status === 'sending' ? 'cursor-wait opacity-70' : ''}`}
                                             onClick={() => {
@@ -289,103 +289,98 @@ const MessageItem = React.memo(({
                                                 )}
                                             </div>
                                         </div>
-                                ) : (
-                                    <button
-                                        onClick={() => {
-                                            if (msg.status === 'sending') return;
-                                            if (att.id && att.name) {
-                                                onDownload(att.url.startsWith('blob:') ? att.url : `/api/files/message/${att.id}`, att.name, msg.id);
-                                            }
-                                        }}
-                                        disabled={downloadingId === msg.id || msg.status === 'sending'}
-                                        className={`w-full group/file flex items-center gap-[0.75rem] p-[0.75rem] rounded-[var(--card-radius)] border transition-all duration-200 ${
-                                            msg.status === 'sending' 
-                                                ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-900 border-dashed'
-                                                : msg.isMe 
-                                                    ? 'bg-white/10 border-white/10 hover:bg-white/20' 
-                                                    : 'bg-secondary/50 dark:bg-white/5 border-border/50 hover:border-primary/30'
-                                        }`}
-                                    >
-                                        <div className={`p-[0.5rem] rounded-md transition-colors ${
-                                            msg.status === 'sending' ? 'bg-slate-200 dark:bg-slate-800' :
-                                            msg.isMe ? 'bg-white/10' : 'bg-primary/10 text-primary'
-                                        }`}>
-                                            {msg.status === 'sending' ? (
-                                                <Loader2 className="h-[1.25rem] w-[1.25rem] animate-spin" />
-                                            ) : (() => {
-                                                const ext = att.name.split('.').pop()?.toLowerCase();
-                                                if (ext === 'pdf') return <FileText className="h-[1.25rem] w-[1.25rem]" />;
-                                                if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') return <FileSpreadsheet className="h-[1.25rem] w-[1.25rem]" />;
-                                                return <File className="h-[1.25rem] w-[1.25rem]" />;
-                                            })()}
-                                        </div>
-                                        
-                                        <div className="flex-1 min-w-0 text-left">
-                                            <div className={`text-[0.875rem] font-medium truncate ${
-                                                msg.isMe ? 'text-white' : 'text-foreground'
-                                            }`}>
-                                                {(att.name || 'attachment').replace(/\\/g, '/').split('/').pop()}
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                if (msg.status === 'sending') return;
+                                                if (att.id && att.name) {
+                                                    onDownload(att.url.startsWith('blob:') ? att.url : `/api/files/message/${att.id}`, att.name, msg.id);
+                                                }
+                                            }}
+                                            disabled={downloadingId === msg.id || msg.status === 'sending'}
+                                            className={`w-full group/file flex items-center gap-[0.75rem] p-[0.75rem] rounded-[var(--card-radius)] border transition-all duration-200 ${msg.status === 'sending'
+                                                    ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-900 border-dashed'
+                                                    : msg.isMe
+                                                        ? 'bg-white/10 border-white/10 hover:bg-white/20'
+                                                        : 'bg-secondary/50 dark:bg-white/5 border-border/50 hover:border-primary/30'
+                                                }`}
+                                        >
+                                            <div className={`p-[0.5rem] rounded-md transition-colors ${msg.status === 'sending' ? 'bg-slate-200 dark:bg-slate-800' :
+                                                    msg.isMe ? 'bg-white/10' : 'bg-primary/10 text-primary'
+                                                }`}>
+                                                {msg.status === 'sending' ? (
+                                                    <Loader2 className="h-[1.25rem] w-[1.25rem] animate-spin" />
+                                                ) : (() => {
+                                                    const ext = att.name.split('.').pop()?.toLowerCase();
+                                                    if (ext === 'pdf') return <FileText className="h-[1.25rem] w-[1.25rem]" />;
+                                                    if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') return <FileSpreadsheet className="h-[1.25rem] w-[1.25rem]" />;
+                                                    return <File className="h-[1.25rem] w-[1.25rem]" />;
+                                                })()}
                                             </div>
-                                            <div className={`text-[0.625rem] font-bold uppercase tracking-wider opacity-60 ${
-                                                msg.isMe ? 'text-white/70' : 'text-muted-foreground'
-                                            }`}>
-                                                {att.name.split('.').pop()?.toUpperCase() || 'FILE'}
+
+                                            <div className="flex-1 min-w-0 text-left">
+                                                <div className={`text-[0.875rem] font-medium truncate ${msg.isMe ? 'text-white' : 'text-foreground'
+                                                    }`}>
+                                                    {(att.name || 'attachment').replace(/\\/g, '/').split('/').pop()}
+                                                </div>
+                                                <div className={`text-[0.625rem] font-bold uppercase tracking-wider opacity-60 ${msg.isMe ? 'text-white/70' : 'text-muted-foreground'
+                                                    }`}>
+                                                    {att.name.split('.').pop()?.toUpperCase() || 'FILE'}
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div className={`flex-shrink-0 transition-opacity ${
-                                            downloadingId === msg.id ? 'opacity-100' : 'opacity-40 group-hover/file:opacity-100'
-                                        }`}>
-                                            {downloadingId === msg.id ? (
-                                                <Loader2 className="h-[1rem] w-[1rem] animate-spin" />
-                                            ) : (
-                                                <Download className={`h-[1rem] w-[1rem] ${msg.isMe ? 'text-white' : 'text-primary'}`} />
-                                            )}
-                                        </div>
-                                    </button>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <p className="whitespace-pre-wrap break-words leading-relaxed font-medium">
-                    {msg.content}
-                </p>
-
-                {/* WhatsApp-Style Reaction Attachment */}
-                {msg.reactions && msg.reactions.length > 0 && (
-                    <div
-                        className="absolute -bottom-3 -left-1 flex items-center bg-white dark:bg-slate-800 rounded-full px-1.5 py-0.5 shadow-md border border-slate-200 dark:border-slate-700 z-[150] transition-all hover:scale-105 cursor-pointer select-none"
-                    >
-                        <div className="flex -space-x-1">
-                            {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
-                                <div key={type} className="relative z-10" style={{ zIndex: 10 - i }}>
-                                    <ReactionIcon type={type} className="text-sm leading-none filter drop-shadow-sm" />
+                                            <div className={`flex-shrink-0 transition-opacity ${downloadingId === msg.id ? 'opacity-100' : 'opacity-40 group-hover/file:opacity-100'
+                                                }`}>
+                                                {downloadingId === msg.id ? (
+                                                    <Loader2 className="h-[1rem] w-[1rem] animate-spin" />
+                                                ) : (
+                                                    <Download className={`h-[1rem] w-[1rem] ${msg.isMe ? 'text-white' : 'text-primary'}`} />
+                                                )}
+                                            </div>
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
-                        {(msg.reactions || []).length > 1 && (
-                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 ml-1">
-                                {(msg.reactions || []).length}
-                            </span>
-                        )}
-                    </div>
-                )}
+                    )}
 
-                <div className={`flex items-center justify-end gap-1.5 mt-1 pt-1 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
-                    <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
-                    {msg.isMe && (
-                        <div className={`message-status-ticks ${msg.status === 'read' ? 'read' : ''}`}>
-                            {msg.status === 'sending' && <Clock className="h-3.5 w-3.5 opacity-50" />}
-                            {msg.status === 'sent' && <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />}
-                            {msg.status === 'delivered' && <CheckCheck className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />}
-                            {msg.status === 'read' && <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />}
-                            {msg.status === 'failed' && <AlertCircle className="h-3.5 w-3.5 text-red-500" strokeWidth={3} />}
+                    <p className="whitespace-pre-wrap break-words leading-relaxed font-medium">
+                        {msg.content}
+                    </p>
+
+                    {/* WhatsApp-Style Reaction Attachment */}
+                    {msg.reactions && msg.reactions.length > 0 && (
+                        <div
+                            className="absolute -bottom-3 -left-1 flex items-center bg-white dark:bg-slate-800 rounded-full px-1.5 py-0.5 shadow-md border border-slate-200 dark:border-slate-700 z-[150] transition-all hover:scale-105 cursor-pointer select-none"
+                        >
+                            <div className="flex -space-x-1">
+                                {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
+                                    <div key={type} className="relative z-10" style={{ zIndex: 10 - i }}>
+                                        <ReactionIcon type={type} className="text-sm leading-none filter drop-shadow-sm" />
+                                    </div>
+                                ))}
+                            </div>
+                            {(msg.reactions || []).length > 1 && (
+                                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 ml-1">
+                                    {(msg.reactions || []).length}
+                                </span>
+                            )}
                         </div>
                     )}
+
+                    <div className={`flex items-center justify-end gap-1.5 mt-1 pt-1 text-[10px] ${msg.isMe ? 'text-white/95' : 'text-slate-400'}`}>
+                        <span className="font-semibold">{getFormattedTime(msg.createdAt)}</span>
+                        {msg.isMe && (
+                            <div className={`message-status-ticks ${msg.status === 'read' ? 'read' : ''}`}>
+                                {msg.status === 'sending' && <Clock className="h-3.5 w-3.5 opacity-50" />}
+                                {msg.status === 'sent' && <Check className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />}
+                                {msg.status === 'delivered' && <CheckCheck className="h-3.5 w-3.5 opacity-70" strokeWidth={3} />}
+                                {msg.status === 'read' && <CheckCheck className="h-3.5 w-3.5" strokeWidth={3} />}
+                                {msg.status === 'failed' && <AlertCircle className="h-3.5 w-3.5 text-red-500" strokeWidth={3} />}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </div>
             </motion.div>
         </div>
     );
@@ -413,7 +408,6 @@ export const ChatHub: React.FC = () => {
         conversations,
         activeConversation,
         messages,
-        presence,
         fetchConversations,
         selectConversation,
         sendMessage,
@@ -425,6 +419,8 @@ export const ChatHub: React.FC = () => {
         markMessageAsRead,
         loading: isLoadingMessages
     } = useChat();
+
+    const { presence, typingUsers } = usePresence();
 
     // IntersectionObserver for Read Receipts replaced by Virtuoso rangeChanged in Phase 3
 
@@ -482,7 +478,7 @@ export const ChatHub: React.FC = () => {
             logger.info('[ChatHub] Institutional download successful.', { fileName, loadingId, correlationId });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            
+
             // Meta-Grade Response Mapping
             if (msg === 'FILE_TYPE_RESTRICTED') {
                 toastWarning('Institutional Security: This file type is restricted for clinical safety.');
@@ -564,10 +560,10 @@ export const ChatHub: React.FC = () => {
         if (view === 'new-chat') {
             const loadDoctors = async () => {
                 try {
-                   const res = await api.get<{ data: DoctorProfile[]; success: boolean } | DoctorProfile[]>('/doctor');
-                   // Guard: API may return wrapped { data: [...] } or raw array
-                   const payload = Array.isArray(res.data) ? res.data : (res.data as { data: DoctorProfile[] }).data;
-                   setDoctors(Array.isArray(payload) ? payload : []);
+                    const res = await api.get<{ data: DoctorProfile[]; success: boolean } | DoctorProfile[]>('/doctor');
+                    // Guard: API may return wrapped { data: [...] } or raw array
+                    const payload = Array.isArray(res.data) ? res.data : (res.data as { data: DoctorProfile[] }).data;
+                    setDoctors(Array.isArray(payload) ? payload : []);
                 } catch (err: unknown) {
                     const errorMessage = err instanceof Error ? err.message : String(err);
                     logger.error('[ChatHub.loadDoctors] Failed to retrieve medical specialists:', { error: errorMessage });
@@ -704,10 +700,10 @@ export const ChatHub: React.FC = () => {
         if (!other) {
             // P0: Soft-Failure Strategy - Try to use conversation name before reverting to global fallback
             const fallbackName = conversation.name && conversation.name !== 'Direct Chat' ? conversation.name : 'Medical Team';
-            
-            logger.debug('[ChatHub] Institutional participant drift detected, applying fallback', { 
+
+            logger.debug('[ChatHub] Institutional participant drift detected, applying fallback', {
                 conversationId: conversation.id,
-                fallbackName 
+                fallbackName
             });
 
             return {
@@ -769,7 +765,7 @@ export const ChatHub: React.FC = () => {
 
 
     // --- Conditional Returns - PERFORMED LAST TO ADHERE TO RULES OF HOOKS ---
-    
+
     // 1. Minimized Floating Bubble View
     if (!isOpen && !isMinimized) {
         return (
@@ -989,11 +985,13 @@ export const ChatHub: React.FC = () => {
                                                 </h3>
                                                 <span className="text-[11px] text-teal-100/80 dark:text-slate-400 font-medium truncate leading-tight capitalize">
                                                     {/* BUG-10 FIX: 3-state text */}
-                                                    {other.isGroup 
-                                                        ? 'Multi-Professional Case Group' 
-                                                        : (isOnline 
-                                                            ? 'Online' 
-                                                            : (last_activity ? `Last seen at ${last_activity}` : 'Offline'))}
+                                                    {other.isGroup
+                                                        ? 'Multi-Professional Case Group'
+                                                        : (typingUsers.includes(other.id as UserId)
+                                                            ? 'Typing...'
+                                                            : (isOnline
+                                                                ? 'Online'
+                                                                : (last_activity ? `Last seen at ${last_activity}` : 'Offline')))}
                                                 </span>
                                             </div>
                                         </div>
@@ -1201,25 +1199,25 @@ export const ChatHub: React.FC = () => {
                                                     }
                                                 }}
                                                 itemContent={(index, msg) => (
-                                                        <MessageItem
-                                                            msg={msg}
-                                                            index={index}
-                                                            onContextMenu={handleMsgContextMenu}
-                                                            onDownload={handleDownload}
-                                                            onLightbox={(src, alt) => setLightboxImage({ src, alt })}
-                                                            onScrollToReply={(replyToId) => {
-                                                                const targetIdx = messages.findIndex(m => m.id === replyToId);
-                                                                if (targetIdx !== -1) {
-                                                                    virtuosoRef.current?.scrollToIndex({
-                                                                        index: targetIdx,
-                                                                        align: 'center',
-                                                                        behavior: 'smooth'
-                                                                    });
-                                                                }
-                                                            }}
-                                                            downloadingId={downloadingId}
-                                                            getFormattedTime={getFormattedTime}
-                                                        />
+                                                    <MessageItem
+                                                        msg={msg}
+                                                        index={index}
+                                                        onContextMenu={handleMsgContextMenu}
+                                                        onDownload={handleDownload}
+                                                        onLightbox={(src, alt) => setLightboxImage({ src, alt })}
+                                                        onScrollToReply={(replyToId) => {
+                                                            const targetIdx = messages.findIndex(m => m.id === replyToId);
+                                                            if (targetIdx !== -1) {
+                                                                virtuosoRef.current?.scrollToIndex({
+                                                                    index: targetIdx,
+                                                                    align: 'center',
+                                                                    behavior: 'smooth'
+                                                                });
+                                                            }
+                                                        }}
+                                                        downloadingId={downloadingId}
+                                                        getFormattedTime={getFormattedTime}
+                                                    />
                                                 )}
                                             />
                                         )}

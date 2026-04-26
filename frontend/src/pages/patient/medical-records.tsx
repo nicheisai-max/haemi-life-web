@@ -11,6 +11,7 @@ import {
 
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { MedicalLoader } from '../../components/ui/medical-loader';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { getMyRecords } from '../../services/record.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -35,6 +36,9 @@ export const MedicalRecords: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     useEffect(() => {
         fetchRecords();
@@ -65,6 +69,7 @@ export const MedicalRecords: React.FC = () => {
         }
 
         setFilteredRecords(result);
+        setCurrentPage(1); // Reset on search/filter change
     }, [records, searchTerm, selectedType]);
 
     const fetchRecords = async () => {
@@ -98,8 +103,8 @@ export const MedicalRecords: React.FC = () => {
 
             setRecords(combined);
         } catch (error: unknown) {
-            logger.error('[Medical-Records] Record retrieval collapsed', { 
-                error: error instanceof Error ? error.message : String(error) 
+            logger.error('[Medical-Records] Record retrieval collapsed', {
+                error: error instanceof Error ? error.message : String(error)
             });
         } finally {
             setLoading(false);
@@ -176,7 +181,7 @@ export const MedicalRecords: React.FC = () => {
             });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            
+
             if (msg === 'FILE_TYPE_RESTRICTED') {
                 toastWarning('Institutional Security: This file type is restricted for safety.');
             } else if (msg === 'ASSET_MISSING') {
@@ -189,6 +194,11 @@ export const MedicalRecords: React.FC = () => {
         }
     };
 
+    // Pagination logic
+    const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, filteredRecords.length);
+    const paginatedRecords = filteredRecords.slice(startIndex, endIndex);
 
     return (
         <div className="space-y-8">
@@ -275,7 +285,7 @@ export const MedicalRecords: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 gap-4">
                         <AnimatePresence>
-                            {filteredRecords.map((record) => (
+                            {paginatedRecords.map((record) => (
                                 <motion.div
                                     key={record.id}
                                     initial={{ opacity: 0, y: 10 }}
@@ -284,14 +294,15 @@ export const MedicalRecords: React.FC = () => {
                                     layout
                                 >
                                     <Card className="group p-0 overflow-hidden hover:shadow-md transition-all shadow-sm flex flex-col md:flex-row h-full rounded-[var(--card-radius)]">
-                                        <div className="w-full md:w-1.5 h-1.5 md:h-auto" style={{ 
-                                            backgroundColor: 
+                                        {/* ... content ... */}
+                                        <div className="w-full md:w-1.5 h-1.5 md:h-auto" style={{
+                                            backgroundColor:
                                                 record.recordType === ClinicalRecordType.LabResult ? 'var(--record-lab)' :
-                                                record.recordType === ClinicalRecordType.Radiology ? 'var(--record-radiology)' :
-                                                record.recordType === ClinicalRecordType.Immunization ? 'var(--record-immunization)' :
-                                                record.recordType === ClinicalRecordType.Prescription ? 'var(--record-prescription)' :
-                                                (record.recordType === ClinicalRecordType.ClinicalNote || record.recordType === ClinicalRecordType.SpecialistReport) ? 'var(--record-notes)' :
-                                                'var(--record-general)'
+                                                    record.recordType === ClinicalRecordType.Radiology ? 'var(--record-radiology)' :
+                                                        record.recordType === ClinicalRecordType.Immunization ? 'var(--record-immunization)' :
+                                                            record.recordType === ClinicalRecordType.Prescription ? 'var(--record-prescription)' :
+                                                                (record.recordType === ClinicalRecordType.ClinicalNote || record.recordType === ClinicalRecordType.SpecialistReport) ? 'var(--record-notes)' :
+                                                                    'var(--record-general)'
                                         }} />
 
                                         <div className="flex-1 p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
@@ -370,6 +381,16 @@ export const MedicalRecords: React.FC = () => {
                                 </motion.div>
                             ))}
                         </AnimatePresence>
+                        <TablePagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={filteredRecords.length}
+                            startIndex={startIndex}
+                            endIndex={endIndex}
+                            showPagination={totalPages > 1}
+                            onPageChange={setCurrentPage}
+                            itemLabel="records"
+                        />
                     </div>
                 )}
             </TransitionItem>
