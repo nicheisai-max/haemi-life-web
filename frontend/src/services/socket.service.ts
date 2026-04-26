@@ -393,37 +393,32 @@ class SocketService {
     }
 
     private manualRebind(socket: SocketInstance) {
-        // Institutional Explicit Rebinding with Broadcast Pipe (Meta-Grade)
-        // Bypasses TS union mapping limitations by being explicit. Zero 'any', Zero casting.
+        // Institutional Explicit Rebinding (Meta-Grade)
+        // Zero 'any', Zero 'as' casting.
         
-        const createPipe = <K extends keyof ServerToClientEvents>(event: K): ServerToClientEvents[K] => {
-            const handler = (...args: Parameters<ServerToClientEvents[K]>) => {
-                const params = args as unknown[];
-                const data = params.length > 0 ? params[0] : undefined;
-                this.broadcastToFollowers(event, data);
-                this.dispatchToLocalListeners(event, data);
-            };
-            return handler as ServerToClientEvents[K];
+        const pipe = <K extends keyof ServerToClientEvents>(event: K, data: unknown) => {
+            this.broadcastToFollowers(event, data);
+            this.dispatchToLocalListeners(event, data);
         };
 
-        socket.on('typingStarted', createPipe('typingStarted'));
-        socket.on('typingStopped', createPipe('typingStopped'));
-        socket.on('messageRead', createPipe('messageRead'));
-        socket.on('messageDelivered', createPipe('messageDelivered'));
-        socket.on('messageReceived', createPipe('messageReceived'));
-        socket.on('messageDeleted', createPipe('messageDeleted'));
-        socket.on('messageReaction', createPipe('messageReaction'));
-        socket.on('userStatus', createPipe('userStatus'));
-        socket.on('localMessageDeleted', createPipe('localMessageDeleted'));
-        socket.on('notificationNew', createPipe('notificationNew'));
-        socket.on('notificationRead', createPipe('notificationRead'));
-        socket.on('notificationReadAll', createPipe('notificationReadAll'));
-        socket.on('notificationDelete', createPipe('notificationDelete'));
-        socket.on('reconnect', createPipe('reconnect'));
-        socket.on('reconnect_attempt', createPipe('reconnect_attempt'));
-        socket.on('disconnect', createPipe('disconnect'));
-        socket.on('error', createPipe('error'));
-        socket.on('connect_error', createPipe('connect_error'));
+        socket.on('typingStarted', (data) => pipe('typingStarted', data));
+        socket.on('typingStopped', (data) => pipe('typingStopped', data));
+        socket.on('messageRead', (data) => pipe('messageRead', data));
+        socket.on('messageDelivered', (data) => pipe('messageDelivered', data));
+        socket.on('messageReceived', (data) => pipe('messageReceived', data));
+        socket.on('messageDeleted', (data) => pipe('messageDeleted', data));
+        socket.on('messageReaction', (data) => pipe('messageReaction', data));
+        socket.on('userStatus', (data) => pipe('userStatus', data));
+        socket.on('localMessageDeleted', (data) => pipe('localMessageDeleted', data));
+        socket.on('notificationNew', (data) => pipe('notificationNew', data));
+        socket.on('notificationRead', (data) => pipe('notificationRead', data));
+        socket.on('notificationReadAll', () => pipe('notificationReadAll', undefined));
+        socket.on('notificationDelete', (data) => pipe('notificationDelete', data));
+        socket.on('reconnect', () => pipe('reconnect', undefined));
+        socket.on('reconnect_attempt', (num) => pipe('reconnect_attempt', num));
+        socket.on('disconnect', (reason) => pipe('disconnect', reason));
+        socket.on('error', (err) => pipe('error', err));
+        socket.on('connect_error', (err) => pipe('connect_error', err));
     }
 
     destroy(): void {

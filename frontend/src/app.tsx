@@ -21,8 +21,6 @@ import { PageTransition } from './components/layout/page-transition';
 import { PATHS } from './routes/paths';
 import { useAuth } from './hooks/use-auth';
 import { logger, auditLogger } from './utils/logger';
-import { safeParseJSON } from './utils/type-guards';
-import { isJWTPayload } from './utils/type-guards';
 
 // Layouts & Guards
 import { TelemedicineGuard } from './components/guards/telemedicine-guard';
@@ -67,23 +65,6 @@ const DoctorPatientList = lazy(() => import('./pages/doctor/doctor-patient-list'
 
 const LoadingFallback = () => <MedicalLoader variant="global" message="Securing clinical session..." />;
 const DelayedFallback = () => <MedicalLoader variant="global" message="Restoring clinical records..." />;
-
-// ─── INSTITUTIONAL HELPERS ───────────────────────────────────────────────────
-
-export const decodeJWT = (token: string | null) => {
-  if (!token) return null;
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonString = atob(base64);
-    return safeParseJSON(jsonString, isJWTPayload);
-  } catch (error: unknown) {
-    logger.error('[App] JWT Decoding systemic failure', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    return null;
-  }
-};
 
 
 // ─── INSTITUTIONAL WRAPPERS (STABILIZED REFS) ────────────────────────────────

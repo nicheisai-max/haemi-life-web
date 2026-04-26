@@ -8,10 +8,10 @@ import { AuthContext } from './auth-context-def';
 import { isAuthError, type User, type LoginCredentials, type SignupCredentials } from '../types/auth.types';
 import {
     safeParseJSON,
-    isJWTPayload,
     isRefreshTokenPayload,
     isUser
 } from '../utils/type-guards';
+import { decodeJWT } from '../utils/jwt';
 
 interface AuthState {
     user: User | null;
@@ -22,18 +22,7 @@ interface AuthState {
     sessionTimeout: number | null; // minutes
 }
 
-// ─── Surgical JWT Decoder (No dependencies) ──────────────────────────────────
-const decodeJWT = (token: string | null) => {
-    if (!token) return null;
-    try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonString = atob(base64);
-        return safeParseJSON(jsonString, isJWTPayload);
-    } catch {
-        return null;
-    }
-};
+
 
 // ─── MODULE-LEVEL BOOTSTRAP GUARDS ─────────────────────────────────────────
 let hasGlobalBootstrapExecuted = false;
@@ -613,11 +602,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!isAuth || !authState.token) return false;
             
             try {
-                // Surgical validation of JWT expiry within the computation block
-                const parts = authState.token.split('.');
-                if (parts.length !== 3) return false;
-                const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-                if (!payload || typeof payload.exp !== 'number') return false;
+                const payload = decodeJWT(authState.token);
+                if (!payload) return false;
                 
                 const now = Math.floor(Date.now() / 1000);
                 return payload.exp > now;

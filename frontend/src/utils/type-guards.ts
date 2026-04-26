@@ -62,29 +62,30 @@ export function isSocketErrorPayload(value: unknown): value is SocketErrorPayloa
 }
 
 export function isUser(value: unknown): value is User {
-    if (typeof value !== 'object' || value === null) return false;
-    const v = value as Record<string, unknown>;
+    if (!isObject(value)) return false;
+    const v = value;
     return (
-        'id' in v && typeof v.id === 'string' &&
-        'email' in v && typeof v.email === 'string' &&
-        'name' in v && typeof v.name === 'string' &&
-        'role' in v && (v.role === 'patient' || v.role === 'doctor' || v.role === 'pharmacist' || v.role === 'admin')
+        'id' in v && isString(v.id) &&
+        'email' in v && isString(v.email) &&
+        'name' in v && isString(v.name) &&
+        'role' in v && isString(v.role) && 
+        (v.role === 'patient' || v.role === 'doctor' || v.role === 'pharmacist' || v.role === 'admin')
     );
 }
 
 export function isJWTPayload(value: unknown): value is JWTPayload {
     if (!isObject(value)) return false;
-    const v = value as Record<string, unknown>;
+    const v = value;
     return (
-        isString(v.id) &&
-        isString(v.email) &&
-        isString(v.role) &&
+        'id' in v && isString(v.id) &&
+        'email' in v && isString(v.email) &&
+        'role' in v && isString(v.role) &&
         (v.role === 'patient' || v.role === 'doctor' || v.role === 'pharmacist' || v.role === 'admin') &&
-        isNumber(v.tokenVersion) &&
-        isString(v.sessionId) &&
-        isString(v.jti) &&
-        isNumber(v.exp) &&
-        isNumber(v.iat)
+        'tokenVersion' in v && isNumber(v.tokenVersion) &&
+        'sessionId' in v && isString(v.sessionId) &&
+        'jti' in v && isString(v.jti) &&
+        'exp' in v && isNumber(v.exp) &&
+        'iat' in v && isNumber(v.iat)
     );
 }
 
@@ -110,26 +111,28 @@ export interface RefreshTokenPayload {
 
 export function isRefreshTokenPayload(value: unknown): value is RefreshTokenPayload {
     if (!isObject(value)) return false;
-    const v = value as Record<string, unknown>;
+    const v = value;
     return (
-        isString(v.id) &&
-        isNumber(v.tokenVersion) &&
-        isString(v.sessionId) &&
-        isString(v.jti) &&
-        isNumber(v.exp) &&
-        isNumber(v.iat)
+        'id' in v && isString(v.id) &&
+        'tokenVersion' in v && isNumber(v.tokenVersion) &&
+        'sessionId' in v && isString(v.sessionId) &&
+        'jti' in v && isString(v.jti) &&
+        'exp' in v && isNumber(v.exp) &&
+        'iat' in v && isNumber(v.iat)
     );
 }
 
 export function isHealthStatus(value: unknown): value is { status: string } {
-    if (typeof value !== 'object' || value === null) return false;
-    return 'status' in value && typeof (value as { status: unknown }).status === 'string';
+    if (!isObject(value)) return false;
+    const v = value;
+    return 'status' in v && typeof v.status === 'string';
 }
 
 // Let's avoid any even in guards if possible.
 export function isHealthStatusStrict(value: unknown): value is { status: string } {
     if (!isObject(value)) return false;
-    return 'status' in value && typeof value.status === 'string';
+    const v = value;
+    return 'status' in v && typeof v.status === 'string';
 }
 
 export function isTokenDetail(value: unknown): value is { token: string } {
