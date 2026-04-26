@@ -12,6 +12,7 @@ export const bookAppointmentSchema = z.object({
         .string()
         .min(10, { message: "Please provide at least 10 characters describing your symptoms" })
         .max(500, { message: "Reason cannot exceed 500 characters" }),
+    screening: z.record(z.string(), z.boolean()).optional(),
 });
 
 export type BookAppointmentFormData = z.infer<typeof bookAppointmentSchema>;

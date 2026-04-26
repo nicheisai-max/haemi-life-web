@@ -29,8 +29,7 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
     }
 
     if (/^[0-9a-fA-F]+$/.test(rawKey)) {
-        const matches = rawKey.match(/.{1,2}/g);
-        keyData = new Uint8Array(matches!.map((byte: string) => parseInt(byte, 16)));
+        keyData = hexToUint8Array(rawKey);
     } else {
         keyData = encoder.encode(rawKey);
     }
@@ -68,6 +67,34 @@ async function deriveKey(algorithm: string): Promise<CryptoKey> {
     return derivedKey;
 }
 
+/**
+ * High-performance hex string to Uint8Array conversion.
+ * Replaces regex-based conversion to prevent main-thread blocking during large message bursts.
+ */
+function hexToUint8Array(hex: string): Uint8Array {
+    const len = hex.length;
+    if (len % 2 !== 0) {
+        throw new Error('[Security] Invalid hex string length');
+    }
+    const array = new Uint8Array(len / 2);
+    for (let i = 0; i < len; i += 2) {
+        array[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    }
+    return array;
+}
+
+/**
+ * High-performance Uint8Array to hex string conversion via lookup table.
+ */
+const HEX_LOOKUP = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+function uint8ArrayToHex(array: Uint8Array): string {
+    let hex = '';
+    for (let i = 0; i < array.length; i++) {
+        hex += HEX_LOOKUP[array[i]];
+    }
+    return hex;
+}
+
 const decryptionCache = new Map<string, string>();
 
 /**
@@ -77,7 +104,8 @@ export const decrypt = async (text: string): Promise<string> => {
     if (!text || !text.startsWith(ENCRYPTED_PREFIX)) return text;
     
     // Phase 5: Decrypt Performance Fix (Single-pass decryption)
-    if (decryptionCache.has(text)) return decryptionCache.get(text)!;
+    const cached = decryptionCache.get(text);
+    if (cached) return cached;
 
     const data = text.slice(ENCRYPTED_PREFIX.length);
     let result = text;
@@ -87,18 +115,15 @@ export const decrypt = async (text: string): Promise<string> => {
         if (data.startsWith(GCM_PREFIX)) {
             const key = await deriveKey(ALGORITHM_GCM);
             const parts = data.slice(GCM_PREFIX.length).split(':');
-            const iv = new Uint8Array(parts[0].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+            if (parts.length < 3) return text;
 
-            // CRITICAL: Format mismatch fix
-            // Web Crypto expects: [ciphertext][tag]
-            // Backend sends: [tag][ciphertext] (hex)
+            const iv = hexToUint8Array(parts[0]);
             const tagHex = parts[1];
             const ciphertextHex = parts[2];
             const combinedHex = ciphertextHex + tagHex;
+            const encryptedData = hexToUint8Array(combinedHex);
 
-            const encryptedData = new Uint8Array(combinedHex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
-
-            const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_GCM, iv }, key, encryptedData);
+            const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_GCM, iv: iv as BufferSource }, key, encryptedData as BufferSource);
             result = new TextDecoder().decode(buffer);
         } else {
             // Mode B: Legacy AES-256-CBC
@@ -106,18 +131,19 @@ export const decrypt = async (text: string): Promise<string> => {
             const parts = data.split(':');
             if (parts.length < 2) return text;
 
-            const iv = new Uint8Array(parts[0].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
-            const encryptedData = new Uint8Array(parts[1].match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+            const iv = hexToUint8Array(parts[0]);
+            const encryptedData = hexToUint8Array(parts[1]);
 
-            const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_CBC, iv }, key, encryptedData);
+            const buffer = await window.crypto.subtle.decrypt({ name: ALGORITHM_CBC, iv: iv as BufferSource }, key, encryptedData as BufferSource);
             result = new TextDecoder().decode(buffer);
         }
         
         decryptionCache.set(text, result);
         return result;
 
-    } catch (error) {
-        console.error('[Security] Decryption failed:', error);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[Security] Decryption failed:', errorMessage);
         // Institutional Hardening: Return sanitized placeholder for corrupted/legacy records
         return '[Encrypted Message]';
     }
@@ -138,9 +164,9 @@ export const encrypt = async (text: string): Promise<string> => {
 
         // Web Crypto output is [ciphertext][tag]
         const encryptedArray = new Uint8Array(encryptedBuffer);
-        const hex = Array.from(encryptedArray).map(b => b.toString(16).padStart(2, '0')).join('');
+        const hex = uint8ArrayToHex(encryptedArray);
 
-        const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+        const ivHex = uint8ArrayToHex(iv);
 
         // Extract 16-byte tag (last 32 hex chars) from Web Crypto output
         const tagHex = hex.slice(-32);
@@ -148,8 +174,9 @@ export const encrypt = async (text: string): Promise<string> => {
 
         // Format: enc:gcm:<iv>:<tag>:<ciphertext>
         return `${ENCRYPTED_PREFIX}${GCM_PREFIX}${ivHex}:${tagHex}:${ciphertextHex}`;
-    } catch (error) {
-        console.error('[Security] Encryption failed:', error);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[Security] Encryption failed:', errorMessage);
         return text;
     }
 };

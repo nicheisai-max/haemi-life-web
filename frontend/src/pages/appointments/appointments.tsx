@@ -9,9 +9,12 @@ import { getMyAppointments, cancelAppointment, updateAppointmentStatus, deleteAp
 import type { Appointment } from '../../services/appointment.service';
 import { Plus, AlertCircle, CalendarX, Clock, Calendar, Trash2 } from 'lucide-react';
 import { MedicalLoader } from '@/components/ui/medical-loader';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 import { TransitionItem } from '../../components/layout/page-transition';
 import { getErrorMessage } from '../../lib/error';
+
+import { PATHS } from '../../routes/paths';
 
 export const Appointments: React.FC = () => {
     const navigate = useNavigate();
@@ -21,6 +24,8 @@ export const Appointments: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const applyFilter = useCallback(() => {
         const now = new Date();
@@ -42,6 +47,7 @@ export const Appointments: React.FC = () => {
         }
 
         setFilteredAppointments(filtered);
+        setCurrentPage(1); // Reset to first page on filter change
     }, [appointments, filter]);
 
     useEffect(() => {
@@ -128,6 +134,12 @@ export const Appointments: React.FC = () => {
         }
     };
 
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, filteredAppointments.length);
+    const paginatedAppointments = filteredAppointments.slice(startIndex, endIndex);
+
     if (loading) {
         return <MedicalLoader message="Syncing clinical appointments..." />;
     }
@@ -142,7 +154,7 @@ export const Appointments: React.FC = () => {
                 <Button
                     variant="default"
                     className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
-                    onClick={() => navigate('/book-appointment')}
+                    onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
                 >
                     <Plus className="h-5 w-5" />
                     Book New
@@ -197,14 +209,14 @@ export const Appointments: React.FC = () => {
                         </p>
                         <Button
                             variant="default"
-                            onClick={() => navigate('/book-appointment')}
+                            onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
                             className="mt-4"
                         >
                             Book Your First Appointment
                         </Button>
                     </Card>
                 ) : (
-                    filteredAppointments.map((appointment) => (
+                    paginatedAppointments.map((appointment) => (
                         <Card key={appointment.id} className="group hover:shadow-md transition-all duration-200">
                             <div className="p-6 flex flex-col md:flex-row gap-6">
                                 {/* Date Badge */}
@@ -304,6 +316,16 @@ export const Appointments: React.FC = () => {
                         </Card>
                     ))
                 )}
+                <TablePagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filteredAppointments.length}
+                    startIndex={startIndex}
+                    endIndex={endIndex}
+                    showPagination={totalPages > 1}
+                    onPageChange={setCurrentPage}
+                    itemLabel="appointments"
+                />
             </TransitionItem>
         </div>
     );

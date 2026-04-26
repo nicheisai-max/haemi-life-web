@@ -1,55 +1,41 @@
-import { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { Suspense, lazy } from 'react';
+import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+
+// Providers
 import { AuthProvider } from './context/auth-context';
-import { useAuth } from './hooks/use-auth';
 import { ThemeProvider } from './context/theme-context';
 import { ToastProvider } from './context/toast-context';
+import { AlertDialogProvider } from './context/alert-dialog-context';
 import { NetworkStatusProvider } from './context/network-status';
 import { SessionManagerProvider } from './context/session-manager';
-import { AlertDialogProvider } from './context/alert-dialog-context';
+import { LanguageProvider } from './context/language-context';
 import { NotificationProvider } from './context/notification-provider';
 import { ChatProvider } from './context/chat-provider';
+import { PresenceProvider } from './context/presence-context';
+
+// Components & Utils
 import { ErrorBoundary } from './components/ui/error-boundary';
-import { DelayedFallback } from './components/layout/delayed-fallback';
-import { LanguageProvider } from './context/language-context';
-import { ScrollToTop } from './components/utils/scroll-to-top';
-import { PageTransition } from './components/layout/page-transition';
 import { MedicalLoader } from './components/ui/medical-loader';
-import { RoleRoute } from './components/auth/role-route';
-import { FirstVisitGuard } from './components/guards/first-visit-guard';
-import { TelemedicineGuard } from './components/guards/telemedicine-guard';
+import { PageTransition } from './components/layout/page-transition';
+import { PATHS } from './routes/paths';
+import { useAuth } from './hooks/use-auth';
 import { logger, auditLogger } from './utils/logger';
-import { safeParseJSON, isJWTPayload } from './utils/type-guards';
 
-// ─── Institutional JWT Decoder (Zero Hallucination Guard) ───────────────────
-const decodeJWT = (token: string | null) => {
-  if (!token) return null;
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonString = atob(base64);
-    return safeParseJSON(jsonString, isJWTPayload);
-  } catch (error: unknown) {
-    logger.error('[InstitutionalJWT] Decoding systemic failure', { 
-        error: error instanceof Error ? error.message : String(error) 
-    });
-    return null;
-  }
-};
+// Layouts & Guards
+import { TelemedicineGuard } from './components/guards/telemedicine-guard';
+import { RoleRoute } from './components/auth/role-route';
+import { ScrollToTop } from './components/utils/scroll-to-top';
 
-// Eagerly loaded Auth/Public pages for zero-jerks and instantaneous navigation
+// Pages (Eagerly Loaded for UX)
 import { Login } from './pages/public/login';
 import { Signup } from './pages/public/signup';
 import { ForgotPassword } from './pages/auth/forgot-password';
 import { StyleGuide } from './pages/public/style-guide';
-import { PATHS } from './routes/paths';
 
-// Lazy loaded layout components
+// ─── LAZY LOAD MODULES ──────────────────────────────────────────────────────
 const LazyDashboardLayout = lazy(() => import('./components/layout/dashboard-layout').then(m => ({ default: m.DashboardLayout })));
 const RoleRouter = lazy(() => import('./components/layout/role-router').then(m => ({ default: m.RoleRouter })));
-
-// Lazy loaded dashboard pages
 const AdminDashboard = lazy(() => import('./pages/admin/admin-dashboard').then(m => ({ default: m.AdminDashboard })));
 const Profile = lazy(() => import('./pages/profile/profile').then(m => ({ default: m.Profile })));
 const Settings = lazy(() => import('./pages/settings/settings').then(m => ({ default: m.Settings })));
@@ -77,428 +63,132 @@ const DoctorReports = lazy(() => import('./pages/doctor/reports').then(m => ({ d
 const DispensePrescription = lazy(() => import('./pages/pharmacist/dispense-prescription').then(m => ({ default: m.DispensePrescription })));
 const DoctorPatientList = lazy(() => import('./pages/doctor/doctor-patient-list').then(m => ({ default: m.DoctorPatientList })));
 
-const LoadingFallback = () => <MedicalLoader variant="global" message="Securing clinical data..." />;
+const LoadingFallback = () => <MedicalLoader variant="global" message="Securing clinical session..." />;
+const DelayedFallback = () => <MedicalLoader variant="global" message="Restoring clinical records..." />;
 
-/**
- * 🛡️ INSTITUTIONAL PROTECTION GUARD:
- * Redirects unauthorized users while ensuring the loading state is never dual-mounted.
- */
+
+// ─── INSTITUTIONAL WRAPPERS (STABILIZED REFS) ────────────────────────────────
+
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { isAuthenticated, isLoading, isRefreshing, isTokenNearDeath, token } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
-  // P0 META-GRADE: Decouple initial boot from background refresh.
   if (isLoading) return <LoadingFallback />;
 
-  // 🩺 INSTITUTIONAL STANDARD: Transition Guard & Token Observability
-  if (isRefreshing) {
-    if (!isAuthenticated || isTokenNearDeath) {
-      const payload = decodeJWT(token);
-      logger.info('[Guard] Critical session lifecycle sync. Token active for refresh.', { 
-          userId: payload?.id,
-          exp: payload?.exp
-      });
-      return <LoadingFallback />;
-    }
-  }
-
   if (!isAuthenticated) {
-    logger.info('[Guard] Unauthorized access attempt blocked. Redirecting to login.');
-    return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
+    logger.warn('[App] Session invalid or expired', { path: location.pathname });
+    return <Navigate to={PATHS.LOGIN} state={{ from: location.pathname }} replace />;
   }
 
   return children;
 };
 
-/**
- * ⚖️ UNIVERSAL LEGAL SHELL:
- * Wraps legal/support pages in the institutional DashboardLayout ONLY for authenticated users.
- */
-const UniversalLegalWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  
-  if (isAuthenticated) {
-    return (
-      <Suspense fallback={<DelayedFallback />}>
-        <LazyDashboardLayout>
-          <PageTransition>
-            {children}
-          </PageTransition>
-        </LazyDashboardLayout>
-      </Suspense>
-    );
-  }
-  
-  return <PageTransition>{children}</PageTransition>;
-};
+const MainClinicalLayout = React.memo(() => (
+  <ProtectedRoute>
+    <Suspense fallback={<DelayedFallback />}>
+      <LazyDashboardLayout>
+        <PageTransition>
+          <Outlet />
+        </PageTransition>
+      </LazyDashboardLayout>
+    </Suspense>
+  </ProtectedRoute>
+));
 
-/**
- * 🛡️ INSTITUTIONAL CONTEXT WRAPPER:
- * Synchronizes Notification and Chat contexts to prevent unmounting across route transitions.
- */
-const AuthGatedNotifications: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return (
-    <NotificationProvider>
+MainClinicalLayout.displayName = 'MainClinicalLayout';
+
+const AuthGatedNotifications: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <NotificationProvider>
+    <PresenceProvider>
       <ChatProvider>
         {children}
       </ChatProvider>
-    </NotificationProvider>
-  );
-};
+    </PresenceProvider>
+  </NotificationProvider>
+);
 
 const IdentityGate = () => {
-  const { isLoading, isAuthenticated, user } = useAuth();
-
-  if (isLoading) {
-    return <LoadingFallback />;
-  }
-
+  const { isAuthenticated, user, isLoading } = useAuth();
+  if (isLoading) return <LoadingFallback />;
   if (isAuthenticated && user) {
-    const dashboardPath = user.role === 'admin' ? PATHS.ADMIN.DASHBOARD : PATHS.DASHBOARD;
-    return <Navigate to={dashboardPath} replace />;
+    return <Navigate to={user.role === 'admin' ? PATHS.ADMIN.DASHBOARD : PATHS.DASHBOARD} replace />;
   }
-
   return <Navigate to={PATHS.LOGIN} replace />;
 };
 
-const AppRoutes = () => {
+// ─── MAIN APP COMPONENT ──────────────────────────────────────────────────────
+
+const AppRoutes = React.memo(() => {
   const location = useLocation();
   const { isLoading } = useAuth();
 
-  if (isLoading) {
-    return <LoadingFallback />;
-  }
-
-  const handleError = (error: Error, info: React.ErrorInfo) => {
-    logger.error('[APP_ERROR] Component boundary failure:', error.message);
-    auditLogger.log('UNHANDLED_ERROR', {
-      message: error.message,
-      context: info.componentStack || 'unknown_component'
-    });
-  };
+  if (isLoading) return <LoadingFallback />;
 
   return (
-    <ErrorBoundary 
-      onReset={() => {
-        logger.info('[ErrorBoundary] System state restoration initiated without hard refresh.');
-        auditLogger.log('SYSTEM_RECOVERY', { method: 'soft_reset', timestamp: Date.now() });
-      }} 
-      onError={handleError}
-    >
-      <Suspense fallback={<LoadingFallback />}>
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.key}>
-            {/* Eagerly Loaded Private/Public Routes */}
-            <Route path={PATHS.STYLE_GUIDE} element={<StyleGuide />} />
-            <Route path={PATHS.LOGIN} element={<FirstVisitGuard><Login /></FirstVisitGuard>} />
-            <Route path={PATHS.SIGNUP} element={<Signup />} />
-            <Route path={PATHS.FORGOT_PASSWORD} element={<ForgotPassword />} />
-            <Route path={PATHS.PRIVACY} element={<UniversalLegalWrapper><PrivacyPolicy /></UniversalLegalWrapper>} />
-            <Route path={PATHS.TERMS} element={<UniversalLegalWrapper><TermsOfService /></UniversalLegalWrapper>} />
+    <Suspense fallback={<LoadingFallback />}>
+      <AnimatePresence mode="wait" initial={false}>
+        <Routes location={location}>
+          {/* Public Routes */}
+          <Route path={PATHS.LOGIN} element={<Login />} />
+          <Route path={PATHS.SIGNUP} element={<Signup />} />
+          <Route path={PATHS.FORGOT_PASSWORD} element={<ForgotPassword />} />
+          <Route path={PATHS.STYLE_GUIDE} element={<StyleGuide />} />
+          <Route path={PATHS.PRIVACY} element={<PrivacyPolicy />} />
+          <Route path={PATHS.TERMS} element={<TermsOfService />} />
+          <Route path={PATHS.HELP} element={<Help />} />
 
-            {/* Lazy Loaded Routes */}
-            <Route path={PATHS.HELP} element={<UniversalLegalWrapper><Help /></UniversalLegalWrapper>} />
-            <Route
-              path="/dashboard/*"
-              element={
-                <ProtectedRoute>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <RoleRouter />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path={PATHS.CONSENT}
-              element={
-                <ProtectedRoute>
-                  <TelemedicineGuard>
-                    <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                      <PageTransition>
-                        <TelemedicineConsent />
-                      </PageTransition>
-                    </LazyDashboardLayout></Suspense>
-                  </TelemedicineGuard>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path={PATHS.TELEMEDICINE}
-              element={
-                <ProtectedRoute>
-                  <TelemedicineGuard>
-                    <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                      <PageTransition>
-                        <TelemedicineDashboard />
-                      </PageTransition>
-                    </LazyDashboardLayout></Suspense>
-                  </TelemedicineGuard>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path={PATHS.PROFILE}
-              element={
-                <ProtectedRoute>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <Profile />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path={PATHS.SETTINGS}
-              element={
-                <ProtectedRoute>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <Settings />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path={PATHS.PATIENT.FIND_DOCTORS}
-              element={
-                <RoleRoute allowedRoles={['patient']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <FindDoctors />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.PATIENT.BOOK_APPOINTMENT}
-              element={
-                <RoleRoute allowedRoles={['patient']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <BookAppointment />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.PATIENT.APPOINTMENTS}
-              element={
-                <RoleRoute allowedRoles={['patient', 'doctor']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <Appointments />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.PATIENT.PRESCRIPTIONS}
-              element={
-                <RoleRoute allowedRoles={['patient', 'doctor', 'pharmacist']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <Prescriptions />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.PATIENT.MEDICAL_RECORDS}
-              element={
-                <RoleRoute allowedRoles={['patient']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <MedicalRecords />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.DOCTOR.SCHEDULE}
-              element={
-                <RoleRoute allowedRoles={['doctor']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <DoctorScheduleManagement />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.PHARMACIST.QUEUE}
-              element={
-                <RoleRoute allowedRoles={['pharmacist']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <PrescriptionQueue />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.PHARMACIST.DISPENSE}
-              element={
-                <RoleRoute allowedRoles={['pharmacist']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <DispensePrescription />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.PHARMACIST.INVENTORY}
-              element={
-                <RoleRoute allowedRoles={['pharmacist']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <Inventory />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.ADMIN.VERIFY_DOCTORS}
-              element={
-                <RoleRoute allowedRoles={['admin']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <VerifyDoctors />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.DOCTOR.PATIENTS}
-              element={
-                <RoleRoute allowedRoles={['doctor']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <DoctorPatientList />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.DOCTOR.REPORTS}
-              element={
-                <RoleRoute allowedRoles={['doctor']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <DoctorReports />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.ADMIN.DASHBOARD}
-              element={
-                <RoleRoute allowedRoles={['admin']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <AdminDashboard />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.ADMIN.USERS}
-              element={
-                <RoleRoute allowedRoles={['admin']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <UserManagement />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.ADMIN.SYSTEM_LOGS}
-              element={
-                <RoleRoute allowedRoles={['admin']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <SystemLogs />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.ADMIN.SECURITY}
-              element={
-                <RoleRoute allowedRoles={['admin']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <SecurityMonitoring />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path={PATHS.ADMIN.SESSIONS}
-              element={
-                <RoleRoute allowedRoles={['admin']}>
-                  <Suspense fallback={<DelayedFallback />}><LazyDashboardLayout>
-                    <PageTransition>
-                      <SessionManagement />
-                    </PageTransition>
-                  </LazyDashboardLayout></Suspense>
-                </RoleRoute>
-              }
-            />
-            <Route
-              path="/consultation/:id"
-              element={
-                <ProtectedRoute>
-                  <Suspense fallback={<LoadingFallback />}>
-                    <VideoConsultation />
-                  </Suspense>
-                </ProtectedRoute>
-              }
-            />
-            <Route path={PATHS.DOCTOR.DASHBOARD_LEGACY} element={<Navigate to={PATHS.DASHBOARD} replace />} />
-            <Route path={PATHS.ADMIN.DASHBOARD_LEGACY} element={<Navigate to={PATHS.ADMIN.DASHBOARD} replace />} />
-            <Route path={PATHS.ROOT} element={<IdentityGate />} />
-            <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
-          </Routes>
-        </AnimatePresence>
-      </Suspense>
-    </ErrorBoundary>
+          {/* Protected Clinical Cluster */}
+          <Route element={<AuthGatedNotifications><MainClinicalLayout /></AuthGatedNotifications>}>
+            <Route path={PATHS.DASHBOARD} element={<RoleRouter />} />
+            <Route path={PATHS.PROFILE} element={<Profile />} />
+            <Route path={PATHS.SETTINGS} element={<Settings />} />
+            <Route path={PATHS.PATIENT.FIND_DOCTORS} element={<FindDoctors />} />
+            <Route path={PATHS.PATIENT.BOOK_APPOINTMENT} element={<BookAppointment />} />
+            <Route path={PATHS.PATIENT.APPOINTMENTS} element={<Appointments />} />
+            <Route path={PATHS.PATIENT.PRESCRIPTIONS} element={<RoleRoute allowedRoles={['patient', 'doctor', 'pharmacist']}><Prescriptions /></RoleRoute>} />
+            <Route path={PATHS.PATIENT.MEDICAL_RECORDS} element={<RoleRoute allowedRoles={['patient']}><MedicalRecords /></RoleRoute>} />
+
+            <Route path={PATHS.DOCTOR.SCHEDULE} element={<RoleRoute allowedRoles={['doctor']}><DoctorScheduleManagement /></RoleRoute>} />
+            <Route path={PATHS.DOCTOR.PATIENTS} element={<RoleRoute allowedRoles={['doctor']}><DoctorPatientList /></RoleRoute>} />
+            <Route path={PATHS.DOCTOR.REPORTS} element={<RoleRoute allowedRoles={['doctor']}><DoctorReports /></RoleRoute>} />
+
+            <Route path={PATHS.PHARMACIST.QUEUE} element={<RoleRoute allowedRoles={['pharmacist']}><PrescriptionQueue /></RoleRoute>} />
+            <Route path={PATHS.PHARMACIST.DISPENSE} element={<RoleRoute allowedRoles={['pharmacist']}><DispensePrescription /></RoleRoute>} />
+            <Route path={PATHS.PHARMACIST.INVENTORY} element={<RoleRoute allowedRoles={['pharmacist']}><Inventory /></RoleRoute>} />
+
+            <Route path={PATHS.ADMIN.DASHBOARD} element={<RoleRoute allowedRoles={['admin']}><AdminDashboard /></RoleRoute>} />
+            <Route path={PATHS.ADMIN.VERIFY_DOCTORS} element={<RoleRoute allowedRoles={['admin']}><VerifyDoctors /></RoleRoute>} />
+            <Route path={PATHS.ADMIN.USERS} element={<RoleRoute allowedRoles={['admin']}><UserManagement /></RoleRoute>} />
+            <Route path={PATHS.ADMIN.SYSTEM_LOGS} element={<RoleRoute allowedRoles={['admin']}><SystemLogs /></RoleRoute>} />
+            <Route path={PATHS.ADMIN.SECURITY} element={<RoleRoute allowedRoles={['admin']}><SecurityMonitoring /></RoleRoute>} />
+            <Route path={PATHS.ADMIN.SESSIONS} element={<RoleRoute allowedRoles={['admin']}><SessionManagement /></RoleRoute>} />
+
+            <Route path={PATHS.CONSENT} element={<TelemedicineGuard><TelemedicineConsent /></TelemedicineGuard>} />
+            <Route path={PATHS.TELEMEDICINE} element={<TelemedicineGuard><TelemedicineDashboard /></TelemedicineGuard>} />
+
+            {/* Fallback Dashboard Home */}
+            <Route path="/dashboard/*" element={<RoleRouter />} />
+          </Route>
+
+          <Route path="/consultation/:id" element={<ProtectedRoute><VideoConsultation /></ProtectedRoute>} />
+          <Route path={PATHS.ROOT} element={<IdentityGate />} />
+          <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
+        </Routes>
+      </AnimatePresence>
+    </Suspense>
   );
-};
+});
+
+AppRoutes.displayName = 'AppRoutes';
 
 const App: React.FC = () => {
-  const handleGlobalError = (error: Error, info: React.ErrorInfo): void => {
-    logger.error('[App] Catastrophic top-level failure:', error.message);
-    auditLogger.log('UNHANDLED_ERROR', {
-      message: error.message,
-      stack: info.componentStack || 'unknown',
-      timestamp: Date.now()
-    });
+  const handleGlobalError = (error: Error, info: React.ErrorInfo) => {
+    logger.error('[App] Boundary Error:', { message: error.message, stack: info.componentStack });
+    auditLogger.log('UNHANDLED_ERROR', { message: error.message, stack: info.componentStack ?? undefined });
   };
 
-  const handleGlobalReset = (): void => {
-    logger.info('[App] Institutional recovery initiated. Purging stale state...');
+  const handleGlobalReset = () => {
+    logger.info('[App] Protocol reset triggered. Clearing temporary states.');
     setTimeout(() => {
       window.location.reload();
     }, 100);
@@ -506,26 +196,24 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary onReset={handleGlobalReset} onError={handleGlobalError}>
-      <Router>
-        <AuthProvider>
-          <ThemeProvider>
-            <ToastProvider>
-              <AlertDialogProvider>
-                <NetworkStatusProvider>
-                  <SessionManagerProvider>
-                    <LanguageProvider>
-                      <AuthGatedNotifications>
-                        <ScrollToTop />
-                        <AppRoutes />
-                      </AuthGatedNotifications>
-                    </LanguageProvider>
-                  </SessionManagerProvider>
-                </NetworkStatusProvider>
-              </AlertDialogProvider>
-            </ToastProvider>
-          </ThemeProvider>
-        </AuthProvider>
-      </Router>
+      <AuthProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <AlertDialogProvider>
+              <NetworkStatusProvider>
+                <SessionManagerProvider>
+                  <LanguageProvider>
+                    <AuthGatedNotifications>
+                      <ScrollToTop />
+                      <AppRoutes />
+                    </AuthGatedNotifications>
+                  </LanguageProvider>
+                </SessionManagerProvider>
+              </NetworkStatusProvider>
+            </AlertDialogProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 };

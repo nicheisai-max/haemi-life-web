@@ -121,9 +121,6 @@ class HaemiChatDatabase extends Dexie {
 
         /**
          * Schema v3: Critical Index Restoration
-         * - Restored [conversationId+createdAt] compound index omitted in v2.
-         * - This fixes the P0 "KeyPath not indexed" runtime crash.
-         * - Applied parity to pendingMessages for sorting consistency.
          */
         this.version(3).stores({
             conversations: 'id, lastMessageAt, updatedAt, localSyncedAt',
@@ -131,10 +128,56 @@ class HaemiChatDatabase extends Dexie {
             presence: 'userId, isOnline, localSyncedAt',
             pendingMessages: 'id, [conversationId+createdAt], conversationId, createdAt, tempId'
         });
+
+        /**
+         * Schema v4: Sequence-based Delta Sync Hardening (Meta-Grade)
+         * - Added sequenceNumber index for gap detection.
+         * - Added [conversationId+sequenceNumber] for efficient per-thread delta fetches.
+         */
+        this.version(4).stores({
+            conversations: 'id, lastMessageAt, updatedAt, localSyncedAt',
+            messages: 'id, [conversationId+createdAt], [conversationId+sequenceNumber], conversationId, createdAt, sequenceNumber, localSyncedAt, tempId',
+            presence: 'userId, isOnline, localSyncedAt',
+            pendingMessages: 'id, [conversationId+createdAt], conversationId, createdAt, tempId'
+        });
     }
 }
 
 const db = new HaemiChatDatabase();
+
+// ... existing mapping helpers ...
+// (I will keep the rest of the mapping helpers and add new public methods below)
+
+/**
+ * Institutional Gap Detection: Retrieves the highest sequence number for a thread.
+ */
+async function getLastSequenceNumber(conversationId: ConversationId): Promise<number> {
+    try {
+        const last = await db.messages
+            .where('[conversationId+sequenceNumber]')
+            .between([conversationId, Dexie.minKey], [conversationId, Dexie.maxKey])
+            .last();
+        return last?.sequenceNumber ?? 0;
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Index lookup failure';
+        logger.error('[Storage] Failed to get last sequence number', msg);
+        return 0;
+    }
+}
+
+/**
+ * Retrieves the global maximum sequence number across all threads.
+ */
+async function getGlobalMaxSequenceNumber(): Promise<number> {
+    try {
+        const last = await db.messages.orderBy('sequenceNumber').last();
+        return last?.sequenceNumber ?? 0;
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Global index failure';
+        logger.error('[Storage] Failed to get global max sequence', msg);
+        return 0;
+    }
+}
 
 // ─── 3. MAPPING HELPERS ───────────────────────────────────────────────────────
 
@@ -546,6 +589,8 @@ export const storageService = {
     putMessages,
     getMessagesByConversation,
     getLastSyncTimestamp,
+    getLastSequenceNumber,
+    getGlobalMaxSequenceNumber,
     markMessagesDelivered,
     markMessagesRead,
     // Presence

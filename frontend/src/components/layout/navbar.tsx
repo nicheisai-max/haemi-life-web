@@ -23,6 +23,7 @@ import { CommandCenter } from '../ui/command-center';
 import { NotificationMenu } from '../ui/notification-menu';
 import { MobileSidebar } from './mobile-sidebar';
 import { getInitials } from '@/utils/avatar.resolver';
+import { PATHS } from '@/routes/paths';
 
 // Import Real Assets
 import doctorImg from '../../assets/images/doctors/doctor_01.jpg';
@@ -82,7 +83,7 @@ export const Navbar: React.FC = () => {
                         <MobileSidebar />
                     </div>
                     <Link
-                        to="/"
+                        to={PATHS.ROOT}
                         className="flex items-center transition-opacity hover:opacity-90"
                         aria-label="Haemi Life Home"
                     >
@@ -144,7 +145,7 @@ export const Navbar: React.FC = () => {
                                 <div className="py-1">
                                     <DropdownMenuItem 
                                         className="flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-[var(--card-radius)] hover:bg-primary/5 text-slate-700 dark:text-slate-300 transition-colors group mb-0.5"
-                                        onClick={() => navigate('/profile')}
+                                        onClick={() => navigate(PATHS.PROFILE)}
                                     >
                                         <UserIcon className="w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
                                         <span className="text-sm font-medium">Your Profile</span>
@@ -152,7 +153,7 @@ export const Navbar: React.FC = () => {
 
                                     <DropdownMenuItem 
                                         className="flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-[var(--card-radius)] hover:bg-primary/5 text-slate-700 dark:text-slate-300 transition-colors group mb-0.5"
-                                        onClick={() => navigate('/settings')}
+                                        onClick={() => navigate(PATHS.SETTINGS)}
                                     >
                                         <Settings className="w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
                                         <span className="text-sm font-medium">Settings</span>

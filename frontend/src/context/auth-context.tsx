@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 import { logger, auditLogger } from '../utils/logger';
@@ -8,10 +8,10 @@ import { AuthContext } from './auth-context-def';
 import { isAuthError, type User, type LoginCredentials, type SignupCredentials } from '../types/auth.types';
 import {
     safeParseJSON,
-    isJWTPayload,
     isRefreshTokenPayload,
     isUser
 } from '../utils/type-guards';
+import { decodeJWT } from '../utils/jwt';
 
 interface AuthState {
     user: User | null;
@@ -22,18 +22,7 @@ interface AuthState {
     sessionTimeout: number | null; // minutes
 }
 
-// ─── Surgical JWT Decoder (No dependencies) ──────────────────────────────────
-const decodeJWT = (token: string | null) => {
-    if (!token) return null;
-    try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonString = atob(base64);
-        return safeParseJSON(jsonString, isJWTPayload);
-    } catch {
-        return null;
-    }
-};
+
 
 // ─── MODULE-LEVEL BOOTSTRAP GUARDS ─────────────────────────────────────────
 let hasGlobalBootstrapExecuted = false;
@@ -111,15 +100,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             offset = serverMs - Date.now();
         }
 
-        setAuthState(prev => ({
-            ...prev,
-            user,
-            token,
-            authStatus: status,
-            profileImageVersion: Date.now(),
-            serverOffset: offset,
-            sessionTimeout: sessionTimeout !== undefined ? sessionTimeout : prev.sessionTimeout
-        }));
+        setAuthState(prev => {
+            const hasUserChanged = prev.user?.id !== user?.id;
+            return {
+                ...prev,
+                user,
+                token,
+                authStatus: status,
+                profileImageVersion: hasUserChanged ? Date.now() : prev.profileImageVersion,
+                serverOffset: offset,
+                sessionTimeout: sessionTimeout !== undefined ? sessionTimeout : prev.sessionTimeout
+            };
+        });
         
         logger.info(`[Auth] Identity Commit: ${status} (Offset: ${offset}ms)`);
     }, []);
@@ -589,30 +581,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initAuth();
     }, [commitAuthState]);
 
-    return (
-        <AuthContext.Provider value={{
-            user: authState.user,
-            token: authState.token,
-            authStatus: authState.authStatus,
-            profileImageVersion: authState.profileImageVersion,
-            login,
-            signup,
-            logout,
-            refreshUser,
-            isRefreshing,
-            isTokenNearDeath,
-            isLoading: ['initializing', 'auth_check', 'onboarding_check'].includes(authState.authStatus),
-            // P0.4 FIX: isAuthenticated must NOT be falsified by isTokenNearDeath.
-            // When a token is within 10s of expiry, the background refresh interval fires.
-            // If isAuthenticated became false here, ProtectedRoute would redirect to /login
-            // BEFORE the refresh completes — a race condition that logs out valid users.
-            // isTokenNearDeath is exposed separately so ProtectedRoute can show a loader
-            // while refreshing, without triggering a redirect. API calls are gated in api.ts.
-            isAuthenticated: (
+    const contextValue = React.useMemo(() => ({
+        user: authState.user,
+        token: authState.token,
+        authStatus: authState.authStatus,
+        profileImageVersion: authState.profileImageVersion,
+        login,
+        signup,
+        logout,
+        refreshUser,
+        isRefreshing,
+        isTokenNearDeath,
+        isLoading: ['initializing', 'auth_check', 'onboarding_check'].includes(authState.authStatus),
+        isAuthenticated: (() => {
+            const isAuth = (
                 authState.authStatus === 'authenticated' ||
                 (authState.authStatus === 'app_ready' && authState.user !== null)
-            ) && authState.token !== null
-        }}>
+            ) && authState.token !== null;
+            
+            if (!isAuth || !authState.token) return false;
+            
+            try {
+                const payload = decodeJWT(authState.token);
+                if (!payload) return false;
+                
+                const now = Math.floor(Date.now() / 1000);
+                return payload.exp > now;
+            } catch (err: unknown) {
+                logger.error('[Auth] Centralized expiry validation systemic failure', {
+                    error: err instanceof Error ? err.message : String(err)
+                });
+                return false;
+            }
+        })()
+    }), [
+        authState.user, 
+        authState.token, 
+        authState.authStatus, 
+        authState.profileImageVersion, 
+        isRefreshing, 
+        isTokenNearDeath,
+        login, 
+        signup, 
+        logout, 
+        refreshUser
+    ]);
+
+    return (
+        <AuthContext.Provider value={contextValue}>
             {children}
         </AuthContext.Provider>
     );

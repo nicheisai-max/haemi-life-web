@@ -16,7 +16,7 @@ export const PATHS = {
     PRIVACY: '/privacy-policy',
     TERMS: '/terms-of-service',
     HELP: '/help',
-    CONSENT: '/consent',
+    CONSENT: '/telemedicine/consent',
     TELEMEDICINE: '/telemedicine',
     ONBOARDING: '/onboarding',
 
@@ -27,7 +27,7 @@ export const PATHS = {
     PATIENT: {
         DASHBOARD: '/dashboard',
         APPOINTMENTS: '/appointments',
-        BOOK_APPOINTMENT: '/book-appointment',
+        BOOK_APPOINTMENT: '/appointments/book',
         PRESCRIPTIONS: '/prescriptions',
         MEDICAL_RECORDS: '/records',
         FIND_DOCTORS: '/doctors',

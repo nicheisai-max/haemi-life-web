@@ -109,12 +109,12 @@ async function performHealthAudit(): Promise<void> {
         `, ['public']);
         
         const actualCount = parseInt(res.rows[0].count);
-        const INSTITUTIONAL_TARGET = 39;
+        const INSTITUTIONAL_TARGET = 42;
 
         console.log(`📊 Structural Audit: Detected ${actualCount} Institutional Tables`);
         
         if (actualCount === INSTITUTIONAL_TARGET) {
-            console.log('✅ Institutional Purity: VERIFIED (Exact 39-Table Parity)');
+            console.log(`✅ Institutional Purity: VERIFIED (Exact ${INSTITUTIONAL_TARGET}-Table Parity)`);
         } else {
             console.error(`❌ GOVERNANCE BREACH: Discrepancy detected! Expected ${INSTITUTIONAL_TARGET}, found ${actualCount}.`);
             process.exit(1);

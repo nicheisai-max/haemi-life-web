@@ -12,6 +12,7 @@ interface BookAppointmentRequest {
     appointmentTime: string;
     consultationType: 'in-person' | 'video';
     reason: string;
+    screeningRecordId?: string;
 }
 
 interface UpdateAppointmentRequest {
@@ -21,7 +22,7 @@ interface UpdateAppointmentRequest {
 
 // Book a new appointment (Patient)
 export const bookAppointment = async (req: Request, res: Response) => {
-    const { doctorId, appointmentDate, appointmentTime, consultationType, reason } = req.body as BookAppointmentRequest;
+    const { doctorId, appointmentDate, appointmentTime, consultationType, reason, screeningRecordId } = req.body as BookAppointmentRequest;
     const user = req.user;
 
     try {
@@ -59,6 +60,14 @@ export const bookAppointment = async (req: Request, res: Response) => {
             consultation_type: consultationType,
             reason
         });
+        
+        // --- Clinical Screening Linkage ---
+        if (screeningRecordId) {
+            const { screeningRepository } = await import('../repositories/screening.repository');
+            await screeningRepository.linkToAppointment(screeningRecordId, appointment.id);
+            logger.info(`[AppointmentController] Linked screening ${screeningRecordId} to appointment ${appointment.id}`);
+        }
+        // ----------------------------------
 
         // Fetch doctor name for notification messages
         const doctorResult = await pool.query<{ name: string }>('SELECT name FROM users WHERE id = $1', [doctorId]);

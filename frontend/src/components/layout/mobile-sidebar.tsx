@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "../ui/logo";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from 'react-router-dom';
+import { PATHS } from '@/routes/paths';
 
 export const MobileSidebar: React.FC = () => {
     const { user } = useAuth();
@@ -27,7 +28,7 @@ export const MobileSidebar: React.FC = () => {
                     Access dashboard, medical records, and healthcare services.
                 </SheetDescription>
                 <div className="p-6">
-                    <Link to="/" onClick={() => setOpen(false)}>
+                    <Link to={PATHS.ROOT} onClick={() => setOpen(false)}>
                         <Logo size="nav" />
                     </Link>
                 </div>

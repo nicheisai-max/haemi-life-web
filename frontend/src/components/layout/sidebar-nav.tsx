@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useNavigation } from '../../hooks/use-navigation';
+import { PATHS } from '@/routes/paths';
 
 
 export const SidebarNav: React.FC<{ onItemClick?: () => void }> = ({ onItemClick }) => {
@@ -10,7 +11,7 @@ export const SidebarNav: React.FC<{ onItemClick?: () => void }> = ({ onItemClick
     return (
         <div className="space-y-1 relative">
             {items.map((item) => {
-                const isDashboardRoot = item.path === '/dashboard' || item.path === '/admin';
+                const isDashboardRoot = item.path === PATHS.DASHBOARD || item.path === PATHS.ADMIN.DASHBOARD;
 
                 return (
                     <NavLink

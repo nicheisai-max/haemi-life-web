@@ -9,8 +9,6 @@ import {
     Message, 
     Attachment, 
     AttachmentDTO,
-    PresenceRecord,
-    PresenceApiResponse,
     RawParticipant,
     normalizeParticipant,
     ChatApiResponse,
@@ -24,16 +22,16 @@ import { logger } from '../utils/logger';
 import { storageService } from '../services/storage.service';
 import { ApiResponse } from '../types/auth.types';
 import axios from 'axios';
+import { usePresence } from '../hooks/use-presence';
 
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, token, isAuthenticated } = useAuth();
+    const { typingUsers, fetchPresence } = usePresence();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(false);
-    const [typingUsers, setTypingUsers] = useState<UserId[]>([]);
-    const [presence, setPresence] = useState<Record<UserId, PresenceRecord>>({});
     const [isHydrated, setIsHydrated] = useState(false);
     // Defensive check to ensure state is in scope for async handlers
     if (typeof typingUsers === 'undefined') {
@@ -41,13 +39,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     const activeConversationRef = useRef<Conversation | null>(null);
     const lastSyncRef = useRef<string>(new Date().toISOString());
-    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const isTypingRef = useRef<boolean>(false);
     const lastReadRequestRef = useRef<Record<string, number>>({});
     const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
     const isMountedRef = useRef(true);
     const syncRetryCountRef = useRef<number>(0);
     const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastSequenceRef = useRef<number>(0);
     // BUG-8 FIX: conversationsRef allows syncPresenceFallback to read the current
     // conversations list WITHOUT being included in its dependency array.
     const conversationsRef = useRef<Conversation[]>([]);
@@ -78,73 +75,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeConversationRef.current = activeConversation;
     }, [activeConversation]);
 
-    const fetchPresenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const activePresenceRequestRef = useRef<Promise<void> | null>(null);
-    const pendingPresenceIdsRef = useRef<Set<UserId>>(new Set());
 
-    const fetchPresence = useCallback(async (userIds: UserId[]) => {
-        if (!isAuthenticated || !userIds || userIds.length === 0) return;
-
-        // 1. Add to pending queue
-        // P0 PROTOCOL: EXACT ID MATCHING (NO NORMALIZATION)
-        userIds.forEach(id => pendingPresenceIdsRef.current.add(String(id) as UserId));
-
-        // 2. Clear existing timeout to debounce
-        if (fetchPresenceTimeoutRef.current) clearTimeout(fetchPresenceTimeoutRef.current);
-
-        // 3. Set new timeout — 300ms debounce window
-        fetchPresenceTimeoutRef.current = setTimeout(async () => {
-            if (!isAuthenticated) return;
-            // 4. Guard: If a request is already in flight, yield
-            if (activePresenceRequestRef.current) return;
-
-            const idsToFetch = Array.from(pendingPresenceIdsRef.current);
-            if (idsToFetch.length === 0) return;
-
-            // Clear queue immediately to avoid duplicates in next cycle
-            pendingPresenceIdsRef.current.clear();
-
-            try {
-                const doFetch = async (): Promise<void> => {
-                    // Uses centralized PresenceRecord & PresenceApiResponse from types/chat.ts
-                    const res = await api.get<PresenceApiResponse | Record<string, PresenceRecord>>(
-                        `/chat/presence?userIds=${idsToFetch.join(',')}`
-                    );
-
-                    if (res.data) {
-                        const responseData = res.data;
-                        let actualPayload: Record<string, PresenceRecord> = {};
-
-                        if (responseData && typeof responseData === 'object') {
-                            const isEnvelope = 'data' in responseData &&
-                                responseData.data &&
-                                typeof responseData.data === 'object' &&
-                                !Array.isArray(responseData.data);
-
-                            if (isEnvelope) {
-                                actualPayload = (responseData as { data: Record<string, PresenceRecord> }).data;
-                            } else {
-                                actualPayload = responseData as Record<string, PresenceRecord>;
-                            }
-                        }
-
-                        setPresence(prev => ({ ...prev, ...actualPayload }));
-                        // Persist to IndexedDB in background
-                        storageService.putPresence(actualPayload).catch((e: unknown) => {
-                            logger.error('[ChatProvider] Presence persistence failed', e instanceof Error ? e.message : String(e));
-                        });
-                    }
-                };
-
-                activePresenceRequestRef.current = doFetch();
-                await activePresenceRequestRef.current;
-            } catch (err: unknown) {
-                logger.error('[ChatProvider] Failed to fetch presence:', err instanceof Error ? err.message : String(err));
-            } finally {
-                activePresenceRequestRef.current = null;
-            }
-        }, 300);
-    }, [isAuthenticated]);
     // ─── 2. HYDRATION: Local-First Strategy ─────────────────────────
     useEffect(() => {
         if (!isAuthenticated || !user?.id) return;
@@ -173,73 +104,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // Fetch presence for hydrated participants
                     const partIds = [...new Set(localConversations.flatMap(c => c.participants.map(p => p.id as UserId)))];
                     if (partIds.length > 0) fetchPresence(partIds);
+
+                    // 🧬 SEED SEQUENCE CURSOR (Meta-Grade)
+                    const maxSeq = await storageService.getGlobalMaxSequenceNumber();
+                    lastSequenceRef.current = maxSeq;
+                    logger.debug(`[ChatProvider] Sequence cursor seeded: ${maxSeq}`);
                 }
             } catch (err: unknown) {
-                const errorMessage = err instanceof Error ? err.message : String(err);
-                logger.error('[ChatProvider] Hydration failed:', errorMessage);
+                const errorMessage = err instanceof Error ? err.message : 'Institutional data breach or persistence failure';
+                logger.error('[ChatProvider] Hydration failed', errorMessage);
             }
         };
 
         hydrate();
     }, [isAuthenticated, user?.id, fetchPresence]);
 
-    // ─── D12 REMEDIATION: Presence Polling Fallback ─────────────────────────
-    // When the socket is disconnected (NAT blip, server restart), presence data
-    // goes stale. This effect provides a 15-30s polling window as a secondary
-    // transport, only active when socketService.isConnected() is false.
-    // BUG-8 FIX: syncPresenceFallback now reads participant IDs from conversationsRef
-    // instead of the conversations state prop, removing it from the dependency array.
-    // Previously: conversations in deps => callback recreated on every message =>
-    // 30s polling interval reset on every message => polling never fired during active chat.
-    const syncPresenceFallback = useCallback((): void => {
-        if (!isAuthenticated || !user?.id) return;
-        
-        if (!socketService.isConnected()) {
-            const participantIds: UserId[] = [...new Set(
-                conversationsRef.current.flatMap((c: Conversation) => c.participants.map((p) => p.id as UserId))
-            )];
-            if (participantIds.length > 0) {
-                fetchPresence(participantIds);
-                logger.info(`[ChatProvider] Reactive presence sync triggered (${participantIds.length} users)`);
-            }
-        }
-    }, [isAuthenticated, user, fetchPresence]); // conversations intentionally removed
 
-    useEffect(() => {
-        if (!isAuthenticated || !user?.id) return;
-
-        // P0: Immediate reactive sync on disconnect to eliminate the 30s lag
-        socketService.on('disconnect', syncPresenceFallback);
-        
-        const intervalId = setInterval(syncPresenceFallback, 30000); // 30s institutional window
-        
-        return () => {
-            socketService.off('disconnect', syncPresenceFallback);
-            clearInterval(intervalId);
-        };
-    }, [isAuthenticated, user?.id, syncPresenceFallback]);
-
-    // ─── Phase 16: Institutional Heartbeat (Zero-Drift Sync) ────────────────
-    // BUG-7 FIX: Only ONE heartbeat interval is permitted. The duplicate previously
-    // at the bottom of this file has been removed. That variant gated on
-    // socketService.isConnected() at SETUP TIME which caused the heartbeat to never
-    // start if the socket connected after the effect ran (common during reconnect).
-    // This variant is authoritative: starts unconditionally when authenticated and
-    // checks connection state inside each tick (correct pattern — no false starts).
-    useEffect(() => {
-        if (!isAuthenticated || !user?.id) return;
-
-        const heartbeatInterval = setInterval((): void => {
-            if (socketService.isConnected()) {
-                socketService.emit('heartbeat');
-            }
-        }, 30000); // 30s Institutional Window
-
-        return () => {
-            clearInterval(heartbeatInterval);
-            logger.info('[ChatProvider] Heartbeat interval cleared on auth state change.');
-        };
-    }, [isAuthenticated, user?.id]);
 
     const internalFetchConversations = useCallback(async (): Promise<Conversation[] | void> => {
         if (!isAuthenticated) return;
@@ -303,13 +183,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             return uniqueConversations;
         } catch (err: unknown) {
-            if (axios.isCancel(err)) return; // Tactical suppression of network aborts
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            logger.error('[ChatProvider] Failed to fetch conversations:', errorMessage);
-            // P0: Escape hatch to prevent indefinite loading hang on "Securing clinical data..." 
+            if (axios.isCancel(err)) return; 
+            const errorMessage = err instanceof Error ? err.message : 'Network layer synchronization failure';
+            logger.error('[ChatProvider] Failed to fetch conversations', errorMessage);
             if (isMountedRef.current) {
                 setLoading(false);
-                setIsHydrated(true); // P0: Certification of source parity (Meta-Grade)
+                setIsHydrated(true); 
             }
         }
     }, [isAuthenticated, fetchPresence, getAbortController]);
@@ -405,63 +284,42 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
 
-        const onUserStatus: ServerToClientEvents["userStatus"] = (data) => {
-            if (!data.userId) return;
 
-            setPresence(prev => {
-                const existing = prev[data.userId as UserId];
-                // P0: Non-Destructive Merge: Ensure we never overwrite metadata with null activities
-                return {
-                    ...prev,
-                    [data.userId as UserId]: { 
-                        isOnline: data.isOnline, 
-                        last_activity: data.last_activity || existing?.last_activity || new Date().toISOString() 
-                    }
-                };
-            });
-            
-            logger.debug('[ChatProvider] Presence heartbeat synchronized', { 
-                userId: data.userId, 
-                isOnline: data.isOnline 
-            });
-        };
 
         const syncMissedMessages = async (): Promise<void> => {
             try {
-                const res = await api.get<{ data: Message[] } | Message[]>(`/chat/sync?since=${lastSyncRef.current}`);
-                // P0 FIX: Hardened unwrapping for explicit JSON envelope normalization
+                // 🧬 DELTA SYNC PROTOCOL: Request messages since the last known sequence ID
+                const res = await api.get<{ data: Message[] } | Message[]>(
+                    `/chat/sync?lastSeqId=${lastSequenceRef.current}&since=${lastSyncRef.current}`
+                );
+                
                 const payload = res.data;
-
                 if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { data: unknown }).data)) {
-                    throw new Error('Invalid sync response');
+                    throw new Error('Invalid delta sync response');
                 }
 
                 const missedMessages: Message[] = (payload as { data: Message[] }).data;
 
                 if (missedMessages.length > 0) {
+                    logger.info(`[ChatProvider] Delta Recovery: Found ${missedMessages.length} messages.`);
                     for (const msg of missedMessages) {
                         await onReceiveMessage(msg);
                     }
-                    logger.info(`[ChatProvider] Recovered ${missedMessages.length} missed messages.`);
                 }
-                // BUG-9 FIX: Advance the sync cursor AFTER successful processing.
-                // Previously lastSyncRef was NEVER updated, causing every reconnect to
-                // replay ALL messages since component mount. On long sessions this payload
-                // grew indefinitely and caused duplicate message processing and re-renders.
+                
+                // Advance cursors
                 lastSyncRef.current = new Date().toISOString();
-                logger.debug('[ChatProvider] Sync cursor advanced.', { cursor: lastSyncRef.current });
+                logger.debug('[ChatProvider] Sync cursors advanced', { 
+                    time: lastSyncRef.current, 
+                    seq: lastSequenceRef.current 
+                });
             } catch (err: unknown) {
-                logger.error('[ChatProvider] Offline recovery failed', err instanceof Error ? err.message : String(err));
+                const msg = err instanceof Error ? err.message : 'Delta recovery handshake failed';
+                logger.error('[ChatProvider] Offline recovery failed', msg);
             }
         };
 
-        const onTypingStarted = (data: { userId: UserId; conversationId: ConversationId; name: string }) => {
-            setTypingUsers((prev) => [...new Set([...prev, data.userId])]);
-        };
 
-        const onTypingStopped = (data: { userId: UserId; conversationId: ConversationId; name: string }) => {
-            setTypingUsers((prev) => prev.filter(id => id !== data.userId));
-        };
 
 
         // BUG-3 FIX: activeConversationRef guard REMOVED.
@@ -543,6 +401,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         const onReceiveMessage: ServerToClientEvents["messageReceived"] = async (message) => {
+            // 🧬 Institutional Sequence Tracking (Meta-Grade)
+            if (message.sequenceNumber && message.sequenceNumber > lastSequenceRef.current) {
+                lastSequenceRef.current = message.sequenceNumber;
+            }
+
             const decryptedContent = await decrypt(message.content);
             const decryptedReplyContent = message.replyTo ? await decrypt(message.replyTo.content) : undefined;
 
@@ -670,135 +533,85 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         };
 
-        socketService.connect(token);
-        socketService.on('typingStarted', onTypingStarted);
-        socketService.on('typingStopped', onTypingStopped);
-        socketService.on('messageRead', onMessageRead);
-        socketService.on('messageDelivered', onMessageDelivered); // NEW: Batched Sync
-        socketService.on('messageReceived', onReceiveMessage);
-        socketService.on('messageDeleted', onMessageDeleted);
-        socketService.on('messageReaction', onMessageReaction);
-        socketService.on('userStatus', onUserStatus);
-        socketService.on('reconnect', syncMissedMessages);
-        socketService.on('localMessageDeleted', onLocalMessageDeleted);
+        // ─── Phase 16: Institutional Socket Integration (Google/Meta Grade) ───
+        // Root Cause Remediation: connection logic is now delegated to the 
+        // socketService singleton. This effect focuses EXCLUSIVELY on 
+        // listener orchestration.
 
-        // ─── D9 REMEDIATION: Token Refresh-on-Reconnect ──────────────────────────
-        // socket.io-client freezes `socket.auth` at the moment `connect()` is first
-        // called. After a proactive token rotation the in-memory credential in api.ts
-        // is fresh, but the socket still holds the original stale token in its
-        // auth closure. `reconnect_attempt` fires BEFORE each connection handshake,
-        // giving us the correct window to push the freshest token to the socket.
         const onReconnectAttempt = (_attempt: number): void => {
             const freshToken = getAccessToken();
             if (freshToken !== null) {
                 socketService.updateAuthToken(freshToken);
             }
         };
+
+        const onReconnect = (): void => {
+            syncMissedMessages();
+        };
+
+        // Hoist listeners BEFORE connection to prevent ReferenceErrors during sync/connect
+        socketService.on('messageRead', onMessageRead);
+        socketService.on('messageDelivered', onMessageDelivered);
+        socketService.on('messageReceived', onReceiveMessage);
+        socketService.on('messageDeleted', onMessageDeleted);
+        socketService.on('messageReaction', onMessageReaction);
+        socketService.on('reconnect', onReconnect);
+        socketService.on('localMessageDeleted', onLocalMessageDeleted);
         socketService.on('reconnect_attempt', onReconnectAttempt);
 
-        // ─── Phase 14: Token Hydration Safety Guard ─────────────────────────────
-        // Root Cause (2026-04-09): `isAuthenticated` transitions to `true` during a
-        // proactive refresh cycle BEFORE the fresh token is written to the in-memory
-        // `accessToken` closure in api.ts. In this window, `fetchConversations()`
-        // fires without a valid Authorization header → spurious 401 on /chat/conversations.
-        //
-        // Fix: Validate the current token before the initial fetch. If within the
-        // near-death threshold (<= 10s), defer until the `auth:token-refreshed`
-        // CustomEvent confirms a fresh credential is available in memory.
-        const TOKEN_NEAR_DEATH_THRESHOLD_MS = 10_000 as const;
+        // Atomic Connection Initiation
+        socketService.connect(token).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : 'Socket handshake aborted';
+            logger.error('[ChatProvider] Connection failure', msg);
+        });
 
+        // Institutional Token Hydration Safety
+        const currentToken = token ?? sessionStorage.getItem('token');
+        let deferredFetchFired = false;
+        const onTokenRefreshed = (): void => { 
+            if (!deferredFetchFired) {
+                fetchConversations(); 
+                deferredFetchFired = true;
+            }
+        };
+
+        const TOKEN_NEAR_DEATH_THRESHOLD_MS = 10_000 as const;
         const isViableToken = (rawToken: string | null): boolean => {
             if (!rawToken) return false;
             try {
                 const parts = rawToken.split('.');
                 if (parts.length !== 3) return false;
-                const part1 = parts[1];
-                if (!part1) return false;
-                const payload: unknown = JSON.parse(
-                    atob(part1.replace(/-/g, '+').replace(/_/g, '/'))
-                );
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    !('exp' in payload) ||
-                    typeof (payload as { exp: unknown }).exp !== 'number'
-                ) return false;
-                return ((payload as { exp: number }).exp * 1000) > (Date.now() + TOKEN_NEAR_DEATH_THRESHOLD_MS);
-            } catch {
-                return false;
-            }
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                return (payload.exp * 1000) > (Date.now() + TOKEN_NEAR_DEATH_THRESHOLD_MS);
+            } catch { return false; }
         };
 
-        const currentToken = token ?? sessionStorage.getItem('token');
-        let deferredFetchListener: (() => void) | null = null;
-
         if (isViableToken(currentToken)) {
-            // Token is healthy — fire the initial fetch immediately
             fetchConversations();
         } else {
-            // Token is absent or within near-death window — defer until refresh confirms
-            logger.info('[ChatProvider] Token near-death or absent. Deferring fetchConversations until auth:token-refreshed fires.');
-            const onTokenRefreshed = (): void => { fetchConversations(); };
-            deferredFetchListener = onTokenRefreshed;
+            logger.info('[ChatProvider] Token near-death. Deferring fetchConversations.');
             window.addEventListener('auth:token-refreshed', onTokenRefreshed, { once: true });
         }
 
         return () => {
-            socketService.off('userStatus', onUserStatus);
-            socketService.off('typingStarted', onTypingStarted);
-            socketService.off('typingStopped', onTypingStopped);
             socketService.off('messageRead', onMessageRead);
             socketService.off('messageDelivered', onMessageDelivered);
             socketService.off('messageReceived', onReceiveMessage);
             socketService.off('messageDeleted', onMessageDeleted);
             socketService.off('messageReaction', onMessageReaction);
-            // D2 + D9 REMEDIATION: Deregister the two new handlers on unmount / auth-loss
             socketService.off('localMessageDeleted', onLocalMessageDeleted);
+            socketService.off('reconnect', onReconnect);
             socketService.off('reconnect_attempt', onReconnectAttempt);
-
-            // Deferred fetch cleanup: remove stale listener if component unmounts before
-            // the refresh cycle completes. `{ once: true }` auto-removes on fire,
-            // but this guards pre-fire unmount scenarios explicitly.
-            if (deferredFetchListener !== null) {
-                window.removeEventListener('auth:token-refreshed', deferredFetchListener);
-                deferredFetchListener = null;
+            
+            if (!deferredFetchFired) {
+                window.removeEventListener('auth:token-refreshed', onTokenRefreshed);
             }
-
-            // Removed Duplicate Heartbeat. See top of file for the authoritative version.
-            // P0: Physical Disconnection on unmount/auth-loss
-            // This ensures the backend disconnect event fires immediately.
-            socketService.disconnect();
+            
+            socketService.destroy();
         };
 
     }, [isAuthenticated, user, token, fetchConversations]);
 
-    // ─── 🧪 INSTITUTIONAL HEARTBEAT EMITTER (Meta-Grade) ────────────────────
-    // P0: Zero-drift presence synchronization. We emit a heartbeat every 30s
-    // to maintain the backend's active_connections source of truth.
-    // Phase 3 Guard: Heartbeat is strictly gated on isAuthenticated.
-    // If the session is terminated (cross-tab logout), this effect will
-    // self-terminate on the next re-render cycle, preventing ghost emissions.
-    useEffect(() => {
-        if (!isAuthenticated) {
-            logger.info('[ChatProvider] Heartbeat suppressed: session not active.');
-            return;
-        }
-        if (!socketService.isConnected()) return;
-
-        const heartbeatInterval = setInterval(() => {
-            // Institutional double-check: guard before each individual emission
-            if (!socketService.isConnected()) {
-                clearInterval(heartbeatInterval);
-                return;
-            }
-            socketService.emit('heartbeat');
-        }, 30000); // 30s Institutional Heartbeat
-
-        return () => {
-            clearInterval(heartbeatInterval);
-            logger.info('[ChatProvider] Heartbeat cleared on session state change.');
-        };
-    }, [isAuthenticated]);
 
     // ─── Phase 3: Hardened Outbox Sync (Exponential Backoff) ──────────────────
     useEffect(() => {
@@ -943,10 +756,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             if (res.data) {
-                const realMessage = {
+                const realMessage: Message = {
                     ...res.data.data,
                     isMe: true
                 };
+
+                // 🧬 Advance Sequence Cursor
+                if (realMessage.sequenceNumber && realMessage.sequenceNumber > lastSequenceRef.current) {
+                    lastSequenceRef.current = realMessage.sequenceNumber;
+                }
 
                 // 4. STORAGE RETIREMENT: Remove from Outbox, commit to Permanent Store
                 await storageService.removePendingMessage(tempId as MessageId);
@@ -1017,29 +835,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [isAuthenticated, selectConversation]);
 
-    const emitTyping = useCallback((conversationId: ConversationId, isTyping: boolean) => {
-        if (!user || !isAuthenticated) return;
 
-        // Enterprise Throttling: Start immediately, stop after inactivity
-        if (isTyping) {
-            if (!isTypingRef.current) {
-                isTypingRef.current = true;
-                socketService.emit('typingStarted', { conversationId, name: user.name || 'User' });
-            }
-
-            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-            typingTimeoutRef.current = setTimeout(() => {
-                isTypingRef.current = false;
-                socketService.emit('typingStopped', { conversationId, name: user.name || 'User' });
-            }, 3000); // 3 second inactivity timeout
-        } else {
-            if (isTypingRef.current) {
-                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                isTypingRef.current = false;
-                socketService.emit('typingStopped', { conversationId, name: user.name || 'User' });
-            }
-        }
-    }, [user, isAuthenticated]);
 
     const uploadAttachment = useCallback(async (file: File): Promise<AttachmentDTO | null> => {
         if (!isAuthenticated) return null;
@@ -1175,9 +971,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return (
         <ChatContext.Provider value={{
-            conversations, activeConversation, messages, loading, typingUsers, presence, isHydrated,
+            conversations, activeConversation, messages, loading, isHydrated,
             fetchConversations, selectConversation, sendMessage, startNewConversation,
-            emitTyping, uploadAttachment, deleteMessage, reactToMessage, markAsRead, markMessageAsRead, user
+            uploadAttachment, deleteMessage, reactToMessage, markAsRead, markMessageAsRead, user
         }}>
             {children}
         </ChatContext.Provider>

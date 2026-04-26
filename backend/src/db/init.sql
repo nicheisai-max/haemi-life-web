@@ -1,5 +1,5 @@
 -- =====================================================
--- HAEMI LIFE DATABASE INITIALIZATION (v4.0)
+-- HAEMI LIFE DATABASE INITIALIZATION (v5.0)
 -- "Gateway to Persistence"
 -- Synchronized with Platinum Institutional Sync (v10.5)
 -- Last updated: 2026-04-06 (Institutional Column Hardening)
