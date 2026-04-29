@@ -42,39 +42,7 @@ export const HealthScreeningForm: React.FC<HealthScreeningFormProps> = ({
     // 🩺 CONCURRENCY GUARD
     const latestRequestId = useRef<number>(0);
 
-    // 🛡️ DEBOUNCED AI NOTIFIER (Institutional Resilience)
-    useEffect(() => {
-        if (loading || questions.length === 0) return;
-
-        const debounceTimer = setTimeout(() => {
-            void notifyParent(responses, questions);
-        }, 400); // Optimized 400ms Grace Period
-
-        return () => clearTimeout(debounceTimer);
-    }, [responses, questions, loading, notifyParent]);
-
-    useEffect(() => {
-        const bootSequence = async (): Promise<void> => {
-            try {
-                const activeQuestions = await screeningService.getActiveQuestions();
-                setQuestions(activeQuestions);
-
-                const initialResponses: Record<string, boolean> = {};
-                activeQuestions.forEach(q => {
-                    initialResponses[q.id] = false;
-                });
-                setResponses(initialResponses);
-            } catch (error: unknown) {
-                const msg = error instanceof Error ? error.message : 'Unknown clinical load failure';
-                logger.error('[HealthScreeningForm] Boot failure', { msg });
-            } finally {
-                setLoading(false);
-            }
-        };
-        void bootSequence();
-    }, []);
-
-    const notifyParent = async (currentResponses: Record<string, boolean>, currentQuestions: ScreeningQuestion[]): Promise<void> => {
+    const notifyParent = useCallback(async (currentResponses: Record<string, boolean>, currentQuestions: ScreeningQuestion[]): Promise<void> => {
         const requestId = ++latestRequestId.current;
         setIsAnalyzing(true);
 
@@ -113,7 +81,40 @@ export const HealthScreeningForm: React.FC<HealthScreeningFormProps> = ({
                 setIsAnalyzing(false);
             }
         }
-    };
+    }, [setIsAnalyzing]);
+
+    // 🛡️ DEBOUNCED AI NOTIFIER (Institutional Resilience)
+    useEffect(() => {
+        if (loading || questions.length === 0) return;
+
+        const debounceTimer = setTimeout(() => {
+            void notifyParent(responses, questions);
+        }, 400); // Optimized 400ms Grace Period
+
+        return () => clearTimeout(debounceTimer);
+    }, [responses, questions, loading, notifyParent]);
+
+    useEffect(() => {
+        const bootSequence = async (): Promise<void> => {
+            try {
+                const activeQuestions = await screeningService.getActiveQuestions();
+                setQuestions(activeQuestions);
+
+                const initialResponses: Record<string, boolean> = {};
+                activeQuestions.forEach(q => {
+                    initialResponses[q.id] = false;
+                });
+                setResponses(initialResponses);
+            } catch (error: unknown) {
+                const msg = error instanceof Error ? error.message : 'Unknown clinical load failure';
+                logger.error('[HealthScreeningForm] Boot failure', { msg });
+            } finally {
+                setLoading(false);
+            }
+        };
+        void bootSequence();
+    }, []);
+
 
     /**
      * 🛡️ OPTIMISTIC INTERACTION HANDLER
