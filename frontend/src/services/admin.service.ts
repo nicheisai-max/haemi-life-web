@@ -36,9 +36,10 @@ export interface UserSession {
     sessionId: string;
     ipAddress: string | null;
     userAgent: string | null;
-    loginTime: string;
+    createdAt: string;
     last_activity: string | null;
     isActive: boolean;
+    profileImage?: string | null;
 }
 
 export interface RevenueStat {

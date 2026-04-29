@@ -51,7 +51,13 @@ import aiRoutes from './routes/ai.routes';
 import pharmacistRoutes from './routes/pharmacist.routes';
 import screeningRoutes from './routes/screening.routes';
 
+import { Server as SocketIOServer } from 'socket.io';
+import { HaemiServer } from './types/socket.types';
+
 const app = express();
+
+// P0: Global Socket Accessor (Hardened Declaration Order)
+export let socketIO: HaemiServer | undefined;
 
 app.use(corsMiddleware);
 
@@ -72,7 +78,7 @@ if (!env.isDemoMode) {
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 
-// Rate Limiting
+// Rate Limiting (Applied BEFORE routes to mitigate DDoS/Brute-force)
 if (!env.isDemoMode && process.env.NODE_ENV !== 'test') {
     app.use('/api/auth/login', authLimiter);
     app.use('/api/auth/signup', authLimiter);
@@ -81,10 +87,6 @@ if (!env.isDemoMode && process.env.NODE_ENV !== 'test') {
         return apiLimiter(req, res, next);
     });
 }
-
-// DB Connection with Retry
-
-// Removed redundant connectDB as startServer uses checkConnection
 
 // Health Probes (Phase 3 Contract)
 app.get('/health', async (_req, res) => {
@@ -114,11 +116,8 @@ app.get('/health', async (_req, res) => {
 // Readiness Probe for Orchestration (Phase 1 Contract)
 app.get('/api/health/ready', async (_req, res) => {
     try {
-        // 1. Check DB
         await pool.query('SELECT 1');
-        // 2. Check Socket.IO (if initialized)
         const isSocketReady = !!socketIO;
-
         if (isSocketReady) {
             return res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
         }
@@ -131,9 +130,9 @@ app.get('/api/health/ready', async (_req, res) => {
     }
 });
 
-
-// API Routes
+// Institutional API Routes (Strict Mounting Order)
 app.use('/api/auth', authRoutes);
+app.use('/api/screening', screeningRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
@@ -150,15 +149,9 @@ app.use('/api/files', fileRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/pharmacist', pharmacistRoutes);
-app.use('/api/screening', screeningRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
-
-import { Server as SocketIOServer } from 'socket.io';
-import { HaemiServer } from './types/socket.types';
-
-export let socketIO: HaemiServer | undefined;
 
 // Server & Sockets
 const startServer = async () => {
@@ -180,13 +173,12 @@ const startServer = async () => {
                 methods: ["GET", "POST", "OPTIONS"],
                 allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
             },
-            transports: ["websocket"], // P0: Google/Meta Grade Direct WebSocket (Zero-Handshake Loop)
+            transports: ["polling", "websocket"], // Institutional Resilience: Enabled polling fallback for stable refresh cycles.
             allowEIO3: false,
             pingTimeout: 60000,
             pingInterval: 25000
         });
 
-        // ... (Socket logic remains identical)
         setupSockets(socketIO);
 
         const PORT = env.port;
@@ -212,9 +204,7 @@ const startServer = async () => {
     }
 };
 
-
-
-// Extracted socket setup to keep startServer clean
+// Institutional Socket Setup (Source of Truth Restoration)
 function setupSockets(io: HaemiServer) {
     io.use(async (socket: Socket, next: (err?: Error) => void) => {
         const auth = socket.handshake.auth;

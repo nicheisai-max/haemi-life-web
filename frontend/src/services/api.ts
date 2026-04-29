@@ -363,13 +363,10 @@ const clearAuthSession = () => {
     // Atomic state clearing (Memory + Network + Storage)
     setAccessToken(null);
     
-    // P1 Fix — Scoped key removal (replaces sessionStorage.clear()):
-    // Preserves non-auth data — theme preference, language, appointment drafts.
+    // P1 Fix — Scoped key removal (Strictly Tab-Bound):
     sessionStorage.removeItem('token');
-    sessionStorage.removeItem('refreshToken'); // P0.1: Legacy key (migration safety)
+    sessionStorage.removeItem('refreshToken');
     sessionStorage.removeItem('user');
-    localStorage.removeItem('token');                 // Legacy purge guarantee
-    localStorage.removeItem('haemi_refresh_token');   // P0.1: Canonical refresh token key
 
     // Deterministic Queue Cleanout
     processQueue(new FatalAuthError('Session terminated'));
@@ -380,10 +377,8 @@ const clearAuthSession = () => {
         details: { version: sessionVersion } 
     });
 
-    // Cross-tab kill-switch broadcast.
+    // Cross-tab kill-switch broadcast. (Institutional Guard)
     // P0 Fix: Only broadcast when broadcastUserId is a confirmed string.
-    // A missing userId means we cannot safely target a specific role silo,
-    // so we skip the broadcast rather than risk a global logout of all roles.
     if (typeof window !== 'undefined' && broadcastUserId) {
         try {
             const syncChannel = new BroadcastChannel('haemi_auth_sync');
@@ -391,30 +386,21 @@ const clearAuthSession = () => {
                 type: 'LOGOUT',
                 payload: {
                     version: sessionVersion,
-                    userId: broadcastUserId, // ← always a real user ID, never undefined
-                    role: broadcastRole      // ← always a real role string, never undefined
+                    userId: broadcastUserId, 
+                    role: broadcastRole      
                 }
             });
             syncChannel.close();
             logger.info('[API] Logout broadcast dispatched to peer tabs', { userId: broadcastUserId, role: broadcastRole });
         } catch (error: unknown) {
-            const errMessage = error instanceof Error ? error.message : String(error);
-            logger.error('[API] Logout broadcast failure', { error: errMessage });
-            auditLogger.log('UNHANDLED_ERROR', { message: errMessage });
+            logger.error('[API] Logout broadcast failure', { error: String(error) });
         }
     }
 
     window.dispatchEvent(new CustomEvent('auth:unauthorized'));
 };
 
-// ─── P0.3 + P0.5: Multi-Tab Token Sync Bridge (SSOT) ──────────────────────────
-// P0.5 FIX: IS_DEMO_MODE guard now applied here to match auth-context.tsx.
-// P0.3 FIX: LOGOUT case removed — cross-tab logout is now exclusively via the
-//   localStorage 'storage' event (haemi_logout_signal key). This eliminates:
-//   • Root Cause D: duplicate BC LOGOUT receiver in auth-context.tsx (now removed)
-//   • Root Cause E: auth-context sent LOGOUT with no 'version' field, so api.ts
-//     rejected it (undefined > 0 === false). localStorage events are version-free.
-// This handler is now the TOKEN_REFRESHED SSOT only.
+// ─── P0.3 + P0.5: Multi-Tab Token Sync Bridge (Institutional Guard) ───────────
 if (typeof window !== 'undefined' && !IS_DEMO_MODE) {
     const authSyncChannel = new BroadcastChannel('haemi_auth_sync');
     authSyncChannel.onmessage = (event: MessageEvent): void => {
@@ -422,7 +408,6 @@ if (typeof window !== 'undefined' && !IS_DEMO_MODE) {
         const { type, payload } = messageData;
         const currentToken: string | null = accessToken ?? sessionStorage.getItem('token');
 
-        // Decode current tab's identity from JWT for role-scoped matching
         let currentUserId: string | null = null;
         if (currentToken !== null) {
             try {
@@ -431,44 +416,34 @@ if (typeof window !== 'undefined' && !IS_DEMO_MODE) {
                 const decoded = safeParseJSON(atob(base64), isJWTPayload);
                 currentUserId = decoded?.id ?? null;
             } catch (decodeErr: unknown) {
-                logger.error('[API] Auth sync identity extraction failure', {
-                    error: decodeErr instanceof Error ? decodeErr.message : String(decodeErr)
-                });
+                logger.error('[API] Auth sync identity extraction failure', decodeErr);
             }
         }
 
         if (type === 'TOKEN_REFRESHED') {
             const tokenPayload = payload as {
-                userId?: unknown;
-                version?: unknown;
-                token?: unknown;
-                refreshToken?: unknown;
+                userId?: string;
+                version?: number;
+                token?: string;
+                refreshToken?: string;
             };
-            // Strict type narrowing — no any, no unsafe cast
-            const payloadUserId: string | null = typeof tokenPayload.userId === 'string'
-                ? tokenPayload.userId : null;
-            const payloadVersion: number | null = typeof tokenPayload.version === 'number'
-                ? tokenPayload.version : null;
-            const payloadToken: string | null = typeof tokenPayload.token === 'string'
-                ? tokenPayload.token : null;
-            const payloadRefreshToken: string | null = typeof tokenPayload.refreshToken === 'string'
-                ? tokenPayload.refreshToken : null;
 
             if (
-                payloadUserId !== null &&
-                payloadUserId === currentUserId &&
-                payloadVersion !== null &&
-                payloadVersion >= sessionVersion &&
-                payloadToken !== null
+                tokenPayload.userId === currentUserId &&
+                (tokenPayload.version ?? 0) >= sessionVersion &&
+                tokenPayload.token
             ) {
                 logger.info('[API] Auth sync received: Token refreshed in matching tab.');
-                setAccessToken(payloadToken, payloadRefreshToken ?? undefined);
-                processQueue(null, payloadToken);
+                setAccessToken(tokenPayload.token, tokenPayload.refreshToken);
+                processQueue(null, tokenPayload.token);
+            }
+        } else if (type === 'LOGOUT') {
+            const logoutPayload = payload as { userId?: string; version?: number };
+            if (logoutPayload.userId === currentUserId) {
+                logger.warn('[API] Auth sync received: External logout for current user identity.');
+                clearAuthSession();
             }
         }
-        // LOGOUT intentionally not handled here.
-        // Cross-tab logout: auth-context.tsx logout() → localStorage 'haemi_logout_signal'
-        //                   → storage event → handleStorageChange → commitAuthState.
     };
 }
 
@@ -551,12 +526,8 @@ const executeRefresh = async (retryCount = 0): Promise<string | null> => {
     const currentVersion = sessionVersion;
 
     try {
-        // P0.1 FIX: Refresh token read from localStorage (origin-scoped, survives new tabs).
-        // Legacy sessionStorage key included as fallback for in-flight migration safety.
-        // Once commitAuthState() runs after a successful refresh, the sessionStorage key is evicted.
-        const currentRefreshToken: string | null =
-            localStorage.getItem('haemi_refresh_token') ??
-            sessionStorage.getItem('refreshToken'); // Legacy fallback: remove after one release cycle
+        // P1.1: Atomic isolation — Refresh token is strictly read from sessionStorage.
+        const currentRefreshToken: string | null = sessionStorage.getItem('refreshToken');
 
         if (currentRefreshToken === null) {
             logger.info('[API] No refresh token found in storage. Draining queue.');
@@ -644,22 +615,20 @@ const executeRefresh = async (retryCount = 0): Promise<string | null> => {
             return null;
         }
 
-        // Atomic state update
+        // Atomic state update (Strictly Tab-Bound)
         const { token: newToken, refreshToken: newRefreshToken, serverTime, sessionTimeout } = refreshData;
 
         setAccessToken(newToken, newRefreshToken, serverTime, sessionTimeout);
         sessionStorage.setItem('token', newToken);
-        // P0.1 FIX: Write refreshToken to localStorage (canonical key).
-        // Evict the legacy sessionStorage key to enforce single-source-of-truth.
+        
         if (typeof newRefreshToken === 'string' && newRefreshToken.length > 0) {
-            localStorage.setItem('haemi_refresh_token', newRefreshToken);
-            sessionStorage.removeItem('refreshToken'); // Evict legacy key
+            sessionStorage.setItem('refreshToken', newRefreshToken);
         }
 
-        logger.info('[API] Token refresh successful');
+        logger.info('[API] Token refresh successful (Atomic Isolation)');
         auditLogger.log('TOKEN_REFRESH_SUCCESS');
 
-        // 📢 Broadcast to other tabs for multi-tab sync (Role-Isolated)
+        // 📢 Broadcast to other tabs for multi-tab sync (Role-Isolated Institutional Guard)
         if (typeof window !== 'undefined') {
             try {
                 const base64Url = newToken.split('.')[1];
@@ -681,9 +650,7 @@ const executeRefresh = async (retryCount = 0): Promise<string | null> => {
                 });
                 syncChannel.close();
             } catch (error) {
-                const errMessage = error instanceof Error ? error.message : 'Unknown error';
-                auditLogger.log('ERROR', { message: errMessage });
-                logger.error('[API] BroadcastChannel sync failed dynamically. Insulated from auth flow.', error);
+                logger.error('[API] BroadcastChannel sync failed dynamically.', error);
             }
         }
 

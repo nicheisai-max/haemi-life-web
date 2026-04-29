@@ -165,10 +165,10 @@
   --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
   --ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);
 
-  --duration-fast: 150ms;
+  --duration-fast: 300ms;
   --duration-normal: 300ms;
-  --duration-slow: 500ms;
-  --duration-slowing: 700ms;
+  --duration-slow: 300ms;
+  --duration-slowing: 300ms;
 }
 
 /* -------------------------------------------------- */

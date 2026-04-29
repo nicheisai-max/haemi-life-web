@@ -13,7 +13,8 @@ import {
     DropdownMenuLabel,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { AuthenticatedImage } from '../ui/authenticated-image';
 import { 
     User as UserIcon, 
     Settings, 
@@ -25,11 +26,6 @@ import { MobileSidebar } from './mobile-sidebar';
 import { getInitials } from '@/utils/avatar.resolver';
 import { PATHS } from '@/routes/paths';
 
-// Import Real Assets
-import doctorImg from '../../assets/images/doctors/doctor_01.jpg';
-import patientImg from '../../assets/images/patients/patient_01.jpg';
-import adminImg from '../../assets/images/admin/admin.png';
-import pharmacistImg from '../../assets/images/pharmacies/pharmacy_01.jpg';
 
 export const Navbar: React.FC = () => {
     const { user, logout, profileImageVersion } = useAuth();
@@ -48,22 +44,13 @@ export const Navbar: React.FC = () => {
 
         // Prioritize the standardized profileImage property
         if (user.profileImage) {
-            // If it's a full URL, use it directly. Otherwise, resolve via API.
+            // If it's a full URL, use it directly. Otherwise, resolve via relative API path.
             if (user.profileImage.startsWith('http')) return user.profileImage;
             
-            const baseUrl = (import.meta.env.VITE_API_URL || '');
-            // Append profileImageVersion as cache-bust to ensure latest image
-            return `${baseUrl}/api/files/profile/${user.id}?v=${profileImageVersion}`;
+            // Return relative path for AuthenticatedImage to handle via baseURL
+            return `/api/files/profile/${user.id}?v=${profileImageVersion}`;
         }
-
-        // Fallback to local imported assets for demo/new users without images
-        switch (user.role) {
-            case 'admin': return adminImg;
-            case 'doctor': return doctorImg;
-            case 'patient': return patientImg;
-            case 'pharmacist': return pharmacistImg;
-            default: return patientImg;
-        }
+        return '';
     };
 
     const handleOpenChange = (open: boolean) => {
@@ -75,7 +62,7 @@ export const Navbar: React.FC = () => {
     };
 
     return (
-        <header className="fixed top-0 left-0 right-0 z-50 h-[var(--layout-header-height)] bg-white/80 dark:bg-background/80 backdrop-blur-md border-b border-border transition-[background-color,color,backdrop-filter,opacity] duration-300">
+        <header className="fixed top-0 left-0 right-0 z-50 h-[var(--layout-header-height)] bg-white/80 dark:bg-background/80 backdrop-blur-md border-b border-border transition-[background-color,color,backdrop-filter,opacity,border-color] duration-300">
             <div className="haemi-nav-container">
                 {/* Left: Logo & Hamburger (Bit-for-Bit Sidebar Baseline at 16px) */}
                 <div className="flex items-center h-full gap-1 md:gap-4 haemi-nav-logo-offset-fix">
@@ -119,14 +106,16 @@ export const Navbar: React.FC = () => {
                                     aria-label="User account menu"
                                 >
                                     <Avatar className="shadow-sm">
-                                        <AvatarImage 
+                                        <AuthenticatedImage 
                                             src={getUserImage()} 
                                             alt={user?.name || 'User'} 
                                             className="haemi-avatar-full-bleed" 
+                                            errorFallback={
+                                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                                                    {user?.name ? getInitials(user.name) : 'U'}
+                                                </AvatarFallback>
+                                            }
                                         />
-                                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                                            {user?.name ? getInitials(user.name) : 'U'}
-                                        </AvatarFallback>
                                     </Avatar>
                                 </Button>
                             </DropdownMenuTrigger>

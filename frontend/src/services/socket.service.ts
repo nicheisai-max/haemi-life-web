@@ -21,17 +21,17 @@ export enum SocketState {
 
 /* ---------------- COORDINATION TYPES ---------------- */
 
-export type BroadcastMessage = 
+export type BroadcastMessage =
     | { type: 'LEADER_CLAIM'; tabId: string }
     | { type: 'LEADER_HEARTBEAT'; tabId: string }
     | { type: 'SOCKET_EVENT'; event: keyof ServerToClientEvents; data: unknown }
-    | { 
-        [K in keyof ClientToServerEvents]: { 
-            type: 'SOCKET_EMIT'; 
-            event: K; 
-            args: Parameters<ClientToServerEvents[K]> 
-        } 
-      }[keyof ClientToServerEvents];
+    | {
+        [K in keyof ClientToServerEvents]: {
+            type: 'SOCKET_EMIT';
+            event: K;
+            args: Parameters<ClientToServerEvents[K]>
+        }
+    }[keyof ClientToServerEvents];
 
 export interface ServerToClientEvents {
     'typingStarted': (data: { userId: UserId; conversationId: ConversationId; name: string }) => void;
@@ -76,7 +76,14 @@ class SocketService {
     private leaderTabId: string | null = null;
     private heartbeatTimer: NodeJS.Timeout | null = null;
     private leaderCheckTimer: NodeJS.Timeout | null = null;
-    
+    /**
+     * 🛡️ DEFERRED-TRANSITION FLAG (Meta/Slack Pattern)
+     * Set when we receive a LEADER signal while mid-handshake (CONNECTING).
+     * becomeFollower() is deferred until the handshake resolves to prevent
+     * the "WebSocket closed before established" race condition.
+     */
+    private pendingFollowerTransition = false;
+
     private listeners: { [K in keyof ServerToClientEvents]: Set<ServerToClientEvents[K]> } = {
         typingStarted: new Set(),
         typingStopped: new Set(),
@@ -100,8 +107,28 @@ class SocketService {
 
     private constructor() {
         if (typeof window !== 'undefined') {
-            // Lifecycle Hardening
-            window.addEventListener('beforeunload', () => this.destroy());
+            /**
+             * 🧬 PAGE-HIDE TOMBSTONE (Meta-Grade Stale-Heartbeat Prevention)
+             * On refresh, the OLD page's heartbeatTimer would keep firing via BroadcastChannel
+             * for up to 1s after unload — causing the new page's socket to be demoted to
+             * FOLLOWER mid-handshake. We tombstone cleanly on pagehide:
+             * - Close the BroadcastChannel (stops receiving/sending messages)
+             * - Clear the heartbeatTimer (stops sending stale heartbeats)
+             * - Clear leaderCheckTimer (prevents phantom becomeLeader() calls)
+             */
+            window.addEventListener('pagehide', () => {
+                if (this.heartbeatTimer) {
+                    clearInterval(this.heartbeatTimer);
+                    this.heartbeatTimer = null;
+                }
+                if (this.leaderCheckTimer) {
+                    clearTimeout(this.leaderCheckTimer);
+                    this.leaderCheckTimer = null;
+                }
+                try { this.broadcastChannel?.close(); } catch { /* ignore */ }
+                this.broadcastChannel = null;
+                logger.debug('[SocketService] Page hiding: Tombstoned BroadcastChannel to prevent stale heartbeats.');
+            });
 
             // 🧬 Multi-tab Coordination Initialization
             try {
@@ -123,7 +150,20 @@ class SocketService {
             case 'LEADER_CLAIM':
                 this.leaderTabId = msg.tabId;
                 if (this.leaderTabId !== this.tabId && this.state !== SocketState.FOLLOWER) {
-                    this.becomeFollower();
+                    if (this.state === SocketState.CONNECTING) {
+                        /**
+                         * 🛡️ DEFERRED FOLLOWER TRANSITION (Meta/Slack Pattern)
+                         * We are mid-handshake. Calling becomeFollower() now would
+                         * call socket.disconnect() on an unestablished WebSocket,
+                         * triggering "WebSocket is closed before the connection is established".
+                         * Instead we set a flag — attachCoreListeners' connect/connect_error
+                         * handlers will honour it and cleanly yield to the leader.
+                         */
+                        this.pendingFollowerTransition = true;
+                        logger.debug('[SocketService] Deferring follower transition: mid-handshake. Will yield after connect resolves.');
+                    } else {
+                        this.becomeFollower();
+                    }
                 }
                 this.resetLeaderCheck();
                 break;
@@ -155,17 +195,36 @@ class SocketService {
     }
 
     private becomeFollower(): void {
+        this.pendingFollowerTransition = false;
         this.transitionTo(SocketState.FOLLOWER);
+        if (this.leaderCheckTimer) {
+            clearTimeout(this.leaderCheckTimer);
+            this.leaderCheckTimer = null;
+        }
+        if (this.heartbeatTimer) {
+            clearInterval(this.heartbeatTimer);
+            this.heartbeatTimer = null;
+        }
         if (this.socket) {
-            this.socket.disconnect();
+            /**
+             * 🛡️ LISTENER-FIRST TEARDOWN (Meta-Grade)
+             * Remove all event listeners BEFORE calling disconnect().
+             * This prevents spurious 'disconnect' or 'connect_error' callbacks
+             * from firing into the state machine after we've already transitioned.
+             */
+            this.socket.removeAllListeners();
+            // socket.active is true during handshake (CONNECTING) OR when connected.
+            // We must call disconnect() in both cases to release the transport.
+            if (this.socket.active || this.socket.connected) {
+                this.socket.disconnect();
+            }
             this.socket = null;
         }
-        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     }
 
     private becomeLeader(): void {
         if (this.state === SocketState.CONNECTED || this.state === SocketState.CONNECTING) return;
-        
+
         logger.info('[SocketService] Promoted to LEADER');
         this.leaderTabId = this.tabId;
         this.connect();
@@ -180,7 +239,11 @@ class SocketService {
     private resetLeaderCheck(): void {
         if (this.leaderCheckTimer) clearTimeout(this.leaderCheckTimer);
         this.leaderCheckTimer = setTimeout(() => {
-            if (this.state !== SocketState.CONNECTED) {
+            // Do not interrupt an active handshake or reconnection cycle
+            const safeToPromote = this.state !== SocketState.CONNECTED
+                && this.state !== SocketState.CONNECTING
+                && this.state !== SocketState.RECONNECTING;
+            if (safeToPromote) {
                 this.becomeLeader();
             }
         }, 3000);
@@ -228,7 +291,11 @@ class SocketService {
             return;
         }
 
-        if (this.state === SocketState.CONNECTED || this.state === SocketState.CONNECTING) return;
+        // Institutional Guard: Prevent multiple simultaneous connection attempts
+        if (this.state === SocketState.CONNECTING) return;
+
+        // If already connected, only reconnect if token is provided (manual refresh)
+        if (this.state === SocketState.CONNECTED && !tokenOverride) return;
 
         const token = tokenOverride || getAccessToken();
         if (!token) {
@@ -239,46 +306,67 @@ class SocketService {
         this.transitionTo(SocketState.CONNECTING);
 
         try {
+            // P0: Infrastructure Cleanup
+            // Forcefully closing previous connection to ensure the new tab owns the ID.
             if (this.socket) {
                 this.socket.removeAllListeners();
-                this.socket.disconnect();
+                if (this.socket.connected) {
+                    this.socket.disconnect();
+                }
+                this.socket = null;
             }
 
             this.socket = io(SOCKET_URL, {
                 auth: { token },
                 path: '/socket.io/',
-                transports: ['websocket', 'polling'], 
+                transports: ['polling', 'websocket'], // Institutional Resilience: Polling-first handshake to prevent refresh race conditions.
                 withCredentials: true,
                 reconnection: true,
-                reconnectionAttempts: 10,
+                reconnectionAttempts: 20,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                randomizationFactor: 0.5,
                 autoConnect: true,
+                timeout: 20000,
+                forceNew: true
             });
 
             this.attachCoreListeners(this.socket);
             this.manualRebind(this.socket);
 
-            auditLogger.log('ERROR', { 
-                message: '[SocketService] Link Secured', 
-                details: { url: SOCKET_URL, state: this.state } 
-            });
+            logger.info('[SocketService] Handshake sequence initiated', { url: SOCKET_URL });
         } catch (error: unknown) {
             this.transitionTo(SocketState.DISCONNECTED);
             const errorMessage = error instanceof Error ? error.message : 'Unknown transport error';
-            auditLogger.log('ERROR', { 
-                message: '[SocketService] Handshake Failure', 
-                details: { error: errorMessage } 
+            auditLogger.log('ERROR', {
+                message: '[SocketService] Handshake Failure',
+                details: { error: errorMessage }
             });
         }
     }
 
     private attachCoreListeners(socket: SocketInstance) {
         socket.on('connect', () => {
+            /**
+             * 🛡️ DEFERRED FOLLOWER RESOLUTION (connect path)
+             * If a LEADER signal arrived while we were mid-handshake, we deferred
+             * the follower transition. Now that the socket is established, we honour
+             * it immediately — this yields cleanly to the real leader without any
+             * "WebSocket closed before established" errors.
+             */
+            if (this.pendingFollowerTransition) {
+                logger.info('[SocketService] Deferred follower transition resolved on connect — yielding to leader.');
+                this.becomeFollower();
+                return;
+            }
             this.transitionTo(SocketState.CONNECTED);
             this.reconnectionAttempts = 0;
             logger.info('[SocketService] Link established.');
         });
 
         socket.on('disconnect', (reason) => {
+            // Only act on disconnect if we haven't already transitioned away (e.g. becomeFollower)
+            if (this.state === SocketState.FOLLOWER || this.state === SocketState.TERMINATED) return;
             this.transitionTo(SocketState.DISCONNECTED, reason);
             if (reason === 'io server disconnect') {
                 const delay = this.calculateBackoff();
@@ -287,11 +375,22 @@ class SocketService {
         });
 
         socket.on('connect_error', (err: Error) => {
+            /**
+             * 🛡️ DEFERRED FOLLOWER RESOLUTION (error path)
+             * Handshake failed AND we have a pending follower transition.
+             * Yield cleanly — do not enter RECONNECTING loop since another tab owns the socket.
+             */
+            if (this.pendingFollowerTransition) {
+                logger.info('[SocketService] Deferred follower transition resolved on connect_error — yielding to leader.');
+                this.becomeFollower();
+                return;
+            }
+            if (this.state === SocketState.FOLLOWER || this.state === SocketState.TERMINATED) return;
             this.transitionTo(SocketState.RECONNECTING);
             this.reconnectionAttempts++;
-            auditLogger.log('ERROR', { 
-                message: '[SocketService] Handshake error', 
-                details: { msg: err.message, attempt: this.reconnectionAttempts } 
+            auditLogger.log('ERROR', {
+                message: '[SocketService] Handshake error',
+                details: { msg: err.message, attempt: this.reconnectionAttempts }
             });
         });
     }
@@ -395,7 +494,7 @@ class SocketService {
     private manualRebind(socket: SocketInstance) {
         // Institutional Explicit Rebinding (Meta-Grade)
         // Zero 'any', Zero 'as' casting.
-        
+
         const pipe = <K extends keyof ServerToClientEvents>(event: K, data: unknown) => {
             this.broadcastToFollowers(event, data);
             this.dispatchToLocalListeners(event, data);
@@ -431,7 +530,10 @@ class SocketService {
     }
 
     disconnect(): void {
-        this.destroy();
+        this.transitionTo(SocketState.DISCONNECTED);
+        if (this.socket) {
+            this.socket.disconnect();
+        }
     }
 }
 

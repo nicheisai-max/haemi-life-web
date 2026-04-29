@@ -5,6 +5,7 @@ import { logger } from '../utils/logger';
 import { mapDoctorToResponse } from '../utils/doctor.mapper';
 import { mapUserToResponse } from '../utils/user.mapper';
 import { JoinedDoctorRow, UserEntity } from '../types/db.types';
+import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 
 interface UpdateDoctorProfileRequest {
     specialization?: string;
@@ -31,8 +32,8 @@ export const listDoctors = async (req: Request, res: Response) => {
     try {
         let query = `
             SELECT 
-                u.id, u.name, u.email, u.phone_number, u.profile_image,
-                dp.specialization, dp.years_of_experience, dp.bio, dp.consultation_fee
+                u.id, u.name, u.email, u.phone_number, u.profile_image, u.initials,
+                dp.specialization, dp.years_of_experience, dp.bio, dp.consultation_fee, dp.can_video_consult
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
             WHERE u.role = 'doctor' AND u.status = 'ACTIVE'
@@ -41,12 +42,12 @@ export const listDoctors = async (req: Request, res: Response) => {
         const params: (string | number | boolean | null)[] = [];
 
         if (specialization) {
-            params.push(specialization as string);
+            params.push(String(specialization));
             query += ` AND dp.specialization = $${params.length}`;
         }
 
         if (search) {
-            params.push(`%${search as string}%`);
+            params.push(`%${String(search)}%`);
             query += ` AND u.name ILIKE $${params.length}`;
         }
 
@@ -55,9 +56,16 @@ export const listDoctors = async (req: Request, res: Response) => {
         const result = await pool.query<JoinedDoctorRow>(query, params);
         return sendResponse(res, 200, true, 'Doctors fetched', result.rows.map(mapDoctorToResponse));
     } catch (error: unknown) {
-        logger.error('Error fetching doctors:', {
-            error: error instanceof Error ? error.message : String(error)
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Error fetching doctors:', { error: message });
+        
+        await auditService.log({
+            userId: SYSTEM_ANONYMOUS_ID,
+            action: 'DOCTOR_LIST_FETCH_FAILURE',
+            entityType: 'DOCTOR_PROFILE',
+            details: message
         });
+
         return sendError(res, 500, 'Error fetching doctors');
     }
 };
@@ -69,9 +77,9 @@ export const getDoctorProfile = async (req: Request, res: Response) => {
     try {
         const result = await pool.query<JoinedDoctorRow>(`
             SELECT 
-                u.id, u.name, u.email, u.phone_number, u.profile_image,
+                u.id, u.name, u.email, u.phone_number, u.profile_image, u.initials,
                 dp.specialization, dp.license_number, dp.years_of_experience, 
-                dp.bio, dp.consultation_fee, dp.is_verified
+                dp.bio, dp.consultation_fee, dp.is_verified, dp.can_video_consult
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
             WHERE u.id = $1 AND u.role = 'doctor'
@@ -83,10 +91,20 @@ export const getDoctorProfile = async (req: Request, res: Response) => {
 
         return sendResponse(res, 200, true, 'Doctor profile fetched', mapDoctorToResponse(result.rows[0]));
     } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
         logger.error('Error fetching doctor profile:', {
-            error: error instanceof Error ? error.message : String(error),
+            error: message,
             doctorId: id
         });
+
+        await auditService.log({
+            userId: SYSTEM_ANONYMOUS_ID,
+            action: 'DOCTOR_PROFILE_FETCH_FAILURE',
+            entityId: String(id),
+            entityType: 'DOCTOR_PROFILE',
+            details: message
+        });
+
         return sendError(res, 500, 'Error fetching doctor profile');
     }
 };

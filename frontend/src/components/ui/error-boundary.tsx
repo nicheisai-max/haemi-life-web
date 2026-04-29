@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-900">
           <Card className="max-w-md w-full p-8 text-center space-y-6 shadow-2xl border-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl">
             <div className="flex justify-center">
-              <Logo className="h-12 w-auto" />
+              <Logo size="auth" />
             </div>
             
             <div className="space-y-2">

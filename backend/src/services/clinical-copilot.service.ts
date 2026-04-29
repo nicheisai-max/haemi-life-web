@@ -6,6 +6,27 @@ import { logger } from '../utils/logger';
  * Standard: Google/Meta Grade TypeScript Execution (Strict-Type Consensus)
  * Architecture: Stateless model instantiation with stateful ChatSession orchestration.
  */
+
+export interface PatientRiskData {
+    patientName: string;
+    appointmentTime: string;
+    riskCategory: 'Infectious' | 'Chronic' | 'Lifestyle';
+    severityScore: number;
+    keySymptoms: string[];
+}
+
+export interface ProactiveInsight {
+    type: 'emergency' | 'briefing' | 'diagnostic';
+    message: string;
+    urgency: 'low' | 'medium' | 'high';
+}
+
+export interface PatientRiskReport {
+    riskLevel: 'Low' | 'Medium' | 'High';
+    summary: string;
+    suggestedActions: string[];
+}
+
 export class ClinicalCopilotService {
     private genAI: GoogleGenerativeAI | null = null;
     private model: GenerativeModel | null = null;
@@ -120,6 +141,107 @@ export class ClinicalCopilotService {
             
             // Standardized Error Propagation for Controller Layer
             throw new Error(`[GEMINI_2_PRO_ERROR] ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Generates proactive clinical insights based on current patient risk profiles.
+     * @param patients Array of high-risk patient data for the current session.
+     * @returns A strictly typed collection of AI-generated clinical alerts in English.
+     */
+    async generateProactiveInsights(patients: PatientRiskData[]): Promise<ProactiveInsight[]> {
+        if (patients.length === 0) return [];
+
+        try {
+            if (!this.model) this.initModel();
+            if (!this.model) throw new Error('AI_INFRASTRUCTURE_UNAVAILABLE');
+
+            const contextString = patients.map(p => 
+                `- Patient: ${p.patientName}, Time: ${p.appointmentTime}, Risk: ${p.riskCategory}, Score: ${p.severityScore}, Symptoms: ${p.keySymptoms.join(', ')}`
+            ).join('\n');
+
+            const prompt = `
+                Analyze the following high-risk patient profiles for today's clinic in Botswana:
+                ${contextString}
+
+                TASK:
+                Generate 1-2 proactive, professional clinical alerts in English.
+                - Focus on immediate triage needs or diagnostic preparations.
+                - Keep each alert under 15 words.
+                - Format as a JSON array of ProactiveInsight objects.
+                
+                Example Output Format:
+                [{"type": "emergency", "message": "Patient [Name] shows severe TB symptoms. Follow infection control.", "urgency": "high"}]
+            `;
+
+            const result = await this.model.generateContent(prompt);
+            const responseText = result.response.text();
+            
+            // Forensic extraction of JSON from AI response
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            if (!jsonMatch) throw new Error('INVALID_AI_JSON_STRUCTURE');
+
+            const insights: ProactiveInsight[] = JSON.parse(jsonMatch[0]);
+            return insights;
+
+        } catch (error: unknown) {
+            logger.error('[ClinicalCopilot] Proactive Insight Generation Failed:', {
+                error: error instanceof Error ? error.message : String(error)
+            });
+            return []; // Fail gracefully to not disrupt the doctor's dashboard
+        }
+    }
+
+    /**
+     * Analyzes patient pre-screening data to generate a patient-facing risk report.
+     * @param responses Collection of patient answers across all 3 tiers.
+     * @returns A strictly typed health report in English.
+     */
+    async analyzePatientRisk(responses: { question: string; answer: boolean }[]): Promise<PatientRiskReport> {
+        try {
+            if (!this.model) this.initModel();
+            if (!this.model) throw new Error('AI_INFRASTRUCTURE_UNAVAILABLE');
+
+            const answerSummary = responses.map(r => `${r.question}: ${r.answer ? 'Yes' : 'No'}`).join('\n');
+
+            const prompt = `
+                You are a clinical assistant at Haemi Life. Analyze these patient responses from Botswana:
+                ${answerSummary}
+
+                TASK:
+                Generate a concise, empathetic health risk report for the PATIENT in English.
+                1. Risk Level: Categorize as 'Low', 'Medium', or 'High'.
+                2. Summary: A 2-sentence empathetic explanation of their current triage state.
+                3. Suggested Actions: 1-2 practical next steps (e.g., 'Wear a mask', 'Keep previous records ready').
+
+                Format strictly as JSON:
+                {
+                    "riskLevel": "...",
+                    "summary": "...",
+                    "suggestedActions": ["...", "..."]
+                }
+            `;
+
+            const result = await this.model.generateContent(prompt);
+            const responseText = result.response.text();
+            
+            // Forensic JSON extraction
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) throw new Error('INVALID_PATIENT_AI_JSON');
+
+            return JSON.parse(jsonMatch[0]) as PatientRiskReport;
+
+        } catch (error: unknown) {
+            logger.error('[ClinicalCopilot] Patient Risk Analysis Failed:', {
+                error: error instanceof Error ? error.message : String(error)
+            });
+            
+            // Safe fallback to prevent UX breakage
+            return {
+                riskLevel: 'Low',
+                summary: 'Your pre-screening data has been recorded. Our clinical team will review it during your visit.',
+                suggestedActions: ['Proceed with appointment booking']
+            };
         }
     }
 }

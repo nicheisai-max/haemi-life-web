@@ -8,11 +8,13 @@ import { MedicalLoader } from '@/components/ui/medical-loader';
 import { Badge } from '@/components/ui/badge';
 import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { TransitionItem } from '../../components/layout/page-transition';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 export const SecurityMonitoring: React.FC = () => {
     const [events, setEvents] = useState<SecurityEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
         fetchEvents();
@@ -61,6 +63,15 @@ export const SecurityMonitoring: React.FC = () => {
         }
     ];
 
+    const itemsPerPage = 10;
+    const totalItems = events.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+    const showPagination = totalItems > itemsPerPage;
+    
+    const paginatedEvents = events.slice(startIndex, endIndex);
+
     if (loading) return <MedicalLoader variant="global" message="Analyzing Security Matrix..." />;
 
     return (
@@ -90,7 +101,7 @@ export const SecurityMonitoring: React.FC = () => {
             </TransitionItem>
 
             <TransitionItem>
-                <Card className="overflow-hidden border shadow-sm rounded-2xl bg-white dark:bg-card">
+                <Card className="overflow-hidden border shadow-sm rounded-[var(--card-radius)] bg-white dark:bg-card">
                     <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/20">
                         <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                             <ShieldAlert className="h-4 w-4 text-primary" />
@@ -119,7 +130,7 @@ export const SecurityMonitoring: React.FC = () => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    events.map((event) => (
+                                    paginatedEvents.map((event) => (
                                         <tr key={event.id} className="bg-background hover:bg-muted/30 transition-colors group">
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
@@ -158,6 +169,16 @@ export const SecurityMonitoring: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                    <TablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={totalItems}
+                        startIndex={startIndex}
+                        endIndex={endIndex}
+                        showPagination={showPagination}
+                        onPageChange={setCurrentPage}
+                        itemLabel="events"
+                    />
                 </Card>
             </TransitionItem>
         </div>

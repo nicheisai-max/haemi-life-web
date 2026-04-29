@@ -1,17 +1,26 @@
 import { Router } from 'express';
-import { screeningController } from '../controllers/screening.controller';
+import * as screeningController from '../controllers/screening.controller';
+import { authenticateToken } from '../middleware/auth.middleware';
+
+/**
+ * 🛡️ HAEMI LIFE: HEALTH SCREENING ROUTES
+ * Institutional Grade: Admin-level API surface for dynamic triage management.
+ */
 
 const router = Router();
 
-/**
- * Clinical Screening Routes
- * Institutional Grade | Zero 'any' Policy
- */
+// Apply global authentication guard
+router.use(authenticateToken);
 
-// Fetch all active screening questions (Ordering by display_order)
-router.get('/questions', screeningController.getQuestions);
+// Clinical Triage Data Access
+router.get('/definitions', screeningController.getActiveQuestions);
+router.get('/definitions/all', screeningController.getAllQuestions);
 
-// Submit screening responses and calculate outcome
-router.post('/submit', screeningController.submitScreening);
+// Admin-level Triage Management
+router.post('/definitions', screeningController.createQuestion);
+router.patch('/definitions/reorder', screeningController.reorderQuestions);
+router.put('/definitions/:id', screeningController.updateQuestion);
+router.patch('/definitions/:id/toggle', screeningController.toggleQuestionStatus);
+router.delete('/definitions/:id', screeningController.deleteQuestion);
 
 export default router;

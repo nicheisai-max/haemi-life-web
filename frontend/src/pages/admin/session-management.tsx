@@ -10,6 +10,17 @@ import { TransitionItem } from '../../components/layout/page-transition';
 import { toast } from 'sonner';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getInitials } from '@/utils/avatar.resolver';
+
+const getUserImageUrl = (userId: string, profileImage?: string | null) => {
+    if (profileImage) {
+        if (profileImage.startsWith('http')) return profileImage;
+        const baseUrl = (import.meta.env.VITE_API_URL || '');
+        return `${baseUrl}/api/files/profile/${userId}`;
+    }
+    return '';
+};
 
 export const SessionManagement: React.FC = () => {
     const [sessions, setSessions] = useState<UserSession[]>([]);
@@ -91,7 +102,7 @@ export const SessionManagement: React.FC = () => {
             </TransitionItem>
 
             <TransitionItem>
-                <Card className="overflow-hidden border shadow-sm rounded-2xl bg-white dark:bg-card">
+                <Card className="overflow-hidden border shadow-sm rounded-[var(--card-radius)] bg-white dark:bg-card">
                     <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/20">
                         <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                             <Activity className="h-4 w-4 text-primary" />
@@ -123,13 +134,16 @@ export const SessionManagement: React.FC = () => {
                                     paginatedSessions.map((session) => (
                                         <tr key={session.id} className="group">
                                             <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold ring-2 ring-background ring-offset-2">
-                                                        {(session.userName || '?').charAt(0).toUpperCase()}
-                                                    </div>
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-8 w-8 ring-2 ring-background ring-offset-2">
+                                                        <AvatarImage src={getUserImageUrl(session.userId, session.profileImage)} alt={session.userName || 'User'} className="object-cover" />
+                                                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                                            {session.userName ? getInitials(session.userName) : '?'}
+                                                        </AvatarFallback>
+                                                    </Avatar>
                                                     <div className="flex flex-col">
-                                                        <span className="font-bold text-foreground text-xs">{session.userName}</span>
-                                                        <span className="text-[10px] text-muted-foreground">{session.userEmail}</span>
+                                                        <span className="font-bold text-foreground text-xs">{session.userName || 'Unknown User'}</span>
+                                                        <span className="text-[10px] text-muted-foreground">{session.userEmail || 'No email provided'}</span>
                                                     </div>
                                                 </div>
                                             </td>
@@ -152,18 +166,20 @@ export const SessionManagement: React.FC = () => {
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col text-[10px]">
                                                     <span className="font-bold text-foreground">{session.last_activity ? new Date(session.last_activity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
-                                                    <span className="text-muted-foreground opacity-70">Logged: {new Date(session.loginTime).toLocaleDateString()}</span>
+                                                    <span className="text-muted-foreground opacity-70">Logged: {new Date(session.createdAt).toLocaleDateString()}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <Button
-                                                    variant="ghost"
                                                     size="sm"
-                                                    className="h-8 w-8 p-0 rounded-[var(--card-radius)] text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all hover:scale-110 active:scale-95"
+                                                    className="user-action-btn user-action-btn-deactivate !min-w-max px-4"
                                                     title="Revoke Session"
                                                     onClick={() => handleRevoke(session.sessionId || session.id)}
                                                 >
-                                                    <LogOut className="h-4 w-4" />
+                                                    <div className="flex items-center gap-1.5">
+                                                        <LogOut className="h-3.5 w-3.5" />
+                                                        <span>Revoke Session</span>
+                                                    </div>
                                                 </Button>
                                             </td>
                                         </tr>

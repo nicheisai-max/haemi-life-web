@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { appointmentRepository } from '../repositories/appointment.repository';
+import { preScreeningRepository } from '../repositories/pre-screening.repository';
 import { pool } from '../config/db';
 import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
@@ -12,7 +13,7 @@ interface BookAppointmentRequest {
     appointmentTime: string;
     consultationType: 'in-person' | 'video';
     reason: string;
-    screeningRecordId?: string;
+    screeningResponses?: Array<{ question_id: string, response_value: boolean }>;
 }
 
 interface UpdateAppointmentRequest {
@@ -21,18 +22,22 @@ interface UpdateAppointmentRequest {
 }
 
 // Book a new appointment (Patient)
-export const bookAppointment = async (req: Request, res: Response) => {
-    const { doctorId, appointmentDate, appointmentTime, consultationType, reason, screeningRecordId } = req.body as BookAppointmentRequest;
+export const bookAppointment = async (req: Request, res: Response): Promise<void> => {
+    const { doctorId, appointmentDate, appointmentTime, consultationType, reason, screeningResponses } = req.body as BookAppointmentRequest;
     const user = req.user;
 
     try {
-        if (!user) return sendError(res, 401, 'Unauthorized');
+        if (!user) {
+            sendError(res, 401, 'Unauthorized');
+            return;
+        }
         const patientId = user.id;
 
         // Validate that doctor exists and is verified
         const isVerified = await appointmentRepository.checkDoctorVerified(doctorId);
         if (!isVerified) {
-            return sendError(res, 404, 'Doctor not found or not verified');
+            sendError(res, 404, 'Doctor not found or not verified');
+            return;
         }
 
         // --- Medical-Grade Safety Guard: Telemedicine Consent ---
@@ -41,7 +46,8 @@ export const bookAppointment = async (req: Request, res: Response) => {
             const { consentRepository } = await import('../repositories/consent.repository');
             const hasConsent = await consentRepository.hasConsent(patientId);
             if (!hasConsent) {
-                return sendError(res, 403, 'Telemedicine consent required. Please review and sign the digital consent form before booking a video consultation.');
+                sendError(res, 403, 'Telemedicine consent required. Please review and sign the digital consent form before booking a video consultation.');
+                return;
             }
         }
         // --------------------------------------------------------
@@ -49,7 +55,8 @@ export const bookAppointment = async (req: Request, res: Response) => {
         // Check for conflicts
         const hasConflict = await appointmentRepository.checkConflict(doctorId, appointmentDate, appointmentTime);
         if (hasConflict) {
-            return sendError(res, 409, 'This time slot is already booked');
+            sendError(res, 409, 'This time slot is already booked');
+            return;
         }
 
         const appointment = await appointmentRepository.create({
@@ -60,14 +67,37 @@ export const bookAppointment = async (req: Request, res: Response) => {
             consultation_type: consultationType,
             reason
         });
-        
-        // --- Clinical Screening Linkage ---
-        if (screeningRecordId) {
-            const { screeningRepository } = await import('../repositories/screening.repository');
-            await screeningRepository.linkToAppointment(screeningRecordId, appointment.id);
-            logger.info(`[AppointmentController] Linked screening ${screeningRecordId} to appointment ${appointment.id}`);
+
+        // --- Clinical Screening Linkage (Institutional Atomic Triage) ---
+        if (screeningResponses && Array.isArray(screeningResponses)) {
+            try {
+                await preScreeningRepository.saveResponses(
+                    appointment.id.toString(), 
+                    patientId, 
+                    screeningResponses
+                );
+                logger.info(`[AppointmentController] Processed triage for appointment ${appointment.id}`);
+            } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                logger.error('[AppointmentController] TRIAGE_LINK_FAILURE intercepted', { 
+                    error: errorMessage, 
+                    appointmentId: appointment.id 
+                });
+                
+                // Nuclear Audit: Log failure for clinical record keeping
+                const { auditService } = await import('../services/audit.service');
+                await auditService.log({
+                    userId: patientId,
+                    action: 'TRIAGE_LINK_FAILURE',
+                    entityId: String(appointment.id),
+                    entityType: 'APPOINTMENT',
+                    metadata: { error: errorMessage }
+                }).catch((e: unknown) => logger.error('[AuditService] Critical failure during triage audit', { error: e instanceof Error ? e.message : String(e) }));
+                
+                // Note: We don't fail the whole booking, but we record the clinical gap.
+            }
         }
-        // ----------------------------------
+        // ----------------------------------------------------------------
 
         // Fetch doctor name for notification messages
         const doctorResult = await pool.query<{ name: string }>('SELECT name FROM users WHERE id = $1', [doctorId]);
@@ -97,25 +127,28 @@ export const bookAppointment = async (req: Request, res: Response) => {
             'info'
         );
 
-        return sendResponse(res, 201, true, 'Appointment booked successfully', mapAppointmentToResponse(appointment));
+        sendResponse(res, 201, true, 'Appointment booked successfully', mapAppointmentToResponse(appointment));
     } catch (error: unknown) {
-        logger.error('Error booking appointment:', { 
-            error: error instanceof Error ? error.message : String(error), 
+        logger.error('Error booking appointment:', {
+            error: error instanceof Error ? error.message : String(error),
             userId: user?.id,
             doctorId
         });
-        return sendError(res, 500, 'Error booking appointment');
+        sendError(res, 500, 'Error booking appointment');
     }
 };
 
 
 // Get user's appointments
-export const getMyAppointments = async (req: Request, res: Response) => {
+export const getMyAppointments = async (req: Request, res: Response): Promise<void> => {
     const user = req.user;
     const { status, upcoming } = req.query;
 
     try {
-        if (!user) return sendError(res, 401, 'Unauthorized');
+        if (!user) {
+            sendError(res, 401, 'Unauthorized');
+            return;
+        }
         const userId = user.id;
 
         const appointments = await appointmentRepository.findByUserId(
@@ -123,147 +156,190 @@ export const getMyAppointments = async (req: Request, res: Response) => {
             typeof status === 'string' ? status : undefined,
             upcoming === 'true'
         );
-        return sendResponse(res, 200, true, 'Appointments fetched successfully', appointments.map(mapAppointmentToResponse));
+        sendResponse(res, 200, true, 'Appointments fetched successfully', appointments.map(mapAppointmentToResponse));
     } catch (error: unknown) {
-        logger.error('Error fetching appointments:', { 
-            error: error instanceof Error ? error.message : String(error), 
+        logger.error('Error fetching appointments:', {
+            error: error instanceof Error ? error.message : String(error),
             userId: user?.id
         });
-        return sendError(res, 500, 'Error fetching appointments');
+        sendError(res, 500, 'Error fetching appointments');
     }
 };
 
 // Get appointment by ID
-export const getAppointmentById = async (req: Request, res: Response) => {
+export const getAppointmentById = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const user = req.user;
 
     try {
-        if (!user) return sendError(res, 401, 'Unauthorized');
-        const userId = user.id;
-
-        const appointment = await appointmentRepository.findByIdWithDetails(Number(id), userId);
-
-        if (!appointment) {
-            return sendError(res, 404, 'Appointment not found');
+        if (!user) {
+            sendError(res, 401, 'Unauthorized');
+            return;
         }
 
-        return sendResponse(res, 200, true, 'Appointment details fetched', mapAppointmentToResponse(appointment));
+        const appointment = await appointmentRepository.findByIdWithDetails(Number(id), user.id);
+
+        if (!appointment) {
+            sendError(res, 404, 'Appointment not found');
+            return;
+        }
+
+        sendResponse(res, 200, true, 'Appointment details fetched', mapAppointmentToResponse(appointment));
     } catch (error: unknown) {
-        logger.error('Error fetching appointment:', { 
-            error: error instanceof Error ? error.message : String(error), 
-            appointmentId: id 
-        });
-        return sendError(res, 500, 'Error fetching appointment');
+        logger.error('Error fetching appointment:', { error: error instanceof Error ? error.message : String(error), appointmentId: id });
+        sendError(res, 500, 'Error fetching appointment');
     }
 };
 
 // Update appointment status (Doctor)
-export const updateAppointmentStatus = async (req: Request, res: Response) => {
+export const updateAppointmentStatus = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const { status, notes } = req.body as UpdateAppointmentRequest;
     const user = req.user;
 
     try {
-        if (!user) return sendError(res, 401, 'Unauthorized');
-        const userId = user.id;
+        if (!user) {
+            sendError(res, 401, 'Unauthorized');
+            return;
+        }
 
         const appointment = await appointmentRepository.updateStatus(
-            Number(id), 
-            userId, 
-            typeof status === 'string' ? status : '', 
+            Number(id),
+            user.id,
+            typeof status === 'string' ? status : '',
             typeof notes === 'string' ? notes : ''
         );
 
         if (!appointment) {
-            return sendError(res, 404, 'Appointment not found or access denied');
+            sendError(res, 404, 'Appointment not found or access denied');
+            return;
         }
 
-        return sendResponse(res, 200, true, 'Appointment updated successfully', mapAppointmentToResponse(appointment));
+        sendResponse(res, 200, true, 'Appointment updated successfully', mapAppointmentToResponse(appointment));
     } catch (error: unknown) {
-        logger.error('Error updating appointment:', { 
-            error: error instanceof Error ? error.message : String(error), 
-            appointmentId: id 
-        });
-        return sendError(res, 500, 'Error updating appointment');
+        logger.error('Error updating appointment:', { error: error instanceof Error ? error.message : String(error), appointmentId: id });
+        sendError(res, 500, 'Error updating appointment');
     }
 };
 
 // Cancel appointment
-export const cancelAppointment = async (req: Request, res: Response) => {
+export const cancelAppointment = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const user = req.user;
 
     try {
-        if (!user) return sendError(res, 401, 'Unauthorized');
-        const userId = user.id;
-
-        const appointment = await appointmentRepository.cancel(Number(id), userId);
-
-        if (!appointment) {
-            return sendError(res, 404, 'Appointment not found or access denied');
+        if (!user) {
+            sendError(res, 401, 'Unauthorized');
+            return;
         }
 
-        return sendResponse(res, 200, true, 'Appointment cancelled successfully', mapAppointmentToResponse(appointment));
+        const appointment = await appointmentRepository.cancel(Number(id), user.id);
+
+        if (!appointment) {
+            sendError(res, 404, 'Appointment not found or access denied');
+            return;
+        }
+
+        sendResponse(res, 200, true, 'Appointment cancelled successfully', mapAppointmentToResponse(appointment));
     } catch (error: unknown) {
-        logger.error('Error cancelling appointment:', { 
-            error: error instanceof Error ? error.message : String(error), 
-            appointmentId: id 
-        });
-        return sendError(res, 500, 'Error cancelling appointment');
+        logger.error('Error cancelling appointment:', { error: error instanceof Error ? error.message : String(error), appointmentId: id });
+        sendError(res, 500, 'Error cancelling appointment');
     }
 };
 
 // Permanently delete a past appointment (Patient only)
-export const deleteAppointment = async (req: Request, res: Response) => {
+export const deleteAppointment = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const user = req.user;
 
     try {
-        if (!user) return sendError(res, 401, 'Unauthorized');
+        if (!user) {
+            sendError(res, 401, 'Unauthorized');
+            return;
+        }
 
         if (user.role !== 'patient') {
-            return res.status(403).json({ message: 'Only patients can permanently delete appointments' });
+            res.status(403).json({ message: 'Only patients can permanently delete appointments' });
+            return;
         }
 
         const deleted = await appointmentRepository.softDelete(Number(id), user.id);
 
         if (!deleted) {
-            return sendError(res, 404, 'Appointment not found, already deleted, or cannot be deleted (only past/completed/cancelled appointments can be deleted)');
+            sendError(res, 404, 'Appointment not found, already deleted, or cannot be deleted');
+            return;
         }
 
-        return sendResponse(res, 200, true, 'Appointment deleted successfully');
+        sendResponse(res, 200, true, 'Appointment deleted successfully');
     } catch (error: unknown) {
-        logger.error('Error deleting appointment:', { 
-            error: error instanceof Error ? error.message : String(error), 
-            appointmentId: id 
+        logger.error('Error deleting appointment:', { error: error instanceof Error ? error.message : String(error), appointmentId: id });
+        sendError(res, 500, 'Error deleting appointment');
+    }
+};
+
+// Get pre-screening questions for appointment booking (Patient)
+export const getPreScreeningQuestions = async (_req: Request, res: Response): Promise<void> => {
+    try {
+        const questions = await preScreeningRepository.getDefinitions('triage');
+        sendResponse(res, 200, true, 'Pre-screening questions fetched successfully', questions);
+    } catch (error: unknown) {
+        logger.error('[AppointmentController] Failed to fetch pre-screening questions', {
+            error: error instanceof Error ? error.message : String(error)
         });
-        return sendError(res, 500, 'Error deleting appointment');
+        sendError(res, 500, 'Failed to fetch pre-screening questions');
+    }
+};
+
+// Submit pre-screening responses linked to an appointment (Patient)
+export const submitPreScreening = async (req: Request, res: Response): Promise<void> => {
+    const user = req.user;
+    const { appointmentId, responses } = req.body as {
+        appointmentId: string;
+        responses: Array<{ question_id: string; response_value: boolean; additional_notes?: string }>;
+    };
+
+    try {
+        if (!user) {
+            sendError(res, 401, 'Unauthorized');
+            return;
+        }
+        if (!appointmentId || !responses || !Array.isArray(responses)) {
+            sendError(res, 400, 'Appointment ID and valid responses array are required');
+            return;
+        }
+
+        await preScreeningRepository.saveResponses(appointmentId, user.id, responses);
+        sendResponse(res, 200, true, 'Pre-screening responses submitted successfully');
+    } catch (error: unknown) {
+        logger.error('[AppointmentController] Failed to submit pre-screening responses', {
+            error: error instanceof Error ? error.message : String(error),
+            userId: user?.id
+        });
+        sendError(res, 500, 'Failed to submit pre-screening responses');
     }
 };
 
 // Get available time slots for a doctor
-export const getAvailableSlots = async (req: Request, res: Response) => {
+export const getAvailableSlots = async (req: Request, res: Response): Promise<void> => {
     const { doctorId, date } = req.query;
 
     try {
         if (typeof doctorId !== 'string' || typeof date !== 'string') {
-            return res.status(400).json({ message: 'doctorId and date are required' });
+            res.status(400).json({ message: 'doctorId and date are required' });
+            return;
         }
-        
-        // Get day of week from date using UTC-safe local parsing
+
         const [year, month, day] = date.split('-').map(Number);
         const dateObj = new Date(year, month - 1, day);
-        const dayOfWeek = dateObj.getDay(); // 0 is Sunday, 6 is Saturday
+        const dayOfWeek = dateObj.getDay();
 
-        // Get doctor's schedule for that day (passing integer as defined in init.sql)
         const schedule = await appointmentRepository.getDoctorSchedule(doctorId, dayOfWeek);
 
         if (schedule.length === 0) {
-            return sendResponse(res, 200, true, 'No slots available', { date, slots: [] });
+            sendResponse(res, 200, true, 'No slots available', { date, slots: [] });
+            return;
         }
 
-        // Get booked appointments
         const bookedTimes = await appointmentRepository.getBookedTimes(doctorId, date);
 
         const slots: string[] = [];
@@ -276,17 +352,13 @@ export const getAvailableSlots = async (req: Request, res: Response) => {
                 if (!bookedTimes.includes(timeStr)) {
                     slots.push(timeStr);
                 }
-                current.setMinutes(current.getMinutes() + 30); // 30-min slots
+                current.setMinutes(current.getMinutes() + 30);
             }
         }
 
-        return sendResponse(res, 200, true, 'Available slots fetched', { date, slots });
+        sendResponse(res, 200, true, 'Available slots fetched', { date, slots });
     } catch (error: unknown) {
-        logger.error('Error fetching available slots:', { 
-            error: error instanceof Error ? error.message : String(error), 
-            doctorId,
-            date
-        });
-        return sendError(res, 500, 'Error fetching available slots');
+        logger.error('Error fetching available slots:', { error: error instanceof Error ? error.message : String(error), doctorId, date });
+        sendError(res, 500, 'Error fetching available slots');
     }
 };

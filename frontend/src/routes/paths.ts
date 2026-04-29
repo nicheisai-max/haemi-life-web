@@ -60,6 +60,7 @@ export const PATHS = {
         SYSTEM_LOGS: '/admin/logs',
         SECURITY: '/admin/security',
         SESSIONS: '/admin/sessions',
+        SCREENING: '/admin/screening',
         // Legacy redirects
         DASHBOARD_LEGACY: '/admin/dashboard',
     },

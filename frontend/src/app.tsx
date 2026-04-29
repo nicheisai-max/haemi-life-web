@@ -62,6 +62,7 @@ const NotFound = lazy(() => import('./pages/public/not-found').then(m => ({ defa
 const DoctorReports = lazy(() => import('./pages/doctor/reports').then(m => ({ default: m.DoctorReports })));
 const DispensePrescription = lazy(() => import('./pages/pharmacist/dispense-prescription').then(m => ({ default: m.DispensePrescription })));
 const DoctorPatientList = lazy(() => import('./pages/doctor/doctor-patient-list').then(m => ({ default: m.DoctorPatientList })));
+const ScreeningManager = lazy(() => import('./pages/admin/ScreeningManager').then(m => ({ default: m.ScreeningManager })));
 
 const LoadingFallback = () => <MedicalLoader variant="global" message="Securing clinical session..." />;
 const DelayedFallback = () => <MedicalLoader variant="global" message="Restoring clinical records..." />;
@@ -85,13 +86,15 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 
 const MainClinicalLayout = React.memo(() => (
   <ProtectedRoute>
-    <Suspense fallback={<DelayedFallback />}>
-      <LazyDashboardLayout>
-        <PageTransition>
-          <Outlet />
-        </PageTransition>
-      </LazyDashboardLayout>
-    </Suspense>
+    <AuthGatedNotifications>
+      <Suspense fallback={<DelayedFallback />}>
+        <LazyDashboardLayout>
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
+        </LazyDashboardLayout>
+      </Suspense>
+    </AuthGatedNotifications>
   </ProtectedRoute>
 ));
 
@@ -138,7 +141,7 @@ const AppRoutes = React.memo(() => {
           <Route path={PATHS.HELP} element={<Help />} />
 
           {/* Protected Clinical Cluster */}
-          <Route element={<AuthGatedNotifications><MainClinicalLayout /></AuthGatedNotifications>}>
+          <Route element={<MainClinicalLayout />}>
             <Route path={PATHS.DASHBOARD} element={<RoleRouter />} />
             <Route path={PATHS.PROFILE} element={<Profile />} />
             <Route path={PATHS.SETTINGS} element={<Settings />} />
@@ -162,6 +165,7 @@ const AppRoutes = React.memo(() => {
             <Route path={PATHS.ADMIN.SYSTEM_LOGS} element={<RoleRoute allowedRoles={['admin']}><SystemLogs /></RoleRoute>} />
             <Route path={PATHS.ADMIN.SECURITY} element={<RoleRoute allowedRoles={['admin']}><SecurityMonitoring /></RoleRoute>} />
             <Route path={PATHS.ADMIN.SESSIONS} element={<RoleRoute allowedRoles={['admin']}><SessionManagement /></RoleRoute>} />
+            <Route path={PATHS.ADMIN.SCREENING} element={<RoleRoute allowedRoles={['admin']}><ScreeningManager /></RoleRoute>} />
 
             <Route path={PATHS.CONSENT} element={<TelemedicineGuard><TelemedicineConsent /></TelemedicineGuard>} />
             <Route path={PATHS.TELEMEDICINE} element={<TelemedicineGuard><TelemedicineDashboard /></TelemedicineGuard>} />
@@ -203,10 +207,10 @@ const App: React.FC = () => {
               <NetworkStatusProvider>
                 <SessionManagerProvider>
                   <LanguageProvider>
-                    <AuthGatedNotifications>
+                    <>
                       <ScrollToTop />
                       <AppRoutes />
-                    </AuthGatedNotifications>
+                    </>
                   </LanguageProvider>
                 </SessionManagerProvider>
               </NetworkStatusProvider>

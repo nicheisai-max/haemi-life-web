@@ -17,6 +17,7 @@ export interface DoctorProfile {
     consultationFee: number;
     isVerified: boolean;
     profileImage?: string | null;
+    canVideoConsult: boolean;
 }
 
 export interface DoctorSchedule {

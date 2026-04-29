@@ -180,6 +180,7 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
     consultation_fee DECIMAL(10,2) CHECK (consultation_fee >= 0),
     is_verified BOOLEAN DEFAULT false,
     profile_image VARCHAR(255),
+    can_video_consult BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -267,11 +268,15 @@ CREATE TABLE IF NOT EXISTS appointments (
     duration_minutes INTEGER DEFAULT 30 CHECK (duration_minutes > 0),
     status VARCHAR(20) DEFAULT 'scheduled',
     consultation_type VARCHAR(50), -- 'video', 'in-person'
+    referral_code VARCHAR(50),
+    referral_source VARCHAR(100),
+    pre_screening_status VARCHAR(30) DEFAULT 'pending',
+    referral_recommendation TEXT,
     reason TEXT,
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMPTZ -- Soft delete support
+    deleted_at TIMESTAMPTZ
 );
 
 -- Appointment Performance Indices
@@ -1127,5 +1132,42 @@ BEGIN
         ALTER TABLE orders ADD COLUMN hospital_origin VARCHAR(100);
     END IF;
 END $$;
+
+-- Idempotent Migration: Appointments Pre-screening columns
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='appointments' AND column_name='pre_screening_status') THEN
+        ALTER TABLE appointments ADD COLUMN pre_screening_status VARCHAR(30) DEFAULT 'pending';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='appointments' AND column_name='referral_recommendation') THEN
+        ALTER TABLE appointments ADD COLUMN referral_recommendation TEXT;
+    END IF;
+END $$;
+
+-- Pre-screening Definitions Table (Master Data)
+CREATE TABLE IF NOT EXISTS pre_screening_definitions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    category VARCHAR(50) NOT NULL, -- 'self-declaration' or 'triage'
+    question_text TEXT NOT NULL,
+    disease_tag VARCHAR(50), -- 'diabetes', 'hypertension', 'tb', etc.
+    risk_weight DECIMAL(5, 2) DEFAULT 0.00,
+    is_active BOOLEAN DEFAULT true,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Appointment Pre-screenings Table (Patient Responses)
+CREATE TABLE IF NOT EXISTS appointment_pre_screenings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    appointment_id INTEGER REFERENCES appointments(id) ON DELETE CASCADE,
+    question_id UUID REFERENCES pre_screening_definitions(id),
+    response_value BOOLEAN NOT NULL,
+    additional_notes TEXT,
+    risk_score DECIMAL(5, 2) DEFAULT 0.00,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_appointments_pre_screening_status ON appointments(pre_screening_status);
+CREATE INDEX IF NOT EXISTS idx_appointment_pre_screenings_appointment_id ON appointment_pre_screenings(appointment_id);
 
 COMMIT;
