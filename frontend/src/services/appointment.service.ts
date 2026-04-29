@@ -33,6 +33,21 @@ export interface AvailableSlots {
     slots: string[];
 }
 
+export interface PreScreeningQuestion {
+    id: string;
+    category: 'self-declaration' | 'triage' | 'risk-assessment';
+    question_text: string;
+    disease_tag?: string;
+    risk_weight?: number;
+    sort_order: number;
+}
+
+export interface PreScreeningResponse {
+    question_id: string;
+    response_value: boolean;
+    additional_notes?: string;
+}
+
 // Book a new appointment (Patient only)
 export const bookAppointment = async (data: {
     doctorId: string;
@@ -40,7 +55,12 @@ export const bookAppointment = async (data: {
     appointmentTime: string;
     consultationType: string;
     reason: string;
-    screeningRecordId?: string; // Link to the clinical screening record
+    // Legacy: inline pre-screening responses submitted with booking
+    screeningResponses?: Array<{ question_id: string; response_value: boolean }>;
+    riskScore?: number;
+    riskLevel?: string;
+    // New: link to a pre-existing clinical screening record
+    screeningRecordId?: string;
 }): Promise<Appointment> => {
     const response = await api.post<ApiResponse<Appointment>>('/appointments', data);
     return normalizeResponse(response);
@@ -84,6 +104,17 @@ export const getAvailableSlots = async (doctorId: string, date: string): Promise
     return normalizeResponse(response);
 };
 
+export const getPreScreeningQuestions = async (category?: string): Promise<PreScreeningQuestion[]> => {
+    const params = category ? { category } : {};
+    const response = await api.get<ApiResponse<PreScreeningQuestion[]>>('/appointments/pre-screening/questions', { params });
+    return normalizeResponse(response);
+};
+
+export const submitPreScreening = async (appointmentId: string, responses: PreScreeningResponse[]): Promise<void> => {
+    const response = await api.post<ApiResponse<void>>('/appointments/pre-screening/submit', { appointmentId, responses });
+    return normalizeResponse(response);
+};
+
 export default {
     bookAppointment,
     getMyAppointments,
@@ -91,6 +122,8 @@ export default {
     updateAppointmentStatus,
     cancelAppointment,
     deleteAppointment,
-    getAvailableSlots
+    getAvailableSlots,
+    getPreScreeningQuestions,
+    submitPreScreening
 };
 

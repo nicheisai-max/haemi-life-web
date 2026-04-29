@@ -13,6 +13,7 @@ export interface DoctorResponse {
     bio?: string | null;
     consultationFee?: number | null;
     isVerified?: boolean;
+    canVideoConsult?: boolean;
     createdAt?: string;
 }
 
@@ -30,6 +31,7 @@ export const mapDoctorToResponse = (data: JoinedDoctorRow): DoctorResponse => {
         bio: data.bio,
         consultationFee: data.consultation_fee ? Number(data.consultation_fee) : null,
         isVerified: !!data.is_verified,
+        canVideoConsult: !!data.can_video_consult,
         createdAt: data.created_at?.toISOString()
     };
 };

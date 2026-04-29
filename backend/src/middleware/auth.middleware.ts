@@ -39,6 +39,8 @@ interface AuthenticatedRequest extends Request {
 }
 
 interface AuthUserRow {
+    id: string;
+    email: string;
     name: string;
     initials: string;
     profile_image: string | null;
@@ -111,7 +113,7 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
         try {
             // Institutional Guard: Verify user exists and status is ACTIVE
             const userResult = await pool.query<AuthUserRow>(
-                'SELECT name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity FROM users WHERE id = $1',
+                'SELECT id, email, name, initials, profile_image, profile_image_mime, status, role, token_version, last_activity FROM users WHERE id = $1',
                 [payload.id]
             );
 
@@ -121,13 +123,13 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
             }
 
             const userData = userResult.rows[0];
-            
+
             // Versioning Guard: Detect and reject revoked token versions
             if (payload.tokenVersion !== userData.token_version) {
                 logger.warn('[Auth.Middleware] Token version mismatch (Revoked)', { userId: payload.id });
                 return sendError(res, 401, 'Session revoked.');
             }
-            
+
             if (userData.status !== 'ACTIVE') {
                 logger.warn('[Auth.Middleware] Restricted account access attempt', { userId: payload.id, status: userData.status });
                 return sendError(res, 403, 'Account restricted.');
@@ -149,25 +151,25 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
             const nowMs = Date.now();
             const last_activity_time = sessionData.last_activity ? new Date(sessionData.last_activity).getTime() : 0;
 
-            if (nowMs - last_activity_time > 60000) {
+            if (nowMs - last_activity_time > 60000 && process.env.NODE_ENV !== 'test') {
                 const timeoutMinutes = await getSessionTimeoutMinutes();
                 const newExpiresAt = new Date(nowMs + timeoutMinutes * 60 * 1000);
-                
+
                 // Nuclear Persistence: Update both user and session markers
                 Promise.all([
                     pool.query('UPDATE user_sessions SET last_activity = CURRENT_TIMESTAMP, expires_at = $1 WHERE session_id = $2', [newExpiresAt, payload.sessionId]),
                     pool.query('UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = $1', [payload.id])
                 ]).catch(error => {
-                    logger.error('[Auth.Middleware] Background pulse update failed', { 
-                        error: error instanceof Error ? error.message : String(error) 
+                    logger.error('[Auth.Middleware] Background pulse update failed', {
+                        error: error instanceof Error ? error.message : String(error)
                     });
                 });
             }
 
             const finalUserPayload: LocalJWTPayload = {
-                id: payload.id,
-                email: payload.email,
-                role: payload.role as UserRole,
+                id: userData.id,
+                email: userData.email,
+                role: userData.role as UserRole,
                 name: userData.name,
                 initials: userData.initials,
                 tokenVersion: payload.tokenVersion,
@@ -206,13 +208,13 @@ export const authorizeRole = (roles: UserRole[]) => {
                 ipAddress: req.ip,
                 userAgent: req.headers['user-agent'],
             });
-            
-            logger.warn('[Auth.Middleware] RBAC Access Rejected', { 
-                userId: user?.id, 
-                required: roles, 
-                actual: user?.role 
+
+            logger.warn('[Auth.Middleware] RBAC Access Rejected', {
+                userId: user?.id,
+                required: roles,
+                actual: user?.role
             });
-            
+
             return sendError(res, 403, 'Access denied.');
         }
         next();
@@ -265,10 +267,10 @@ export const relaxedAuthenticateToken = (inputReq: Request, res: Response, next:
             req.user = finalUserPayload;
             return next();
         } catch (error: unknown) {
-            logger.error('[Auth.Middleware.relaxedAuthenticateToken] Silent capture failure', { 
-                error: error instanceof Error ? error.message : String(error) 
+            logger.error('[Auth.Middleware.relaxedAuthenticateToken] Silent capture failure', {
+                error: error instanceof Error ? error.message : String(error)
             });
-            return next(); 
+            return next();
         }
     });
 };

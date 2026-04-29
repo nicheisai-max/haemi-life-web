@@ -130,12 +130,8 @@ export const authService = {
             const token: string | null = await performRefresh();
 
             if (token !== null) {
-                // P0.1 FIX: Read refreshToken from localStorage (canonical key).
-                // Legacy sessionStorage key retained as migration fallback.
-                const storedRefreshToken: string | null =
-                    localStorage.getItem('haemi_refresh_token') ??
-                    sessionStorage.getItem('refreshToken') ?? // Legacy fallback
-                    null;
+                // P1.1: Atomic isolation — Strictly use sessionStorage for refresh token retrieval.
+                const storedRefreshToken = sessionStorage.getItem('refreshToken');
                 return {
                     token,
                     refreshToken: storedRefreshToken ?? undefined,

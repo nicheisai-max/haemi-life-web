@@ -4,6 +4,7 @@ import { Sparkles, AlertTriangle, Lightbulb, Zap, X, ChevronRight, BrainCircuit,
 import { Button } from './button';
 import { useLocation } from 'react-router-dom';
 import { useClickOutside } from '../../hooks/use-click-outside';
+import { useAuth } from '../../hooks/use-auth';
 import api from '../../services/api';
 import { logger } from '@/utils/logger';
 
@@ -18,12 +19,19 @@ interface ClinicalCopilotProps<T extends Element = Element> {
     onClose: () => void;
     triggerRef?: React.RefObject<T | null>;
 }
+import { useToast } from '../../hooks/use-toast';
 
 interface Message {
     id: string;
     role: 'user' | 'model';
     content: string;
     timestamp: Date;
+}
+
+interface ProactiveInsight {
+    type: 'emergency' | 'briefing' | 'diagnostic';
+    message: string;
+    urgency: 'low' | 'medium' | 'high';
 }
 
 // 🧬 INSTITUTIONAL MEMOIZATION: ATOMIC SUB-COMPONENTS
@@ -137,6 +145,7 @@ const MessageList = React.memo(({ messages, isLoading, messagesEndRef }: {
 
 export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose, triggerRef }: ClinicalCopilotProps<T>) => {
     const ignoredRefs = useMemo(() => (triggerRef ? [triggerRef] : []), [triggerRef]);
+    const { user } = useAuth();
     
     // 🧬 INTERACTION STABILIZATION: Ensuring ClickOutside doesn't conflict with Drag
     const containerRef = useClickOutside<HTMLDivElement>(
@@ -150,6 +159,64 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const location = useLocation();
+    const { success, error, warning } = useToast();
+    const lastAlertId = useRef<string | null>(null);
+
+    // 🧬 PROACTIVE CLINICAL MONITORING ENGINE
+    const fetchProactiveAlerts = React.useCallback(async () => {
+        if (user?.role !== 'doctor') return;
+        try {
+            // NOTE: In a full production sync, we would fetch current patients from the dashboard context
+            // For now, we simulate the high-risk context to demonstrate the AI-Toast pipeline
+            const response = await api.post('/clinical-copilot/proactive-insights', {
+                patients: [
+                    {
+                        patientName: 'Kagiso Moalusi',
+                        appointmentTime: '10:00 AM',
+                        riskCategory: 'Infectious',
+                        severityScore: 8,
+                        keySymptoms: ['Drenching night sweats', 'Weight loss']
+                    }
+                ]
+            });
+
+            if (response.data?.success && response.data?.insights) {
+                const insights: ProactiveInsight[] = response.data.insights;
+                
+                insights.forEach(insight => {
+                    // Prevent duplicate toasts for the same message
+                    if (lastAlertId.current === insight.message) return;
+                    lastAlertId.current = insight.message;
+
+                    // Standard: Professional English Toasts Only
+                    if (insight.urgency === 'high' || insight.type === 'emergency') {
+                        error(insight.message);
+                    } else if (insight.urgency === 'medium') {
+                        warning(insight.message);
+                    } else {
+                        success(insight.message);
+                    }
+                });
+            }
+        } catch (err: unknown) {
+            console.error('[PROACTIVE_MONITOR_ERROR]:', err);
+        }
+    }, [user?.role, error, warning, success]);
+
+    useEffect(() => {
+        // Initial fetch after dashboard load
+        const timer = setTimeout(() => {
+            fetchProactiveAlerts();
+        }, 5000);
+
+        // Polling every 5 minutes for new clinical risks
+        const interval = setInterval(fetchProactiveAlerts, 300000);
+
+        return () => {
+            clearTimeout(timer);
+            clearInterval(interval);
+        };
+    }, [fetchProactiveAlerts]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

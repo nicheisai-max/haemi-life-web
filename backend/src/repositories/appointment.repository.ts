@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
+import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 
 export interface Appointment {
     id: number;
@@ -25,6 +26,10 @@ export interface AppointmentWithDetails extends Appointment {
     other_party_name?: string;
     user_role?: string;
     profile_image?: string | null;
+}
+
+interface InstitutionalError extends Error {
+    code?: string;
 }
 
 export class AppointmentRepository {
@@ -71,20 +76,65 @@ export class AppointmentRepository {
     }
 
     async create(data: Partial<Appointment>): Promise<Appointment> {
+        const client = await this.db.connect();
         try {
-            const result = await this.db.query<Appointment>(`
+            await client.query('BEGIN');
+
+            // --- Institutional Concurrency Guard: Row-Level Lock ---
+            // Locking the potential conflict rows to prevent race conditions during peak booking bursts.
+            const conflictCheck = await client.query(`
+                SELECT id FROM appointments
+                WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3 
+                AND status != 'cancelled' AND deleted_at IS NULL
+                FOR UPDATE
+            `, [data.doctor_id, data.appointment_date, data.appointment_time]);
+
+            if (conflictCheck.rows.length > 0) {
+                const conflictError: Error = new Error('This time slot has just been reserved by another patient.');
+                // Attaching institutional error code for controller-level handling
+                (conflictError as InstitutionalError).code = 'SLOT_ALREADY_BOOKED'; 
+                throw conflictError;
+            }
+
+            const result = await client.query<Appointment>(`
                 INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status)
                 VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
                 RETURNING *
             `, [data.patient_id, data.doctor_id, data.appointment_date, data.appointment_time, data.consultation_type, data.reason]);
+
+            await client.query('COMMIT');
             return result.rows[0];
         } catch (error: unknown) {
-            logger.error('Failed to create appointment', {
-                error: error instanceof Error ? error.message : String(error),
+            await client.query('ROLLBACK');
+            
+            // Google/Meta Grade Strict Narrowing
+            const errorMessage: string = error instanceof Error ? error.message : String(error);
+            const errorCode: string = (error as { code?: string })?.code || 'UNKNOWN_ERROR';
+
+            logger.error('Failed to create appointment securely', { 
+                error: errorMessage, 
+                errorCode,
                 patientId: data.patient_id,
-                doctorId: data.doctor_id
+                doctorId: data.doctor_id 
             });
+
+            // Institutional Logging: Recording the failure for forensic audit
+            await auditService.log({
+                userId: data.patient_id || SYSTEM_ANONYMOUS_ID,
+                action: 'APPOINTMENT_CREATION_FAILURE',
+                entityType: 'APPOINTMENT',
+                metadata: { 
+                    error: errorMessage, 
+                    errorCode,
+                    doctorId: data.doctor_id,
+                    date: data.appointment_date,
+                    time: data.appointment_time
+                }
+            });
+
             throw error;
+        } finally {
+            client.release();
         }
     }
 
@@ -97,6 +147,10 @@ export class AppointmentRepository {
                         WHEN a.patient_id = $1 THEN u_doctor.name
                         ELSE u_patient.name
                     END as other_party_name,
+                    CASE 
+                        WHEN a.patient_id = $1 THEN u_doctor.profile_image
+                        ELSE u_patient.profile_image
+                    END as profile_image,
                     CASE 
                         WHEN a.patient_id = $1 THEN 'patient'
                         ELSE 'doctor'
@@ -142,6 +196,10 @@ export class AppointmentRepository {
                     u_doctor.name as doctor_name,
                     u_patient.name as patient_name,
                     u_patient.phone_number as patient_phone,
+                    CASE 
+                        WHEN a.patient_id = $2 THEN u_doctor.profile_image
+                        ELSE u_patient.profile_image
+                    END as profile_image,
                     dp.specialization
                 FROM appointments a
                 JOIN users u_doctor ON a.doctor_id = u_doctor.id
@@ -224,9 +282,9 @@ export class AppointmentRepository {
                 WHERE doctor_id = $1 AND appointment_date = $2 
                   AND status != 'cancelled' AND deleted_at IS NULL
             `, [doctorId, date]);
-            return result.rows.map(row => {
-                const time = row.appointment_time;
-                return typeof time === 'string' ? time.slice(0, 5) : time;
+            return result.rows.map((row: { appointment_time: string }) => {
+                const time: string = row.appointment_time;
+                return typeof time === 'string' ? time.slice(0, 5) : String(time).slice(0, 5);
             });
         } catch (error: unknown) {
             logger.error('Failed to get booked times', {

@@ -31,6 +31,8 @@ export type AuditEventType =
     | 'SESSION_TERMINATED'
     | 'UNHANDLED_ERROR'
     | 'SYSTEM_RECOVERY'
+    | 'AI_TRIAGE_SUCCESS'
+    | 'AI_TRIAGE_FALLBACK'
     | 'ERROR';
 
 export interface AuditEventPayload {

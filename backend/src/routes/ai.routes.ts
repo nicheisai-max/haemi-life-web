@@ -19,7 +19,7 @@ router.post(
     '/ask',
     aiLimiter,
     authenticateToken,
-    authorizeRole(['doctor', 'admin']),
+    authorizeRole(['doctor', 'admin', 'patient']),
     (req, res) => aiController.ask(req, res)
 );
 

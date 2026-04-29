@@ -49,7 +49,8 @@ async function deliverFile(
                 assetId: metadata.assetId,
                 correlationId
             });
-            res.setHeader('X-Haemi-Error', 'ASSET_NOT_FOUND');
+            res.setHeader('X-Haemi-Error', 'PHYSICAL_FILE_MISSING');
+            res.setHeader('X-Haemi-Path', relativePath);
             sendError(res, 404, 'Asset not found on storage media');
             return;
         }
@@ -112,6 +113,8 @@ async function deliverFile(
 
 /**
  * 🩺 RESOLVER: Profile Image
+ * Institutional Grade: Falls through gracefully (204) when physical asset is missing.
+ * Never returns 404 for profile — the frontend shows initials fallback on 204.
  */
 export const getProfileImage = async (req: Request, res: Response): Promise<void> => {
     const userId = req.params.userId as string;
@@ -129,7 +132,8 @@ export const getProfileImage = async (req: Request, res: Response): Promise<void
         }>(query, [userId]);
 
         if (result.rows.length === 0) {
-            sendError(res, 404, 'User identity not found');
+            // User not found → 204 so frontend uses initials fallback
+            res.status(204).end();
             return;
         }
 
@@ -141,15 +145,27 @@ export const getProfileImage = async (req: Request, res: Response): Promise<void
         }
 
         if (user.profile_image && !user.profile_image.startsWith('/api/')) {
-            // Meta-Grade Path Normalization: Handles legacy and absolute prefix variations
-            const relativePath = user.profile_image.replace(/^(\/)?(uploads\/)?/i, '').replace(/^\/+/, '').replace(/\\/g, '/');
-            await deliverFile(res, relativePath, { 
-                name: `profile_${userId}`, 
-                mimeType: user.profile_image_mime || undefined,
-                domain: FileDomain.PROFILE,
-                assetId: String(userId)
+            let relativePath = user.profile_image
+                .replace(/^(\/)?(uploads\/)?/i, '')
+                .replace(/\\/g, '/')
+                .replace(/^\/+/, '');
+            relativePath = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, '');
+
+            // Pre-flight: Only stream if physical file exists (prevents 404 on legacy seed paths)
+            const fileStats = await fileService.getFileStats(relativePath);
+            if (fileStats && fileStats.size > 0) {
+                await deliverFile(res, relativePath, { 
+                    name: `profile_${userId}`, 
+                    mimeType: user.profile_image_mime || undefined,
+                    domain: FileDomain.PROFILE,
+                    assetId: String(userId)
+                });
+                return;
+            }
+            // Physical file missing (legacy seed path / deleted) → fall through to buffer
+            logger.warn('[File-Resolver] Profile path missing on disk — using fallback', {
+                userId, profile_image: user.profile_image, relativePath
             });
-            return;
         }
 
         if (user.profile_image_data) {
@@ -162,7 +178,8 @@ export const getProfileImage = async (req: Request, res: Response): Promise<void
         res.status(204).end();
     } catch (error: unknown) {
         logger.error('[File-Resolver] Profile resolution failure', { error, userId });
-        sendError(res, 500, 'Profile engine error');
+        // Never crash the UI — return 204 so initials avatar renders
+        if (!res.headersSent) res.status(204).end();
     }
 };
 

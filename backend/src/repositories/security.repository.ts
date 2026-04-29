@@ -27,6 +27,9 @@ export interface UserSession {
     createdAt: Date;
     last_activity: Date | string | null;
     revoked: boolean;
+    userName?: string;
+    userEmail?: string;
+    profileImage?: string | null;
 }
 
 interface SecurityEventRow {
@@ -56,6 +59,7 @@ interface UserSessionRow {
     revoked: boolean;
     user_name: string;
     user_email: string;
+    profile_image: string | null;
 }
 
 export const securityRepository = {
@@ -101,7 +105,7 @@ export const securityRepository = {
                 `SELECT us.id, us.user_id, us.user_role, us.session_id, us.ip_address, 
                  us.ip_address, us.user_agent, us.browser_name, us.os_name, us.device_type,
                  us.created_at, us.last_activity, us.revoked,
-                 u.name as user_name, u.email as user_email 
+                 u.name as user_name, u.email as user_email, u.profile_image 
                  FROM user_sessions us
                  JOIN users u ON us.user_id = u.id
                  WHERE us.revoked = FALSE
@@ -121,7 +125,10 @@ export const securityRepository = {
                 deviceType: row.device_type,
                 createdAt: row.created_at,
                 last_activity: row.last_activity,
-                revoked: row.revoked
+                revoked: row.revoked,
+                userName: row.user_name,
+                userEmail: row.user_email,
+                profileImage: row.profile_image
             }));
         } catch (error: unknown) {
             logger.error('Failed to fetch active sessions', {

@@ -15,7 +15,7 @@ import { execSync } from 'child_process';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const INIT_SQL_PATH = path.resolve(__dirname, '../backend/src/db/init.sql');
-const MIGRATIONS_DIR = path.resolve(__dirname, '../backend/src/db/migrations');
+const MIGRATIONS_DIR = path.resolve(__dirname, '../backend/db/migrations');
 const HASH_FILE = path.resolve(__dirname, '../tmp/.init_sql_sha256');
 const ARCHIVE_DIR = path.resolve(__dirname, '../institutional_archives');
 
@@ -64,7 +64,7 @@ function verifySchemaLock(): void {
         
         const migrations: string[] = [];
         if (fs.existsSync(MIGRATIONS_DIR)) {
-            migrations.push(...fs.readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql')));
+            migrations.push(...fs.readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql') || f.endsWith('.js')));
         }
 
         if (migrations.length === 0) {
@@ -86,6 +86,11 @@ function verifySchemaLock(): void {
  * 🩺 HEALTH AUDIT: Live Database Connectivity & Structural Check.
  */
 async function performHealthAudit(): Promise<void> {
+    const EXPECTED_MIGRATIONS = {
+        '20260427134000_add_video_consult_flag.js': '5A88F11BAE92224F5379057B77A0B130E000788481A837C513E8D3F95B036815',
+        '20260427185500_add_pre_screening_infrastructure.js': '2572BEA8479B447AC28F2F6485C039400823D496521569FA151683930AA32AFE'
+    };
+
     console.log('\n--- 🩺 HAEMI LIFE: DATABASE HEALTH HEARTBEAT ---');
     
     const client = new Client({

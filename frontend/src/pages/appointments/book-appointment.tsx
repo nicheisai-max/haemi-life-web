@@ -16,18 +16,28 @@ import { bookAppointment, getAvailableSlots } from '../../services/appointment.s
 import { bookAppointmentSchema, type BookAppointmentFormData } from '../../lib/validation/appointment.schema';
 import type { DoctorProfile } from '../../services/doctor.service';
 import type { AvailableSlots } from '../../services/appointment.service';
+import { 
+    HealthScreeningForm 
+} from '../../components/clinical/health-screening-form';
+import { 
+    type ScreeningResponse, 
+    type RiskReport 
+} from '../../services/screening.service';
 import { getConsentStatus } from '../../services/consent.service';
 import { getErrorMessage } from '../../lib/error';
-import { CheckCircle, AlertTriangle, User, Calendar, Clock, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { CheckCircle, AlertTriangle, User, Calendar, Clock, ShieldCheck, ShieldAlert, Activity } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/premium-loader';
+import { useToast } from '@/hooks/use-toast';
 import { DateScroller } from '@/components/ui/date-scroller';
 import { TimeGrid } from '@/components/ui/time-grid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TransitionItem } from '@/components/layout/page-transition';
 import { PATHS } from '../../routes/paths';
+import { auditLogger, logger } from '@/utils/logger';
 
 export const BookAppointment: React.FC = () => {
     const navigate = useNavigate();
+    const { error: showErrorToast } = useToast();
     const [searchParams] = useSearchParams();
     const preselectedDoctorId = searchParams.get('doctorId');
 
@@ -37,7 +47,10 @@ export const BookAppointment: React.FC = () => {
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
-    // Telemedicine Consent States
+    // Triage & Screening States (Institutional Standard)
+    const [screeningResponses, setScreeningResponses] = useState<ScreeningResponse[]>([]);
+    const [screeningReport, setScreeningReport] = useState<RiskReport | null>(null);
+    const [isTriageAnalyzing, setIsTriageAnalyzing] = useState(false);
     const [hasConsent, setHasConsent] = useState<boolean | null>(null);
     const [showConsentModal, setShowConsentModal] = useState(false);
 
@@ -64,33 +77,59 @@ export const BookAppointment: React.FC = () => {
         try {
             const data = await getConsentStatus();
             setHasConsent(data.hasConsent);
-        } catch {
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Consent status sync failure';
+            logger.warn('[BookAppointment] Consent check skipped/failed', { msg });
             setHasConsent(false);
         }
     };
 
     useEffect(() => {
-        if (preselectedDoctorId && doctors.length > 0) {
+        if (preselectedDoctorId && doctors.length > 0 && form.getValues('doctorId') !== preselectedDoctorId) {
             form.setValue('doctorId', preselectedDoctorId);
         }
 
-        // Restore form data from draft if arriving back from the /consent page
+        // 🛡️ INSTITUTIONAL DRAFT RESTORATION (Meta-Grade)
+        // Restore form data from draft if arriving back from the /consent page.
+        // CLINICAL GUARD: Only restore 'video' if the selected doctor supports it.
         const draft = sessionStorage.getItem('book_appointment_draft');
         if (draft && doctors.length > 0) {
             try {
                 const draftData = JSON.parse(draft);
-                if (draftData.doctorId) form.setValue('doctorId', draftData.doctorId);
-                if (draftData.appointmentDate) form.setValue('appointmentDate', draftData.appointmentDate);
-                if (draftData.appointmentTime) form.setValue('appointmentTime', draftData.appointmentTime);
-                if (draftData.reason) form.setValue('reason', draftData.reason);
-                form.setValue('consultationType', 'video');
-                // Clean up draft after restoring to avoid sticking state
+                const currentDoctorId = form.getValues('doctorId');
+                const selectedDoctor = doctors.find(d => d.id === (draftData.doctorId || currentDoctorId));
+                const supportsVideo = selectedDoctor?.canVideoConsult ?? true;
+
+                if (draftData.doctorId && currentDoctorId !== draftData.doctorId) {
+                    form.setValue('doctorId', draftData.doctorId);
+                }
+                if (draftData.appointmentDate && form.getValues('appointmentDate') !== draftData.appointmentDate) {
+                    form.setValue('appointmentDate', draftData.appointmentDate);
+                }
+                if (draftData.appointmentTime && form.getValues('appointmentTime') !== draftData.appointmentTime) {
+                    form.setValue('appointmentTime', draftData.appointmentTime);
+                }
+                if (draftData.reason && form.getValues('reason') !== draftData.reason) {
+                    form.setValue('reason', draftData.reason);
+                }
+
+                // Atomic Sync: Only set to video if clinically allowed by the doctor profile
+                const targetType = supportsVideo ? 'video' : 'in-person';
+                if (form.getValues('consultationType') !== targetType) {
+                    form.setValue('consultationType', targetType);
+                }
+
+                // Clean up draft after successful restoration
                 sessionStorage.removeItem('book_appointment_draft');
-            } catch {
-                console.error("Failed to parse appointment draft");
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Draft parsing failure';
+                logger.error('[BookAppointment] Draft restoration failed', { msg });
             }
         }
-    }, [preselectedDoctorId, doctors, form]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [preselectedDoctorId, doctors]);
+    // ↑ Intentionally omits `form`: useForm() does not produce a stable object reference.
+    //   form.setValue is stable and is the only method called — its identity never changes.
 
     const fetchDoctors = async () => {
         try {
@@ -98,6 +137,8 @@ export const BookAppointment: React.FC = () => {
             const data = await getDoctors();
             setDoctors(data);
         } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'Institutional doctor load failure';
+            logger.error('[BookAppointment] Fetch doctors failure', { msg: errorMessage });
             setGeneralError(getErrorMessage(err, 'Failed to load doctors'));
         } finally {
             setLoading(false);
@@ -112,7 +153,8 @@ export const BookAppointment: React.FC = () => {
             const slots = await getAvailableSlots(doctorId, watchedDate);
             setAvailableSlots(slots);
         } catch (err: unknown) {
-            console.error('Failed to fetch slots:', getErrorMessage(err));
+            const errorMessage = err instanceof Error ? err.message : 'Slot synchronization failure';
+            logger.error('[BookAppointment] Fetch slots failure', { msg: errorMessage, doctorId: watchedDoctorId });
             setAvailableSlots(null);
         }
     }, [watchedDoctorId, watchedDate]);
@@ -126,13 +168,38 @@ export const BookAppointment: React.FC = () => {
     const onSubmit = async (data: BookAppointmentFormData) => {
         try {
             setGeneralError(null);
-            await bookAppointment(data);
+
+            // Institutional Protocol: Bundle screening with booking
+            const payload = {
+                ...data,
+                screeningResponses,
+                riskScore: screeningReport?.score || 0,
+                riskLevel: screeningReport?.level || 'Low'
+            };
+
+            await bookAppointment(payload);
+
             setSuccess(true);
             setTimeout(() => {
                 navigate('/appointments');
             }, 2000);
         } catch (err: unknown) {
-            setGeneralError(getErrorMessage(err, 'Failed to book appointment'));
+            const errorMessage = err instanceof Error ? err.message : 'Clinical booking transmission failure';
+            auditLogger.log('ERROR', {
+                message: '[BookAppointment] Submission failed',
+                details: { msg: errorMessage }
+            });
+
+            const userFriendlyError: string = getErrorMessage(err);
+
+            // Institutional Concurrency Handling with Premium Toast
+            if (userFriendlyError.includes('reserved by another patient') || userFriendlyError.includes('409')) {
+                showErrorToast("This slot was just reserved by another patient. We've refreshed the slots for you.");
+                fetchAvailableSlots();
+            } else {
+                showErrorToast(userFriendlyError);
+                setGeneralError(userFriendlyError);
+            }
         }
     };
 
@@ -150,6 +217,20 @@ export const BookAppointment: React.FC = () => {
     };
 
     const selectedDoctorData = doctors.find(d => d.id === watchedDoctorId);
+    const canVideoConsult = selectedDoctorData?.canVideoConsult ?? true;
+
+    const watchedConsultationType = form.watch('consultationType');
+
+    // 🛡️ CLINICAL INTEGRITY GUARD (Institutional Standard)
+    // Strict Enforcement: If selected doctor doesn't support video, force in-person.
+    // This effect is idempotent and guarded to prevent infinite render loops.
+    useEffect(() => {
+        if (!canVideoConsult && watchedConsultationType === 'video') {
+            form.setValue('consultationType', 'in-person');
+            logger.info('[BookAppointment] Consultation type downgraded: Video not supported by specialist.');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canVideoConsult, watchedConsultationType]);
 
 
     if (success) {
@@ -189,7 +270,7 @@ export const BookAppointment: React.FC = () => {
                     <div className="min-w-0 lg:col-span-3">
                         <Card className="p-8 h-fit border-none shadow-xl shadow-primary/5 bg-white dark:bg-card ring-1 ring-border/50">
                             <div className="flex items-center gap-3 mb-8 pb-4 border-b border-border/40">
-                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                <div className="w-10 h-10 bg-primary/10 flex items-center justify-center text-primary rounded-[var(--card-radius)]">
                                     <Calendar className="h-5 w-5" />
                                 </div>
                                 <h2 className="text-xl font-bold text-foreground">Appointment Details</h2>
@@ -209,11 +290,11 @@ export const BookAppointment: React.FC = () => {
                                                     disabled={loading}
                                                 >
                                                     <FormControl>
-                                                        <SelectTrigger>
+                                                        <SelectTrigger className="rounded-[var(--card-radius)]">
                                                             <SelectValue placeholder="Choose a doctor..." />
                                                         </SelectTrigger>
                                                     </FormControl>
-                                                    <SelectContent>
+                                                    <SelectContent className="rounded-[var(--card-radius)]">
                                                         {doctors.map(doctor => (
                                                             <SelectItem key={doctor.id} value={doctor.id.toString()}>
                                                                 {doctor.name} - {doctor.specialization}
@@ -259,9 +340,15 @@ export const BookAppointment: React.FC = () => {
                                                     name="appointmentTime"
                                                     render={({ field }) => (
                                                         <FormItem className="space-y-4">
-                                                            <div className="space-y-1">
-                                                                <FormLabel className="text-base font-bold text-foreground">Choose Available Time</FormLabel>
-                                                                <p className="text-xs text-muted-foreground">Select an available slot from the groups below</p>
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="space-y-1">
+                                                                    <FormLabel className="text-base font-bold text-foreground">Choose Available Time</FormLabel>
+                                                                    <p className="text-xs text-muted-foreground">Select an available slot from the groups below</p>
+                                                                </div>
+                                                                <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200 flex items-center gap-1 py-1">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                                                    Live
+                                                                </Badge>
                                                             </div>
                                                             <FormControl>
                                                                 <TimeGrid
@@ -279,24 +366,55 @@ export const BookAppointment: React.FC = () => {
                                         )}
                                     </AnimatePresence>
 
+                                    {/* --- INSTITUTIONAL DYNAMIC HEALTH SCREENING SECTION --- */}
+                                    <div className="pt-8 mt-8 border-t border-border/40 space-y-6">
+
+                                        <HealthScreeningForm
+                                            onComplete={(responses, report) => {
+                                                setScreeningResponses(responses);
+                                                setScreeningReport(report);
+                                            }}
+                                            onAnalyzingChange={setIsTriageAnalyzing}
+                                        />
+
+                                        {screeningReport && (
+                                            <Alert className={cn(
+                                                "border-none shadow-sm",
+                                                screeningReport.level === 'High' ? "bg-red-50 text-red-700" :
+                                                    screeningReport.level === 'Medium' ? "bg-orange-50 text-orange-700" : "bg-green-50 text-green-700"
+                                            )}>
+                                                <div className="flex gap-3">
+                                                    {screeningReport.level === 'High' ? <AlertTriangle className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+                                                    <div>
+                                                        <AlertTitle className="font-bold">Triage Assessment: {screeningReport.level} Risk</AlertTitle>
+                                                        <AlertDescription className="text-sm opacity-90">{screeningReport.message}</AlertDescription>
+                                                    </div>
+                                                </div>
+                                            </Alert>
+                                        )}
+                                    </div>
+                                    {/* ---------------------------------------------------- */}
+
                                     <FormField
                                         control={form.control}
                                         name="consultationType"
                                         render={({ field }) => (
-                                            <FormItem>
+                                            <FormItem className="pt-8 mt-8 border-t border-border/40">
                                                 <FormLabel>Consultation Type</FormLabel>
                                                 <Select
                                                     onValueChange={(value) => field.onChange(value)}
                                                     value={field.value}
                                                 >
                                                     <FormControl>
-                                                        <SelectTrigger>
+                                                        <SelectTrigger className="rounded-[var(--card-radius)]">
                                                             <SelectValue placeholder="Select type..." />
                                                         </SelectTrigger>
                                                     </FormControl>
-                                                    <SelectContent>
+                                                    <SelectContent className="rounded-[var(--card-radius)]">
                                                         <SelectItem value="in-person">In-Person (Physical)</SelectItem>
-                                                        <SelectItem value="video">Online (Video Call)</SelectItem>
+                                                        {canVideoConsult ? (
+                                                            <SelectItem value="video">Online (Video Call)</SelectItem>
+                                                        ) : null}
                                                     </SelectContent>
                                                 </Select>
                                                 <FormMessage />
@@ -304,11 +422,22 @@ export const BookAppointment: React.FC = () => {
                                         )}
                                     />
 
+                                    {/* Physical Only Notice */}
+                                    {!canVideoConsult && watchedDoctorId && (
+                                        <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/50">
+                                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                            <AlertDescription className="text-amber-800 dark:text-amber-400 text-xs">
+                                                This specialist ({selectedDoctorData?.specialization}) requires a physical examination.
+                                                Online consultations are unavailable for this category.
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+
                                     <FormField
                                         control={form.control}
                                         name="reason"
                                         render={({ field }) => (
-                                            <FormItem>
+                                            <FormItem className="pt-6">
                                                 <FormLabel>Reason for Visit</FormLabel>
                                                 <FormControl>
                                                     <textarea
@@ -352,12 +481,17 @@ export const BookAppointment: React.FC = () => {
                                             type="submit"
                                             className="w-full"
                                             size="lg"
-                                            disabled={form.formState.isSubmitting}
+                                            disabled={form.formState.isSubmitting || !screeningReport || isTriageAnalyzing}
                                         >
                                             {form.formState.isSubmitting ? (
                                                 <>
                                                     <PremiumLoader size="xs" />
                                                     Booking...
+                                                </>
+                                            ) : isTriageAnalyzing ? (
+                                                <>
+                                                    <Activity className="mr-2 h-4 w-4 animate-pulse" />
+                                                    Verifying Clinical Signals...
                                                 </>
                                             ) : (
                                                 <>

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
+import { pool } from '../config/db';
 
 /**
  * 🛡️ HAEMI LIFE: STORAGE BOOTSTRAPPER (v1.0)
@@ -52,6 +53,42 @@ export class StorageBootstrapper {
             }
         }
 
+        // 3. Forensic Data Parity Audit (Google/Meta Standard)
+        // Checks if DB paths actually exist on disk.
+        await this.performDataParityAudit(backendUploadsDir);
+
         logger.info('[Storage-Bootstrapper] Asset verification complete.');
+    }
+
+    private static async performDataParityAudit(uploadsDir: string): Promise<void> {
+        try {
+            const result = await pool.query('SELECT id, name, profile_image FROM users WHERE profile_image IS NOT NULL');
+            let driftCount = 0;
+
+            for (const row of result.rows) {
+                if (row.profile_image.startsWith('http')) continue;
+
+                // Normalize path (v2 Logic)
+                const relativePath = row.profile_image
+                    .replace(/^(\/)?(uploads\/)?/i, '')
+                    .replace(/\\/g, '/')
+                    .replace(/^\/+/, '');
+                
+                const fullPath = path.join(uploadsDir, relativePath);
+
+                if (!fs.existsSync(fullPath)) {
+                    driftCount++;
+                    logger.error(`[Data-Drift-Alert] Missing physical asset for user ${row.name} (${row.id}). Path: ${row.profile_image}`);
+                }
+            }
+
+            if (driftCount > 0) {
+                logger.warn(`[Storage-Bootstrapper] Audit finished: Detected ${driftCount} assets with data drift.`);
+            } else {
+                logger.info('[Storage-Bootstrapper] Forensic Audit: 100% Data Parity Verified.');
+            }
+        } catch (error: unknown) {
+            logger.error('[Storage-Bootstrapper] Audit failed to execute:', error);
+        }
     }
 }

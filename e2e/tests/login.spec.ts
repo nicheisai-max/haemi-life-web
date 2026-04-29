@@ -1,8 +1,15 @@
 import { test, expect } from '@playwright/test';
 
-// Use a known demo/admin account if exists, or mock if we want pure E2E isolation
-const TEST_EMAIL = 'admin@haemilife.com';
-const TEST_PASSWORD = 'HaemiLifeDemo@2026'; // Institutional Hardened Credential
+// Institutional Hardened Credentials (Single Source of Truth)
+const TEST_PASSWORD = 'HaemiLifeDemo@2026';
+const ROLES = {
+    ADMIN: { email: 'admin@haemilife.com', password: TEST_PASSWORD },
+    DOCTOR: { email: 'doctor@haemilife.com', password: TEST_PASSWORD },
+    PATIENT: { email: 'patient@haemilife.com', password: TEST_PASSWORD },
+    PHARMACIST: { email: 'pharmacist@haemilife.com', password: TEST_PASSWORD }
+};
+
+const TEST_EMAIL = ROLES.ADMIN.email; // Default for primary login tests
 
 test.describe('Authentication E2E Lifecycle', () => {
 

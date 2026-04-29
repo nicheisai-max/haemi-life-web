@@ -47,8 +47,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* Motion Tokens - Apple/Google Standards */
-  --duration-fast: 150ms;
-  --duration-hover: 200ms;
+  --duration-fast: 300ms;
+  --duration-hover: 300ms;
   --duration-state: 300ms;
 
   --ease-premium: cubic-bezier(0.4, 0, 0.2, 1);
@@ -270,8 +270,8 @@
   .theme-transitioning *,
   .theme-transitioning ::before,
   .theme-transitioning ::after {
-    transition-property: background-color, color, border-color, fill, stroke;
-    transition-duration: 200ms;
+    transition-property: background-color, color, border-color, fill, stroke, transform;
+    transition-duration: 300ms;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -281,7 +281,8 @@
   */
   .institutional-border {
     border: 1px solid var(--border) !important;
-    transition-property: color, background-color, opacity, box-shadow, transform !important;
+    transition-property: all !important;
+    transition-duration: 300ms !important;
   }
 
   /* Core layout elements */
@@ -345,7 +346,7 @@
     padding-right: var(--input-px);
     border: 1px solid var(--border) !important;
     @apply bg-background outline-none;
-    transition: background-color 0.2s, color 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s !important;
+    transition: background-color 0.3s, color 0.3s, opacity 0.3s, box-shadow 0.3s, transform 0.3s !important;
   }
 
   /* Support for shadcn/ui and other components that might use height: 10px or similar */
@@ -429,7 +430,7 @@
     border-radius: 20px !important;
     border: 2px solid transparent !important;
     background-clip: content-box !important;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.3s ease;
   }
 
   ::-webkit-scrollbar-thumb:hover {
@@ -469,8 +470,17 @@
 
   /* 🩺 HAEMI PREMIUM STATUS PULSE (Google/Apple Grade) */
   @keyframes haemi-status-breathing {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(0.92); }
+
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.7;
+      transform: scale(0.92);
+    }
   }
 
   .haemi-status-pulse {
@@ -484,7 +494,8 @@
   .chat-thumbnail-container {
     position: relative !important;
     width: 100% !important;
-    max-width: 12.5rem !important; /* ~200px Passport Size */
+    max-width: 12.5rem !important;
+    /* ~200px Passport Size */
     aspect-ratio: 1 / 1 !important;
     overflow: hidden !important;
     border-radius: var(--radius) !important;
@@ -587,16 +598,19 @@
   .haemi-command-item-wrapper {
     display: flex !important;
     align-items: center !important;
-    gap: 1.25rem !important; /* Premium Breathing Space (20px) */
+    gap: 1.25rem !important;
+    /* Premium Breathing Space (20px) */
     padding: 1rem 1.25rem !important;
     cursor: pointer !important;
     transition: background-color var(--duration-fast) var(--ease-premium) !important;
     border-radius: var(--card-radius) !important;
     margin: 0.125rem 0.5rem !important;
-    border: none !important; /* NO BORDERS TO PREVENT SHAKING */
+    border: none !important;
+    /* NO BORDERS TO PREVENT SHAKING */
     position: relative !important;
     background-color: transparent;
-    transform: none !important; /* NO TRANSLATIONS */
+    transform: none !important;
+    /* NO TRANSLATIONS */
   }
 
   .haemi-command-item-wrapper[data-selected="true"] {
@@ -627,9 +641,10 @@
   /* REFINED TRENDING PILL (Subtle & Elegant) */
   .haemi-trending-pill {
     font-size: 10px !important;
-    font-weight: 500 !important; /* Sophisticated Weight */
+    font-weight: 500 !important;
+    /* Sophisticated Weight */
     text-transform: uppercase !important;
-    padding: 0.25rem 0.75rem !important; 
+    padding: 0.25rem 0.75rem !important;
     border-radius: 999px !important;
     background-color: var(--secondary) !important;
     color: var(--muted-foreground) !important;
@@ -663,11 +678,16 @@
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 1.5rem !important; /* Institutional Mini-Circle (24px) */
-    height: 1.5rem !important; /* Institutional Mini-Circle (24px) */
-    border-radius: 999px !important; /* Perfect Circle */
-    background-color: #E2E8F0 !important; /* Gray-200 (High Contrast on White) */
-    color: #475569 !important; /* Gray-600 (Google Standard Icon) */
+    width: 1.5rem !important;
+    /* Institutional Mini-Circle (24px) */
+    height: 1.5rem !important;
+    /* Institutional Mini-Circle (24px) */
+    border-radius: 999px !important;
+    /* Perfect Circle */
+    background-color: #E2E8F0 !important;
+    /* Gray-200 (High Contrast on White) */
+    color: #475569 !important;
+    /* Gray-600 (Google Standard Icon) */
     transition: all var(--duration-fast) var(--ease-premium) !important;
     border: none !important;
     padding: 0 !important;
@@ -677,8 +697,10 @@
   }
 
   .haemi-dialog-close-institutional:hover {
-    background-color: #CBD5E1 !important; /* Gray-300 (Subtle Hover) */
-    color: #0F172A !important; /* Gray-900 (Focused Icon) */
+    background-color: #CBD5E1 !important;
+    /* Gray-300 (Subtle Hover) */
+    color: #0F172A !important;
+    /* Gray-900 (Focused Icon) */
     transform: rotate(90deg) !important;
   }
 
@@ -716,7 +738,7 @@
     gap: 0.375rem !important;
     font-size: 0.875rem !important;
     font-weight: 500 !important;
-    transition: all 0.2s !important;
+    transition: all 0.3s !important;
     box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important;
     white-space: nowrap !important;
   }
@@ -1169,10 +1191,14 @@
   .hl-pagination {
     display: flex;
     align-items: center;
-    justify-content: center; /* 🛡️ INSTITUTIONAL CENTERING MANDATE */
-    gap: 1rem; /* 16px Breathing Space (Variable Grid) */
-    padding: 1.25rem; /* 20px Institutional Padding */
-    border-top: 0.0625rem solid var(--border); /* 1px Hardened Line */
+    justify-content: center;
+    /* 🛡️ INSTITUTIONAL CENTERING MANDATE */
+    gap: 1rem;
+    /* 16px Breathing Space (Variable Grid) */
+    padding: 1.25rem;
+    /* 20px Institutional Padding */
+    border-top: 0.0625rem solid var(--border);
+    /* 1px Hardened Line */
     background-color: var(--card);
     flex-wrap: wrap;
     border-radius: 0 0 var(--card-radius) var(--card-radius);
@@ -1186,7 +1212,8 @@
     font-weight: 500;
     /* margin-right: auto; -> Purged to allow centering */
     white-space: nowrap;
-    order: 2; /* Mobile First: Text below buttons? No, let's keep centered row. */
+    order: 2;
+    /* Mobile First: Text below buttons? No, let's keep centered row. */
   }
 
   /* --- Pagination Ellipsis --- */
@@ -1207,8 +1234,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.25rem; /* ~36px */
-    height: 2.25rem; /* ~36px */
+    min-width: 2.25rem;
+    /* ~36px */
+    height: 2.25rem;
+    /* ~36px */
     padding: 0 0.5rem;
     border-radius: 0.35rem;
     border: 0.0625rem solid var(--border);
@@ -1221,7 +1250,8 @@
     transition: all var(--duration-fast) var(--ease-standard);
     line-height: 1;
     outline: none;
-    order: 1; /* Priority Ordering */
+    order: 1;
+    /* Priority Ordering */
   }
 
   /* --- Pagination Button Hover (not disabled) --- */
@@ -1524,31 +1554,38 @@
 
   /* HAEMI OFFICIAL LOGO SYSTEM (Institutional Scale) */
   .official-logo-sm {
-    height: 1.25rem; /* ~20px */
+    height: 1.25rem;
+    /* ~20px */
   }
 
   .official-logo-md {
-    height: 1.5rem; /* ~24px */
+    height: 1.5rem;
+    /* ~24px */
   }
 
   .official-logo-nav {
-    height: 3rem; /* ~48px */
+    height: 3rem;
+    /* ~48px */
   }
 
   .official-logo-auth {
-    height: 3.25rem; /* ~52px */
+    height: 3.25rem;
+    /* ~52px */
   }
 
   .official-logo-lg {
-    height: 3.5rem; /* ~56px */
+    height: 3.5rem;
+    /* ~56px */
   }
 
   .official-logo-xl {
-    height: 4.5rem; /* ~72px */
+    height: 4.5rem;
+    /* ~72px */
   }
 
   .official-logo-xxl {
-    height: 6rem; /* ~96px */
+    height: 6rem;
+    /* ~96px */
   }
 
   /* HAEMI INSTITUTIONAL AUTH SURFACES */
@@ -1621,8 +1658,10 @@
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    height: 2.5rem !important; /* System Locked 40px */
-    width: 2.5rem !important; /* System Locked 40px */
+    height: 2.5rem !important;
+    /* System Locked 40px */
+    width: 2.5rem !important;
+    /* System Locked 40px */
     min-width: 2.5rem !important;
     max-width: 2.5rem !important;
     max-height: 2.5rem !important;
@@ -1640,22 +1679,27 @@
 
   /* HAEMI NAV SYNC DROP-DOWN (v8.9 FINAL) */
   .haemi-nav-dropdown-content {
-    margin-top: 0.625rem !important; /* Exactly 10px stabilization offset */
+    margin-top: 0.625rem !important;
+    /* Exactly 10px stabilization offset */
     transform-origin: var(--radix-dropdown-menu-content-transform-origin);
-    animation: slide-in-from-top-2 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: slide-in-from-top-2 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* 1:1 Institutional Header Synchronization Protocol */
   .haemi-nav-dropdown-header {
-    padding: 0.875rem 1.25rem !important; /* Total parity with Notification Menu (px-5 py-3.5) */
+    padding: 0.875rem 1.25rem !important;
+    /* Total parity with Notification Menu (px-5 py-3.5) */
     border-bottom: 1px solid var(--border);
     margin-bottom: 0.25rem;
-    background-color: rgba(226, 232, 240, 0.8) !important; /* bg-slate-200/80 */
+    background-color: rgba(226, 232, 240, 0.8) !important;
+    /* bg-slate-200/80 */
   }
 
   .dark .haemi-nav-dropdown-header {
-    background-color: rgba(255, 255, 255, 0.05) !important; /* bg-white/5 */
-    border-bottom-color: rgba(255, 255, 255, 0.1) !important; /* border-white/10 */
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    /* bg-white/5 */
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+    /* border-white/10 */
   }
 
   /* Synchronized Horizon: Prevent 48px Atmospheric Drift */
@@ -1734,12 +1778,15 @@
     flex: 1 !important;
     min-width: 0 !important;
     padding: 0 0.5rem !important;
-    max-width: 42rem !important; /* ~672px */
+    max-width: 42rem !important;
+    /* ~672px */
   }
 
   .haemi-nav-search-trigger-mobile {
-    height: 2.5rem !important; /* System Locked 40px */
-    width: 2.5rem !important; /* System Locked 40px */
+    height: 2.5rem !important;
+    /* System Locked 40px */
+    width: 2.5rem !important;
+    /* System Locked 40px */
     border-radius: 9999px !important;
     background-color: var(--nav-action-bg) !important;
     border: 1px solid var(--nav-action-border) !important;
@@ -1748,6 +1795,7 @@
   }
 
   @media (min-width: 80rem) {
+
     /* xl */
     .haemi-nav-search-container {
       padding: 0 2rem !important;
@@ -1770,4 +1818,88 @@
     transition: opacity var(--duration-state) var(--ease-premium);
 }
 
+}
+
+/* ----------------------------------------------
+   HAEMI LIFE: CLINICAL TRIAGE SYSTEM
+   Phase 11: Institutional Resilience (Zero-Drift)
+   ---------------------------------------------- */
+.triage-container {
+  @apply space-y-4 w-full max-w-[var(--layout-max-width)] mx-auto;
+}
+
+.triage-banner {
+  @apply p-4 border border-primary/10 mb-4 flex items-center justify-between transition-all duration-300;
+  background-color: rgba(20, 140, 139, 0.03);
+  border-radius: var(--card-radius);
+}
+
+.triage-card {
+  @apply p-3 transition-all duration-300 border-slate-200 bg-card relative overflow-hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  cursor: default;
+  /* Reset parent cursor to prevent leakage */
+}
+
+.triage-card:hover {
+  @apply border-primary/30 shadow-sm;
+  transform: translateY(-1px);
+}
+
+.triage-card--active {
+  @apply border-primary/20 shadow-sm;
+  background-color: rgba(20, 140, 139, 0.02);
+}
+
+.triage-card--analyzing {
+  @apply opacity-80;
+  animation: triage-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes triage-pulse {
+
+  0%,
+  100% {
+    background-color: var(--card);
+  }
+
+  50% {
+    background-color: rgba(20, 140, 139, 0.05);
+  }
+}
+
+.triage-question-text {
+  @apply font-semibold leading-snug transition-colors duration-200;
+  font-size: var(--font-body-lg);
+}
+
+.triage-icon-box {
+  @apply mt-1 p-1 rounded-full transition-all duration-300 flex-shrink-0;
+}
+
+.triage-switch-wrapper {
+  @apply cursor-pointer p-2 rounded-md transition-all hover:bg-primary/5;
+}
+
+/* Dark Mode Overrides - Institutional Purity */
+.dark .triage-banner {
+  background-color: rgba(63, 194, 181, 0.08) !important;
+  border-color: rgba(63, 194, 181, 0.2) !important;
+}
+
+.dark .triage-card {
+  background-color: #0d181a !important;
+  border-color: rgba(31, 59, 64, 0.5) !important;
+}
+
+.dark .triage-card--active {
+  background-color: rgba(63, 194, 181, 0.15) !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 15px -5px rgba(63, 194, 181, 0.3);
+}
+
+.dark .triage-icon-box.bg-slate-100 {
+  background-color: rgba(31, 59, 64, 0.5) !important;
+  color: #648285 !important;
 }

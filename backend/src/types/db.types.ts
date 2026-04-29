@@ -37,6 +37,7 @@ export interface DoctorProfileEntity {
     consultation_fee: number | null;
     is_verified: boolean;
     profile_image: string | null;
+    can_video_consult: boolean;
 }
 
 export interface MedicineEntity {
@@ -89,5 +90,6 @@ export interface JoinedDoctorRow extends UserEntity {
     bio: string | null;
     consultation_fee: number;
     is_verified: boolean;
+    can_video_consult: boolean;
     license_number?: string | null;
 }

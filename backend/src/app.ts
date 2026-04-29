@@ -4,6 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { Socket } from 'socket.io';
 import { JWTPayload } from './types/express';
 import {
@@ -11,7 +12,8 @@ import {
     ClientToServerEvents,
     InterServerEvents,
     SocketData,
-    StrictAuthenticatedSocket
+    StrictAuthenticatedSocket,
+    HaemiServer
 } from './types/socket.types';
 import { UserId, ConversationId } from './types/chat.types';
 import * as jwt from 'jsonwebtoken';
@@ -53,6 +55,9 @@ import screeningRoutes from './routes/screening.routes';
 
 const app = express();
 
+// P0: Global Socket Accessor (Hardened Declaration Order)
+export let socketIO: HaemiServer | undefined;
+
 app.use(corsMiddleware);
 
 // Global CORS handles all methods including OPTIONS before any auth logic
@@ -72,7 +77,7 @@ if (!env.isDemoMode) {
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 
-// Rate Limiting
+// Rate Limiting (Applied BEFORE routes to mitigate DDoS/Brute-force)
 if (!env.isDemoMode && process.env.NODE_ENV !== 'test') {
     app.use('/api/auth/login', authLimiter);
     app.use('/api/auth/signup', authLimiter);
@@ -81,10 +86,6 @@ if (!env.isDemoMode && process.env.NODE_ENV !== 'test') {
         return apiLimiter(req, res, next);
     });
 }
-
-// DB Connection with Retry
-
-// Removed redundant connectDB as startServer uses checkConnection
 
 // Health Probes (Phase 3 Contract)
 app.get('/health', async (_req, res) => {
@@ -114,11 +115,8 @@ app.get('/health', async (_req, res) => {
 // Readiness Probe for Orchestration (Phase 1 Contract)
 app.get('/api/health/ready', async (_req, res) => {
     try {
-        // 1. Check DB
         await pool.query('SELECT 1');
-        // 2. Check Socket.IO (if initialized)
         const isSocketReady = !!socketIO;
-
         if (isSocketReady) {
             return res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
         }
@@ -131,9 +129,9 @@ app.get('/api/health/ready', async (_req, res) => {
     }
 });
 
-
-// API Routes
+// Institutional API Routes (Strict Mounting Order)
 app.use('/api/auth', authRoutes);
+app.use('/api/screening', screeningRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
@@ -150,15 +148,9 @@ app.use('/api/files', fileRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/pharmacist', pharmacistRoutes);
-app.use('/api/screening', screeningRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
-
-import { Server as SocketIOServer } from 'socket.io';
-import { HaemiServer } from './types/socket.types';
-
-export let socketIO: HaemiServer | undefined;
 
 // Server & Sockets
 const startServer = async () => {
@@ -180,13 +172,13 @@ const startServer = async () => {
                 methods: ["GET", "POST", "OPTIONS"],
                 allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
             },
-            transports: ["websocket"], // P0: Google/Meta Grade Direct WebSocket (Zero-Handshake Loop)
+            // Institutional Resilience: Polling-first for stable refresh cycles (prevents race condition on reconnect)
+            transports: ["polling", "websocket"],
             allowEIO3: false,
             pingTimeout: 60000,
             pingInterval: 25000
         });
 
-        // ... (Socket logic remains identical)
         setupSockets(socketIO);
 
         const PORT = env.port;
@@ -212,9 +204,7 @@ const startServer = async () => {
     }
 };
 
-
-
-// Extracted socket setup to keep startServer clean
+// Institutional Socket Setup (Source of Truth Restoration)
 function setupSockets(io: HaemiServer) {
     io.use(async (socket: Socket, next: (err?: Error) => void) => {
         const auth = socket.handshake.auth;
