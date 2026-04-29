@@ -18,7 +18,7 @@ import type { DoctorProfile } from '../../services/doctor.service';
 import type { AvailableSlots } from '../../services/appointment.service';
 import { 
     HealthScreeningForm 
-} from '../../components/clinical/HealthScreeningForm';
+} from '../../components/clinical/health-screening-form';
 import { 
     type ScreeningResponse, 
     type RiskReport 
@@ -126,6 +126,7 @@ export const BookAppointment: React.FC = () => {
                 logger.error('[BookAppointment] Draft restoration failed', { msg });
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [preselectedDoctorId, doctors]);
     // ↑ Intentionally omits `form`: useForm() does not produce a stable object reference.
     //   form.setValue is stable and is the only method called — its identity never changes.
@@ -228,6 +229,7 @@ export const BookAppointment: React.FC = () => {
             form.setValue('consultationType', 'in-person');
             logger.info('[BookAppointment] Consultation type downgraded: Video not supported by specialist.');
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canVideoConsult, watchedConsultationType]);
 
 

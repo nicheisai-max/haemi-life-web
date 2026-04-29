@@ -62,7 +62,7 @@ const NotFound = lazy(() => import('./pages/public/not-found').then(m => ({ defa
 const DoctorReports = lazy(() => import('./pages/doctor/reports').then(m => ({ default: m.DoctorReports })));
 const DispensePrescription = lazy(() => import('./pages/pharmacist/dispense-prescription').then(m => ({ default: m.DispensePrescription })));
 const DoctorPatientList = lazy(() => import('./pages/doctor/doctor-patient-list').then(m => ({ default: m.DoctorPatientList })));
-const ScreeningManager = lazy(() => import('./pages/admin/ScreeningManager').then(m => ({ default: m.ScreeningManager })));
+const ScreeningManager = lazy(() => import('./pages/admin/screening-manager').then(m => ({ default: m.ScreeningManager })));
 
 const LoadingFallback = () => <MedicalLoader variant="global" message="Securing clinical session..." />;
 const DelayedFallback = () => <MedicalLoader variant="global" message="Restoring clinical records..." />;

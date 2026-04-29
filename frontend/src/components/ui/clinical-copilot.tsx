@@ -163,7 +163,7 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
     const lastAlertId = useRef<string | null>(null);
 
     // 🧬 PROACTIVE CLINICAL MONITORING ENGINE
-    const fetchProactiveAlerts = async () => {
+    const fetchProactiveAlerts = React.useCallback(async () => {
         if (user?.role !== 'doctor') return;
         try {
             // NOTE: In a full production sync, we would fetch current patients from the dashboard context
@@ -201,7 +201,7 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
         } catch (err: unknown) {
             console.error('[PROACTIVE_MONITOR_ERROR]:', err);
         }
-    };
+    }, [user?.role, error, warning, success]);
 
     useEffect(() => {
         // Initial fetch after dashboard load
@@ -216,7 +216,7 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
             clearTimeout(timer);
             clearInterval(interval);
         };
-    }, []);
+    }, [fetchProactiveAlerts]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

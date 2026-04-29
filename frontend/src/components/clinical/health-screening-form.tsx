@@ -51,7 +51,7 @@ export const HealthScreeningForm: React.FC<HealthScreeningFormProps> = ({
         }, 400); // Optimized 400ms Grace Period
 
         return () => clearTimeout(debounceTimer);
-    }, [responses, questions, loading]);
+    }, [responses, questions, loading, notifyParent]);
 
     useEffect(() => {
         const bootSequence = async (): Promise<void> => {
@@ -125,7 +125,7 @@ export const HealthScreeningForm: React.FC<HealthScreeningFormProps> = ({
         // Instant Visual Feedback
         setIsAnalyzing(true); 
         setResponses(nextResponses);
-    }, [responses]);
+    }, [responses, setIsAnalyzing, setResponses]);
 
     if (loading) {
         return <div className="p-8 text-center animate-pulse text-slate-400">Initializing clinical triage...</div>;

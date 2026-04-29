@@ -52,7 +52,7 @@ export const PreScreeningForm: React.FC<PreScreeningFormProps> = ({
 
     const allAnswered = questions.length > 0 && responses.length === questions.length;
 
-    const runRiskAnalysis = async () => {
+    const runRiskAnalysis = React.useCallback(async () => {
         if (!allAnswered || isAnalyzing) return;
         
         setIsAnalyzing(true);
@@ -74,13 +74,13 @@ export const PreScreeningForm: React.FC<PreScreeningFormProps> = ({
         } finally {
             setIsAnalyzing(false);
         }
-    };
+    }, [allAnswered, isAnalyzing, responses, questions, onRiskAnalysisComplete]);
 
     React.useEffect(() => {
         if (allAnswered && !riskReport) {
             runRiskAnalysis();
         }
-    }, [responses.length, questions.length]);
+    }, [allAnswered, riskReport, runRiskAnalysis]);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

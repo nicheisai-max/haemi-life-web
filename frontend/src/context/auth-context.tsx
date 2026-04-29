@@ -282,7 +282,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             window.removeEventListener('visibilitychange', handleVisibilityChange);
             interactionEvents.forEach(name => window.removeEventListener(name, updateActivity));
         };
-    }, [authState.authStatus, authState.token, checkRefreshNeeded]);
+    }, [authState.authStatus, authState.token, checkRefreshNeeded, commitAuthState]);
 
     useEffect(() => {
         const handleUnauthorized = () => commitAuthState(null, null, 'unauthenticated');
