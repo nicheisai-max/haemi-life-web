@@ -20,9 +20,6 @@ export interface PreScreeningResponse {
     risk_score?: number;
 }
 
-interface InstitutionalError extends Error {
-    code?: string;
-}
 
 export class PreScreeningRepository {
     private db: Pool;
