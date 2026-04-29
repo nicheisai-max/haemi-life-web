@@ -1816,7 +1816,7 @@
     justify-content: center;
     backdrop-filter: blur(12px);
     transition: opacity var(--duration-state) var(--ease-premium);
-  }
+}
 
 }
 

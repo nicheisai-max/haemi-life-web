@@ -55,9 +55,12 @@ export const bookAppointment = async (data: {
     appointmentTime: string;
     consultationType: string;
     reason: string;
-    screeningResponses?: Array<{ question_id: string, response_value: boolean }>;
+    // Legacy: inline pre-screening responses submitted with booking
+    screeningResponses?: Array<{ question_id: string; response_value: boolean }>;
     riskScore?: number;
     riskLevel?: string;
+    // New: link to a pre-existing clinical screening record
+    screeningRecordId?: string;
 }): Promise<Appointment> => {
     const response = await api.post<ApiResponse<Appointment>>('/appointments', data);
     return normalizeResponse(response);

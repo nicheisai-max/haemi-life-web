@@ -1,32 +1,58 @@
- import api, { normalizeResponse } from './api';
- import type { ApiResponse } from '../types/auth.types';
- import { auditLogger } from '../utils/logger';
- 
- /**
-  * 🛡️ HAEMI LIFE: HEALTH SCREENING SERVICE
-  * Institutional Grade: Strictly typed service for dynamic triage management.
-  */
- 
- export interface ScreeningQuestion {
-     id: string;
-     category: 'triage';
-     question_text: string;
-     disease_tag?: string;
-     risk_weight: number;
-     is_active: boolean;
-     sort_order: number;
- }
- 
- export interface ScreeningResponse {
-     question_id: string;
-     response_value: boolean;
- }
- 
- export interface RiskReport {
-     score: number;
-     level: 'Low' | 'Medium' | 'High';
-     message: string;
- }
+import api, { normalizeResponse } from './api';
+import type { ApiResponse } from '../types/auth.types';
+import { auditLogger } from '../utils/logger';
+
+/**
+ * 🛡️ HAEMI LIFE: HEALTH SCREENING SERVICE (Unified)
+ * Institutional Grade: Strictly typed service for all triage and clinical screening operations.
+ * Standards: Google/Meta-grade TypeScript | Zero 'any' Policy | Strict Audit Logging.
+ */
+
+// ─── ADMIN: Dynamic Triage Definition Types ───────────────────────────────────
+
+export interface ScreeningQuestion {
+    id: string;
+    category: 'triage';
+    question_text: string;
+    disease_tag?: string;
+    risk_weight: number;
+    is_active: boolean;
+    sort_order: number;
+}
+
+export interface ScreeningResponse {
+    question_id: string;
+    response_value: boolean;
+}
+
+export interface RiskReport {
+    score: number;
+    level: 'Low' | 'Medium' | 'High';
+    message: string;
+}
+
+// ─── PATIENT: Clinical Submission Types ──────────────────────────────────────
+
+export interface StructuredScreeningQuestion {
+    id: string;
+    diseaseCategory: string;
+    questionTextEn: string;
+    inputType: string;
+    displayOrder: number;
+}
+
+export interface SubmitScreeningRequest {
+    appointmentId?: string;
+    responses: Record<string, boolean>;
+}
+
+export interface SubmitScreeningResponse {
+    screeningId: string;
+    outcome: 'PRESUMPTIVE' | 'NEGATIVE';
+    message: string;
+}
+
+// ─── ADMIN: Triage Definition Management API ─────────────────────────────────
 
 // Fetch all active questions for patients
 export const getActiveQuestions = async (): Promise<ScreeningQuestion[]> => {
@@ -55,6 +81,17 @@ export const updateQuestion = async (id: string, data: Partial<ScreeningQuestion
 // Admin: Toggle active status
 export const toggleQuestion = async (id: string, is_active: boolean): Promise<ScreeningQuestion> => {
     const response = await api.patch<ApiResponse<ScreeningQuestion>>(`/screening/definitions/${id}/toggle`, { is_active });
+    return normalizeResponse(response);
+};
+
+// Admin: Delete question
+export const deleteQuestion = async (id: string): Promise<void> => {
+    await api.delete(`/screening/definitions/${id}`);
+};
+
+// Admin: Reorder questions
+export const reorderQuestions = async (updates: { id: string; sort_order: number }[]): Promise<void> => {
+    const response = await api.patch<ApiResponse<void>>('/screening/definitions/reorder', { updates });
     return normalizeResponse(response);
 };
 
@@ -131,15 +168,27 @@ export const analyzeWithAI = async (responses: ScreeningResponse[], questions: S
     }
 };
 
-// Admin: Delete question
-export const deleteQuestion = async (id: string): Promise<void> => {
-    await api.delete(`/screening/definitions/${id}`);
-};
+// ─── PATIENT: Structured Clinical Submission API ──────────────────────────────
 
-// Admin: Reorder questions
-export const reorderQuestions = async (updates: { id: string; sort_order: number }[]): Promise<void> => {
-    const response = await api.patch<ApiResponse<void>>('/screening/definitions/reorder', { updates });
-    return normalizeResponse(response);
+/**
+ * screeningService object — patient-facing structured submission flow.
+ */
+export const screeningService = {
+    /**
+     * Fetch all active screening questions from the backend (display_order sorted)
+     */
+    getQuestions: async (): Promise<StructuredScreeningQuestion[]> => {
+        const response = await api.get<ApiResponse<StructuredScreeningQuestion[]>>('/screening/questions');
+        return normalizeResponse(response);
+    },
+
+    /**
+     * Submit patient screening responses and get clinical outcome
+     */
+    submitScreening: async (data: SubmitScreeningRequest): Promise<SubmitScreeningResponse> => {
+        const response = await api.post<ApiResponse<SubmitScreeningResponse>>('/screening/submit', data);
+        return normalizeResponse(response);
+    }
 };
 
 export default {
@@ -150,5 +199,6 @@ export default {
     toggleQuestion,
     deleteQuestion,
     reorderQuestions,
-    analyzeWithAI
+    analyzeWithAI,
+    screeningService
 };

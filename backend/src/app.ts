@@ -4,6 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { Socket } from 'socket.io';
 import { JWTPayload } from './types/express';
 import {
@@ -11,7 +12,8 @@ import {
     ClientToServerEvents,
     InterServerEvents,
     SocketData,
-    StrictAuthenticatedSocket
+    StrictAuthenticatedSocket,
+    HaemiServer
 } from './types/socket.types';
 import { UserId, ConversationId } from './types/chat.types';
 import * as jwt from 'jsonwebtoken';
@@ -50,9 +52,6 @@ import profileRoutes from './routes/profile.routes';
 import aiRoutes from './routes/ai.routes';
 import pharmacistRoutes from './routes/pharmacist.routes';
 import screeningRoutes from './routes/screening.routes';
-
-import { Server as SocketIOServer } from 'socket.io';
-import { HaemiServer } from './types/socket.types';
 
 const app = express();
 
@@ -173,7 +172,8 @@ const startServer = async () => {
                 methods: ["GET", "POST", "OPTIONS"],
                 allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
             },
-            transports: ["polling", "websocket"], // Institutional Resilience: Enabled polling fallback for stable refresh cycles.
+            // Institutional Resilience: Polling-first for stable refresh cycles (prevents race condition on reconnect)
+            transports: ["polling", "websocket"],
             allowEIO3: false,
             pingTimeout: 60000,
             pingInterval: 25000

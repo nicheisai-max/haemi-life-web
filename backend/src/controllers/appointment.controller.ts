@@ -13,7 +13,10 @@ interface BookAppointmentRequest {
     appointmentTime: string;
     consultationType: 'in-person' | 'video';
     reason: string;
-    screeningResponses?: Array<{ question_id: string, response_value: boolean }>;
+    // Legacy pre-screening responses (inline triage via preScreeningRepository)
+    screeningResponses?: Array<{ question_id: string; response_value: boolean }>;
+    // New structured clinical record linkage (via screeningRepository)
+    screeningRecordId?: string;
 }
 
 interface UpdateAppointmentRequest {
@@ -23,7 +26,7 @@ interface UpdateAppointmentRequest {
 
 // Book a new appointment (Patient)
 export const bookAppointment = async (req: Request, res: Response): Promise<void> => {
-    const { doctorId, appointmentDate, appointmentTime, consultationType, reason, screeningResponses } = req.body as BookAppointmentRequest;
+    const { doctorId, appointmentDate, appointmentTime, consultationType, reason, screeningResponses, screeningRecordId } = req.body as BookAppointmentRequest;
     const user = req.user;
 
     try {
@@ -67,6 +70,14 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
             consultation_type: consultationType,
             reason
         });
+        
+        // --- Clinical Screening Linkage ---
+        if (screeningRecordId) {
+            const { screeningRepository } = await import('../repositories/screening.repository');
+            await screeningRepository.linkToAppointment(screeningRecordId, appointment.id);
+            logger.info(`[AppointmentController] Linked screening ${screeningRecordId} to appointment ${appointment.id}`);
+        }
+        // ----------------------------------
 
         // --- Clinical Screening Linkage (Institutional Atomic Triage) ---
         if (screeningResponses && Array.isArray(screeningResponses)) {

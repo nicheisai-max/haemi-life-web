@@ -114,7 +114,7 @@ async function performHealthAudit(): Promise<void> {
         `, ['public']);
         
         const actualCount = parseInt(res.rows[0].count);
-        const INSTITUTIONAL_TARGET = 41;
+        const INSTITUTIONAL_TARGET = 42;
 
         console.log(`📊 Structural Audit: Detected ${actualCount} Institutional Tables`);
         

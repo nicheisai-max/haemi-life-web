@@ -402,6 +402,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const now = Math.floor(Date.now() / 1000);
                 return payload.exp > now;
             } catch (err: unknown) {
+                logger.error('[Auth] Centralized expiry validation systemic failure', {
+                    error: err instanceof Error ? err.message : String(err)
+                });
                 return false;
             }
         })()
