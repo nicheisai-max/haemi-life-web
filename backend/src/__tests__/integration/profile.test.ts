@@ -13,7 +13,7 @@ jest.mock('../../config/db', () => ({
     checkConnection: jest.fn().mockResolvedValue(undefined),
 }));
 
-// 🛡️ LOCKING CONFIG DRIFT
+// 🛡️ LOCKING CONFIG DRIFT: Prevent background DB hits during Auth Middleware pulse
 jest.mock('../../utils/config.util', () => ({
     getSessionTimeoutMinutes: jest.fn().mockResolvedValue(60),
 }));
@@ -54,20 +54,27 @@ describe('Profile API (Integration)', () => {
         jest.restoreAllMocks();
     });
 
+    // 🛡️ ATOMIC ISOLATION: Reset pool mocks before every test to prevent sequence leak
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
     /**
      * 🛡️ INSTITUTIONAL HELPER: MOCK AUTH CHAIN
-     * Ensures middleware queries are always satisfied before controller logic starts.
+     * Deterministic satisfaction of authenticateToken middleware requirements.
      */
     const mockAuthChain = (role: string, tokenVersion: number = 0) => {
         const mockQuery = pool.query as jest.Mock;
-        // 1. User check (auth middleware)
+        
+        // 1. User check (SELECT FROM users)
         mockQuery.mockResolvedValueOnce({
             rows: [{
-                id: 'any', name: 'Test', status: 'ACTIVE', role, token_version: tokenVersion,
-                email: 'any@any.com', initials: 'TT', last_activity: new Date()
+                id: 'mock-id', name: 'Mock User', status: 'ACTIVE', role, token_version: tokenVersion,
+                email: 'mock@test.com', initials: 'MU', last_activity: new Date()
             }]
         });
-        // 2. Session check (auth middleware)
+        
+        // 2. Session check (SELECT FROM user_sessions)
         mockQuery.mockResolvedValueOnce({
             rows: [{ revoked: false, last_activity: new Date() }]
         });
@@ -77,7 +84,7 @@ describe('Profile API (Integration)', () => {
         const mockQuery = pool.query as jest.Mock;
         mockAuthChain('patient');
         
-        // 3. Controller query
+        // 3. Controller query (Profile resolution)
         mockQuery.mockResolvedValueOnce({
             rows: [{
                 id: patientId, email: 'p@t.com', role: 'patient', name: 'Test Patient',
@@ -124,7 +131,7 @@ describe('Profile API (Integration)', () => {
         const mockQuery = pool.query as jest.Mock;
         mockAuthChain('patient');
 
-        // 3. Controller query (Not Found)
+        // 3. Controller query (NOT FOUND scenario)
         mockQuery.mockResolvedValueOnce({ rows: [] });
 
         const res = await request(app)
@@ -133,5 +140,6 @@ describe('Profile API (Integration)', () => {
 
         expect(res.status).toBe(404);
         expect(res.body.message).toBe('Profile not found');
+        expect(res.body.code).toBe('NOT_FOUND');
     });
 });

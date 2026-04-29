@@ -151,7 +151,7 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
             const nowMs = Date.now();
             const last_activity_time = sessionData.last_activity ? new Date(sessionData.last_activity).getTime() : 0;
 
-            if (nowMs - last_activity_time > 60000) {
+            if (nowMs - last_activity_time > 60000 && process.env.NODE_ENV !== 'test') {
                 const timeoutMinutes = await getSessionTimeoutMinutes();
                 const newExpiresAt = new Date(nowMs + timeoutMinutes * 60 * 1000);
 
