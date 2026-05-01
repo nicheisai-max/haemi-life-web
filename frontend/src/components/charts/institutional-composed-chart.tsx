@@ -17,9 +17,16 @@ interface InstitutionalComposedChartProps<T extends object> {
     title: string;
     description?: string;
     data: T[];
-    areaKey: keyof T & string;
-    lineKey: keyof T & string;
-    categoryKey: keyof T & string;
+    /**
+     * Property names on T for the layered series. Typed as `string`
+     * (not `keyof T & string`) because recharts' `DataKey<T>` accepts
+     * a wider surface than TypeScript's `keyof T` intersection
+     * produces at the prop boundary; the runtime accessor is a string
+     * lookup. See premium-bar-chart.tsx for the same pattern.
+     */
+    areaKey: string;
+    lineKey: string;
+    categoryKey: string;
     areaColor?: string;
     lineColor?: string;
     height?: number;
@@ -120,7 +127,7 @@ export const InstitutionalComposedChart = <T extends object>({
                                 />
 
                                 <XAxis
-                                    dataKey={categoryKey as string}
+                                    dataKey={categoryKey}
                                     axisLine={false}
                                     tickLine={false}
                                     tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 700 }}
@@ -152,7 +159,7 @@ export const InstitutionalComposedChart = <T extends object>({
                                 <Area
                                     type="monotone"
                                     name="Revenue"
-                                    dataKey={areaKey as string}
+                                    dataKey={areaKey}
                                     stroke={areaColor}
                                     strokeWidth={3}
                                     fillOpacity={1}
@@ -163,7 +170,7 @@ export const InstitutionalComposedChart = <T extends object>({
                                 <Line
                                     type="monotone"
                                     name="Expenses"
-                                    dataKey={lineKey as string}
+                                    dataKey={lineKey}
                                     stroke={lineColor}
                                     strokeWidth={3}
                                     dot={{ r: 0 }}

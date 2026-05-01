@@ -71,25 +71,25 @@ describe('Authentication API Lifecycle (Integration)', () => {
         });
 
         /* it('should return 200 and tokens for valid credentials', async () => {
-            // Because bcrypt is used, we mock the whole bcrypt compare or authController logic, 
-            // OR we mock DB to return a valid hash.
-            // But since this is system integration testing, let's mock the DB to yield a real hash.
-            const mockHash = '$2b$10$A5v1...'; // A valid bcrypt hash for 'password123'
+            const mockHash = '$2b$10$A5v1...'; 
 
-            // To simplify without dealing with bcrypt overhead here, let's mock bcrypt.compare if necessary.
-            // Alternatively, mock just the postgres queries:
             (pool.query as jest.Mock)
                 .mockResolvedValueOnce({
                     rows: [{
                         id: '123',
                         email: 'test@admin.com',
                         password_hash: mockHash,
+                        name: 'Admin User',
+                        initials: 'AU',
                         role: 'admin',
-                        is_verified: true
+                        status: 'ACTIVE',
+                        is_verified: true,
+                        token_version: 0,
+                        profile_image: null,
+                        profile_image_mime: null,
+                        last_activity: new Date()
                     }]
                 });
-
-            // We will inject a manual spy into bcrypt inside auth logic if we really want to bypass hashing
         }); */
     });
 

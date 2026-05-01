@@ -279,7 +279,15 @@ export const login = async (req: Request, res: Response) => {
             return sendError(res, 403, 'Account is not active. Please contact support.');
         }
 
-        const validPassword = await bcrypt.compare(password, user.password!);
+        // PASSWORD GUARD: `user.password` is optional on the entity (the
+        // column is hidden from generic SELECTs). At login we explicitly
+        // SELECT it, so it must be present — but assert with a typed
+        // narrow rather than a non-null assertion.
+        if (typeof user.password !== 'string' || user.password.length === 0) {
+            logger.error('[Auth] Login row missing password hash for active user', { userId: user.id });
+            return sendError(res, 500, 'Account verification unavailable');
+        }
+        const validPassword = await bcrypt.compare(password, user.password);
 
         if (!validPassword) {
             await auditService.log({
@@ -559,9 +567,15 @@ export const refreshToken = async (req: Request, res: Response) => {
             return sendError(res, 429, 'Too many refresh attempts. Please try again in a minute.');
         }
 
-        // 2. Fetch User and Session state
+        // 2. Fetch User and Session state.
+        // P1 RACE FIX (Phase 12): both reads acquire row-level locks
+        // (`FOR UPDATE`) so concurrent refresh attempts on the same
+        // session serialize at the database. Without this, two parallel
+        // refreshes could each observe the same `token_version` and JTI,
+        // mint two new access tokens, and rotate the session out of step
+        // with the underlying user row.
         const userRes = await client.query(
-            'SELECT id, status, token_version, email, role, last_activity FROM users WHERE id = $1',
+            'SELECT id, status, token_version, email, role, last_activity FROM users WHERE id = $1 FOR UPDATE',
             [userId]
         );
         const user = userRes.rows[0] as UserEntity | undefined;
@@ -573,7 +587,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 
         const sessionRes = await client.query(
             `SELECT refresh_token_jti, previous_refresh_token_jti, jti_rotated_at, last_activity,
-             access_token_jti, revoked, expires_at FROM user_sessions WHERE session_id = $1`,
+             access_token_jti, revoked, expires_at FROM user_sessions WHERE session_id = $1 FOR UPDATE`,
             [sessionId]
         );
         const session = sessionRes.rows[0] as UserSessionEntity | undefined;

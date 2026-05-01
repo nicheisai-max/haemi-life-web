@@ -3,7 +3,13 @@ import { logger } from './logger';
 
 const ALGORITHM_GCM = 'aes-256-gcm';
 const ALGORITHM_CBC = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!;
+// Fail-fast at module load: a missing ENCRYPTION_KEY is a deployment
+// misconfiguration that must abort startup, never default silently.
+const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (typeof RAW_ENCRYPTION_KEY !== 'string' || RAW_ENCRYPTION_KEY.length === 0) {
+    throw new Error('ENCRYPTION_KEY environment variable is required for institutional PII encryption');
+}
+const ENCRYPTION_KEY: string = RAW_ENCRYPTION_KEY;
 const IV_LENGTH = 12; // Standard GCM IV length for WebCrypto compatibility
 const AUTH_TAG_LENGTH = 16;
 const ENCRYPTED_PREFIX = 'enc:';

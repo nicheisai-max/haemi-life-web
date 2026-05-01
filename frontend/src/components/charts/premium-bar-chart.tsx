@@ -16,8 +16,16 @@ interface PremiumBarChartProps<T extends object> {
     title: string;
     description?: string;
     data: T[];
-    dataKey: keyof T & string;
-    categoryKey: keyof T & string;
+    /**
+     * Property name on T containing the numeric series value.
+     * Typed as `string` (not `keyof T & string`) because recharts'
+     * `DataKey<T>` accepts a wider surface than TypeScript's `keyof T`
+     * intersection produces at the prop boundary; the runtime accessor
+     * is just a string lookup.
+     */
+    dataKey: string;
+    /** Property name on T containing the category-axis label. */
+    categoryKey: string;
     color?: string;
     height?: number;
     valuePrefix?: string;
@@ -101,7 +109,7 @@ export const PremiumBarChart = <T extends object>({
                             />
                             
                             <XAxis
-                                dataKey={categoryKey as string}
+                                dataKey={categoryKey}
                                 axisLine={false}
                                 tickLine={false}
                                 tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 500 }}
@@ -123,7 +131,7 @@ export const PremiumBarChart = <T extends object>({
                             />
                             
                             <Bar
-                                dataKey={dataKey as string}
+                                dataKey={dataKey}
                                 radius={[8, 8, 0, 0]}
                                 barSize={32}
                                 animationDuration={1800}

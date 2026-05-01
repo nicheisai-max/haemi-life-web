@@ -77,7 +77,8 @@ export interface PersistedPresence {
     /** Primary Key — User UUID */
     userId: UserId;
     isOnline: boolean;
-    last_activity: string;
+    // P1 CASING FIX (Phase 12): camelCase across all in-memory contracts.
+    lastActivity: string;
     /** ISO timestamp */
     localSyncedAt: string;
 }
@@ -187,7 +188,7 @@ async function getGlobalMaxSequenceNumber(): Promise<number> {
  */
 function toPersistedConversation(c: Conversation): PersistedConversation {
     return {
-        id: c.id as ConversationId,
+        id: c.id,
         isDraft: c.isDraft,
         name: c.name,
         updatedAt: c.updatedAt,
@@ -235,9 +236,29 @@ function fromPersistedConversation(p: PersistedConversation): Conversation {
 }
 
 /**
+ * Object-URL and data-URI schemes are session-scoped: a `blob:` URL is
+ * invalidated on `URL.revokeObjectURL` (or implicitly on page reload) and
+ * a `data:` URI inflates IndexedDB with binary that is already authoritative
+ * on the server. Persisting either causes `ERR_FILE_NOT_FOUND` on the next
+ * session and silently breaks image previews. We rewrite to the canonical
+ * `/api/files/message/:id` URL when the attachment carries a server id, and
+ * drop the volatile URL otherwise so the read path can route to a graceful
+ * "asset unavailable" state instead of a dead blob handle.
+ */
+function normalizeAttachmentForPersistence(att: Attachment): Attachment {
+    const isVolatile = att.url.startsWith('blob:') || att.url.startsWith('data:');
+    if (!isVolatile) return att;
+    return {
+        ...att,
+        url: att.id ? `/api/files/message/${att.id}` : '',
+    };
+}
+
+/**
  * Converts a frontend `Message` into the persisted DB format.
  */
 function toPersistedMessage(m: Message, isMe: boolean): PersistedMessage {
+    const attachments = (m.attachments ?? []).map(normalizeAttachmentForPersistence);
     return {
         id: m.id,
         conversationId: m.conversationId,
@@ -245,7 +266,7 @@ function toPersistedMessage(m: Message, isMe: boolean): PersistedMessage {
         tempId: m.tempId,
         content: m.content,
         messageType: m.messageType,
-        attachmentsJson: JSON.stringify(m.attachments ?? []),
+        attachmentsJson: JSON.stringify(attachments),
         isRead: m.isRead ?? false,
         status: m.status,
         deliveredAt: m.deliveredAt,
@@ -272,7 +293,14 @@ function fromPersistedMessage(p: PersistedMessage): Message {
 
     try {
         const parsed: unknown = JSON.parse(p.attachmentsJson);
-        if (Array.isArray(parsed)) attachments = parsed as Attachment[];
+        if (Array.isArray(parsed)) {
+            // Forward-compatibility: rows persisted before
+            // `normalizeAttachmentForPersistence` was added may carry a
+            // dead `blob:` / `data:` URL from a previous session. Heal on
+            // read so existing IDB databases recover automatically without
+            // a full schema bump.
+            attachments = (parsed as Attachment[]).map(normalizeAttachmentForPersistence);
+        }
     } catch (e: unknown) {
         logger.warn('[Storage] Failed to parse attachments JSON', { id: p.id, error: e instanceof Error ? e.message : String(e) });
     }
@@ -520,14 +548,14 @@ async function updatePendingMessageStatus(id: MessageId, status: 'sending' | 'fa
  * Persists presence state for a set of users.
  */
 async function putPresence(
-    presenceMap: Record<string, { isOnline: boolean; last_activity: string }>,
+    presenceMap: Record<string, { isOnline: boolean; lastActivity: string }>,
 ): Promise<void> {
     try {
         const records: PersistedPresence[] = Object.entries(presenceMap).map(
             ([userId, state]) => ({
                 userId: userId as UserId,
                 isOnline: state.isOnline,
-                last_activity: state.last_activity,
+                lastActivity: state.lastActivity,
                 localSyncedAt: new Date().toISOString(),
             }),
         );

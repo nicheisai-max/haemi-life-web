@@ -102,8 +102,11 @@ export class PrescriptionRepository {
 
     async findByUserId(userId: string, role: string): Promise<PrescriptionWithDetails[]> {
         try {
+            // P0 SOFT-DELETE GUARD: medication_count must exclude soft-deleted
+            // items by joining on the deleted_at predicate, otherwise the count
+            // reflects a historical superset of the prescription.
             const query = `
-                SELECT 
+                SELECT
                     p.*,
                     u_patient.name as patient_name,
                     u_doctor.name as doctor_name,
@@ -111,8 +114,11 @@ export class PrescriptionRepository {
                 FROM prescriptions p
                 JOIN users u_patient ON p.patient_id = u_patient.id
                 JOIN users u_doctor ON p.doctor_id = u_doctor.id
-                LEFT JOIN prescription_items pi ON p.id = pi.prescription_id
-                WHERE ${role === 'patient' ? 'p.patient_id' : 'p.doctor_id'} = $1 AND p.deleted_at IS NULL
+                LEFT JOIN prescription_items pi
+                    ON p.id = pi.prescription_id
+                   AND pi.deleted_at IS NULL
+                WHERE ${role === 'patient' ? 'p.patient_id' : 'p.doctor_id'} = $1
+                  AND p.deleted_at IS NULL
                 GROUP BY p.id, u_patient.name, u_doctor.name
                 ORDER BY p.prescription_date DESC
             `;
@@ -140,7 +146,7 @@ export class PrescriptionRepository {
                     u_patient.phone_number as patient_phone,
                     u_doctor.name as doctor_name,
                     dp.specialization,
-                    (SELECT COUNT(*) FROM prescription_items WHERE prescription_id = p.id) as medication_count
+                    (SELECT COUNT(*) FROM prescription_items WHERE prescription_id = p.id AND deleted_at IS NULL) as medication_count
                 FROM prescriptions p
                 JOIN users u_patient ON p.patient_id = u_patient.id
                 JOIN users u_doctor ON p.doctor_id = u_doctor.id
@@ -168,8 +174,11 @@ export class PrescriptionRepository {
 
     async findItemsByPrescriptionId(id: number): Promise<PrescriptionItemRow[]> {
         try {
+            // P0 SOFT-DELETE GUARD: deleted line-items must not surface in the
+            // detail view; the dosage/instructions of a removed medication
+            // would otherwise leak to pharmacists and patients.
             const query = `
-                SELECT 
+                SELECT
                     pi.*,
                     m.name as medicine_name,
                     m.category,
@@ -177,6 +186,7 @@ export class PrescriptionRepository {
                 FROM prescription_items pi
                 LEFT JOIN medicines m ON pi.medicine_id = m.id
                 WHERE pi.prescription_id = $1
+                  AND pi.deleted_at IS NULL
             `;
             const result = await this.db.query<PrescriptionItemRow>(query, [id]);
             return result.rows;
@@ -210,8 +220,10 @@ export class PrescriptionRepository {
 
     async findPending(): Promise<PrescriptionWithDetails[]> {
         try {
+            // P0 SOFT-DELETE GUARD: medication_count must respect deleted_at
+            // on the join, identical to findByUserId.
             const query = `
-                SELECT 
+                SELECT
                     p.*,
                     u_patient.name as patient_name,
                     u_patient.phone_number as patient_phone,
@@ -220,7 +232,9 @@ export class PrescriptionRepository {
                 FROM prescriptions p
                 JOIN users u_patient ON p.patient_id = u_patient.id
                 JOIN users u_doctor ON p.doctor_id = u_doctor.id
-                LEFT JOIN prescription_items pi ON p.id = pi.prescription_id
+                LEFT JOIN prescription_items pi
+                    ON p.id = pi.prescription_id
+                   AND pi.deleted_at IS NULL
                 WHERE p.status = 'pending' AND p.deleted_at IS NULL
                 GROUP BY p.id, u_patient.name, u_patient.phone_number, u_doctor.name
                 ORDER BY p.prescription_date ASC

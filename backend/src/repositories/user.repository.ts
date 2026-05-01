@@ -99,7 +99,7 @@ export class UserRepository {
                 `INSERT INTO users (
                     name, phone_number, email, password, role, id_number, phone_blind_index, id_blind_index, created_at, updated_at, status
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'ACTIVE') 
-                RETURNING id, name, phone_number, email, role, id_number, status, initials, is_active, is_verified, token_version, profile_image, last_activity, created_at, updated_at, FALSE as has_consent`,
+                RETURNING id, name, phone_number, email, role, id_number, status, initials, is_active, is_verified, token_version, profile_image, profile_image_mime, last_activity, created_at, updated_at, FALSE as has_consent`,
                 [name, encryptedPhone, email || null, password, role, encryptedID, phoneBlindIndex, idBlindIndex]
             );
             return this.decryptUser(result.rows[0]);

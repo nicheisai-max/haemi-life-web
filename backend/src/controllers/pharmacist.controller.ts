@@ -4,6 +4,29 @@ import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import type { PharmacyInventoryEntity, OrderEntity, DashboardStats } from '../types/pharmacist.types';
 
+/**
+ * 🛡️ HAEMI LIFE — Botswana Omang PII Masking (Phase 12 P1 Fix)
+ *
+ * Botswana national IDs (Omang numbers) are sensitive personal data
+ * under the Data Protection Act 2018; PoPIA (South Africa) treats them
+ * the same. Returning the full value in any list/dashboard surface lets
+ * any in-browser observer (DevTools, screenshots, screen recording,
+ * cached SPA state) capture identity. We mask everything except the
+ * last four digits at the API boundary, which is sufficient for visual
+ * patient verification without exposing the canonical identifier.
+ *
+ * If a pharmacist legitimately requires the full Omang (e.g. for a
+ * regulator-mandated paper script), they MUST request it through a
+ * dedicated audited endpoint that records the access in `audit_logs`.
+ * That endpoint is intentionally NOT in this list response.
+ */
+function maskOmangNumber(value: string | null | undefined): string | null {
+    if (typeof value !== 'string' || value.length === 0) return null;
+    if (value.length <= 4) return '*'.repeat(value.length);
+    const tail = value.slice(-4);
+    return `${'*'.repeat(value.length - 4)}${tail}`;
+}
+
 // ─── Institutional Guard: Dashboard Logic ─────────────────────────────
 
 export const getDashboardStats = async (req: Request, res: Response): Promise<void> => {
@@ -147,7 +170,13 @@ export const getOrders = async (req: Request, res: Response): Promise<void> => {
             LIMIT 50
         `);
 
-        return sendResponse(res, 200, true, 'Orders fetched successfully', result.rows);
+        // P1 PII GUARD: mask Omang at the response boundary so the raw
+        // national ID never leaves the server through this list endpoint.
+        const masked: OrderEntity[] = result.rows.map((row): OrderEntity => ({
+            ...row,
+            omang_number: maskOmangNumber(row.omang_number),
+        }));
+        return sendResponse(res, 200, true, 'Orders fetched successfully', masked);
     } catch (error: unknown) {
         logger.error('[Pharmacist] Error fetching orders:', {
             error: error instanceof Error ? error.message : String(error),

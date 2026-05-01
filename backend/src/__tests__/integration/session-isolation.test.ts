@@ -59,6 +59,8 @@ describe('Session Isolation (Phase 2)', () => {
         token_version: number;
         last_activity: Date;
         minutes_since_activity: number;
+        profile_image: string | null;
+        profile_image_mime: string | null;
     }
 
     interface SessionMock {
@@ -102,7 +104,9 @@ describe('Session Isolation (Phase 2)', () => {
                 status: 'ACTIVE',
                 token_version: 1,
                 last_activity: new Date(),
-                minutes_since_activity: 5
+                minutes_since_activity: 5,
+                profile_image: null,
+                profile_image_mime: null
             },
             session: {
                 session_id: sessionId,
@@ -166,7 +170,7 @@ describe('Session Isolation (Phase 2)', () => {
         };
 
         (pool.query as jest.Mock).mockImplementation(dbMock);
-        (mockClient.query as jest.Mock).mockImplementation(dbMock);
+        (mockClient.query).mockImplementation(dbMock);
     });
 
     describe('Cookie Security & Revocation', () => {
@@ -180,7 +184,8 @@ describe('Session Isolation (Phase 2)', () => {
             );
 
             // 2. Mock state has version 1
-            mockState.user!.token_version = 1;
+            if (!mockState.user) throw new Error('test setup: mockState.user not initialized');
+            mockState.user.token_version = 1;
 
             // 3. Attempt to refresh
             const res = await request(app)
@@ -202,7 +207,8 @@ describe('Session Isolation (Phase 2)', () => {
             );
 
             // 2. Mock state matches
-            mockState.user!.token_version = 1;
+            if (!mockState.user) throw new Error('test setup: mockState.user not initialized');
+            mockState.user.token_version = 1;
 
             // 4. Attempt to refresh
             const res = await request(app)
@@ -240,8 +246,8 @@ describe('Session Isolation (Phase 2)', () => {
             expect(res.body.success).toBe(true);
 
             // Verify state transition (Institutional Grade - Data Driven Verification)
-            expect(mockState.user!.token_version).toBe(2);
-            expect(mockState.session!.revoked).toBe(true);
+            expect(mockState.user?.token_version).toBe(2);
+            expect(mockState.session?.revoked).toBe(true);
 
             // Verify the UPDATE query was called correctly
             expect(pool.query).toHaveBeenCalledWith(

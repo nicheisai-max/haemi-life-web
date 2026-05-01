@@ -17,8 +17,10 @@ const keyCache = new Map<string, CryptoKey>();
  * Phase 5: Cached to prevent redundant compute-heavy iterations.
  */
 async function deriveKey(algorithm: string): Promise<CryptoKey> {
-    if (keyCache.has(algorithm)) return keyCache.get(algorithm)!;
-    
+    // Read-then-narrow avoids a non-null assertion on `Map.get`.
+    const cached = keyCache.get(algorithm);
+    if (cached) return cached;
+
     const encoder = new TextEncoder();
 
     // CRITICAL: Handle the hex key from .env correctly.
@@ -146,6 +148,63 @@ export const decrypt = async (text: string): Promise<string> => {
         console.error('[Security] Decryption failed:', errorMessage);
         // Institutional Hardening: Return sanitized placeholder for corrupted/legacy records
         return '[Encrypted Message]';
+    }
+};
+
+/**
+ * Bounded memo for JWT `exp` extraction. Tokens rotate per session
+ * (login, refresh, logout) so the working set is small in practice; the
+ * cap prevents unbounded growth in pathological edge cases (e.g. a long
+ * page lifetime that happens to refresh many times). FIFO eviction is
+ * sufficient because access frequency is dominated by the *current*
+ * token, which is always re-cached on its first read.
+ */
+const TOKEN_EXP_CACHE_MAX = 8;
+const tokenExpCache = new Map<string, number>();
+
+interface JwtPayloadShape { exp: number; }
+
+const isJwtPayloadShape = (v: unknown): v is JwtPayloadShape => {
+    if (typeof v !== 'object' || v === null) return false;
+    if (!('exp' in v)) return false;
+    return typeof (v as { exp: unknown }).exp === 'number';
+};
+
+/**
+ * Extracts the `exp` claim (Unix seconds) from a JWT and memoises the
+ * result keyed on the full raw token. Returns `null` for malformed,
+ * non-three-segment, or non-conforming payloads.
+ *
+ * Centralised so multiple call-sites (chat-provider viability check,
+ * auth-sync identity extraction, future schedulers) don't each pay the
+ * `atob + JSON.parse` cost on every render. The decode is sub-millisecond
+ * but cumulative under React re-renders; the memo makes it free after
+ * first read.
+ */
+export const getTokenExp = (rawToken: string | null): number | null => {
+    if (!rawToken) return null;
+    const cached = tokenExpCache.get(rawToken);
+    if (cached !== undefined) return cached;
+
+    const parts = rawToken.split('.');
+    if (parts.length !== 3) return null;
+
+    try {
+        const decoded = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+        const parsed: unknown = JSON.parse(decoded);
+        if (!isJwtPayloadShape(parsed)) return null;
+
+        // FIFO eviction when the cache fills.
+        if (tokenExpCache.size >= TOKEN_EXP_CACHE_MAX) {
+            const oldest = tokenExpCache.keys().next();
+            if (!oldest.done) tokenExpCache.delete(oldest.value);
+        }
+        tokenExpCache.set(rawToken, parsed.exp);
+        return parsed.exp;
+    } catch (err: unknown) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.warn('[Security] JWT exp extraction failed:', detail);
+        return null;
     }
 };
 

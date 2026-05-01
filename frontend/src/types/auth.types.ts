@@ -9,6 +9,7 @@ export interface User {
     idNumber: string | null;
     initials: string;
     profileImage: string | null;
+    profileImageMime: string | null;
     isVerified: boolean;
     hasConsent: boolean;
     status: string;

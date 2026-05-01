@@ -8,13 +8,48 @@ interface TimeGridProps {
     selectedTime: string;
     onTimeSelect: (time: string) => void;
     loading?: boolean;
+    /**
+     * The date these slots belong to (`yyyy-MM-dd`). When equal to today's
+     * date we filter out slots whose start time is already in the past
+     * (with a small lead-time buffer) so the patient cannot select a slot
+     * that has already started. The backend `getAvailableSlots` applies the
+     * same filter — this is defense-in-depth against clock skew and stale
+     * server responses.
+     */
+    selectedDate?: string;
 }
+
+/**
+ * Minimum lead time, in minutes, between "now" and the start of a bookable
+ * slot. Prevents patients from booking a slot that begins in the next 60
+ * seconds (which the doctor cannot realistically prep for) while still
+ * allowing same-day same-hour booking parity with consumer systems.
+ */
+const BOOKING_LEAD_TIME_MINUTES = 15;
+
+const isTodayLocal = (yyyymmdd: string | undefined): boolean => {
+    if (!yyyymmdd) return false;
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return yyyymmdd === todayStr;
+};
+
+const slotIsBookable = (slot: string, selectedDate: string | undefined): boolean => {
+    if (!isTodayLocal(selectedDate)) return true;
+    const [hh, mm] = slot.split(':').map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return false;
+    const slotDate = new Date();
+    slotDate.setHours(hh, mm, 0, 0);
+    const earliestBookable = new Date(Date.now() + BOOKING_LEAD_TIME_MINUTES * 60_000);
+    return slotDate.getTime() >= earliestBookable.getTime();
+};
 
 export const TimeGrid: React.FC<TimeGridProps> = ({
     slots,
     selectedTime,
     onTimeSelect,
-    loading
+    loading,
+    selectedDate
 }) => {
     if (loading) {
         return (
@@ -26,10 +61,15 @@ export const TimeGrid: React.FC<TimeGridProps> = ({
         );
     }
 
-    if (!slots || slots.length === 0) {
+    const bookableSlots = (slots ?? []).filter(s => slotIsBookable(s, selectedDate));
+
+    if (bookableSlots.length === 0) {
+        const emptyCopy = isTodayLocal(selectedDate) && (slots?.length ?? 0) > 0
+            ? "All of today's remaining slots have passed. Select a future date."
+            : "No available slots for this date.";
         return (
             <div className="text-center py-8 px-4 rounded-xl border border-dashed border-border bg-muted/30">
-                <p className="text-muted-foreground text-sm italic">No available slots for this date.</p>
+                <p className="text-muted-foreground text-sm italic">{emptyCopy}</p>
             </div>
         );
     }
@@ -39,7 +79,7 @@ export const TimeGrid: React.FC<TimeGridProps> = ({
         const afternoon: string[] = [];
         const evening: string[] = [];
 
-        slots.forEach(slot => {
+        bookableSlots.forEach(slot => {
             const hour = parseInt(slot.split(':')[0], 10);
             if (hour < 12) morning.push(slot);
             else if (hour < 17) afternoon.push(slot);

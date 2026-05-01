@@ -25,11 +25,15 @@ export interface UserSession {
     osName: string | null;
     deviceType: string | null;
     createdAt: Date;
-    last_activity: Date | string | null;
+    // P1 CASING FIX (Phase 12): API surface is camelCase; DB column
+    // remains snake_case (`us.last_activity`) and is mapped at the
+    // boundary in getActiveSessions().
+    lastActivity: Date | string | null;
     revoked: boolean;
     userName?: string;
     userEmail?: string;
     profileImage?: string | null;
+    profileImageMime?: string | null;
 }
 
 interface SecurityEventRow {
@@ -60,6 +64,7 @@ interface UserSessionRow {
     user_name: string;
     user_email: string;
     profile_image: string | null;
+    profile_image_mime: string | null;
 }
 
 export const securityRepository = {
@@ -102,10 +107,11 @@ export const securityRepository = {
     async getActiveSessions(limit: number = 50, offset: number = 0): Promise<UserSession[]> {
         try {
             const result = await pool.query<UserSessionRow>(
-                `SELECT us.id, us.user_id, us.user_role, us.session_id, us.ip_address, 
-                 us.ip_address, us.user_agent, us.browser_name, us.os_name, us.device_type,
+                `SELECT us.id, us.user_id, us.user_role, us.session_id, us.ip_address,
+                 us.user_agent, us.browser_name, us.os_name, us.device_type,
                  us.created_at, us.last_activity, us.revoked,
-                 u.name as user_name, u.email as user_email, u.profile_image 
+                 u.name as user_name, u.email as user_email,
+                 u.profile_image, u.profile_image_mime
                  FROM user_sessions us
                  JOIN users u ON us.user_id = u.id
                  WHERE us.revoked = FALSE
@@ -124,11 +130,13 @@ export const securityRepository = {
                 osName: row.os_name,
                 deviceType: row.device_type,
                 createdAt: row.created_at,
-                last_activity: row.last_activity,
+                // Source column is snake_case (us.last_activity); API key is camelCase.
+                lastActivity: row.last_activity,
                 revoked: row.revoked,
                 userName: row.user_name,
                 userEmail: row.user_email,
-                profileImage: row.profile_image
+                profileImage: row.profile_image,
+                profileImageMime: row.profile_image_mime
             }));
         } catch (error: unknown) {
             logger.error('Failed to fetch active sessions', {

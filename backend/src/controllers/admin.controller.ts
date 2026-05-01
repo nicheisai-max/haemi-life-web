@@ -16,8 +16,8 @@ export const getPendingVerifications = async (req: Request, res: Response) => {
     logger.debug('[Admin] Fetching pending verifications', { url: originalUrl, from: ip });
     try {
         const result = await pool.query<JoinedDoctorRow>(`
-            SELECT 
-                u.id, u.name, u.email, u.phone_number, u.profile_image, u.created_at,
+            SELECT
+                u.id, u.name, u.email, u.phone_number, u.profile_image, u.profile_image_mime, u.created_at,
                 dp.specialization, dp.license_number, dp.years_of_experience, dp.bio
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
@@ -118,12 +118,14 @@ export const getAllUsers = async (req: Request, res: Response) => {
             params: { role, status, search, page: pageNum, limit: limitNum } 
         });
 
+        // P0 SOFT-DELETE GUARD: admin user list must hide soft-deleted accounts.
         let query = `
-            SELECT 
-                id, name, email, phone_number, profile_image, role, status, initials, created_at,
+            SELECT
+                id, name, email, phone_number, profile_image, profile_image_mime,
+                role, status, initials, created_at,
                 COUNT(*) OVER() as total_count
-            FROM users 
-            WHERE 1=1
+            FROM users
+            WHERE deleted_at IS NULL
         `;
         const params: (string | number | boolean | null)[] = [];
 
@@ -194,7 +196,8 @@ export const updateUserStatus = async (req: Request, res: Response) => {
                 UPDATE users
                 SET status = $1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = $2
-                RETURNING id, name, email, phone_number, profile_image, role, status, initials, created_at
+                RETURNING id, name, email, phone_number, profile_image, profile_image_mime,
+                          role, status, initials, created_at
             `, [status, id]);
 
             if (result.rows.length === 0) {
@@ -243,14 +246,16 @@ export const getSystemStats = async (req: Request, res: Response) => {
         const user = req.user;
         if (!user || user.role !== 'admin') return sendError(res, 403, 'Unauthorized');
 
+        // P0 SOFT-DELETE GUARD: every count must exclude soft-deleted rows so
+        // dashboard analytics reflect live state, not the historical superset.
         const stats = await Promise.all([
-            pool.query<CountRow>('SELECT COUNT(*) FROM users WHERE role = $1', ['patient']),
-            pool.query<CountRow>('SELECT COUNT(*) FROM users WHERE role = $1 AND status = $2', ['doctor', 'ACTIVE']),
-            pool.query<CountRow>('SELECT COUNT(*) FROM doctor_profiles WHERE is_verified = false'),
-            pool.query<CountRow>('SELECT COUNT(*) FROM appointments WHERE status = $1', ['scheduled']),
-            pool.query<CountRow>('SELECT COUNT(*) FROM prescriptions WHERE status = $1', ['pending']),
-            pool.query<CountRow>('SELECT COUNT(*) FROM users WHERE status = $1', ['ACTIVE']),
-            pool.query<CountRow>('SELECT COUNT(*) FROM users')
+            pool.query<CountRow>("SELECT COUNT(*) FROM users WHERE role = $1 AND deleted_at IS NULL", ['patient']),
+            pool.query<CountRow>("SELECT COUNT(*) FROM users WHERE role = $1 AND status = $2 AND deleted_at IS NULL", ['doctor', 'ACTIVE']),
+            pool.query<CountRow>("SELECT COUNT(*) FROM doctor_profiles WHERE is_verified = false"),
+            pool.query<CountRow>("SELECT COUNT(*) FROM appointments WHERE status = $1 AND deleted_at IS NULL", ['scheduled']),
+            pool.query<CountRow>("SELECT COUNT(*) FROM prescriptions WHERE status = $1 AND deleted_at IS NULL", ['pending']),
+            pool.query<CountRow>("SELECT COUNT(*) FROM users WHERE status = $1 AND deleted_at IS NULL", ['ACTIVE']),
+            pool.query<CountRow>("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
         ]);
 
         return sendResponse(res, 200, true, 'System statistics fetched', {
@@ -262,9 +267,10 @@ export const getSystemStats = async (req: Request, res: Response) => {
             activeUsers: parseInt(stats[5].rows[0].count, 10),
             totalUsers: parseInt(stats[6].rows[0].count, 10)
         });
-    } catch {
+    } catch (error: unknown) {
         logger.error('Error fetching system stats:', {
-            adminId: req.user?.id
+            adminId: req.user?.id,
+            error: error instanceof Error ? error.message : String(error),
         });
         return sendError(res, 500, 'Error fetching system stats');
     }

@@ -6,7 +6,6 @@
 
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
-import { JWTPayload } from '../types/express';
 import { sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import * as path from 'path';
@@ -192,7 +191,7 @@ export const getChatAttachment = async (req: Request, res: Response): Promise<vo
     try {
         // req.user is populated by authenticateToken middleware,
         // which now supports both Authorization header and ?token= query param.
-        const user = req.user as JWTPayload | undefined;
+        const user = req.user;
 
         if (!user) {
             sendError(res, 401, 'Unauthorized');
@@ -243,7 +242,7 @@ export const getChatAttachment = async (req: Request, res: Response): Promise<vo
  */
 export const getMedicalRecordFile = async (req: Request, res: Response): Promise<void> => {
     const { recordId } = req.params;
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
 
     try {
         if (!user) {
@@ -307,7 +306,7 @@ export const getMedicalRecordFile = async (req: Request, res: Response): Promise
  */
 export const getTempAttachment = async (req: Request, res: Response): Promise<void> => {
     const { tempId } = req.params;
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
 
     try {
         if (!user) {

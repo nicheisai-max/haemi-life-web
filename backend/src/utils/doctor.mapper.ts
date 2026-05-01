@@ -8,6 +8,7 @@ export interface DoctorResponse {
     role: string;
     initials: string;
     profileImage: string | null;
+    profileImageMime: string | null;
     specialization?: string | null;
     yearsOfExperience?: number | null;
     bio?: string | null;
@@ -26,6 +27,7 @@ export const mapDoctorToResponse = (data: JoinedDoctorRow): DoctorResponse => {
         role: data.role || 'doctor',
         initials: data.initials,
         profileImage: data.profile_image || null,
+        profileImageMime: data.profile_image_mime || null,
         specialization: data.specialization,
         yearsOfExperience: data.years_of_experience,
         bio: data.bio,

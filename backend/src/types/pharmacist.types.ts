@@ -23,6 +23,14 @@ export interface OrderEntity {
     prescription_url: string | null;
     is_prescription_required: boolean;
     delivery_mode: 'COLLECT' | 'HAEMI_DELIVERY';
+    is_government_subsidized: boolean;
+    /**
+     * Botswana Omang (national ID). PII-sensitive. The list endpoint
+     * masks this value at the response boundary; only an audited reveal
+     * endpoint may surface the raw value.
+     */
+    omang_number: string | null;
+    hospital_origin: string | null;
     created_at: Date;
     updated_at: Date;
     // Joined fields

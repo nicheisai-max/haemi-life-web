@@ -56,11 +56,12 @@ export class SchemaIntegrityService {
         GROUP BY table_name
       `);
 
-      if (fileTablesCheck.rowCount! < 3) {
+      const fileTableCount = fileTablesCheck.rowCount ?? 0;
+      if (fileTableCount < 3) {
         throw new Error('Institutional Drift Detected: One or more Unified File Engine tables are missing critical columns.');
       }
 
-      logger.info(`[SchemaIntegrity] Validated ${fileTablesCheck.rowCount} critical file tables.`);
+      logger.info(`[SchemaIntegrity] Validated ${fileTableCount} critical file tables.`);
  
       // 5. Verify Presence Infrastructure (Presence Heartbeat Guard)
       const presenceCheck = await pool.query<{ column_name: string }>(`

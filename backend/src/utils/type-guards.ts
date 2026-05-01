@@ -33,7 +33,7 @@ export function isJWTPayloadStrict(payload: unknown): payload is JWTPayload {
     const hasSessionId = 'sessionId' in p && typeof p.sessionId === 'string';
     const hasJti = 'jti' in p && typeof p.jti === 'string';
     const validRoles = ['patient', 'doctor', 'pharmacist', 'admin'];
-    const hasRole = 'role' in p && typeof p.role === 'string' && validRoles.includes(p.role as string);
+    const hasRole = 'role' in p && typeof p.role === 'string' && validRoles.includes(p.role);
     
     return hasId && hasEmail && hasRole && hasSessionId && hasJti;
 }

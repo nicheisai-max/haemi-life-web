@@ -85,7 +85,8 @@ export interface TypingEventPayload {
 export interface UserPresencePayload {
     userId: UserId;
     isOnline: boolean; // Institutional standard (boolean)
-    last_activity: string;
+    // P1 CASING FIX (Phase 12): camelCase across the socket boundary.
+    lastActivity: string;
 }
 
 export interface MessageDeliveredPayload {

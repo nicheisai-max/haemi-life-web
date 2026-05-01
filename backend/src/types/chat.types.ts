@@ -14,6 +14,7 @@ export interface ChatParticipant {
     role: string;
     initials: string;
     profileImage: string | null;
+    profileImageMime: string | null;
 }
 
 export interface DbAttachment {

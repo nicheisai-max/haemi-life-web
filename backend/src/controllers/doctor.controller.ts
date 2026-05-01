@@ -6,6 +6,22 @@ import { mapDoctorToResponse } from '../utils/doctor.mapper';
 import { mapUserToResponse } from '../utils/user.mapper';
 import { JoinedDoctorRow, UserEntity } from '../types/db.types';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
+import { decrypt } from '../utils/security';
+
+/**
+ * Decrypts the encrypted PII columns on a row joined from `users`. Mirror
+ * of `UserRepository.decryptUser` but applied at the controller boundary
+ * for raw SELECTs that bypass the repository. Phase 12 P0 fix: ensures
+ * that listDoctors / getDoctorProfile / getDoctorPatients never emit the
+ * encrypted blob into the API response.
+ */
+function decryptUserPii<R extends { phone_number?: string | null; id_number?: string | null }>(row: R): R {
+    return {
+        ...row,
+        phone_number: row.phone_number ? decrypt(row.phone_number) : '',
+        id_number: row.id_number ? decrypt(row.id_number) : null,
+    };
+}
 
 interface UpdateDoctorProfileRequest {
     specialization?: string;
@@ -31,8 +47,8 @@ export const listDoctors = async (req: Request, res: Response) => {
 
     try {
         let query = `
-            SELECT 
-                u.id, u.name, u.email, u.phone_number, u.profile_image, u.initials,
+            SELECT
+                u.id, u.name, u.email, u.phone_number, u.profile_image, u.profile_image_mime, u.initials,
                 dp.specialization, dp.years_of_experience, dp.bio, dp.consultation_fee, dp.can_video_consult
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
@@ -54,7 +70,8 @@ export const listDoctors = async (req: Request, res: Response) => {
         query += ' ORDER BY u.name ASC';
 
         const result = await pool.query<JoinedDoctorRow>(query, params);
-        return sendResponse(res, 200, true, 'Doctors fetched', result.rows.map(mapDoctorToResponse));
+        // P0 PII GUARD: decrypt phone/id before the mapper projects them.
+        return sendResponse(res, 200, true, 'Doctors fetched', result.rows.map(row => mapDoctorToResponse(decryptUserPii(row))));
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error('Error fetching doctors:', { error: message });
@@ -76,9 +93,9 @@ export const getDoctorProfile = async (req: Request, res: Response) => {
 
     try {
         const result = await pool.query<JoinedDoctorRow>(`
-            SELECT 
-                u.id, u.name, u.email, u.phone_number, u.profile_image, u.initials,
-                dp.specialization, dp.license_number, dp.years_of_experience, 
+            SELECT
+                u.id, u.name, u.email, u.phone_number, u.profile_image, u.profile_image_mime, u.initials,
+                dp.specialization, dp.license_number, dp.years_of_experience,
                 dp.bio, dp.consultation_fee, dp.is_verified, dp.can_video_consult
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
@@ -89,7 +106,8 @@ export const getDoctorProfile = async (req: Request, res: Response) => {
             return sendError(res, 404, 'Doctor not found');
         }
 
-        return sendResponse(res, 200, true, 'Doctor profile fetched', mapDoctorToResponse(result.rows[0]));
+        // P0 PII GUARD: decrypt phone/id before the mapper projects them.
+        return sendResponse(res, 200, true, 'Doctor profile fetched', mapDoctorToResponse(decryptUserPii(result.rows[0])));
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error('Error fetching doctor profile:', {
@@ -136,23 +154,36 @@ export const updateDoctorProfile = async (req: Request, res: Response) => {
     try {
         if (!doctorId) return sendError(res, 401, 'Unauthorized');
 
+        // Phase 10: CTE re-joins users so the response carries the full atomic
+        // profile_image / profile_image_mime pair plus identity fields the mapper requires.
+        // Without the join, RETURNING * from doctor_profiles would yield neither image field.
         const result = await pool.query<JoinedDoctorRow>(`
-            UPDATE doctor_profiles 
-            SET 
-                specialization = COALESCE($1, specialization),
-                years_of_experience = COALESCE($2, years_of_experience),
-                bio = COALESCE($3, bio),
-                consultation_fee = COALESCE($4, consultation_fee),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = $5
-            RETURNING *
+            WITH updated AS (
+                UPDATE doctor_profiles
+                SET
+                    specialization = COALESCE($1, specialization),
+                    years_of_experience = COALESCE($2, years_of_experience),
+                    bio = COALESCE($3, bio),
+                    consultation_fee = COALESCE($4, consultation_fee),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = $5
+                RETURNING *
+            )
+            SELECT
+                u.id, u.name, u.email, u.phone_number, u.profile_image, u.profile_image_mime,
+                u.initials, u.role, u.created_at,
+                updated.specialization, updated.license_number, updated.years_of_experience,
+                updated.bio, updated.consultation_fee, updated.is_verified, updated.can_video_consult
+            FROM updated
+            JOIN users u ON u.id = updated.user_id
         `, [specialization || null, yearsOfExperience || null, bio || null, consultationFee || null, doctorId]);
 
         if (result.rows.length === 0) {
             return sendError(res, 404, 'Doctor profile not found');
         }
 
-        return sendResponse(res, 200, true, 'Profile updated successfully', mapDoctorToResponse(result.rows[0]));
+        // P0 PII GUARD: decrypt phone/id before the mapper projects them.
+        return sendResponse(res, 200, true, 'Profile updated successfully', mapDoctorToResponse(decryptUserPii(result.rows[0])));
     } catch (error: unknown) {
         logger.error('Error updating doctor profile:', {
             error: error instanceof Error ? error.message : String(error),
@@ -256,8 +287,9 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
         if (!doctorId) return sendError(res, 401, 'Unauthorized');
 
         const result = await pool.query<UserEntity & { total_appointments: string, last_visit: Date }>(`
-            SELECT DISTINCT 
-                u.id, u.name, u.phone_number, u.email, u.profile_image, u.role, u.status, u.initials,
+            SELECT DISTINCT
+                u.id, u.name, u.phone_number, u.email, u.profile_image, u.profile_image_mime,
+                u.role, u.status, u.initials,
                 COUNT(a.id) as total_appointments,
                 MAX(a.appointment_date) as last_visit
             FROM users u
@@ -267,8 +299,9 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
             ORDER BY MAX(a.appointment_date) DESC
         `, [doctorId]);
 
+        // P0 PII GUARD: decrypt phone/id before the mapper projects them.
         return sendResponse(res, 200, true, 'Patients fetched', result.rows.map(row => ({
-            ...mapUserToResponse(row),
+            ...mapUserToResponse(decryptUserPii(row)),
             totalAppointments: Number(row.total_appointments),
             lastVisit: row.last_visit
         })));

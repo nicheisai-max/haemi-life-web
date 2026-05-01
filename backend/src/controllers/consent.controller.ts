@@ -36,7 +36,7 @@ export const signConsent = async (req: Request, res: Response) => {
         if (!userId) return sendError(res, 401, 'Unauthorized');
         
         const ipAddress = (req.ip || req.headers['x-forwarded-for'] || 'unknown') as string;
-        const userAgent = (req.headers['user-agent'] || 'unknown') as string;
+        const userAgent = (req.headers['user-agent'] || 'unknown');
 
         if (role !== 'patient') {
             return sendError(res, 403, 'Only patients can sign telemedicine consent.');

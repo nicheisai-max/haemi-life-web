@@ -79,12 +79,19 @@ export const DoctorReports: React.FC = () => {
     // We isolate data processing from JSX construction to comply with strict React/ESLint standards.
     const auditedPrevalenceData = useMemo(() => {
         if (!performance?.topDiagnoses) return [];
+        // Typed helper preserves the discriminated literal union expected
+        // by `DiagnosisEntry.trend` ('up' | 'stable' | 'down') without a
+        // boundary cast.
+        const computeTrend = (count: number): 'up' | 'stable' | 'down' => {
+            if (count > 10) return 'up';
+            return 'stable';
+        };
         try {
             return performance.topDiagnoses.map(d => ({
                 name: d.name,
                 count: d.count,
                 percentage: d.percentage,
-                trend: (d.count > 10 ? 'up' : 'stable') as 'up' | 'stable',
+                trend: computeTrend(d.count),
                 trendValue: d.count > 10 ? '↑ 12%' : 'Stable'
             }));
         } catch (err: unknown) {

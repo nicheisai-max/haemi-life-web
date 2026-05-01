@@ -13,7 +13,8 @@ export type ConversationId = string & { readonly __brand: unique symbol };
 
 export interface PresenceRecord {
     isOnline: boolean;
-    last_activity: string;
+    // P1 CASING FIX (Phase 12): camelCase across the API/socket boundary.
+    lastActivity: string;
 }
 
 export interface PresenceApiResponse {

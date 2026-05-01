@@ -6,8 +6,13 @@ import type { Message, ConversationId, MessageReadEvent, UserId, MessageId } fro
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 const SOCKET_URL = BASE_URL.replace(/\/$/, '');
+const SOCKET_PATH = '/socket.io/';
 
-/* ---------------- TYPES & ENUMS ---------------- */
+const LEADER_HEARTBEAT_INTERVAL_MS = 1000;
+const LEADER_TIMEOUT_MS = 3000;
+const RECONNECT_BACKOFF_BASE_MS = 1000;
+const RECONNECT_BACKOFF_MAX_MS = 30000;
+const RECONNECT_BACKOFF_MAX_EXPONENT = 6;
 
 export enum SocketState {
     IDLE = 'IDLE',
@@ -16,32 +21,22 @@ export enum SocketState {
     DISCONNECTED = 'DISCONNECTED',
     RECONNECTING = 'RECONNECTING',
     TERMINATED = 'TERMINATED',
-    FOLLOWER = 'FOLLOWER' // Tab is listening to a leader
+    FOLLOWER = 'FOLLOWER'
 }
-
-/* ---------------- COORDINATION TYPES ---------------- */
-
-export type BroadcastMessage =
-    | { type: 'LEADER_CLAIM'; tabId: string }
-    | { type: 'LEADER_HEARTBEAT'; tabId: string }
-    | { type: 'SOCKET_EVENT'; event: keyof ServerToClientEvents; data: unknown }
-    | {
-        [K in keyof ClientToServerEvents]: {
-            type: 'SOCKET_EMIT';
-            event: K;
-            args: Parameters<ClientToServerEvents[K]>
-        }
-    }[keyof ClientToServerEvents];
 
 export interface ServerToClientEvents {
     'typingStarted': (data: { userId: UserId; conversationId: ConversationId; name: string }) => void;
     'typingStopped': (data: { userId: UserId; conversationId: ConversationId; name: string }) => void;
     'messageRead': (event: MessageReadEvent) => void;
-    'messageDelivered': (event: { conversationId: ConversationId; messageIds: MessageId[] }) => void;
+    // P1 SOCKET CONTRACT FIX (Phase 12): align with backend
+    // MessageDeliveredPayload, which emits userId and an ISO timestamp on
+    // the same wire frame. Previously these fields were silently dropped
+    // by frontend listeners that destructured the narrower shape.
+    'messageDelivered': (event: { conversationId: ConversationId; messageIds: MessageId[]; userId: UserId; timestamp: string }) => void;
     'messageReceived': (message: Message) => void;
     'messageDeleted': (payload: { messageId: string; conversationId: ConversationId; newLastMessage?: Message }) => void;
     'messageReaction': (data: { messageId: string; userId: UserId; reactionType: string; action: 'added' | 'removed' }) => void;
-    'userStatus': (data: { userId: string; isOnline: boolean; last_activity?: string }) => void;
+    'userStatus': (data: { userId: string; isOnline: boolean; lastActivity?: string }) => void;
     'localMessageDeleted': (payload: { messageId: string; conversationId: ConversationId; newLastMessage?: Message }) => void;
     'notificationNew': (notification: HaemiNotification) => void;
     'notificationRead': (payload: { id: string }) => void;
@@ -50,7 +45,7 @@ export interface ServerToClientEvents {
     'reconnect': () => void;
     'reconnect_attempt': (attempt: number) => void;
     'disconnect': (reason: string) => void;
-    'error': (error: { message: string; code?: string }) => void;
+    'error': (error: Error) => void;
     'connect_error': (error: Error) => void;
 }
 
@@ -65,6 +60,104 @@ export interface ClientToServerEvents {
 }
 
 type SocketInstance = Socket<ServerToClientEvents, ClientToServerEvents>;
+type S2CName = keyof ServerToClientEvents;
+type C2SName = keyof ClientToServerEvents;
+
+type LeaderClaim = { type: 'LEADER_CLAIM'; tabId: string };
+type LeaderHeartbeat = { type: 'LEADER_HEARTBEAT'; tabId: string };
+type SocketEvent = { type: 'SOCKET_EVENT'; event: S2CName; data: unknown };
+type SocketEmit = {
+    [K in C2SName]: {
+        type: 'SOCKET_EMIT';
+        event: K;
+        args: Parameters<ClientToServerEvents[K]>;
+    }
+}[C2SName];
+
+export type BroadcastMessage = LeaderClaim | LeaderHeartbeat | SocketEvent | SocketEmit;
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null;
+
+const hasStringField = (v: unknown, key: string): boolean =>
+    isRecord(v) && typeof v[key] === 'string';
+
+const isTypingPayload = (v: unknown): v is { userId: UserId; conversationId: ConversationId; name: string } =>
+    isRecord(v)
+    && typeof v.userId === 'string'
+    && typeof v.conversationId === 'string'
+    && typeof v.name === 'string';
+
+const isMessageReadEventPayload = (v: unknown): v is MessageReadEvent =>
+    isRecord(v)
+    && typeof v.conversationId === 'string'
+    && Array.isArray(v.messageIds);
+
+const isMessageDeliveredPayload = (v: unknown): v is { conversationId: ConversationId; messageIds: MessageId[]; userId: UserId; timestamp: string } =>
+    isRecord(v)
+    && typeof v.conversationId === 'string'
+    && Array.isArray(v.messageIds)
+    && typeof v.userId === 'string'
+    && typeof v.timestamp === 'string';
+
+const isMessage = (v: unknown): v is Message =>
+    hasStringField(v, 'id');
+
+const isMessageDeletedPayload = (v: unknown): v is { messageId: string; conversationId: ConversationId; newLastMessage?: Message } =>
+    isRecord(v)
+    && typeof v.messageId === 'string'
+    && typeof v.conversationId === 'string';
+
+const isMessageReactionPayload = (v: unknown): v is { messageId: string; userId: UserId; reactionType: string; action: 'added' | 'removed' } =>
+    isRecord(v)
+    && typeof v.messageId === 'string'
+    && typeof v.userId === 'string'
+    && typeof v.reactionType === 'string'
+    && (v.action === 'added' || v.action === 'removed');
+
+const isUserStatusPayload = (v: unknown): v is { userId: string; isOnline: boolean; lastActivity?: string } =>
+    isRecord(v)
+    && typeof v.userId === 'string'
+    && typeof v.isOnline === 'boolean';
+
+const isHaemiNotification = (v: unknown): v is HaemiNotification =>
+    isRecord(v) && typeof v.type === 'string';
+
+const isIdPayload = (v: unknown): v is { id: string } =>
+    hasStringField(v, 'id');
+
+/**
+ * Strict listener registry. Each event key is bound to a Set of typed
+ * callbacks. The single narrowing assertion at the iteration boundary
+ * is unavoidable for a runtime Set-of-callbacks pattern; it carries no
+ * data transformation and no double-cast.
+ */
+class TypedListenerStore {
+    private store: Map<S2CName, Set<unknown>> = new Map();
+
+    add<K extends S2CName>(event: K, cb: ServerToClientEvents[K]): void {
+        let set = this.store.get(event);
+        if (!set) {
+            set = new Set();
+            this.store.set(event, set);
+        }
+        set.add(cb);
+    }
+
+    delete<K extends S2CName>(event: K, cb: ServerToClientEvents[K]): void {
+        this.store.get(event)?.delete(cb);
+    }
+
+    dispatch<K extends S2CName>(event: K, run: (cb: ServerToClientEvents[K]) => void): void {
+        const set = this.store.get(event);
+        if (!set) return;
+        set.forEach((cb) => run(cb as ServerToClientEvents[K]));
+    }
+
+    clear(): void {
+        this.store.clear();
+    }
+}
 
 class SocketService {
     private static instance: SocketService;
@@ -74,190 +167,26 @@ class SocketService {
     private tabId: string = Math.random().toString(36).substring(2, 15);
     private broadcastChannel: BroadcastChannel | null = null;
     private leaderTabId: string | null = null;
-    private heartbeatTimer: NodeJS.Timeout | null = null;
-    private leaderCheckTimer: NodeJS.Timeout | null = null;
-    /**
-     * 🛡️ DEFERRED-TRANSITION FLAG (Meta/Slack Pattern)
-     * Set when we receive a LEADER signal while mid-handshake (CONNECTING).
-     * becomeFollower() is deferred until the handshake resolves to prevent
-     * the "WebSocket closed before established" race condition.
-     */
+    private leaderHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    private leaderCheckTimer: ReturnType<typeof setTimeout> | null = null;
     private pendingFollowerTransition = false;
-
-    private listeners: { [K in keyof ServerToClientEvents]: Set<ServerToClientEvents[K]> } = {
-        typingStarted: new Set(),
-        typingStopped: new Set(),
-        messageRead: new Set(),
-        messageDelivered: new Set(),
-        messageReceived: new Set(),
-        messageDeleted: new Set(),
-        messageReaction: new Set(),
-        userStatus: new Set(),
-        localMessageDeleted: new Set(),
-        notificationNew: new Set(),
-        notificationRead: new Set(),
-        notificationReadAll: new Set(),
-        notificationDelete: new Set(),
-        reconnect: new Set(),
-        reconnect_attempt: new Set(),
-        disconnect: new Set(),
-        error: new Set(),
-        connect_error: new Set()
-    };
+    private listeners: TypedListenerStore = new TypedListenerStore();
+    private deferredConnectBound = false;
 
     private constructor() {
-        if (typeof window !== 'undefined') {
-            /**
-             * 🧬 PAGE-HIDE TOMBSTONE (Meta-Grade Stale-Heartbeat Prevention)
-             * On refresh, the OLD page's heartbeatTimer would keep firing via BroadcastChannel
-             * for up to 1s after unload — causing the new page's socket to be demoted to
-             * FOLLOWER mid-handshake. We tombstone cleanly on pagehide:
-             * - Close the BroadcastChannel (stops receiving/sending messages)
-             * - Clear the heartbeatTimer (stops sending stale heartbeats)
-             * - Clear leaderCheckTimer (prevents phantom becomeLeader() calls)
-             */
-            window.addEventListener('pagehide', () => {
-                if (this.heartbeatTimer) {
-                    clearInterval(this.heartbeatTimer);
-                    this.heartbeatTimer = null;
-                }
-                if (this.leaderCheckTimer) {
-                    clearTimeout(this.leaderCheckTimer);
-                    this.leaderCheckTimer = null;
-                }
-                try { this.broadcastChannel?.close(); } catch { /* ignore */ }
-                this.broadcastChannel = null;
-                logger.debug('[SocketService] Page hiding: Tombstoned BroadcastChannel to prevent stale heartbeats.');
-            });
+        if (typeof window === 'undefined') return;
 
-            // 🧬 Multi-tab Coordination Initialization
-            try {
-                this.broadcastChannel = new BroadcastChannel('haemi_socket_coordination');
-                this.broadcastChannel.onmessage = (event: MessageEvent<BroadcastMessage>) => {
-                    this.handleBroadcastMessage(event.data);
-                };
-                this.startLeaderElection();
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'BroadcastChannel initialization failed';
-                logger.error('[SocketService] Coordination failure', msg);
-            }
-        }
-    }
+        this.openBroadcastChannel();
+        this.startLeaderElection();
 
-    private handleBroadcastMessage(msg: BroadcastMessage): void {
-        switch (msg.type) {
-            case 'LEADER_HEARTBEAT':
-            case 'LEADER_CLAIM':
-                this.leaderTabId = msg.tabId;
-                if (this.leaderTabId !== this.tabId && this.state !== SocketState.FOLLOWER) {
-                    if (this.state === SocketState.CONNECTING) {
-                        /**
-                         * 🛡️ DEFERRED FOLLOWER TRANSITION (Meta/Slack Pattern)
-                         * We are mid-handshake. Calling becomeFollower() now would
-                         * call socket.disconnect() on an unestablished WebSocket,
-                         * triggering "WebSocket is closed before the connection is established".
-                         * Instead we set a flag — attachCoreListeners' connect/connect_error
-                         * handlers will honour it and cleanly yield to the leader.
-                         */
-                        this.pendingFollowerTransition = true;
-                        logger.debug('[SocketService] Deferring follower transition: mid-handshake. Will yield after connect resolves.');
-                    } else {
-                        this.becomeFollower();
-                    }
-                }
-                this.resetLeaderCheck();
-                break;
-            case 'SOCKET_EVENT':
-                if (this.state === SocketState.FOLLOWER) {
-                    this.dispatchToLocalListeners(msg.event, msg.data);
-                }
-                break;
-            case 'SOCKET_EMIT':
-                if (this.state === SocketState.CONNECTED) {
-                    // Institutional Type-Safe Proxying (Meta-Grade)
-                    switch (msg.event) {
-                        case 'message:send': this.emit('message:send', msg.args[0]); break;
-                        case 'messageRead': this.emit('messageRead', msg.args[0]); break;
-                        case 'typingStarted': this.emit('typingStarted', msg.args[0]); break;
-                        case 'typingStopped': this.emit('typingStopped', msg.args[0]); break;
-                        case 'heartbeat': this.emit('heartbeat'); break;
-                        case 'ackDelivery': this.emit('ackDelivery', msg.args[0]); break;
-                        case 'joinConversation': this.emit('joinConversation', msg.args[0]); break;
-                    }
-                }
-                break;
-        }
-    }
-
-    private startLeaderElection(): void {
-        this.broadcastChannel?.postMessage({ type: 'LEADER_CLAIM', tabId: this.tabId });
-        this.resetLeaderCheck();
-    }
-
-    private becomeFollower(): void {
-        this.pendingFollowerTransition = false;
-        this.transitionTo(SocketState.FOLLOWER);
-        if (this.leaderCheckTimer) {
-            clearTimeout(this.leaderCheckTimer);
-            this.leaderCheckTimer = null;
-        }
-        if (this.heartbeatTimer) {
-            clearInterval(this.heartbeatTimer);
-            this.heartbeatTimer = null;
-        }
-        if (this.socket) {
-            /**
-             * 🛡️ LISTENER-FIRST TEARDOWN (Meta-Grade)
-             * Remove all event listeners BEFORE calling disconnect().
-             * This prevents spurious 'disconnect' or 'connect_error' callbacks
-             * from firing into the state machine after we've already transitioned.
-             */
-            this.socket.removeAllListeners();
-            // socket.active is true during handshake (CONNECTING) OR when connected.
-            // We must call disconnect() in both cases to release the transport.
-            if (this.socket.active || this.socket.connected) {
-                this.socket.disconnect();
-            }
-            this.socket = null;
-        }
-    }
-
-    private becomeLeader(): void {
-        if (this.state === SocketState.CONNECTED || this.state === SocketState.CONNECTING) return;
-
-        logger.info('[SocketService] Promoted to LEADER');
-        this.leaderTabId = this.tabId;
-        this.connect();
-
-        // Start sending heartbeats
-        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = setInterval(() => {
-            this.broadcastChannel?.postMessage({ type: 'LEADER_HEARTBEAT', tabId: this.tabId });
-        }, 1000);
-    }
-
-    private resetLeaderCheck(): void {
-        if (this.leaderCheckTimer) clearTimeout(this.leaderCheckTimer);
-        this.leaderCheckTimer = setTimeout(() => {
-            // Do not interrupt an active handshake or reconnection cycle
-            const safeToPromote = this.state !== SocketState.CONNECTED
-                && this.state !== SocketState.CONNECTING
-                && this.state !== SocketState.RECONNECTING;
-            if (safeToPromote) {
-                this.becomeLeader();
-            }
-        }, 3000);
-    }
-
-    private dispatchToLocalListeners<K extends keyof ServerToClientEvents>(event: K, data: unknown): void {
-        const set = this.listeners[event];
-        set.forEach((cb) => {
-            try {
-                const handler = cb as (...args: unknown[]) => void;
-                handler(data);
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'Callback execution failed';
-                logger.error(`[SocketService] Listener error for ${event}`, msg);
+        // bfcache-friendly: do NOT close the socket on pagehide/beforeunload.
+        // The browser will close the transport cleanly on a real unload, and
+        // suppressing those listeners lets the page enter the back-forward
+        // cache. On bfcache restoration the socket may have been frozen, so
+        // we re-establish on `pageshow` if persisted.
+        window.addEventListener('pageshow', (event: PageTransitionEvent): void => {
+            if (event.persisted && !this.isConnected() && this.state !== SocketState.FOLLOWER) {
+                void this.connect();
             }
         });
     }
@@ -269,6 +198,40 @@ class SocketService {
         return SocketService.instance;
     }
 
+    private openBroadcastChannel(): void {
+        try {
+            this.broadcastChannel = new BroadcastChannel('haemi_socket_coordination');
+            // The `onmessage` body is deferred by one microtask so the native
+            // `message` event handler returns to the browser immediately.
+            // `handleBroadcastMessage` may transitively trigger
+            // `dispatchToLocalListeners`, which fires React state updates in
+            // the chat / notification / presence providers — and React 18
+            // does NOT auto-batch setState calls inside browser-native
+            // events. Running the cascade inside a microtask keeps the
+            // synchronous handler span sub-millisecond (eliminating the
+            // `[Violation] 'message' handler took Xms` warning) AND lets
+            // React's automatic batching coalesce the cascade into a single
+            // render commit. Microtasks run FIFO before the next task tick,
+            // so cross-tab message ordering is preserved.
+            this.broadcastChannel.onmessage = (event: MessageEvent<BroadcastMessage>): void => {
+                queueMicrotask(() => this.handleBroadcastMessage(event.data));
+            };
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error('[SocketService] Failed to open BroadcastChannel', { error: message });
+        }
+    }
+
+    private postBroadcast(message: BroadcastMessage): void {
+        if (!this.broadcastChannel) return;
+        try {
+            this.broadcastChannel.postMessage(message);
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            logger.warn('[SocketService] BroadcastChannel post failed', { error: detail, type: message.type });
+        }
+    }
+
     private transitionTo(newState: SocketState, context?: string): void {
         const oldState = this.state;
         this.state = newState;
@@ -276,227 +239,319 @@ class SocketService {
     }
 
     private calculateBackoff(): number {
-        const baseDelay = 1000; // 1s
-        const maxDelay = 30000; // 30s
-        const exponent = Math.min(this.reconnectionAttempts, 6); // Max 2^6 = 64
-        const delay = Math.min(baseDelay * Math.pow(2, exponent), maxDelay);
-        const jitter = Math.random() * 1000; // 1s jitter
-        return delay + jitter;
+        const exponent = Math.min(this.reconnectionAttempts, RECONNECT_BACKOFF_MAX_EXPONENT);
+        const delay = Math.min(RECONNECT_BACKOFF_BASE_MS * Math.pow(2, exponent), RECONNECT_BACKOFF_MAX_MS);
+        return delay + Math.random() * 1000;
     }
 
-    async connect(tokenOverride?: string): Promise<void> {
-        // Multi-tab Safety: Followers do not connect to real socket
-        if (this.state === SocketState.FOLLOWER) {
-            logger.debug('[SocketService] Connect suppressed: Tab is in FOLLOWER mode.');
-            return;
-        }
-
-        // Institutional Guard: Prevent multiple simultaneous connection attempts
+    /**
+     * Idempotent connect. If no token is yet available (e.g. during the
+     * post-refresh auth boot), defers until `auth:token-refreshed` fires
+     * exactly once, then retries.
+     */
+    public async connect(tokenOverride?: string): Promise<void> {
+        if (this.state === SocketState.FOLLOWER) return;
         if (this.state === SocketState.CONNECTING) return;
+        if (this.state === SocketState.CONNECTED && tokenOverride === undefined) return;
+        if (this.state === SocketState.TERMINATED) return;
 
-        // If already connected, only reconnect if token is provided (manual refresh)
-        if (this.state === SocketState.CONNECTED && !tokenOverride) return;
-
-        const token = tokenOverride || getAccessToken();
+        const token = tokenOverride ?? getAccessToken();
         if (!token) {
-            logger.warn('[SocketService] Connection suppressed: No auth token');
+            this.bindDeferredConnect();
             return;
         }
 
         this.transitionTo(SocketState.CONNECTING);
 
         try {
-            // P0: Infrastructure Cleanup
-            // Forcefully closing previous connection to ensure the new tab owns the ID.
             if (this.socket) {
                 this.socket.removeAllListeners();
-                if (this.socket.connected) {
-                    this.socket.disconnect();
-                }
+                this.socket.disconnect();
                 this.socket = null;
             }
 
             this.socket = io(SOCKET_URL, {
                 auth: { token },
-                path: '/socket.io/',
-                transports: ['polling', 'websocket'], // Institutional Resilience: Polling-first handshake to prevent refresh race conditions.
+                path: SOCKET_PATH,
+                transports: ['polling', 'websocket'],
                 withCredentials: true,
-                reconnection: true,
-                reconnectionAttempts: 20,
-                reconnectionDelay: 1000,
-                reconnectionDelayMax: 5000,
-                randomizationFactor: 0.5,
-                autoConnect: true,
-                timeout: 20000,
-                forceNew: true
+                reconnection: true
             });
 
             this.attachCoreListeners(this.socket);
-            this.manualRebind(this.socket);
-
-            logger.info('[SocketService] Handshake sequence initiated', { url: SOCKET_URL });
-        } catch (error: unknown) {
-            this.transitionTo(SocketState.DISCONNECTED);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown transport error';
-            auditLogger.log('ERROR', {
-                message: '[SocketService] Handshake Failure',
-                details: { error: errorMessage }
-            });
+            this.attachEventPipes(this.socket);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.transitionTo(SocketState.DISCONNECTED, 'connect_failure');
+            auditLogger.log('ERROR', { message: '[SocketService] Connection failed', details: { error: message } });
         }
     }
 
-    private attachCoreListeners(socket: SocketInstance) {
-        socket.on('connect', () => {
-            /**
-             * 🛡️ DEFERRED FOLLOWER RESOLUTION (connect path)
-             * If a LEADER signal arrived while we were mid-handshake, we deferred
-             * the follower transition. Now that the socket is established, we honour
-             * it immediately — this yields cleanly to the real leader without any
-             * "WebSocket closed before established" errors.
-             */
+    private bindDeferredConnect(): void {
+        if (this.deferredConnectBound) return;
+        if (typeof window === 'undefined') return;
+        this.deferredConnectBound = true;
+        const onTokenReady = (): void => {
+            this.deferredConnectBound = false;
+            void this.connect();
+        };
+        window.addEventListener('auth:token-refreshed', onTokenReady, { once: true });
+    }
+
+    private attachCoreListeners(socket: SocketInstance): void {
+        socket.on('connect', (): void => {
             if (this.pendingFollowerTransition) {
-                logger.info('[SocketService] Deferred follower transition resolved on connect — yielding to leader.');
                 this.becomeFollower();
                 return;
             }
             this.transitionTo(SocketState.CONNECTED);
             this.reconnectionAttempts = 0;
-            logger.info('[SocketService] Link established.');
         });
 
-        socket.on('disconnect', (reason) => {
-            // Only act on disconnect if we haven't already transitioned away (e.g. becomeFollower)
+        socket.on('disconnect', (reason: string): void => {
             if (this.state === SocketState.FOLLOWER || this.state === SocketState.TERMINATED) return;
             this.transitionTo(SocketState.DISCONNECTED, reason);
             if (reason === 'io server disconnect') {
                 const delay = this.calculateBackoff();
-                setTimeout(() => this.connect(), delay);
+                setTimeout((): void => { void this.connect(); }, delay);
             }
         });
 
-        socket.on('connect_error', (err: Error) => {
-            /**
-             * 🛡️ DEFERRED FOLLOWER RESOLUTION (error path)
-             * Handshake failed AND we have a pending follower transition.
-             * Yield cleanly — do not enter RECONNECTING loop since another tab owns the socket.
-             */
+        socket.on('connect_error', (err: Error): void => {
+            logger.error('[SocketService] Connection Error', {
+                message: err.message,
+                reconnectionAttempts: this.reconnectionAttempts
+            });
+
             if (this.pendingFollowerTransition) {
-                logger.info('[SocketService] Deferred follower transition resolved on connect_error — yielding to leader.');
                 this.becomeFollower();
                 return;
             }
             if (this.state === SocketState.FOLLOWER || this.state === SocketState.TERMINATED) return;
-            this.transitionTo(SocketState.RECONNECTING);
+            this.transitionTo(SocketState.RECONNECTING, 'connect_error');
             this.reconnectionAttempts++;
-            auditLogger.log('ERROR', {
-                message: '[SocketService] Handshake error',
-                details: { msg: err.message, attempt: this.reconnectionAttempts }
-            });
         });
     }
 
-    updateAuthToken(token: string) {
-        if (this.socket) {
-            this.socket.auth = { token };
-            if (this.socket.connected) {
-                logger.info('[SocketService] Cycling connection for token update');
-                this.socket.disconnect().connect();
+    private handleBroadcastMessage(msg: BroadcastMessage): void {
+        switch (msg.type) {
+            case 'LEADER_HEARTBEAT':
+            case 'LEADER_CLAIM': {
+                this.leaderTabId = msg.tabId;
+                if (this.leaderTabId !== this.tabId && this.state !== SocketState.FOLLOWER) {
+                    if (this.state === SocketState.CONNECTING) {
+                        this.pendingFollowerTransition = true;
+                    } else {
+                        this.becomeFollower();
+                    }
+                }
+                this.resetLeaderCheck();
+                break;
+            }
+            case 'SOCKET_EVENT': {
+                if (this.state === SocketState.FOLLOWER) {
+                    this.dispatchToLocalListeners(msg.event, msg.data);
+                }
+                break;
+            }
+            case 'SOCKET_EMIT': {
+                if (this.state === SocketState.CONNECTED) {
+                    this.proxyEmit(msg);
+                }
+                break;
             }
         }
     }
 
-    getState(): SocketState {
-        return this.state;
-    }
-
-    isConnected(): boolean {
-        return this.state === SocketState.CONNECTED;
-    }
-
-    on<K extends keyof ServerToClientEvents>(event: K, callback: ServerToClientEvents[K]): void {
-        // Institutional Explicit Dispatcher (Meta-Grade)
-        // Prevents Union-Type mapping errors without using ANY.
-        const set = this.listeners[event] as Set<ServerToClientEvents[K]>;
-        set.add(callback);
-
-        if (!this.socket || this.state === SocketState.FOLLOWER) return;
-
-        switch (event) {
-            case 'typingStarted': this.socket.on('typingStarted', callback as ServerToClientEvents['typingStarted']); break;
-            case 'typingStopped': this.socket.on('typingStopped', callback as ServerToClientEvents['typingStopped']); break;
-            case 'messageRead': this.socket.on('messageRead', callback as ServerToClientEvents['messageRead']); break;
-            case 'messageDelivered': this.socket.on('messageDelivered', callback as ServerToClientEvents['messageDelivered']); break;
-            case 'messageReceived': this.socket.on('messageReceived', callback as ServerToClientEvents['messageReceived']); break;
-            case 'messageDeleted': this.socket.on('messageDeleted', callback as ServerToClientEvents['messageDeleted']); break;
-            case 'messageReaction': this.socket.on('messageReaction', callback as ServerToClientEvents['messageReaction']); break;
-            case 'userStatus': this.socket.on('userStatus', callback as ServerToClientEvents['userStatus']); break;
-            case 'localMessageDeleted': this.socket.on('localMessageDeleted', callback as ServerToClientEvents['localMessageDeleted']); break;
-            case 'notificationNew': this.socket.on('notificationNew', callback as ServerToClientEvents['notificationNew']); break;
-            case 'notificationRead': this.socket.on('notificationRead', callback as ServerToClientEvents['notificationRead']); break;
-            case 'notificationReadAll': this.socket.on('notificationReadAll', callback as ServerToClientEvents['notificationReadAll']); break;
-            case 'notificationDelete': this.socket.on('notificationDelete', callback as ServerToClientEvents['notificationDelete']); break;
-            case 'reconnect': this.socket.on('reconnect', callback as ServerToClientEvents['reconnect']); break;
-            case 'reconnect_attempt': this.socket.on('reconnect_attempt', callback as ServerToClientEvents['reconnect_attempt']); break;
-            case 'disconnect': this.socket.on('disconnect', callback as ServerToClientEvents['disconnect']); break;
-            case 'error': this.socket.on('error', callback as ServerToClientEvents['error']); break;
-            case 'connect_error': this.socket.on('connect_error', callback as ServerToClientEvents['connect_error']); break;
-        }
-    }
-
-    off<K extends keyof ServerToClientEvents>(event: K, callback: ServerToClientEvents[K]): void {
-        const set = this.listeners[event] as Set<ServerToClientEvents[K]>;
-        set.delete(callback);
-
+    /**
+     * Strict-typed proxy of a follower-tab emit through the leader's socket.
+     * Each branch narrows `msg.event` so `msg.args` is type-correlated with
+     * the corresponding `ClientToServerEvents` signature.
+     */
+    private proxyEmit(msg: SocketEmit): void {
         if (!this.socket) return;
+        switch (msg.event) {
+            case 'heartbeat':
+                this.socket.emit('heartbeat');
+                break;
+            case 'joinConversation':
+                this.socket.emit('joinConversation', ...msg.args);
+                break;
+            case 'messageRead':
+                this.socket.emit('messageRead', ...msg.args);
+                break;
+            case 'message:send':
+                this.socket.emit('message:send', ...msg.args);
+                break;
+            case 'typingStarted':
+                this.socket.emit('typingStarted', ...msg.args);
+                break;
+            case 'typingStopped':
+                this.socket.emit('typingStopped', ...msg.args);
+                break;
+            case 'ackDelivery':
+                this.socket.emit('ackDelivery', ...msg.args);
+                break;
+        }
+    }
 
+    private startLeaderElection(): void {
+        this.postBroadcast({ type: 'LEADER_CLAIM', tabId: this.tabId });
+        this.resetLeaderCheck();
+    }
+
+    private becomeFollower(): void {
+        this.pendingFollowerTransition = false;
+        this.transitionTo(SocketState.FOLLOWER);
+        if (this.leaderCheckTimer) clearTimeout(this.leaderCheckTimer);
+        if (this.leaderHeartbeatTimer) clearInterval(this.leaderHeartbeatTimer);
+        if (this.socket) {
+            this.socket.removeAllListeners();
+            if (this.socket.active || this.socket.connected) {
+                this.socket.disconnect();
+            }
+            this.socket = null;
+        }
+    }
+
+    private becomeLeader(): void {
+        if (this.state === SocketState.CONNECTED || this.state === SocketState.CONNECTING) return;
+        this.leaderTabId = this.tabId;
+        void this.connect();
+        if (this.leaderHeartbeatTimer) clearInterval(this.leaderHeartbeatTimer);
+        this.leaderHeartbeatTimer = setInterval((): void => {
+            this.postBroadcast({ type: 'LEADER_HEARTBEAT', tabId: this.tabId });
+        }, LEADER_HEARTBEAT_INTERVAL_MS);
+    }
+
+    private resetLeaderCheck(): void {
+        if (this.leaderCheckTimer) clearTimeout(this.leaderCheckTimer);
+        this.leaderCheckTimer = setTimeout((): void => {
+            const safeToPromote = this.state !== SocketState.CONNECTED
+                && this.state !== SocketState.CONNECTING
+                && this.state !== SocketState.RECONNECTING;
+            if (safeToPromote) this.becomeLeader();
+        }, LEADER_TIMEOUT_MS);
+    }
+
+    private dispatchToLocalListeners(event: S2CName, data: unknown): void {
         switch (event) {
-            case 'typingStarted': this.socket.off('typingStarted', callback as ServerToClientEvents['typingStarted']); break;
-            case 'typingStopped': this.socket.off('typingStopped', callback as ServerToClientEvents['typingStopped']); break;
-            case 'messageRead': this.socket.off('messageRead', callback as ServerToClientEvents['messageRead']); break;
-            case 'messageDelivered': this.socket.off('messageDelivered', callback as ServerToClientEvents['messageDelivered']); break;
-            case 'messageReceived': this.socket.off('messageReceived', callback as ServerToClientEvents['messageReceived']); break;
-            case 'messageDeleted': this.socket.off('messageDeleted', callback as ServerToClientEvents['messageDeleted']); break;
-            case 'messageReaction': this.socket.off('messageReaction', callback as ServerToClientEvents['messageReaction']); break;
-            case 'userStatus': this.socket.off('userStatus', callback as ServerToClientEvents['userStatus']); break;
-            case 'localMessageDeleted': this.socket.off('localMessageDeleted', callback as ServerToClientEvents['localMessageDeleted']); break;
-            case 'notificationNew': this.socket.off('notificationNew', callback as ServerToClientEvents['notificationNew']); break;
-            case 'notificationRead': this.socket.off('notificationRead', callback as ServerToClientEvents['notificationRead']); break;
-            case 'notificationReadAll': this.socket.off('notificationReadAll', callback as ServerToClientEvents['notificationReadAll']); break;
-            case 'notificationDelete': this.socket.off('notificationDelete', callback as ServerToClientEvents['notificationDelete']); break;
-            case 'reconnect': this.socket.off('reconnect', callback as ServerToClientEvents['reconnect']); break;
-            case 'reconnect_attempt': this.socket.off('reconnect_attempt', callback as ServerToClientEvents['reconnect_attempt']); break;
-            case 'disconnect': this.socket.off('disconnect', callback as ServerToClientEvents['disconnect']); break;
-            case 'error': this.socket.off('error', callback as ServerToClientEvents['error']); break;
-            case 'connect_error': this.socket.off('connect_error', callback as ServerToClientEvents['connect_error']); break;
+            case 'typingStarted':
+                if (isTypingPayload(data)) this.listeners.dispatch('typingStarted', cb => cb(data));
+                break;
+            case 'typingStopped':
+                if (isTypingPayload(data)) this.listeners.dispatch('typingStopped', cb => cb(data));
+                break;
+            case 'messageRead':
+                if (isMessageReadEventPayload(data)) this.listeners.dispatch('messageRead', cb => cb(data));
+                break;
+            case 'messageDelivered':
+                if (isMessageDeliveredPayload(data)) this.listeners.dispatch('messageDelivered', cb => cb(data));
+                break;
+            case 'messageReceived':
+                if (isMessage(data)) this.listeners.dispatch('messageReceived', cb => cb(data));
+                break;
+            case 'messageDeleted':
+                if (isMessageDeletedPayload(data)) this.listeners.dispatch('messageDeleted', cb => cb(data));
+                break;
+            case 'localMessageDeleted':
+                if (isMessageDeletedPayload(data)) this.listeners.dispatch('localMessageDeleted', cb => cb(data));
+                break;
+            case 'messageReaction':
+                if (isMessageReactionPayload(data)) this.listeners.dispatch('messageReaction', cb => cb(data));
+                break;
+            case 'userStatus':
+                if (isUserStatusPayload(data)) this.listeners.dispatch('userStatus', cb => cb(data));
+                break;
+            case 'notificationNew':
+                if (isHaemiNotification(data)) this.listeners.dispatch('notificationNew', cb => cb(data));
+                break;
+            case 'notificationRead':
+                if (isIdPayload(data)) this.listeners.dispatch('notificationRead', cb => cb(data));
+                break;
+            case 'notificationReadAll':
+                this.listeners.dispatch('notificationReadAll', cb => cb());
+                break;
+            case 'notificationDelete':
+                if (isIdPayload(data)) this.listeners.dispatch('notificationDelete', cb => cb(data));
+                break;
+            case 'reconnect':
+                this.listeners.dispatch('reconnect', cb => cb());
+                break;
+            case 'reconnect_attempt':
+                if (typeof data === 'number') this.listeners.dispatch('reconnect_attempt', cb => cb(data));
+                break;
+            case 'disconnect':
+                if (typeof data === 'string') this.listeners.dispatch('disconnect', cb => cb(data));
+                break;
+            case 'error':
+                if (data instanceof Error) this.listeners.dispatch('error', cb => cb(data));
+                break;
+            case 'connect_error':
+                if (data instanceof Error) this.listeners.dispatch('connect_error', cb => cb(data));
+                break;
         }
     }
 
-    private broadcastToFollowers<K extends keyof ServerToClientEvents>(event: K, data: unknown): void {
-        if (this.state === SocketState.CONNECTED) {
-            this.broadcastChannel?.postMessage({ type: 'SOCKET_EVENT', event, data });
-        }
+    on<K extends S2CName>(event: K, callback: ServerToClientEvents[K]): void {
+        this.listeners.add(event, callback);
+        if (!this.socket || this.state === SocketState.FOLLOWER) return;
+        // socket.io's `Socket.on` overload union cannot resolve a caller-bound
+        // generic K against its distributive listener type. We narrow via a
+        // single function-type cast — but the method MUST be bound to its
+        // receiver via `Function.prototype.bind` first, otherwise the
+        // detached call-site loses its `this` reference and socket.io's
+        // internal `Emitter.addEventListener` crashes on `this._callbacks`
+        // (the Set it tracks listeners in). `bind` is the documented
+        // method-passing pattern; it returns a new function whose `this`
+        // is permanently fixed to the socket.
+        const bind = this.socket.on.bind(this.socket) as (event: K, listener: ServerToClientEvents[K]) => SocketInstance;
+        bind(event, callback);
     }
 
-    emit<K extends keyof ClientToServerEvents>(event: K, ...args: Parameters<ClientToServerEvents[K]>): void {
+    off<K extends S2CName>(event: K, callback: ServerToClientEvents[K]): void {
+        this.listeners.delete(event, callback);
+        if (!this.socket) return;
+        const unbind = this.socket.off.bind(this.socket) as (event: K, listener: ServerToClientEvents[K]) => SocketInstance;
+        unbind(event, callback);
+    }
+
+    emit<K extends C2SName>(event: K, ...args: Parameters<ClientToServerEvents[K]>): void {
         if (this.state === SocketState.FOLLOWER) {
-            // Proxy emit to leader
-            this.broadcastChannel?.postMessage({ type: 'SOCKET_EMIT', event, args });
+            this.broadcastSocketEmit(event, args);
             return;
         }
-
-        if (this.state !== SocketState.CONNECTED) {
-            logger.warn(`[SocketService] Emit suppressed: State is ${this.state}`, { event });
-            return;
-        }
-        this.socket?.emit(event, ...args);
+        if (this.state !== SocketState.CONNECTED || !this.socket) return;
+        const dispatch = this.socket.emit.bind(this.socket) as (event: K, ...args: Parameters<ClientToServerEvents[K]>) => SocketInstance;
+        dispatch(event, ...args);
     }
 
-    private manualRebind(socket: SocketInstance) {
-        // Institutional Explicit Rebinding (Meta-Grade)
-        // Zero 'any', Zero 'as' casting.
+    /**
+     * Per-K SOCKET_EMIT broadcast. The generic K-typed envelope is
+     * structurally a member of the distributive SocketEmit union, but
+     * TypeScript cannot prove that across the boundary. Posting directly
+     * via the BroadcastChannel platform API (which is untyped) avoids
+     * both lint suppressions and double casts while preserving full
+     * compile-time discipline at the call sites of this method.
+     */
+    private broadcastSocketEmit<K extends C2SName>(
+        event: K,
+        args: Parameters<ClientToServerEvents[K]>
+    ): void {
+        if (!this.broadcastChannel) return;
+        try {
+            this.broadcastChannel.postMessage({ type: 'SOCKET_EMIT', event, args });
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            logger.warn('[SocketService] BroadcastChannel post failed', { error: detail, type: 'SOCKET_EMIT' });
+        }
+    }
 
-        const pipe = <K extends keyof ServerToClientEvents>(event: K, data: unknown) => {
-            this.broadcastToFollowers(event, data);
+    private attachEventPipes(socket: SocketInstance): void {
+        const pipe = <K extends S2CName>(event: K, data: unknown): void => {
+            if (this.state === SocketState.CONNECTED) {
+                this.postBroadcast({ type: 'SOCKET_EVENT', event, data });
+            }
             this.dispatchToLocalListeners(event, data);
         };
 
@@ -516,12 +571,36 @@ class SocketService {
         socket.on('reconnect', () => pipe('reconnect', undefined));
         socket.on('reconnect_attempt', (num) => pipe('reconnect_attempt', num));
         socket.on('disconnect', (reason) => pipe('disconnect', reason));
-        socket.on('error', (err) => pipe('error', err));
-        socket.on('connect_error', (err) => pipe('connect_error', err));
+        socket.on('error', (err: Error) => pipe('error', err));
+        socket.on('connect_error', (err: Error) => pipe('connect_error', err));
     }
 
-    destroy(): void {
-        this.transitionTo(SocketState.TERMINATED);
+    public isConnected(): boolean {
+        return this.socket?.connected ?? false;
+    }
+
+    public getState(): SocketState {
+        return this.state;
+    }
+
+    public updateAuthToken(token: string): void {
+        logger.info('[SocketService] Updating authentication token');
+        if (!this.socket) return;
+        this.socket.auth = { token };
+        if (this.socket.connected) {
+            this.socket.disconnect().connect();
+        }
+    }
+
+    /**
+     * Transient teardown. Closes the active socket but preserves listeners,
+     * BroadcastChannel, and leader-election so the singleton can reconnect
+     * within the same page lifecycle (e.g., after logout / re-login).
+     * Use this for component-level cleanup. Do NOT use `destroy()` from
+     * React effect cleanup — that permanently kills cross-tab coordination.
+     */
+    disconnect(): void {
+        this.transitionTo(SocketState.DISCONNECTED, 'manual');
         if (this.socket) {
             this.socket.removeAllListeners();
             this.socket.disconnect();
@@ -529,11 +608,30 @@ class SocketService {
         }
     }
 
-    disconnect(): void {
-        this.transitionTo(SocketState.DISCONNECTED);
-        if (this.socket) {
-            this.socket.disconnect();
+    /**
+     * Final teardown for full app shutdown. Closes BroadcastChannel,
+     * cancels leader election, and clears every listener. The singleton
+     * cannot reconnect after this without a fresh page load.
+     */
+    public destroy(): void {
+        logger.info('[SocketService] Destroying instance (final teardown)');
+        this.disconnect();
+        this.transitionTo(SocketState.TERMINATED, 'destroy');
+
+        if (this.leaderHeartbeatTimer) clearInterval(this.leaderHeartbeatTimer);
+        if (this.leaderCheckTimer) clearTimeout(this.leaderCheckTimer);
+
+        if (this.broadcastChannel) {
+            try {
+                this.broadcastChannel.close();
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err);
+                logger.warn('[SocketService] BroadcastChannel close failed', { error: message });
+            }
+            this.broadcastChannel = null;
         }
+
+        this.listeners.clear();
     }
 }
 

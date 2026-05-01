@@ -403,7 +403,11 @@ const clearAuthSession = () => {
 // ─── P0.3 + P0.5: Multi-Tab Token Sync Bridge (Institutional Guard) ───────────
 if (typeof window !== 'undefined' && !IS_DEMO_MODE) {
     const authSyncChannel = new BroadcastChannel('haemi_auth_sync');
-    authSyncChannel.onmessage = (event: MessageEvent): void => {
+
+    // Body of the auth-sync message handler. Extracted so the channel
+    // `onmessage` itself can return synchronously to the browser; see the
+    // wrapping `queueMicrotask` below for the rationale.
+    const handleAuthSyncMessage = (event: MessageEvent): void => {
         const messageData = event.data as { type: string; payload: Record<string, unknown> };
         const { type, payload } = messageData;
         const currentToken: string | null = accessToken ?? sessionStorage.getItem('token');
@@ -444,6 +448,17 @@ if (typeof window !== 'undefined' && !IS_DEMO_MODE) {
                 clearAuthSession();
             }
         }
+    };
+
+    // The `onmessage` body is deferred by one microtask so the native
+    // `message` event handler returns to the browser immediately.
+    // `setAccessToken` and `processQueue` may flush dozens of pending axios
+    // requests synchronously, each of which can resolve a Promise that
+    // triggers React state updates in calling components. Running this
+    // inside a microtask keeps the synchronous handler span sub-millisecond
+    // (eliminating the `[Violation] 'message' handler took Xms` warning).
+    authSyncChannel.onmessage = (event: MessageEvent): void => {
+        queueMicrotask(() => handleAuthSyncMessage(event));
     };
 }
 

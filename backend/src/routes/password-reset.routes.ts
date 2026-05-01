@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { randomInt } from 'crypto';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -51,9 +52,10 @@ router.post(
 
         try {
             const isEmail = identifier.includes('@');
+            // P0 SOFT-DELETE GUARD: deleted accounts must not be password-resettable.
             const query = isEmail
-                ? 'SELECT id, email, phone_number FROM users WHERE email = $1'
-                : 'SELECT id, email, phone_number FROM users WHERE phone_number = $1';
+                ? 'SELECT id, email, phone_number FROM users WHERE email = $1 AND deleted_at IS NULL'
+                : 'SELECT id, email, phone_number FROM users WHERE phone_number = $1 AND deleted_at IS NULL';
 
             const result = await pool.query(query, [identifier]);
             const GENERIC_RESPONSE = { message: 'If the account exists, an OTP has been sent.' };
@@ -70,7 +72,9 @@ router.post(
 
             return res.status(200).json(GENERIC_RESPONSE);
         } catch (error: unknown) {
-            console.error('Request reset error:', error);
+            logger.error('[PasswordReset] request-reset failure', {
+                error: error instanceof Error ? error.message : String(error),
+            });
             res.status(500).json({ message: 'Failed to process request' });
         }
     }
@@ -130,7 +134,9 @@ router.post(
             otpStore.delete(identifier);
             return res.status(200).json({ message: 'OTP verified successfully', resetToken });
         } catch (error: unknown) {
-            console.error('Verify OTP error:', error);
+            logger.error('[PasswordReset] verify-otp failure', {
+                error: error instanceof Error ? error.message : String(error),
+            });
             res.status(500).json({ message: 'Failed to verify OTP' });
         }
     }
@@ -161,9 +167,10 @@ router.post(
             const { identifier } = decoded;
 
             const isEmail = identifier.includes('@');
+            // P0 SOFT-DELETE GUARD: deleted accounts must not be password-resettable.
             const query = isEmail
-                ? 'SELECT id FROM users WHERE email = $1'
-                : 'SELECT id FROM users WHERE phone_number = $1';
+                ? 'SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL'
+                : 'SELECT id FROM users WHERE phone_number = $1 AND deleted_at IS NULL';
 
             const result = await pool.query(query, [identifier]);
 
@@ -181,12 +188,14 @@ router.post(
 
             return res.status(200).json({ message: 'Password reset successfully' });
         } catch (error: unknown) {
-            console.error('Reset password error:', error);
-            const err = error as { name?: string };
-            if (err.name === 'JsonWebTokenError') {
+            logger.error('[PasswordReset] reset-password failure', {
+                error: error instanceof Error ? error.message : String(error),
+                name: error instanceof Error ? error.name : undefined,
+            });
+            if (error instanceof jwt.JsonWebTokenError) {
                 return res.status(400).json({ message: 'Invalid reset token' });
             }
-            if (err.name === 'TokenExpiredError') {
+            if (error instanceof jwt.TokenExpiredError) {
                 return res.status(400).json({ message: 'Reset token has expired' });
             }
             res.status(500).json({ message: 'Failed to reset password' });
@@ -211,9 +220,10 @@ router.post(
 
         try {
             const isEmail = identifier.includes('@');
+            // P0 SOFT-DELETE GUARD: deleted accounts must not be password-resettable.
             const query = isEmail
-                ? 'SELECT id, email, phone_number FROM users WHERE email = $1'
-                : 'SELECT id, email, phone_number FROM users WHERE phone_number = $1';
+                ? 'SELECT id, email, phone_number FROM users WHERE email = $1 AND deleted_at IS NULL'
+                : 'SELECT id, email, phone_number FROM users WHERE phone_number = $1 AND deleted_at IS NULL';
 
             const result = await pool.query(query, [identifier]);
             if (result.rows.length === 0) {
@@ -226,7 +236,9 @@ router.post(
 
             return res.status(200).json({ message: 'OTP resent successfully' });
         } catch (error: unknown) {
-            console.error('Resend OTP error:', error);
+            logger.error('[PasswordReset] resend-otp failure', {
+                error: error instanceof Error ? error.message : String(error),
+            });
             res.status(500).json({ message: 'Failed to resend OTP' });
         }
     }

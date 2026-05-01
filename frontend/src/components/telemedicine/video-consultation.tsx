@@ -150,10 +150,16 @@ export const VideoConsultation: React.FC = () => {
     };
 
     const initiateCall = (participantId: string) => {
+        if (!stream) {
+            // No local media stream — initiating a call without one would
+            // produce an audio/video-less peer; bail loudly so the UI
+            // surfaces the prerequisite (mic/camera permission).
+            return;
+        }
         const peer = new Peer({
             initiator: true,
             trickle: false,
-            stream: stream!,
+            stream,
         });
 
         peer.on('signal', (data) => {
@@ -171,10 +177,15 @@ export const VideoConsultation: React.FC = () => {
     };
 
     const answerCall = (offer: SignalData, from: string) => {
+        if (!stream) {
+            // Same prerequisite as initiateCall — without a local stream
+            // the answer side would be media-less.
+            return;
+        }
         const peer = new Peer({
             initiator: false,
             trickle: false,
-            stream: stream!,
+            stream,
         });
 
         peer.on('signal', (data) => {
