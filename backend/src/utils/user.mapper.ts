@@ -26,7 +26,10 @@ export interface UserResponse {
     isVerified: boolean;
     hasConsent: boolean;
     profileImage: string | null;
-    last_activity: string | null;
+    profileImageMime: string | null;
+    // P1 CASING FIX (Phase 12): API surface is camelCase; DB column
+    // stays snake_case (sourced via user.last_activity in the mapper).
+    lastActivity: string | null;
     createdAt: string;
 }
 
@@ -45,9 +48,13 @@ export const mapUserToResponse = (user: UserEntity): UserResponse => {
         status: user.status,
         initials: user.initials,
         isVerified: user.is_verified,
-        hasConsent: user.has_consent,
+        // `has_consent` is optional on UserEntity (P1 type fix: it's a
+        // join-derived field, not a column on `users`). Default to false
+        // when the row was loaded without joining `telemedicine_consents`.
+        hasConsent: user.has_consent ?? false,
         profileImage: user.profile_image ? (typeof user.profile_image === 'string' ? user.profile_image : (Buffer.isBuffer(user.profile_image) ? (user.profile_image as Buffer).toString('base64') : String(user.profile_image))) : null,
-        last_activity: toIsoString(user.last_activity),
+        profileImageMime: user.profile_image_mime || null,
+        lastActivity: toIsoString(user.last_activity),
         createdAt: toIsoString(user.created_at) || new Date().toISOString()
     };
 };

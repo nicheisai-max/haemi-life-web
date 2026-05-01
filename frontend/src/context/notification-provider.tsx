@@ -109,15 +109,33 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         };
 
         /* ---------- Legacy: Remove notifications for deleted messages ---------- */
-        const handleMessageDeleted = ({ messageId }: { messageId: string }) => {
+        // Single-pass partition: the previous implementation walked the
+        // notification array three times (filter to collect deletions →
+        // filter to count unread → filter again to keep survivors). For a
+        // bounded list (<=MAX_NOTIFICATIONS) the absolute cost is small,
+        // but every cross-tab message-deleted event re-triggers all three
+        // scans. Replaced with a single linear walk that builds the
+        // survivor array and tallies the unread deletions in one go;
+        // returns the previous reference unchanged if nothing matched so
+        // React skips the render.
+        const handleMessageDeleted = ({ messageId }: { messageId: string }): void => {
             setNotifications(prev => {
-                const toDelete = prev.filter(n => n.messageId === messageId);
-                if (toDelete.length === 0) return prev;
-                const unreadDeleted = toDelete.filter(n => !n.isRead).length;
+                let unreadDeleted = 0;
+                let foundAny = false;
+                const survivors: typeof prev = [];
+                for (const n of prev) {
+                    if (n.messageId === messageId) {
+                        foundAny = true;
+                        if (!n.isRead) unreadDeleted += 1;
+                    } else {
+                        survivors.push(n);
+                    }
+                }
+                if (!foundAny) return prev;
                 if (unreadDeleted > 0) {
                     setUnreadCount(count => Math.max(0, count - unreadDeleted));
                 }
-                return prev.filter(n => n.messageId !== messageId);
+                return survivors;
             });
         };
 

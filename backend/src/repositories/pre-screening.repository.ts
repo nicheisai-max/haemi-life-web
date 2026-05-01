@@ -89,8 +89,23 @@ export class PreScreeningRepository {
 
     /**
      * Transactional Integrity: Saving responses and updating appointment status in one atomic block.
+     *
+     * P0 TYPE FIX (Phase 12): `appointment_id` is `number` to match the
+     * INTEGER primary key on `appointments.id` and the FK on
+     * `appointment_pre_screenings.appointment_id`. Passing a string here
+     * previously relied on Postgres implicit coercion and silently risked
+     * mis-matched UPDATE WHERE clauses on hot triage paths.
+     *
+     * P0 NUMERIC FIX (Phase 12): `risk_weight` is NUMERIC in PostgreSQL,
+     * which `node-postgres` returns as a string. Without `Number()` the
+     * "+= weight" arithmetic became string concatenation and silently
+     * corrupted clinical risk scores.
      */
-    async saveResponses(appointment_id: string, userId: string, responses: PreScreeningResponse[]): Promise<{ healthScore: number }> {
+    async saveResponses(appointment_id: number, userId: string, responses: PreScreeningResponse[]): Promise<{ healthScore: number }> {
+        if (!Number.isInteger(appointment_id) || appointment_id <= 0) {
+            throw new Error(`Invalid appointment_id: expected positive integer, received ${String(appointment_id)}`);
+        }
+
         const client: PoolClient = await this.db.connect();
         try {
             await client.query('BEGIN');
@@ -103,10 +118,16 @@ export class PreScreeningRepository {
             let maxPossibleRisk = 0;
 
             for (const resp of responses) {
-                // Fetch the weight for this specific question to ensure logic integrity
-                const qResult = await client.query<{ risk_weight: number }>('SELECT risk_weight FROM pre_screening_definitions WHERE id = $1', [resp.question_id]);
-                const weight = qResult.rows[0]?.risk_weight || 1;
-                
+                // Fetch the weight for this specific question to ensure logic integrity.
+                // pg returns NUMERIC as string; Number() converts safely (NaN if malformed).
+                const qResult = await client.query<{ risk_weight: string | number | null }>(
+                    'SELECT risk_weight FROM pre_screening_definitions WHERE id = $1',
+                    [resp.question_id]
+                );
+                const rawWeight = qResult.rows[0]?.risk_weight;
+                const parsedWeight = rawWeight === null || rawWeight === undefined ? 1 : Number(rawWeight);
+                const weight = Number.isFinite(parsedWeight) ? parsedWeight : 1;
+
                 maxPossibleRisk += weight;
                 if (resp.response_value) {
                     totalRiskScore += weight;
@@ -121,7 +142,7 @@ export class PreScreeningRepository {
             // 3. Update appointment status based on weighted score (Google-grade Triage)
             const normalizedRisk = maxPossibleRisk > 0 ? totalRiskScore / maxPossibleRisk : 0;
             const status = normalizedRisk >= 0.7 ? 'high-risk' : 'completed';
-            
+
             await client.query('UPDATE appointments SET pre_screening_status = $1 WHERE id = $2', [status, appointment_id]);
 
             await client.query('COMMIT');
@@ -130,7 +151,7 @@ export class PreScreeningRepository {
             await auditService.log({
                 userId: userId || SYSTEM_ANONYMOUS_ID,
                 action: 'HEALTH_SCREENING_SUBMITTED',
-                entityId: appointment_id,
+                entityId: String(appointment_id),
                 entityType: 'APPOINTMENT',
                 metadata: { normalizedRisk, responseCount: responses.length }
             });

@@ -169,7 +169,7 @@ export const authenticateToken = async (inputReq: Request, res: Response, next: 
             const finalUserPayload: LocalJWTPayload = {
                 id: userData.id,
                 email: userData.email,
-                role: userData.role as UserRole,
+                role: userData.role,
                 name: userData.name,
                 initials: userData.initials,
                 tokenVersion: payload.tokenVersion,

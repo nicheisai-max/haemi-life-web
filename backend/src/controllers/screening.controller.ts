@@ -222,14 +222,24 @@ export const deleteQuestion = async (req: Request, res: Response): Promise<void>
 
 // Save screening responses for an appointment (Patient/Public)
 export const saveResponses = async (req: Request, res: Response): Promise<void> => {
-    const { appointmentId, responses } = req.body as { 
-        appointmentId: string; 
-        responses: Array<{ questionId: string; responseValue: string | boolean }> 
+    // P0 TYPE FIX (Phase 12): `appointment_id` is INTEGER in the database;
+    // accept either numeric body or numeric-string and parse strictly.
+    const { appointmentId, responses } = req.body as {
+        appointmentId: string | number;
+        responses: Array<{ questionId: string; responseValue: string | boolean }>
     };
 
     try {
-        if (!appointmentId || !responses || !Array.isArray(responses)) {
+        if (appointmentId === undefined || appointmentId === null || !responses || !Array.isArray(responses)) {
             sendError(res, 400, 'Appointment ID and valid responses are required.');
+            return;
+        }
+
+        const parsedAppointmentId = typeof appointmentId === 'number'
+            ? appointmentId
+            : parseInt(appointmentId, 10);
+        if (!Number.isInteger(parsedAppointmentId) || parsedAppointmentId <= 0) {
+            sendError(res, 400, 'Appointment ID must be a positive integer.');
             return;
         }
 
@@ -242,7 +252,7 @@ export const saveResponses = async (req: Request, res: Response): Promise<void> 
 
         const userId = req.user ? String(req.user.id) : SYSTEM_ANONYMOUS_ID;
 
-        const result = await preScreeningRepository.saveResponses(appointmentId, userId, normalizedResponses);
+        const result = await preScreeningRepository.saveResponses(parsedAppointmentId, userId, normalizedResponses);
 
         await auditService.log({
             userId,

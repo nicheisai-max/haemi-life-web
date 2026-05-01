@@ -126,10 +126,7 @@ export const BookAppointment: React.FC = () => {
                 logger.error('[BookAppointment] Draft restoration failed', { msg });
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [preselectedDoctorId, doctors]);
-    // ↑ Intentionally omits `form`: useForm() does not produce a stable object reference.
-    //   form.setValue is stable and is the only method called — its identity never changes.
+    }, [preselectedDoctorId, doctors, form]);
 
     const fetchDoctors = async () => {
         try {
@@ -147,7 +144,7 @@ export const BookAppointment: React.FC = () => {
 
     const fetchAvailableSlots = useCallback(async () => {
         try {
-            const doctorId = watchedDoctorId as string;
+            const doctorId = watchedDoctorId;
             if (!doctorId) return;
 
             const slots = await getAvailableSlots(doctorId, watchedDate);
@@ -229,8 +226,7 @@ export const BookAppointment: React.FC = () => {
             form.setValue('consultationType', 'in-person');
             logger.info('[BookAppointment] Consultation type downgraded: Video not supported by specialist.');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [canVideoConsult, watchedConsultationType]);
+    }, [canVideoConsult, watchedConsultationType, form]);
 
 
     if (success) {
@@ -356,6 +352,7 @@ export const BookAppointment: React.FC = () => {
                                                                     selectedTime={field.value}
                                                                     onTimeSelect={field.onChange}
                                                                     loading={loading}
+                                                                    selectedDate={watchedDate}
                                                                 />
                                                             </FormControl>
                                                             <FormMessage />

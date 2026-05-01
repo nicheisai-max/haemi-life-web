@@ -515,6 +515,203 @@
     object-fit: cover !important;
     transition: opacity var(--duration-hover) var(--ease-premium) !important;
   }
+
+  /* 🩺 HAEMI DATE SCROLLER (Premium Appointment Carousel)
+     Tokens: every color, radius, and elevation drawn from the existing
+     brand palette (`--sidebar-active`, `--card`, `--border`, `--card-radius`,
+     `--shadow-diffused`, motion tokens). Selected state mirrors the sidebar
+     active treatment so the user feels visual continuity between primary
+     navigation and date picking. No magic numbers, no `px`, no hex.
+     Arrows are anchored to the container edges; the track reserves a
+     half-arrow gutter so each arrow naturally overlaps its edge pill by 50%.
+  */
+  .haemi-date-scroller {
+    position: relative;
+    isolation: isolate;
+    --haemi-date-arrow-size: 2.25rem;
+    --haemi-date-pill-width: 5rem;
+    --haemi-date-pill-py: 1rem;
+    --haemi-date-pill-gap: 0.625rem;
+    --haemi-date-tint-hover: color-mix(in srgb, var(--sidebar-active) 8%, var(--card));
+    --haemi-date-tint-selected: color-mix(in srgb, var(--sidebar-active) 16%, var(--card));
+    --haemi-date-glow-selected: 0 0.625rem 1.5rem -0.5rem color-mix(in srgb, var(--sidebar-active) 55%, transparent);
+    --haemi-date-ring-hover: 0 0 0 0.0625rem color-mix(in srgb, var(--sidebar-active) 28%, transparent);
+  }
+
+  .haemi-date-scroller__track {
+    display: flex;
+    gap: var(--haemi-date-pill-gap);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    /* Half-arrow gutter so first/last pills sit under the arrow centre */
+    padding-inline: calc(var(--haemi-date-arrow-size) / 2);
+    padding-block: 0.5rem;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .haemi-date-scroller__track::-webkit-scrollbar { display: none; }
+
+  /* Edge arrows ─────────────────────────────────────────────────────── */
+  .haemi-date-scroller__arrow {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    width: var(--haemi-date-arrow-size);
+    height: var(--haemi-date-arrow-size);
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background-color: var(--card);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-diffused);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-hover) var(--ease-premium),
+      color var(--duration-hover) var(--ease-premium),
+      border-color var(--duration-hover) var(--ease-premium),
+      box-shadow var(--duration-hover) var(--ease-premium),
+      transform var(--duration-hover) var(--ease-premium);
+  }
+  .haemi-date-scroller__arrow--left  { left: 0; }
+  .haemi-date-scroller__arrow--right { right: 0; }
+
+  .haemi-date-scroller__arrow:hover {
+    background-color: var(--sidebar-active);
+    color: var(--primary-foreground);
+    border-color: var(--sidebar-active);
+    box-shadow:
+      0 0 0 0.25rem color-mix(in srgb, var(--sidebar-active) 22%, transparent),
+      var(--shadow-elevation);
+    transform: translateY(-50%) scale(1.06);
+  }
+  .haemi-date-scroller__arrow:active {
+    transform: translateY(-50%) scale(0.96);
+  }
+  .haemi-date-scroller__arrow:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 0.1875rem color-mix(in srgb, var(--sidebar-active) 50%, transparent),
+      var(--shadow-elevation);
+  }
+
+  .haemi-date-scroller__arrow-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* Date pill ───────────────────────────────────────────────────────── */
+  .haemi-date-pill {
+    flex: 0 0 var(--haemi-date-pill-width);
+    width: var(--haemi-date-pill-width);
+    padding-block: var(--haemi-date-pill-py);
+    padding-inline: 0.5rem;
+    border-radius: var(--card-radius);
+    border: 1px solid var(--border);
+    background-color: color-mix(in srgb, var(--card) 65%, transparent);
+    color: var(--muted-foreground);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    scroll-snap-align: center;
+    text-align: center;
+    transition:
+      transform var(--duration-hover) var(--ease-premium),
+      background-color var(--duration-hover) var(--ease-premium),
+      border-color var(--duration-hover) var(--ease-premium),
+      color var(--duration-hover) var(--ease-premium),
+      box-shadow var(--duration-hover) var(--ease-premium);
+  }
+
+  .haemi-date-pill:hover {
+    transform: translateY(-0.25rem);
+    border-color: var(--sidebar-active);
+    background-color: var(--haemi-date-tint-hover);
+    box-shadow: var(--haemi-date-ring-hover), var(--shadow-diffused);
+  }
+
+  .haemi-date-pill:active {
+    transform: translateY(-0.125rem) scale(0.97);
+  }
+
+  .haemi-date-pill:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 0.1875rem color-mix(in srgb, var(--sidebar-active) 45%, transparent);
+  }
+
+  .haemi-date-pill__month {
+    font-size: 0.625rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-foreground);
+    transition: color var(--duration-hover) var(--ease-premium);
+  }
+
+  .haemi-date-pill__num {
+    font-size: var(--font-h3);
+    line-height: 1;
+    font-weight: 800;
+    color: var(--foreground);
+    transition: color var(--duration-hover) var(--ease-premium);
+  }
+
+  /* Day name uses a softened sidebar-active tint so it harmonises with the
+     selected pill instead of competing with it. Reserves full intensity
+     for the selected state. */
+  .haemi-date-pill__day {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--sidebar-active) 78%, var(--muted-foreground));
+    letter-spacing: 0.025em;
+    transition: color var(--duration-hover) var(--ease-premium);
+  }
+
+  .haemi-date-pill:hover .haemi-date-pill__day {
+    color: var(--sidebar-active);
+  }
+
+  /* Selected state — visual continuity with the sidebar's active item ── */
+  .haemi-date-pill[data-selected="true"] {
+    background-color: var(--haemi-date-tint-selected);
+    border-color: var(--sidebar-active);
+    box-shadow:
+      0 0 0 0.0625rem var(--sidebar-active),
+      var(--haemi-date-glow-selected);
+  }
+  .haemi-date-pill[data-selected="true"] .haemi-date-pill__month,
+  .haemi-date-pill[data-selected="true"] .haemi-date-pill__num,
+  .haemi-date-pill[data-selected="true"] .haemi-date-pill__day {
+    color: var(--sidebar-active);
+  }
+
+  /* Subtle accent dot under "Today" (first pill); gives same-day discovery
+     parity with consumer booking systems without crowding the layout. */
+  .haemi-date-pill[data-today="true"] {
+    position: relative;
+  }
+  .haemi-date-pill[data-today="true"]::after {
+    content: "";
+    position: absolute;
+    bottom: 0.375rem;
+    left: 50%;
+    width: 0.25rem;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background-color: var(--sidebar-active);
+    transform: translateX(-50%);
+    opacity: 0.85;
+  }
+  .haemi-date-pill[data-today="true"][data-selected="true"]::after {
+    background-color: var(--sidebar-active);
+    opacity: 1;
+  }
 }
 
 @utility premium-cta {

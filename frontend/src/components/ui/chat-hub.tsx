@@ -4,7 +4,7 @@
 // FALLBACKS FORBIDDEN
 // TYPESCRIPT STRICT MODE ENFORCED
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { Button } from './button';
 import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus, FileText, File, FileSpreadsheet, ImageOff, Clock, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -154,7 +154,7 @@ const ConversationItem = React.memo(({
                             size="md"
                         />
                         {/* BUG-10 FIX: 3-state presence dot (online/offline/unknown) */}
-                        {presence[other.id as UserId] !== undefined ? (
+                        {presence[other.id] !== undefined ? (
                             isOnline ? (
                                 <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 group-hover:scale-110 transition-transform haemi-status-pulse" />
                             ) : (
@@ -179,7 +179,7 @@ const ConversationItem = React.memo(({
                     <p className="text-xs text-slate-500 truncate dark:text-slate-400">
                         {conv.lastMessage || 'Start a conversation'}
                     </p>
-                    {((conv.unreadCount as number) || 0) > 0 && (
+                    {((conv.unreadCount) || 0) > 0 && (
                         <span className="conv-unread-pill animate-badge-pop">
                             {conv.unreadCount}
                         </span>
@@ -228,12 +228,19 @@ const MessageItem = React.memo(({
                         : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
                         }`}
                 >
-                    {/* Reply Preview */}
-                    {msg.replyTo && (
+                    {/* Reply Preview — local consts let TS narrow the
+                        replyToId across the onClick closure (a property
+                        access on `msg` would be re-read inside the
+                        closure and lose the narrowing). */}
+                    {(() => {
+                        const replyTo = msg.replyTo;
+                        const replyToId = msg.replyToId;
+                        if (!replyTo || !replyToId) return null;
+                        return (
                         <div
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onScrollToReply(msg.replyToId!);
+                                onScrollToReply(replyToId);
                             }}
                             className={`mb-2 p-2 rounded-xl border-l-[3px] text-[11px] cursor-pointer transition-all hover:bg-black/5 dark:hover:bg-white/5 ${msg.isMe
                                 ? 'bg-black/10 border-white/40 text-teal-50'
@@ -242,15 +249,16 @@ const MessageItem = React.memo(({
                         >
                             <div className="flex items-center justify-between mb-0.5">
                                 <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
-                                    {msg.replyTo.senderName}
+                                    {replyTo.senderName}
                                 </p>
                                 <Reply className="h-2.5 w-2.5 opacity-60" />
                             </div>
                             <p className="line-clamp-2 opacity-80 italic">
-                                {msg.replyTo.content}
+                                {replyTo.content}
                             </p>
                         </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Institutional Multi-Attachment Pipeline (P3: Grid Layout) */}
                     {msg.attachments && msg.attachments.length > 0 && (
@@ -417,6 +425,9 @@ export const ChatHub: React.FC = () => {
         reactToMessage,
         markAsRead,
         markMessageAsRead,
+        loadOlderMessages,
+        hasMoreOlder,
+        isLoadingOlder,
         loading: isLoadingMessages
     } = useChat();
 
@@ -460,6 +471,18 @@ export const ChatHub: React.FC = () => {
     const virtuosoRef = useRef<VirtuosoHandle>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
+
+    // Virtuoso firstItemIndex anchoring. Starts at a high constant so we
+    // can decrement on prepend without crossing zero. Reset per
+    // conversation so switching does not bleed an offset across threads.
+    const FIRST_ITEM_START = 100_000_000;
+    const [firstItemIndex, setFirstItemIndex] = useState<number>(FIRST_ITEM_START);
+    const firstItemIdRef = useRef<string | null>(null);
+    const prevConversationIdRef = useRef<string | null>(null);
+    // Tracks which conversation we have already auto-scrolled to bottom
+    // for, so that subsequent message-state updates inside the same
+    // conversation do not re-scroll over user-controlled scroll.
+    const scrolledOnceRef = useRef<string | null>(null);
 
     const handleDownload = async (url: string, fileName: string, loadingId: string) => {
         if (!url || !fileName) {
@@ -574,7 +597,59 @@ export const ChatHub: React.FC = () => {
         }
     }, [view]);
 
-    // Auto-scroll handled by Virtuoso followOutput in Phase 3
+    // ─── SCROLL: Imperative bottom-anchor on conversation transition ─────────
+    // `followOutput="auto"` only follows when the user is already at the
+    // bottom; it cannot recover from a fresh conversation switch where the
+    // scroll position was inherited from the previous thread. We anchor
+    // imperatively the first time messages settle for a new conversation.
+    useLayoutEffect((): (() => void) | void => {
+        if (!activeConversation || isLoadingMessages || messages.length === 0) return;
+        if (scrolledOnceRef.current === activeConversation.id) return;
+
+        scrolledOnceRef.current = activeConversation.id;
+        const handle = requestAnimationFrame((): void => {
+            virtuosoRef.current?.scrollToIndex({
+                index: 'LAST',
+                align: 'end',
+                behavior: 'auto'
+            });
+        });
+        return (): void => cancelAnimationFrame(handle);
+    }, [activeConversation, isLoadingMessages, messages.length]);
+
+    // Reset the per-conversation scroll-once marker whenever the active
+    // conversation changes (including becoming null). Keeps the imperative
+    // effect above one-shot per thread.
+    useEffect((): void => {
+        const currentId = activeConversation?.id ?? null;
+        if (prevConversationIdRef.current !== currentId) {
+            scrolledOnceRef.current = null;
+            firstItemIdRef.current = null;
+            setFirstItemIndex(FIRST_ITEM_START);
+            prevConversationIdRef.current = currentId;
+        }
+    }, [activeConversation?.id]);
+
+    // Detect prepended (older) messages by watching the head of the
+    // messages array. When the first id changes and the previous head is
+    // now found at a higher index, items were inserted at the start —
+    // shift `firstItemIndex` backward by exactly that count so Virtuoso
+    // keeps the user's visible anchor in place during lazy load.
+    useEffect((): void => {
+        if (messages.length === 0) {
+            firstItemIdRef.current = null;
+            return;
+        }
+        const currentFirstId = String(messages[0].id);
+        const prevFirstId = firstItemIdRef.current;
+        if (prevFirstId !== null && prevFirstId !== currentFirstId) {
+            const newIndexOfPrev = messages.findIndex(m => String(m.id) === prevFirstId);
+            if (newIndexOfPrev > 0) {
+                setFirstItemIndex(prev => prev - newIndexOfPrev);
+            }
+        }
+        firstItemIdRef.current = currentFirstId;
+    }, [messages]);
 
     // Phase 17: Institutional Route-Change Guard
     // Standard: Google/Meta Grade (Atomic Path Tracking)
@@ -604,9 +679,22 @@ export const ChatHub: React.FC = () => {
     }, [isOpen, closeOverlay, setOverlay]);
 
     const handleSelectConversation = useCallback((conversation: Conversation) => {
+        const isReclick = activeConversation?.id === conversation.id;
         selectConversation(conversation);
         setView('conversation');
-    }, [selectConversation]);
+        // Re-clicking the open conversation should snap to the latest
+        // message (WhatsApp behaviour). chat-provider's selectConversation
+        // early-returns on identity match so we drive the scroll here.
+        if (isReclick && messages.length > 0) {
+            requestAnimationFrame((): void => {
+                virtuosoRef.current?.scrollToIndex({
+                    index: 'LAST',
+                    align: 'end',
+                    behavior: 'smooth'
+                });
+            });
+        }
+    }, [selectConversation, activeConversation?.id, messages.length]);
 
     const handleStartNewChat = useCallback(async (doctor: DoctorProfile) => {
         // optimistically check if conversation exists
@@ -636,6 +724,18 @@ export const ChatHub: React.FC = () => {
         setReplyingTo(null);
         // Keep focus
         setTimeout(() => inputRef.current?.focus(), 10);
+        // Always anchor to bottom on user-send — even if the user had
+        // scrolled up to read history. Two RAFs let the optimistic
+        // message commit to the messages array before Virtuoso scrolls.
+        requestAnimationFrame((): void => {
+            requestAnimationFrame((): void => {
+                virtuosoRef.current?.scrollToIndex({
+                    index: 'LAST',
+                    align: 'end',
+                    behavior: 'smooth'
+                });
+            });
+        });
     }, [newMessage, activeConversation, sendMessage, replyingTo]);
 
     const handleMsgContextMenu = useCallback((e: React.MouseEvent, msgId: MessageId, isMe: boolean) => {
@@ -951,9 +1051,9 @@ export const ChatHub: React.FC = () => {
                                 )}
                                 {view === 'conversation' && activeConversation ? (() => {
                                     const other = getOtherParticipant(activeConversation);
-                                    const userPresence = presence[other.id as UserId];
+                                    const userPresence = presence[other.id];
                                     const isOnline = !other.isGroup && !!userPresence?.isOnline;
-                                    const last_activity = !other.isGroup && userPresence?.last_activity ? getFormattedTime(userPresence.last_activity) : undefined;
+                                    const lastActivity = !other.isGroup && userPresence?.lastActivity ? getFormattedTime(userPresence.lastActivity) : undefined;
 
                                     return (
                                         <div className="flex items-center gap-3 min-w-0">
@@ -987,11 +1087,11 @@ export const ChatHub: React.FC = () => {
                                                     {/* BUG-10 FIX: 3-state text */}
                                                     {other.isGroup
                                                         ? 'Multi-Professional Case Group'
-                                                        : (typingUsers.includes(other.id as UserId)
+                                                        : (typingUsers.includes(other.id)
                                                             ? 'Typing...'
                                                             : (isOnline
                                                                 ? 'Online'
-                                                                : (last_activity ? `Last seen at ${last_activity}` : 'Offline')))}
+                                                                : (lastActivity ? `Last seen at ${lastActivity}` : 'Offline')))}
                                                 </span>
                                             </div>
                                         </div>
@@ -1181,12 +1281,32 @@ export const ChatHub: React.FC = () => {
                                                 data={messages}
                                                 followOutput="auto"
                                                 atBottomThreshold={100}
-                                                initialTopMostItemIndex={messages.length - 1}
+                                                initialTopMostItemIndex={{ index: 'LAST', align: 'end' }}
+                                                firstItemIndex={firstItemIndex}
+                                                startReached={(): void => {
+                                                    if (activeConversation && hasMoreOlder && !isLoadingOlder) {
+                                                        void loadOlderMessages(activeConversation.id);
+                                                    }
+                                                }}
+                                                components={{
+                                                    Header: (): React.ReactElement | null => (
+                                                        isLoadingOlder ? (
+                                                            <div className="flex items-center justify-center py-4">
+                                                                <MedicalLoader message="Loading older messages..." />
+                                                            </div>
+                                                        ) : null
+                                                    )
+                                                }}
                                                 className="chat-scrollbar"
                                                 style={{ height: '100%' }}
                                                 increaseViewportBy={200}
                                                 rangeChanged={(range) => {
-                                                    const visibleItems = messages.slice(range.startIndex, range.endIndex + 1);
+                                                    // Virtuoso emits absolute indices when firstItemIndex is set;
+                                                    // convert back to the data-array's local indices for slicing.
+                                                    const localStart = Math.max(0, range.startIndex - firstItemIndex);
+                                                    const localEnd = Math.min(messages.length - 1, range.endIndex - firstItemIndex);
+                                                    if (localStart > localEnd) return;
+                                                    const visibleItems = messages.slice(localStart, localEnd + 1);
                                                     let shouldMarkRead = false;
                                                     visibleItems.forEach(msg => {
                                                         if (!msg.isMe && !msg.isRead) {
@@ -1209,7 +1329,9 @@ export const ChatHub: React.FC = () => {
                                                             const targetIdx = messages.findIndex(m => m.id === replyToId);
                                                             if (targetIdx !== -1) {
                                                                 virtuosoRef.current?.scrollToIndex({
-                                                                    index: targetIdx,
+                                                                    // Convert local data-array index back to absolute
+                                                                    // Virtuoso index using firstItemIndex offset.
+                                                                    index: firstItemIndex + targetIdx,
                                                                     align: 'center',
                                                                     behavior: 'smooth'
                                                                 });

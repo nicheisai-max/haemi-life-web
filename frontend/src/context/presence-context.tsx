@@ -136,18 +136,29 @@ export const PresenceProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                     ...prev,
                     [data.userId as UserId]: { 
                         isOnline: data.isOnline, 
-                        last_activity: data.last_activity || existing?.last_activity || new Date().toISOString() 
+                        lastActivity: data.lastActivity ?? existing?.lastActivity ?? new Date().toISOString()
                     }
                 };
             });
         };
 
-        const onTypingStarted = (data: { userId: UserId }) => {
-            setTypingUsers((prev) => [...new Set([...prev, data.userId])]);
+        // Both handlers return the previous reference unchanged when the
+        // incoming event would not alter the set. React shallow-compares
+        // setter return values against the current state and *skips the
+        // re-render entirely* when the reference is identical. Without this
+        // guard, every `typingStarted` keystroke from N concurrent typists
+        // re-renders the entire presence subtree even when the membership
+        // set hasn't changed — a quiet O(N × keystrokes) waste.
+        const onTypingStarted = (data: { userId: UserId }): void => {
+            setTypingUsers((prev) => (
+                prev.includes(data.userId) ? prev : [...prev, data.userId]
+            ));
         };
 
-        const onTypingStopped = (data: { userId: UserId }) => {
-            setTypingUsers((prev) => prev.filter(id => id !== data.userId));
+        const onTypingStopped = (data: { userId: UserId }): void => {
+            setTypingUsers((prev) => (
+                prev.includes(data.userId) ? prev.filter(id => id !== data.userId) : prev
+            ));
         };
 
         socketService.on('userStatus', onUserStatus);

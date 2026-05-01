@@ -81,8 +81,9 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({
             return;
         }
 
-        if (imageCache.has(targetSrc)) {
-            setImgUrl(imageCache.get(targetSrc)!);
+        const cachedImage = imageCache.get(targetSrc);
+        if (cachedImage) {
+            setImgUrl(cachedImage);
             setLoading(false);
             return;
         }
@@ -216,6 +217,19 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({
             className={cn("object-cover", ratioClass, className)}
             padding-none="true"
             loading="lazy"
+            onError={(): void => {
+                // Two failure modes reach the <img> element directly,
+                // bypassing the axios pipeline:
+                //   1. `blob:` URLs whose backing object was revoked (or
+                //      whose creating session ended — blob URLs are
+                //      window-scoped and do not survive a reload).
+                //   2. `data:` URIs that are malformed.
+                // In both cases the axios catch never fires, so we promote
+                // the DOM-level failure to React state and render the
+                // institutional "Asset Unavailable" fallback.
+                logger.warn('[AuthenticatedImage] Element-level load failure', { src: imgUrl });
+                setError(true);
+            }}
         />
     );
 };

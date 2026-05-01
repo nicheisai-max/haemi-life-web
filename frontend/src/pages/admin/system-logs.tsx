@@ -88,7 +88,7 @@ export const SystemLogs: React.FC = () => {
                 return log.details;
             }
         } else {
-            details = log.details as Record<string, unknown>;
+            details = log.details;
         }
 
         if (Object.keys(details).length === 0) return 'System event record';

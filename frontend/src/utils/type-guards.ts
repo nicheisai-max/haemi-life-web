@@ -61,6 +61,10 @@ export function isSocketErrorPayload(value: unknown): value is SocketErrorPayloa
     return false;
 }
 
+function isStringOrNull(value: unknown): value is string | null {
+    return value === null || typeof value === 'string';
+}
+
 export function isUser(value: unknown): value is User {
     if (!isObject(value)) return false;
     const v = value;
@@ -68,8 +72,14 @@ export function isUser(value: unknown): value is User {
         'id' in v && isString(v.id) &&
         'email' in v && isString(v.email) &&
         'name' in v && isString(v.name) &&
-        'role' in v && isString(v.role) && 
-        (v.role === 'patient' || v.role === 'doctor' || v.role === 'pharmacist' || v.role === 'admin')
+        'role' in v && isString(v.role) &&
+        (v.role === 'patient' || v.role === 'doctor' || v.role === 'pharmacist' || v.role === 'admin') &&
+        // Phase 10 Atomic Pair Enforcement: profile_image and profile_image_mime
+        // must coexist in any hydrated User object. A cached session missing either
+        // field is rejected so the boot path falls through to /auth/verify and
+        // restores the canonical Phase 10 shape from the backend.
+        'profileImage' in v && isStringOrNull(v.profileImage) &&
+        'profileImageMime' in v && isStringOrNull(v.profileImageMime)
     );
 }
 

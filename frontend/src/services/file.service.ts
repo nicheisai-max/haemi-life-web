@@ -120,7 +120,8 @@ class HaemiFileController {
         // Chrome managed policies CANNOT intercept this — it's a file write, not a download.
         if (this.hasFilePicker) {
             try {
-                const ext = providedFileName.includes('.') ? `.${providedFileName.split('.').pop()!.toLowerCase()}` : '';
+                const extPart = providedFileName.includes('.') ? providedFileName.split('.').pop() : undefined;
+                const ext = extPart ? `.${extPart.toLowerCase()}` : '';
                 const mimeType = this._guessMimeFromExtension(ext);
 
                 const pickerOptions: SaveFilePickerOptions = {
@@ -135,9 +136,15 @@ class HaemiFileController {
                 };
 
                 // ✅ showSaveFilePicker MUST be called before any other awaits
-                // This is safe here because we haven't awaited anything yet
-                const fileHandle = await (window as unknown as { showSaveFilePicker: (opts: SaveFilePickerOptions) => Promise<FileSystemFileHandle> })
-                    .showSaveFilePicker(pickerOptions);
+                // This is safe here because we haven't awaited anything yet.
+                // The `hasFilePicker` feature-flag (line 93) gates entry to this
+                // branch; the local const narrows the optional Window method
+                // from `… | undefined` to a callable function without a cast.
+                const picker = window.showSaveFilePicker;
+                if (!picker) {
+                    throw new Error('File System Access API unavailable at call site');
+                }
+                const fileHandle = await picker(pickerOptions);
 
                 logger.info(`${this.TAG} File System Access: picker confirmed`, { correlationId });
 
@@ -315,8 +322,9 @@ class HaemiFileController {
         correlationId: string
     ): Promise<void> {
         type MsSaveNav = Navigator & { msSaveBlob?: (blob: Blob, name: string) => boolean };
-        if (blob && typeof (navigator as MsSaveNav).msSaveBlob === 'function') {
-            (navigator as MsSaveNav).msSaveBlob!(blob, fileName);
+        const msNav = navigator as MsSaveNav;
+        if (blob && typeof msNav.msSaveBlob === 'function') {
+            msNav.msSaveBlob(blob, fileName);
             return;
         }
 

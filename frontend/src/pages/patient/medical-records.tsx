@@ -52,8 +52,8 @@ export const MedicalRecords: React.FC = () => {
                 selectedType === 'lab' ? r.recordType === ClinicalRecordType.LabResult :
                     selectedType === 'radiology' ? r.recordType === ClinicalRecordType.Radiology :
                         selectedType === 'prescription' ? r.recordType === ClinicalRecordType.Prescription :
-                            selectedType === 'notes' ? [ClinicalRecordType.ClinicalNote, ClinicalRecordType.SpecialistReport].includes(r.recordType as ClinicalRecordType) :
-                                selectedType === 'other' ? ![ClinicalRecordType.LabResult, ClinicalRecordType.Radiology, ClinicalRecordType.Prescription, ClinicalRecordType.ClinicalNote, ClinicalRecordType.SpecialistReport].includes(r.recordType as ClinicalRecordType) :
+                            selectedType === 'notes' ? [ClinicalRecordType.ClinicalNote, ClinicalRecordType.SpecialistReport].includes(r.recordType) :
+                                selectedType === 'other' ? ![ClinicalRecordType.LabResult, ClinicalRecordType.Radiology, ClinicalRecordType.Prescription, ClinicalRecordType.ClinicalNote, ClinicalRecordType.SpecialistReport].includes(r.recordType) :
                                     true
             );
         }

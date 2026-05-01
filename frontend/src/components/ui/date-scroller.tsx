@@ -1,8 +1,6 @@
 import React, { useRef } from 'react';
-import { cn } from "@/lib/utils";
 import { format, addDays } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { motion } from "framer-motion";
 
 interface DateScrollerProps {
     selectedDate: string;
@@ -10,6 +8,19 @@ interface DateScrollerProps {
     daysCount?: number;
 }
 
+/**
+ * Premium institutional date carousel.
+ *
+ * All visuals (colour, radius, motion, hover/selected/focus states) are
+ * driven from `index.css` against the brand-token system — `--sidebar-active`
+ * for selection continuity with primary navigation, `--card-radius` as the
+ * single source of truth for corner radius, and motion tokens
+ * (`--duration-hover`, `--ease-premium`) for transition timing.
+ *
+ * The track reserves a half-arrow-width gutter at each end so the
+ * left/right scroller arrows naturally overlap their edge pill by 50%,
+ * the standard premium-carousel affordance (Apple, Netflix).
+ */
 export const DateScroller: React.FC<DateScrollerProps> = ({
     selectedDate,
     onDateSelect,
@@ -17,89 +28,69 @@ export const DateScroller: React.FC<DateScrollerProps> = ({
 }) => {
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Index 0 is today. Past time-slots for today are filtered at the
+    // TimeGrid layer with a server-side guard in `getAvailableSlots`.
     const dates = Array.from({ length: daysCount }, (_, i) => {
-        const date = addDays(new Date(), i + 1);
+        const date = addDays(new Date(), i);
         return {
             full: format(date, 'yyyy-MM-dd'),
             dayName: format(date, 'EEE'),
             dayNum: format(date, 'd'),
-            month: format(date, 'MMM')
+            month: format(date, 'MMM'),
+            isToday: i === 0,
         };
     });
 
-    const scroll = (direction: 'left' | 'right') => {
-        if (scrollRef.current) {
-            const scrollAmount = 300;
-            scrollRef.current.scrollBy({
-                left: direction === 'left' ? -scrollAmount : scrollAmount,
-                behavior: 'smooth'
-            });
-        }
+    const scroll = (direction: 'left' | 'right'): void => {
+        if (!scrollRef.current) return;
+        const step = scrollRef.current.clientWidth * 0.6;
+        scrollRef.current.scrollBy({
+            left: direction === 'left' ? -step : step,
+            behavior: 'smooth'
+        });
     };
 
     return (
-        <div className="relative group px-1">
-            {/* Navigation Buttons - Always visible now */}
+        <div className="haemi-date-scroller">
             <button
-                onClick={() => scroll('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-background/95 dark:bg-background/80 backdrop-blur-md border border-input shadow-sm flex items-center justify-center text-foreground transition-all duration-300 hover:bg-primary hover:border-primary hover:text-primary-foreground hover:shadow-lg dark:hover:bg-primary dark:hover:shadow-primary/30"
                 type="button"
+                aria-label="Scroll to earlier dates"
+                onClick={() => scroll('left')}
+                className="haemi-date-scroller__arrow haemi-date-scroller__arrow--left"
             >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="haemi-date-scroller__arrow-icon" aria-hidden="true" />
             </button>
 
-            <div
-                ref={scrollRef}
-                className="flex gap-3 overflow-x-auto py-2 px-8 scrollbar-none snap-x snap-mandatory"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-                {dates.map((date) => {
-                    const isSelected = selectedDate === date.full;
-                    return (
-                        <motion.button
-                            key={date.full}
-                            whileHover={{ y: -4 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => onDateSelect(date.full)}
-                            type="button"
-                            className={cn(
-                                "flex-shrink-0 w-20 py-4 rounded-xl border transition-all duration-300 snap-center cursor-pointer",
-                                "flex flex-col items-center justify-center gap-1",
-                                isSelected
-                                    ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/30"
-                                    : "bg-background/60 border-border/60 text-muted-foreground hover:bg-primary/5 hover:border-primary hover:text-foreground hover:shadow-md dark:hover:bg-primary/15 dark:hover:shadow-lg dark:hover:shadow-primary/20"
-                            )}
-                        >
-                            <span className={cn(
-                                "text-[10px] font-bold uppercase tracking-wider transition-colors duration-300",
-                                isSelected 
-                                    ? "text-primary-foreground/80" 
-                                    : "text-muted-foreground group-hover:text-foreground"
-                            )}>
-                                {date.month}
-                            </span>
-                            <span className="text-h3 leading-none transition-colors duration-300">
-                                {date.dayNum}
-                            </span>
-                            <span className={cn(
-                                "text-xs font-medium transition-colors duration-300",
-                                isSelected 
-                                    ? "text-primary-foreground/90" 
-                                    : "text-primary hover:text-primary-600 dark:hover:text-primary-400"
-                            )}>
-                                {date.dayName}
-                            </span>
-                        </motion.button>
-                    );
-                })}
+            <div ref={scrollRef} className="haemi-date-scroller__track">
+                {dates.map((date) => (
+                    <button
+                        key={date.full}
+                        type="button"
+                        onClick={() => onDateSelect(date.full)}
+                        data-selected={selectedDate === date.full ? 'true' : 'false'}
+                        data-today={date.isToday ? 'true' : 'false'}
+                        aria-pressed={selectedDate === date.full}
+                        aria-label={
+                            date.isToday
+                                ? `Today, ${date.month} ${date.dayNum}, ${date.dayName}`
+                                : `${date.month} ${date.dayNum}, ${date.dayName}`
+                        }
+                        className="haemi-date-pill"
+                    >
+                        <span className="haemi-date-pill__month">{date.month}</span>
+                        <span className="haemi-date-pill__num">{date.dayNum}</span>
+                        <span className="haemi-date-pill__day">{date.dayName}</span>
+                    </button>
+                ))}
             </div>
 
             <button
-                onClick={() => scroll('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-background/95 dark:bg-background/80 backdrop-blur-md border border-input shadow-sm flex items-center justify-center text-foreground transition-all duration-300 hover:bg-primary hover:border-primary hover:text-primary-foreground hover:shadow-lg dark:hover:bg-primary dark:hover:shadow-primary/30"
                 type="button"
+                aria-label="Scroll to later dates"
+                onClick={() => scroll('right')}
+                className="haemi-date-scroller__arrow haemi-date-scroller__arrow--right"
             >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="haemi-date-scroller__arrow-icon" aria-hidden="true" />
             </button>
         </div>
     );

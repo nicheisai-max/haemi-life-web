@@ -5,7 +5,8 @@ import { UserId } from '../types/chat.types';
 export type UserStatusEvent = {
     userId: UserId;
     isOnline: boolean; // Institutional standard (boolean)
-    last_activity: string;
+    // P1 CASING FIX (Phase 12): camelCase across the API/socket boundary.
+    lastActivity: string;
 };
 
 
@@ -16,11 +17,17 @@ class StatusService {
     public async isOnline(userId: string): Promise<boolean> {
         try {
             const id = String(userId);
-            // P0 META-GRADE: Check if any session has pinged in the last 90 seconds
+            // P1 HEARTBEAT FIX (Phase 12): the institutional cleanup interval
+            // (institutionalSocketCleanup) and the in-memory `purgeZombiePresence`
+            // both operate at the 90-second mark. The previous 45-second probe
+            // here created a 45–90s "phantom online" window where the DB
+            // claimed a user was active but the socket layer had already
+            // begun reaping them. Aligning both reads to the same 90-second
+            // threshold makes the truth surface consistent.
             const result = await pool.query<{ exists: boolean }>(
                 `SELECT EXISTS(
-                    SELECT 1 FROM active_connections 
-                    WHERE user_id = $1 
+                    SELECT 1 FROM active_connections
+                    WHERE user_id = $1
                     AND last_ping > NOW() - INTERVAL '90 seconds'
                 )`, [id]);
             return result.rows[0]?.exists ?? false;
@@ -57,7 +64,7 @@ class StatusService {
         return {
             userId: id as UserId,
             isOnline: true,
-            last_activity: new Date().toISOString()
+            lastActivity: new Date().toISOString()
         };
     }
 
@@ -101,7 +108,7 @@ class StatusService {
             return {
                 userId: id as UserId,
                 isOnline: stillOnline,
-                last_activity: last_activity
+                lastActivity: last_activity
             };
         } catch (error: unknown) {
             logger.error('[PRESENCE FAILURE] Failed to set user offline', {
@@ -176,7 +183,7 @@ class StatusService {
             return {
                 userId: id as UserId,
                 isOnline: false,
-                last_activity: new Date().toISOString()
+                lastActivity: new Date().toISOString()
             };
         } catch (error: unknown) {
             logger.error('[StatusService] Failed to purge user connections', {
@@ -187,16 +194,18 @@ class StatusService {
         }
     }
 
-    public async getPresenceBatch(userIds: string[]): Promise<Record<string, { isOnline: boolean, last_activity: string }>> {
+    public async getPresenceBatch(userIds: string[]): Promise<Record<string, { isOnline: boolean; lastActivity: string }>> {
         if (!userIds || userIds.length === 0) return {};
-        const results: Record<string, { isOnline: boolean, last_activity: string }> = {};
+        const results: Record<string, { isOnline: boolean; lastActivity: string }> = {};
 
         try {
-            // 1. Query active_connections for ALL requested users
-            // P0 META-GRADE: Filter by activity threshold (90s)
+            // 1. Query active_connections for ALL requested users.
+            // P1 HEARTBEAT FIX (Phase 12): unified 90-second window — see
+            // the rationale documented on isOnline(). Single source of
+            // truth for online vs offline determination across the service.
             const onlineResult = await pool.query<{ user_id: string }>(
-                `SELECT DISTINCT user_id FROM active_connections 
-                 WHERE user_id = ANY($1) 
+                `SELECT DISTINCT user_id FROM active_connections
+                 WHERE user_id = ANY($1)
                  AND last_ping > NOW() - INTERVAL '90 seconds'`,
                 [userIds]
             );
@@ -211,7 +220,8 @@ class StatusService {
             dbResult.rows.forEach((row) => {
                 results[row.id] = {
                     isOnline: onlineSet.has(row.id),
-                    last_activity: row.last_activity ?
+                    // Source column stays snake_case (`last_activity`); API key is camelCase.
+                    lastActivity: row.last_activity ?
                         (row.last_activity instanceof Date ? row.last_activity.toISOString() : new Date(row.last_activity).toISOString()) :
                         new Date().toISOString()
                 };
@@ -228,16 +238,19 @@ class StatusService {
     }
 
     /**
-     * Phase 4: Surgical Cleanup (Safe)
-     * Effectively purges orphaned database records that no longer correspond to active sockets.
-     * Rule: NO TRUNCATE. Uses standard DELETE for precise cleanup.
+     * Replica-safe boot sweep. Only purges rows whose `last_ping` has
+     * exceeded the heartbeat threshold; live sessions owned by sibling
+     * replicas are preserved. Live rows continue to refresh their
+     * `last_ping` via the heartbeat handler, so true ghosts (process-
+     * bound sockets that vanished on a crashed replica) age out and
+     * are reaped here at boot or by the periodic cleanup job.
      */
     public async institutionalSocketCleanup(): Promise<void> {
         try {
-            // Since WebSocket sessions are process-bound, rows persisting across server 
-            // restarts are definitively orphaned "Ghost" sessions.
-            const result = await pool.query("DELETE FROM active_connections");
-            logger.info('[Institutional Reset] Presence sanitized.', { purgedRows: result.rowCount || 0 });
+            const result = await pool.query(
+                "DELETE FROM active_connections WHERE last_ping < NOW() - INTERVAL '90 seconds'"
+            );
+            logger.info('[Institutional Reset] Stale presence purged.', { purgedRows: result.rowCount || 0 });
         } catch (error: unknown) {
             logger.error('[Institutional Reset] Cleanup failure:', {
                 error: error instanceof Error ? error.message : String(error)

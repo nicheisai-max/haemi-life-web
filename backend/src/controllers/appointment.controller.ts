@@ -36,6 +36,29 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
         }
         const patientId = user.id;
 
+        // Server-clock guard: reject appointments whose start instant has
+        // already passed (with the same lead-time buffer the slot list uses).
+        // Defense-in-depth against:
+        //   - clock-skewed clients,
+        //   - stale slot lists held in a tab for hours,
+        //   - hand-crafted POSTs that bypass the UI entirely.
+        // Both inputs are user-provided strings; we parse defensively so a
+        // malformed payload is rejected as 400 rather than silently coerced.
+        const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(appointmentDate ?? '');
+        const timeMatch = /^(\d{2}):(\d{2})$/.exec(appointmentTime ?? '');
+        if (!dateMatch || !timeMatch) {
+            sendError(res, 400, 'Invalid appointment date or time format');
+            return;
+        }
+        const [, y, mo, d] = dateMatch;
+        const [, hh, mm] = timeMatch;
+        const slotInstant = new Date(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), 0, 0);
+        const earliestBookableMs = Date.now() + BOOKING_LEAD_TIME_MINUTES * 60_000;
+        if (slotInstant.getTime() < earliestBookableMs) {
+            sendError(res, 400, 'This appointment slot has already passed. Please choose a future time.');
+            return;
+        }
+
         // Validate that doctor exists and is verified
         const isVerified = await appointmentRepository.checkDoctorVerified(doctorId);
         if (!isVerified) {
@@ -83,8 +106,8 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
         if (screeningResponses && Array.isArray(screeningResponses)) {
             try {
                 await preScreeningRepository.saveResponses(
-                    appointment.id.toString(), 
-                    patientId, 
+                    appointment.id,
+                    patientId,
                     screeningResponses
                 );
                 logger.info(`[AppointmentController] Processed triage for appointment ${appointment.id}`);
@@ -304,8 +327,11 @@ export const getPreScreeningQuestions = async (_req: Request, res: Response): Pr
 // Submit pre-screening responses linked to an appointment (Patient)
 export const submitPreScreening = async (req: Request, res: Response): Promise<void> => {
     const user = req.user;
+    // P0 TYPE FIX (Phase 12): `appointment_id` is INTEGER in the database,
+    // so we accept either a numeric or a numeric-string body and parse to
+    // a strict positive integer before invoking the repository.
     const { appointmentId, responses } = req.body as {
-        appointmentId: string;
+        appointmentId: string | number;
         responses: Array<{ question_id: string; response_value: boolean; additional_notes?: string }>;
     };
 
@@ -314,12 +340,20 @@ export const submitPreScreening = async (req: Request, res: Response): Promise<v
             sendError(res, 401, 'Unauthorized');
             return;
         }
-        if (!appointmentId || !responses || !Array.isArray(responses)) {
+        if (appointmentId === undefined || appointmentId === null || !responses || !Array.isArray(responses)) {
             sendError(res, 400, 'Appointment ID and valid responses array are required');
             return;
         }
 
-        await preScreeningRepository.saveResponses(appointmentId, user.id, responses);
+        const parsedAppointmentId = typeof appointmentId === 'number'
+            ? appointmentId
+            : parseInt(appointmentId, 10);
+        if (!Number.isInteger(parsedAppointmentId) || parsedAppointmentId <= 0) {
+            sendError(res, 400, 'Appointment ID must be a positive integer');
+            return;
+        }
+
+        await preScreeningRepository.saveResponses(parsedAppointmentId, user.id, responses);
         sendResponse(res, 200, true, 'Pre-screening responses submitted successfully');
     } catch (error: unknown) {
         logger.error('[AppointmentController] Failed to submit pre-screening responses', {
@@ -329,6 +363,13 @@ export const submitPreScreening = async (req: Request, res: Response): Promise<v
         sendError(res, 500, 'Failed to submit pre-screening responses');
     }
 };
+
+/**
+ * Minimum lead time, in minutes, between server-now and the start of a
+ * bookable slot. Mirrors the same constant in the frontend `TimeGrid`
+ * (defense-in-depth: client filters for UX, server filters for truth).
+ */
+const BOOKING_LEAD_TIME_MINUTES = 15;
 
 // Get available time slots for a doctor
 export const getAvailableSlots = async (req: Request, res: Response): Promise<void> => {
@@ -344,6 +385,17 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
         const dateObj = new Date(year, month - 1, day);
         const dayOfWeek = dateObj.getDay();
 
+        // Reject queries for dates strictly before today on the server clock.
+        // (Same-day with no remaining slots returns an empty list, not 400 —
+        // the frontend renders a clean "All slots have passed" state.)
+        const now = new Date();
+        const startOfRequestedDay = new Date(year, month - 1, day);
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (startOfRequestedDay.getTime() < startOfToday.getTime()) {
+            sendResponse(res, 200, true, 'Date is in the past', { date, slots: [] });
+            return;
+        }
+
         const schedule = await appointmentRepository.getDoctorSchedule(doctorId, dayOfWeek);
 
         if (schedule.length === 0) {
@@ -353,6 +405,14 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
 
         const bookedTimes = await appointmentRepository.getBookedTimes(doctorId, date);
 
+        const isToday = startOfRequestedDay.getTime() === startOfToday.getTime();
+        // For same-day requests, suppress slots that start before
+        // (now + lead time). Comparison is done in minutes-since-midnight
+        // so it is independent of the schedule-row epoch (`2000-01-01`).
+        const earliestMinutes = isToday
+            ? now.getHours() * 60 + now.getMinutes() + BOOKING_LEAD_TIME_MINUTES
+            : -1;
+
         const slots: string[] = [];
         for (const row of schedule) {
             const current = new Date(`2000-01-01T${row.start_time}`);
@@ -360,7 +420,9 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
 
             while (current < end) {
                 const timeStr = current.toTimeString().slice(0, 5);
-                if (!bookedTimes.includes(timeStr)) {
+                const slotMinutes = current.getHours() * 60 + current.getMinutes();
+                const isBookable = !bookedTimes.includes(timeStr) && slotMinutes >= earliestMinutes;
+                if (isBookable) {
                     slots.push(timeStr);
                 }
                 current.setMinutes(current.getMinutes() + 30);

@@ -59,6 +59,7 @@ export interface AppointmentResponse {
     otherPartyName?: string;
     userRole?: string;
     profileImage?: string | null;
+    profileImageMime?: string | null;
 }
 
 export const mapAppointmentToResponse = (data: AppointmentWithDetails): AppointmentResponse => {
@@ -81,7 +82,8 @@ export const mapAppointmentToResponse = (data: AppointmentWithDetails): Appointm
         specialization: data.specialization,
         otherPartyName: data.other_party_name,
         userRole: data.user_role,
-        profileImage: data.profile_image || null
+        profileImage: data.profile_image || null,
+        profileImageMime: data.profile_image_mime || null
     };
 };
 

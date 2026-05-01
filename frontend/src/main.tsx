@@ -28,7 +28,11 @@ window.addEventListener('beforeinstallprompt', (e: Event) => {
 
 import { BrowserRouter } from 'react-router-dom';
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+    throw new Error('Root mount point #root not found in document; index.html is misconfigured.');
+}
+createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter>
       <App />

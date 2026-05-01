@@ -4,9 +4,26 @@ import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import { mapUserToResponse } from '../utils/user.mapper';
 import { UserEntity } from '../types/db.types';
+import { decrypt } from '../utils/security';
 
 interface ProfileQueryResult extends UserEntity {
     metadata: Record<string, unknown>;
+}
+
+/**
+ * P0 PII GUARD (Phase 10/12): rows joined directly from `users` carry
+ * `phone_number` and `id_number` as encrypted blobs. The repository
+ * layer (`UserRepository.decryptUser`) performs decryption on its own
+ * reads, but `getMe` here uses raw `pool.query` for role-based JSON
+ * aggregation. This helper applies the same decryption at the
+ * controller boundary so the mapper never projects an encrypted value.
+ */
+function decryptUserRow(row: ProfileQueryResult): ProfileQueryResult {
+    return {
+        ...row,
+        phone_number: row.phone_number ? decrypt(row.phone_number) : '',
+        id_number: row.id_number ? decrypt(row.id_number) : null,
+    };
 }
 
 /**
@@ -95,7 +112,7 @@ export const getMe = async (req: Request, res: Response) => {
             return sendError(res, 404, 'Profile not found', 'NOT_FOUND');
         }
 
-        const user = result.rows[0];
+        const user = decryptUserRow(result.rows[0]);
         const duration = Date.now() - start;
 
         // Structured Logging for institutional audit
@@ -106,7 +123,8 @@ export const getMe = async (req: Request, res: Response) => {
             duration: `${duration}ms`
         });
 
-        // Use mapUserToResponse for consistent contract
+        // Use mapUserToResponse for consistent contract.
+        // PII columns (phone_number, id_number) are decrypted above.
         const normalized = mapUserToResponse(user);
 
         return sendResponse(res, 200, true, 'Profile fetched successfully', {
@@ -114,6 +132,7 @@ export const getMe = async (req: Request, res: Response) => {
             profile: {
                 fullName: user.name,
                 profileImage: user.profile_image,
+                profileImageMime: user.profile_image_mime,
                 metadata: user.metadata
             }
         });

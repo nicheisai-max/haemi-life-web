@@ -33,7 +33,6 @@ import {
 } from '../types/chat.types';
 import { FileDomain } from '../types/file';
 import { ChatMessage, MessageDeletedPayload } from '../types/socket.types';
-import { JWTPayload } from '../types/express';
 
 // 🔒 STRICT UUID VALIDATION (RFC 4122)
 const isUUID = (id: string | undefined | null): id is string => {
@@ -87,7 +86,7 @@ export const uploadAttachment = async (req: Request, res: Response) => {
 
 // Get all conversations for the current user (Phase 4: Batch Processed)
 export const getConversations = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id as UserId;
 
@@ -103,14 +102,18 @@ export const getConversations = async (req: Request, res: Response) => {
             participants_hash: string,
             last_message_id: string | null
         }>(
-            `SELECT DISTINCT ON (c.id) 
-                c.id, c.updated_at, 
-                COALESCE(m.created_at, c.last_message_at, c.updated_at) as last_message_at, 
+            `SELECT DISTINCT ON (c.id)
+                c.id, c.updated_at,
+                COALESCE(m.created_at, c.last_message_at, c.updated_at) as last_message_at,
                 c.participants_hash, m.id as last_message_id
              FROM conversations c
              JOIN conversation_participants cp ON c.id = cp.conversation_id
              LEFT JOIN messages m ON c.id = m.conversation_id AND m.is_deleted = false
              WHERE cp.user_id = $1
+               -- P0 GUARD (Phase 12): conversations flagged as redundant by
+               -- the chat-reliability service must not appear in the user's
+               -- sidebar projection.
+               AND c.is_redundant = false
                AND (
                      -- D7 REMEDIATION: Exclude ghost conversations (0 messages) that are
                      -- older than 24 hours. 10 minutes was too short for clinical workflows
@@ -147,8 +150,23 @@ export const getConversations = async (req: Request, res: Response) => {
 
         const convIds: string[] = sortedConvs.map((c): string => c.id);
 
+        // Legacy rows created before migration 20260309000002 added the
+        // `preview_text` column have NULL/empty previews. The COALESCE chain
+        // falls back to `content` (plaintext) and emits a fixed sentinel for
+        // ciphertext rows (matching the `[Encrypted Preview]` convention used
+        // when new messages are inserted). The companion backfill migration
+        // (20260501000001) populates these NULL rows so this fallback is a
+        // belt-and-braces guard, not a permanent dependency.
         const msgResult = await pool.query<{ conversation_id: string, preview_text: string | null }>(
-            `SELECT DISTINCT ON (conversation_id) conversation_id, preview_text
+            `SELECT DISTINCT ON (conversation_id)
+                    conversation_id,
+                    COALESCE(
+                        NULLIF(preview_text, ''),
+                        CASE
+                            WHEN content LIKE 'enc:%' THEN '[Encrypted Preview]'
+                            ELSE content
+                        END
+                    ) AS preview_text
              FROM messages
              WHERE conversation_id = ANY($1)
                AND is_deleted = false
@@ -176,9 +194,10 @@ export const getConversations = async (req: Request, res: Response) => {
             name: string,
             role: string,
             initials: string,
-            profile_image: string | null
+            profile_image: string | null,
+            profile_image_mime: string | null
         }>(
-            `SELECT cp.conversation_id, u.id, u.name, u.role, u.initials, u.profile_image
+            `SELECT cp.conversation_id, u.id, u.name, u.role, u.initials, u.profile_image, u.profile_image_mime
              FROM conversation_participants cp
              JOIN users u ON cp.user_id = u.id
              WHERE cp.conversation_id = ANY($1) AND cp.user_id != $2`,
@@ -187,13 +206,19 @@ export const getConversations = async (req: Request, res: Response) => {
 
         const partMap = new Map<string, ChatParticipant[]>();
         partResult.rows.forEach((r): void => {
-            if (!partMap.has(r.conversation_id)) partMap.set(r.conversation_id, []);
-            partMap.get(r.conversation_id)!.push({
-                id: r.id as UserId, 
-                name: r.name || 'Unknown Professional', 
-                role: r.role || 'user', 
-                initials: r.initials || '??', 
-                profileImage: r.profile_image
+            // Get-or-init pattern avoids a non-null assertion on .get().
+            let participants = partMap.get(r.conversation_id);
+            if (!participants) {
+                participants = [];
+                partMap.set(r.conversation_id, participants);
+            }
+            participants.push({
+                id: r.id as UserId,
+                name: r.name || 'Unknown Professional',
+                role: r.role || 'user',
+                initials: r.initials || '??',
+                profileImage: r.profile_image,
+                profileImageMime: r.profile_image_mime
             });
         });
 
@@ -225,7 +250,7 @@ export const getConversations = async (req: Request, res: Response) => {
 };
 
 export const getMessages = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id as UserId;
     const { conversationId } = req.params as { conversationId: ConversationId };
@@ -237,6 +262,19 @@ export const getMessages = async (req: Request, res: Response) => {
         return sendError(res, 400, 'Invalid or missing userId (UUID expected)');
     }
 
+    // Pagination cursor + bounded limit. Initial load returns the latest
+    // window; subsequent calls pass `?before=<sequence_number>` to fetch
+    // strictly older messages. The +1 probe row lets us report `hasMore`
+    // accurately to the client without a second EXISTS query.
+    const PAGE_DEFAULT = 50;
+    const PAGE_MAX = 200;
+    const limitParam = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : PAGE_DEFAULT;
+    const limit = Number.isFinite(limitParam) && limitParam > 0
+        ? Math.min(limitParam, PAGE_MAX)
+        : PAGE_DEFAULT;
+    const beforeParam = typeof req.query.before === 'string' ? Number(req.query.before) : Number.NaN;
+    const before = Number.isFinite(beforeParam) && beforeParam > 0 ? beforeParam : null;
+
     try {
         const [membershipCheck, result] = await Promise.all([
             pool.query(
@@ -245,22 +283,27 @@ export const getMessages = async (req: Request, res: Response) => {
             ),
             pool.query<DbMessage>(
                 `
-                SELECT 
-                    m.id, m.conversation_id, m.content, m.sender_id, m.created_at, 
-                    m.message_type, m.status, m.delivered_at, m.read_at, m.reply_to_id,
-                    u.name as sender_name, u.role as sender_role,
-                    m.sequence_number
-                FROM messages m
-                LEFT JOIN users u ON m.sender_id = u.id
-                WHERE m.conversation_id = $1
-                  AND m.is_deleted = false
-                  AND NOT EXISTS (
-                      SELECT 1 FROM deleted_messages dm 
-                      WHERE dm.message_id = m.id AND dm.user_id = $2
-                  )
-                ORDER BY m.created_at ASC
+                WITH paginated AS (
+                    SELECT
+                        m.id, m.conversation_id, m.content, m.sender_id, m.created_at,
+                        m.message_type, m.status, m.delivered_at, m.read_at, m.reply_to_id,
+                        u.name as sender_name, u.role as sender_role,
+                        m.sequence_number
+                    FROM messages m
+                    LEFT JOIN users u ON m.sender_id = u.id
+                    WHERE m.conversation_id = $1
+                      AND m.is_deleted = false
+                      AND NOT EXISTS (
+                          SELECT 1 FROM deleted_messages dm
+                          WHERE dm.message_id = m.id AND dm.user_id = $2
+                      )
+                      AND ($3::bigint IS NULL OR m.sequence_number < $3::bigint)
+                    ORDER BY m.sequence_number DESC
+                    LIMIT $4
+                )
+                SELECT * FROM paginated ORDER BY sequence_number ASC
                 `,
-                [conversationId, userId]
+                [conversationId, userId, before, limit + 1]
             )
         ]);
 
@@ -268,12 +311,19 @@ export const getMessages = async (req: Request, res: Response) => {
             return sendError(res, 403, 'Not authorized to view this conversation');
         }
 
-        if (result.rows.length === 0) {
-            return sendResponse(res, 200, true, 'Messages fetched', []);
+        // Probe-row reduction: rows are sorted oldest-first by the outer
+        // ORDER BY. If we got more than `limit`, the OLDEST row is the
+        // probe and there is at least one further older row in the table.
+        const allRows = result.rows;
+        const hasMore = allRows.length > limit;
+        const trimmedRows = hasMore ? allRows.slice(1) : allRows;
+
+        if (trimmedRows.length === 0) {
+            return sendResponse(res, 200, true, 'Messages fetched', { messages: [], hasMore: false });
         }
 
-        const messageIds = result.rows.map(m => m.id as MessageId);
-        const replyToIds = result.rows.map(m => m.reply_to_id as MessageId).filter((id): id is MessageId => !!id);
+        const messageIds = trimmedRows.map(m => m.id);
+        const replyToIds = trimmedRows.map(m => m.reply_to_id as MessageId).filter((id): id is MessageId => !!id);
 
         const [attachmentsRes, reactionsRes, repliesRes] = await Promise.all([
             pool.query<DbAttachment>(
@@ -317,7 +367,7 @@ export const getMessages = async (req: Request, res: Response) => {
             return acc;
         }, {} as Record<MessageId, { id: MessageId, content: string, sender_name: string }>);
 
-        const messages: ChatMessage[] = result.rows.map(row => {
+        const messages: ChatMessage[] = trimmedRows.map(row => {
             const dbMsg: DbMessage = {
                 ...row,
                 attachments: attachmentsMap[row.id] || [],
@@ -328,7 +378,7 @@ export const getMessages = async (req: Request, res: Response) => {
             return normalized;
         }).filter((m): m is ChatMessage => m !== null);
 
-        return sendResponse(res, 200, true, 'Messages fetched', messages);
+        return sendResponse(res, 200, true, 'Messages fetched', { messages, hasMore });
     } catch (error: unknown) {
         logger.error('[ChatController] Error fetching messages:', {
             error: error instanceof Error ? error.message : String(error),
@@ -340,7 +390,7 @@ export const getMessages = async (req: Request, res: Response) => {
 };
 
 export const sendMessage = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const senderId = user.id as UserId;
     const { participantId, content, messageType = 'text', attachment, tempId, attachments } = req.body as SendMessageRequest;
@@ -442,7 +492,7 @@ export const sendMessage = async (req: Request, res: Response) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', $8)
             RETURNING *
             `,
-            [conversationId as string, senderId, user.role, storedContent as string, (decodedPreview || '') as string, messageType as string, req.body.replyToId as MessageId, sequenceNumber]
+            [conversationId as string, senderId, user.role, storedContent, (decodedPreview || ''), messageType as string, req.body.replyToId as MessageId, sequenceNumber]
         );
 
         const newMessage = msgResult.rows[0];
@@ -547,7 +597,7 @@ export const sendMessage = async (req: Request, res: Response) => {
 
         await client.query(
             'UPDATE conversations SET last_message_id = $1, preview_text = $2, last_message_at = NOW(), updated_at = NOW() WHERE id = $3',
-            [newMessage.id, (decodedPreview || '') as string, conversationId as string]
+            [newMessage.id, (decodedPreview || ''), conversationId as string]
         );
 
         await client.query('COMMIT');
@@ -579,7 +629,7 @@ export const sendMessage = async (req: Request, res: Response) => {
             const others = participants.filter(pid => pid !== senderId);
             let previewText = finalAttachments.length > 0 ? '📎 Attachment' : 'New message';
             if (content) {
-                const previewStr = (decodedPreview || '') as string;
+                const previewStr = (decodedPreview || '');
                 previewText = (previewStr.length > 100) ? previewStr.substring(0, 100) + '...' : previewStr;
             }
 
@@ -604,7 +654,7 @@ export const sendMessage = async (req: Request, res: Response) => {
 };
 
 export const startConversation = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user || !user.id) return sendError(res, 401, 'Unauthorized');
     const userId = user.id as UserId;
     const { participantId } = req.body as { participantId: UserId };
@@ -698,9 +748,10 @@ export const startConversation = async (req: Request, res: Response) => {
             name: string,
             role: string,
             initials: string,
-            profile_image: string | null
+            profile_image: string | null,
+            profile_image_mime: string | null
         }>(
-            `SELECT u.id, u.name, u.role, u.initials, u.profile_image
+            `SELECT u.id, u.name, u.role, u.initials, u.profile_image, u.profile_image_mime
              FROM conversation_participants cp
              JOIN users u ON cp.user_id = u.id
              WHERE cp.conversation_id = $1 AND cp.user_id != $2`,
@@ -723,7 +774,12 @@ export const startConversation = async (req: Request, res: Response) => {
             last_message: lastMsgResult.rows[0]?.preview_text ?? undefined,
             last_message_id: (row.last_message_id as MessageId | null) ?? undefined,
             participants: partResult.rows.map(r => ({
-                id: r.id as UserId, name: r.name, role: r.role, initials: r.initials, profileImage: r.profile_image
+                id: r.id as UserId, 
+                name: r.name, 
+                role: r.role, 
+                initials: r.initials, 
+                profileImage: r.profile_image,
+                profileImageMime: r.profile_image_mime
             })),
             unread_count: 0, // Freshly created or retrieved thread from user's perspective
             message_count: 0,
@@ -750,7 +806,7 @@ export const startConversation = async (req: Request, res: Response) => {
 };
 
 export const markAsDelivered = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id as UserId;
     const { conversationId } = req.params as { conversationId: ConversationId };
@@ -768,7 +824,7 @@ export const markAsDelivered = async (req: Request, res: Response) => {
         if (io && result.rows.length > 0) {
             const messageIds = result.rows.map(r => r.id);
             io.to(`conversation:${conversationId}`).emit('messageDelivered', {
-                conversationId: conversationId as ConversationId,
+                conversationId: conversationId,
                 messageIds: messageIds,
                 userId: userId,
                 timestamp: new Date().toISOString()
@@ -786,7 +842,7 @@ export const markAsDelivered = async (req: Request, res: Response) => {
 };
 
 export const markAsRead = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id as UserId;
     const { conversationId } = req.params as { conversationId: ConversationId };
@@ -802,7 +858,7 @@ export const markAsRead = async (req: Request, res: Response) => {
             [conversationId, userId]
         );
         if (io && result.rows.length > 0) {
-            const messageIds = result.rows.map(r => r.id as MessageId);
+            const messageIds = result.rows.map(r => r.id);
             io.to(`conversation:${conversationId}`).emit('messageRead', {
                 conversationId,
                 messageIds,
@@ -821,7 +877,7 @@ export const markAsRead = async (req: Request, res: Response) => {
 };
 
 export const reactToMessage = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id as UserId;
     const { messageId } = req.params as { messageId: MessageId };
@@ -904,7 +960,7 @@ export const reactToMessage = async (req: Request, res: Response) => {
 };
 
 export const deleteMessage = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user) return sendError(res, 401, 'Unauthorized');
     const userId = user.id as UserId;
     const { messageId } = req.params as { messageId: MessageId };
@@ -1010,7 +1066,7 @@ export const deleteMessage = async (req: Request, res: Response) => {
                 if (io) {
                     const deleteData: MessageDeletedPayload = {
                         messageId,
-                        conversationId: conversationId as ConversationId,
+                        conversationId: conversationId,
                         newLastMessage: newLastMessageData
                     };
                     io.to(`conversation:${conversationId}`).emit('messageDeleted', deleteData);
@@ -1063,7 +1119,7 @@ export const deleteMessage = async (req: Request, res: Response) => {
             if (io) {
                 const localDeleteData: MessageDeletedPayload = {
                     messageId,
-                    conversationId: conversationId as ConversationId,
+                    conversationId: conversationId,
                     newLastMessage: newLastMessageData
                 };
                 io.to(`user:${userId}`).emit('localMessageDeleted', localDeleteData);
@@ -1107,7 +1163,7 @@ export const getPresence = async (req: Request, res: Response) => {
 };
 
 export const syncChat = async (req: Request, res: Response) => {
-    const user = req.user as JWTPayload | undefined;
+    const user = req.user;
     if (!user) return res.status(401).json({ message: 'Unauthorized' });
     const since = req.query.since as string;
 

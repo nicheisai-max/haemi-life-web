@@ -61,7 +61,7 @@ describe('AuthContext Lifecycle', () => {
 
         return render(
             <AuthProvider>
-                <TestComponent useAuthHook={useAuth as unknown as () => AuthContextValue} />
+                <TestComponent useAuthHook={useAuth} />
             </AuthProvider>
         );
     };
@@ -95,6 +95,7 @@ describe('AuthContext Lifecycle', () => {
                 idNumber: '123456789',
                 initials: 'DT',
                 profileImage: null,
+                profileImageMime: null,
                 isVerified: true,
                 hasConsent: false,
                 status: 'ACTIVE',

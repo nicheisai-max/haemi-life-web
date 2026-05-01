@@ -6,7 +6,6 @@ import morgan from 'morgan';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { Socket } from 'socket.io';
-import { JWTPayload } from './types/express';
 import {
     ServerToClientEvents,
     ClientToServerEvents,
@@ -15,7 +14,7 @@ import {
     StrictAuthenticatedSocket,
     HaemiServer
 } from './types/socket.types';
-import { UserId, ConversationId } from './types/chat.types';
+import { UserId } from './types/chat.types';
 import * as jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 
@@ -175,8 +174,8 @@ const startServer = async () => {
             // Institutional Resilience: Polling-first for stable refresh cycles (prevents race condition on reconnect)
             transports: ["polling", "websocket"],
             allowEIO3: false,
-            pingTimeout: 60000,
-            pingInterval: 25000
+            pingTimeout: 30000,
+            pingInterval: 15000
         });
 
         setupSockets(socketIO);
@@ -230,7 +229,7 @@ function setupSockets(io: HaemiServer) {
                 return next(new Error(JSON.stringify({ code: 'AUTH_INVALID', message: 'Invalid token payload or missing required fields' })));
             }
 
-            const decoded = decodedPayload as JWTPayload;
+            const decoded = decodedPayload;
 
             if (!decoded.email || !decoded.id || !decoded.sessionId) {
                 return next(new Error(JSON.stringify({ 
@@ -242,9 +241,10 @@ function setupSockets(io: HaemiServer) {
             // Fallback initialization for name (populated from DB below)
             decoded.name = '';
 
-            // Database-level verification: Check tokenVersion, status, AND fetch name
+            // Database-level verification: Check tokenVersion, status, AND fetch name.
+            // P0 SOFT-DELETE GUARD: soft-deleted users must not authenticate over socket.
             const userResult = await pool.query(
-                'SELECT token_version, status, name FROM users WHERE id = $1',
+                'SELECT token_version, status, name FROM users WHERE id = $1 AND deleted_at IS NULL',
                 [decoded.id]
             );
 
@@ -362,7 +362,7 @@ function setupSockets(io: HaemiServer) {
         socket.on('typingStarted', (data) => {
             const payload = {
                 userId: userId,
-                conversationId: data.conversationId as ConversationId,
+                conversationId: data.conversationId,
                 name: user.name || 'Someone'
             };
             socket.to(`conversation:${data.conversationId}`).emit('typingStarted', payload);
@@ -378,7 +378,7 @@ function setupSockets(io: HaemiServer) {
         socket.on('typingStopped', (data) => {
             const payload = {
                 userId: userId,
-                conversationId: data.conversationId as ConversationId,
+                conversationId: data.conversationId,
                 name: user.name || 'Someone'
             };
             socket.to(`conversation:${data.conversationId}`).emit('typingStopped', payload);

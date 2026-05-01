@@ -26,6 +26,7 @@ export interface AppointmentWithDetails extends Appointment {
     other_party_name?: string;
     user_role?: string;
     profile_image?: string | null;
+    profile_image_mime?: string | null;
 }
 
 interface InstitutionalError extends Error {
@@ -141,17 +142,21 @@ export class AppointmentRepository {
     async findByUserId(userId: string, status?: string, upcoming?: boolean): Promise<AppointmentWithDetails[]> {
         try {
             let query = `
-                SELECT 
+                SELECT
                     a.*,
-                    CASE 
+                    CASE
                         WHEN a.patient_id = $1 THEN u_doctor.name
                         ELSE u_patient.name
                     END as other_party_name,
-                    CASE 
+                    CASE
                         WHEN a.patient_id = $1 THEN u_doctor.profile_image
                         ELSE u_patient.profile_image
                     END as profile_image,
-                    CASE 
+                    CASE
+                        WHEN a.patient_id = $1 THEN u_doctor.profile_image_mime
+                        ELSE u_patient.profile_image_mime
+                    END as profile_image_mime,
+                    CASE
                         WHEN a.patient_id = $1 THEN 'patient'
                         ELSE 'doctor'
                     END as user_role
@@ -191,15 +196,19 @@ export class AppointmentRepository {
     async findByIdWithDetails(id: number, userId: string): Promise<AppointmentWithDetails | null> {
         try {
             const result = await this.db.query<AppointmentWithDetails>(`
-                SELECT 
+                SELECT
                     a.*,
                     u_doctor.name as doctor_name,
                     u_patient.name as patient_name,
                     u_patient.phone_number as patient_phone,
-                    CASE 
+                    CASE
                         WHEN a.patient_id = $2 THEN u_doctor.profile_image
                         ELSE u_patient.profile_image
                     END as profile_image,
+                    CASE
+                        WHEN a.patient_id = $2 THEN u_doctor.profile_image_mime
+                        ELSE u_patient.profile_image_mime
+                    END as profile_image_mime,
                     dp.specialization
                 FROM appointments a
                 JOIN users u_doctor ON a.doctor_id = u_doctor.id
@@ -298,8 +307,10 @@ export class AppointmentRepository {
 
     async checkOwnership(id: number, userId: string): Promise<boolean> {
         try {
+            // P0 SOFT-DELETE GUARD: ownership of a soft-deleted appointment must
+            // not authorize any subsequent operation.
             const result = await this.db.query<{ id: number }>(
-                'SELECT id FROM appointments WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2)',
+                'SELECT id FROM appointments WHERE id = $1 AND (patient_id = $2 OR doctor_id = $2) AND deleted_at IS NULL',
                 [id, userId]
             );
             return result.rows.length > 0;

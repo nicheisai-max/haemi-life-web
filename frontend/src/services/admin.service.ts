@@ -37,7 +37,8 @@ export interface UserSession {
     ipAddress: string | null;
     userAgent: string | null;
     createdAt: string;
-    last_activity: string | null;
+    // P1 CASING FIX (Phase 12): camelCase across the API surface.
+    lastActivity: string | null;
     isActive: boolean;
     profileImage?: string | null;
 }

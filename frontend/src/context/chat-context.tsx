@@ -15,11 +15,15 @@ export interface ChatContextType {
     messages: Message[];
     loading: boolean;
     isHydrated: boolean;
+    /** True while a backwards-pagination request is in flight. */
+    isLoadingOlder: boolean;
+    /** True if the backend reported additional older messages beyond what is currently loaded. */
+    hasMoreOlder: boolean;
     fetchConversations: () => Promise<void>;
     selectConversation: (conversation: Conversation) => void;
     sendMessage: (
-        content: string, 
-        conversationId: ConversationId, 
+        content: string,
+        conversationId: ConversationId,
         attachments?: Attachment[],
         replyToId?: string
     ) => Promise<void>;
@@ -30,6 +34,8 @@ export interface ChatContextType {
     reactToMessage: (messageId: MessageId, reactionType: string) => Promise<void>;
     markAsRead: (conversationId: ConversationId) => Promise<void>;
     markMessageAsRead: (messageId: MessageId) => Promise<void>;
+    /** Load the next batch of older messages above the current oldest. Idempotent while a load is in flight. */
+    loadOlderMessages: (conversationId: ConversationId) => Promise<void>;
     user: { id: string; name: string; role: string } | null;
 }
 

@@ -165,7 +165,7 @@ export const SessionManagement: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col text-[10px]">
-                                                    <span className="font-bold text-foreground">{session.last_activity ? new Date(session.last_activity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
+                                                    <span className="font-bold text-foreground">{session.lastActivity ? new Date(session.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</span>
                                                     <span className="text-muted-foreground opacity-70">Logged: {new Date(session.createdAt).toLocaleDateString()}</span>
                                                 </div>
                                             </td>
