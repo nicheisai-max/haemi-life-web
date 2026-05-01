@@ -699,12 +699,22 @@ const executeRefresh = async (retryCount = 0): Promise<string | null> => {
                 logger.info('[API] Session refresh unauthorized (TERMINAL REJECTION)');
                 auditLogger.log('UNAUTHORIZED_EVENT', { reason: 'Refresh token rejected' });
 
-                // CRITICAL P0 FIX: Atomic clearance to prevent ghost loops
-                clearAuthSession();
-
-                // Drain queue with terminal rejection BEFORE setting isRefreshing to false
+                // Drain queue with terminal rejection BEFORE setting isRefreshing
+                // to false so dependent requests resolve atomically.
                 processQueue(finalErr, null);
                 isRefreshing = false;
+
+                // Defer `clearAuthSession()` to the next microtask so it does
+                // not flip the AuthContext state synchronously inside the
+                // axios interceptor — which can run mid-render of any
+                // protected component and trigger a `<Navigate to="/login">`
+                // re-render WHILE the dashboard is committing, producing the
+                // observed "login flash → dashboard remount" flicker. The
+                // microtask deferral lets React finish the current render
+                // pass first; then the auth state flips, ProtectedRoute
+                // reads the new state cleanly, and the redirect happens
+                // exactly once instead of racing with a partial commit.
+                queueMicrotask(() => clearAuthSession());
                 return null;
             } else {
                 // Phase 12: Silent Guard for non-auth refresh failures (Network, 500s)

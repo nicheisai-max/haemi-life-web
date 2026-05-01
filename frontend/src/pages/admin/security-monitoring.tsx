@@ -6,9 +6,11 @@ import { getSecurityEvents } from '../../services/admin.service';
 import type { SecurityEvent } from '../../services/admin.service';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { getInitials, getProfileImageUrl } from '../../utils/avatar.resolver';
 
 export const SecurityMonitoring: React.FC = () => {
     const [events, setEvents] = useState<SecurityEvent[]>([]);
@@ -140,12 +142,30 @@ export const SecurityMonitoring: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300">
-                                                        {(event.userName || 'Sys').charAt(0).toUpperCase()}
-                                                    </div>
+                                                    {/* Institutional Actor cell — same pattern shipped to
+                                                        `system-logs.tsx` and `user-management.tsx`. The
+                                                        Radix `<AvatarImage>` resolves the actor's profile
+                                                        picture from `/api/files/profile/:userId`; on 204
+                                                        (no picture) or any load error, the primitive
+                                                        transparently swaps in the `<AvatarFallback>` —
+                                                        which renders proper first+last initials via the
+                                                        canonical `getInitials` resolver (e.g.
+                                                        "Dr. Mpho Modise" → "MM", not "D"). For genuinely
+                                                        system-originated events (`user_id` NULL upstream
+                                                        of the LEFT JOIN), the "SY" sentinel renders. */}
+                                                    <Avatar className="h-7 w-7">
+                                                        <AvatarImage
+                                                            src={getProfileImageUrl(event.userId)}
+                                                            alt={event.userName ?? 'System'}
+                                                            className="object-cover"
+                                                        />
+                                                        <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                                            {event.userName ? getInitials(event.userName) : 'SY'}
+                                                        </AvatarFallback>
+                                                    </Avatar>
                                                     <div className="flex flex-col">
-                                                        <span className="font-semibold text-foreground text-xs">{event.userName || 'System'}</span>
-                                                        <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{event.userEmail || 'internal'}</span>
+                                                        <span className="font-semibold text-foreground text-xs">{event.userName ?? 'System'}</span>
+                                                        <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{event.userEmail ?? 'internal'}</span>
                                                     </div>
                                                 </div>
                                             </td>

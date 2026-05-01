@@ -33,7 +33,11 @@ export interface ChatMessage {
     replyTo?: {
         id: MessageId;
         content: string;
-        senderName: string;
+        // `senderName` is nullable because the upstream LEFT JOIN to
+        // `users` returns NULL when the original sender's account has
+        // been deleted. The frontend must render a fallback ("Unknown
+        // sender") rather than treating this as a guaranteed string.
+        senderName: string | null;
     } | null;
     reactions?: Array<{
         type: string;

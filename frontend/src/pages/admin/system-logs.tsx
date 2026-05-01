@@ -11,6 +11,9 @@ import { getErrorMessage } from '../../lib/error';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { isObject } from '../../utils/type-guards';
+import { getInitials, getProfileImageUrl } from '../../utils/avatar.resolver';
 
 export const SystemLogs: React.FC = () => {
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -74,44 +77,113 @@ export const SystemLogs: React.FC = () => {
     };
 
     /**
-     * 🛡️ INSTITUTIONAL RENDERING PROTOCOL
-     * Transforms raw JSONB metadata into human-readable clinical summaries.
+     * Renders an audit-log `details` payload into a human-readable summary.
+     *
+     * The backend column is `JSONB` and the `pg` driver auto-deserialises
+     * it into a structured JS value, so what we receive can be any
+     * combination of primitives, arrays, or nested objects depending on
+     * the action that produced the entry. The previous implementation
+     * naïvely template-stringed each top-level value, which produced the
+     * `[object Object]` rendering whenever a writer (e.g. screening
+     * `metadata: { changes: data }`) included a nested object.
+     *
+     * Bounded depth + bounded list length protect against degenerate or
+     * unexpectedly large payloads becoming UI hazards.
      */
-    const renderLogDetails = (log: AuditLog) => {
+    const AUDIT_DETAIL_MAX_DEPTH = 3;
+    const AUDIT_DETAIL_MAX_LIST = 5;
+
+    const humanizeKey = (key: string): string =>
+        key
+            .replace(/[_-]/g, ' ')
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/^./, (s) => s.toUpperCase());
+
+    const formatScalar = (val: unknown): string => {
+        if (val === null || val === undefined) return '—';
+        if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+        if (typeof val === 'number' || typeof val === 'bigint') return String(val);
+        if (typeof val === 'string') return val;
+        return '';
+    };
+
+    const formatValue = (val: unknown, depth: number = 0): string => {
+        if (depth >= AUDIT_DETAIL_MAX_DEPTH) return '…';
+        if (val === null || val === undefined) return '—';
+        if (typeof val !== 'object') return formatScalar(val);
+
+        if (Array.isArray(val)) {
+            const head = val
+                .slice(0, AUDIT_DETAIL_MAX_LIST)
+                .map((x) => formatValue(x, depth + 1))
+                .join(', ');
+            return val.length > AUDIT_DETAIL_MAX_LIST
+                ? `${head}, +${val.length - AUDIT_DETAIL_MAX_LIST} more`
+                : head;
+        }
+
+        // `isObject` narrows `unknown` to `Record<string, unknown>` via a
+        // user-defined type predicate — no `as` cast needed. The runtime
+        // checks (typeof + null + !Array) live inside the predicate so the
+        // narrowing and the assertion can never drift apart.
+        if (!isObject(val)) return '';
+        const entries = Object.entries(val);
+        if (entries.length === 0) return '—';
+        return entries
+            .map(([k, v]) => `${humanizeKey(k)}: ${formatValue(v, depth + 1)}`)
+            .join(', ');
+    };
+
+    const renderLogDetails = (log: AuditLog): string => {
         if (!log.details) return 'System event record';
 
+        // `isObject` consolidates the typeof + null + !Array runtime checks
+        // and narrows the type in one step — eliminates trust-me casts at
+        // both branches and keeps this file in lock-step with the project's
+        // shared predicate vocabulary (see frontend/src/utils/type-guards.ts).
         let details: Record<string, unknown> = {};
         if (typeof log.details === 'string') {
             try {
-                details = JSON.parse(log.details);
+                const parsed: unknown = JSON.parse(log.details);
+                if (isObject(parsed)) {
+                    details = parsed;
+                } else {
+                    return log.details;
+                }
             } catch {
                 return log.details;
             }
-        } else {
+        } else if (isObject(log.details)) {
             details = log.details;
         }
 
         if (Object.keys(details).length === 0) return 'System event record';
 
-        // Semantic mapping for known institutional actions
+        // Semantic mapping for known institutional actions — these read better
+        // as bespoke phrases than as generic `key: value` pairs.
         switch (log.action) {
             case 'VERIFY_DOCTOR':
                 return `Verification: ${details.verified ? 'Approved' : 'Rejected'}`;
             case 'UPDATE_USER_STATUS':
-                return `Account Status: ${details.status || 'Updated'}`;
+                return `Account Status: ${formatScalar(details.status) || 'Updated'}`;
             case 'LOGIN_SUCCESS':
-                return `Authentication: Session Established`;
+                return 'Authentication: Session Established';
             case 'LOGIN_FAILURE':
-                return `Security: Unsuccessful Login Attempt`;
-            default:
-                // Generic formatting: Key-Value pairing with readable capitalization
-                return Object.entries(details)
-                    .map(([key, val]) => {
-                        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                        return `${label}: ${val}`;
-                    })
-                    .join(', ');
+                return 'Security: Unsuccessful Login Attempt';
         }
+
+        // Convention used by mutation writers across the backend:
+        // `metadata: { changes: { ... } }`. Unwrap the `changes` envelope so
+        // the diff renders as a flat list of fields rather than nesting one
+        // level deeper than necessary. `isObject` narrows in one step so no
+        // cast is needed at the assignment.
+        const target: Record<string, unknown> = isObject(details.changes)
+            ? details.changes
+            : details;
+
+        return formatValue(target);
     };
 
     if (loading) {
@@ -184,11 +256,25 @@ export const SystemLogs: React.FC = () => {
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-2">
-                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
-                                                {(log.userName || 'Sys').charAt(0).toUpperCase()}
-                                            </div>
+                                            {/* Avatar pattern matches the rest of the admin surface
+                                                (user-management, chat-hub). `<AvatarImage>` fetches the
+                                                profile picture from the canonical `/api/files/profile/:userId`
+                                                endpoint; on 204 No Content (no picture) or any load error,
+                                                Radix transparently switches to `<AvatarFallback>`, which
+                                                shows the institutional first+last initials via
+                                                `getInitials` — e.g. "Dr. Mpho Modise" → "MM", not "D". */}
+                                            <Avatar className="h-8 w-8">
+                                                <AvatarImage
+                                                    src={getProfileImageUrl(log.userId)}
+                                                    alt={log.userName ?? 'System User'}
+                                                    className="object-cover"
+                                                />
+                                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                                    {log.userName ? getInitials(log.userName) : 'SY'}
+                                                </AvatarFallback>
+                                            </Avatar>
                                             <div className="flex flex-col">
-                                                <span className="font-medium text-foreground">{log.userName || 'System User'}</span>
+                                                <span className="font-medium text-foreground">{log.userName ?? 'System User'}</span>
                                                 <span className="text-xs text-muted-foreground">{log.userEmail}</span>
                                             </div>
                                         </div>

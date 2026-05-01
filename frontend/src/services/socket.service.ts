@@ -36,7 +36,12 @@ export interface ServerToClientEvents {
     'messageReceived': (message: Message) => void;
     'messageDeleted': (payload: { messageId: string; conversationId: ConversationId; newLastMessage?: Message }) => void;
     'messageReaction': (data: { messageId: string; userId: UserId; reactionType: string; action: 'added' | 'removed' }) => void;
-    'userStatus': (data: { userId: string; isOnline: boolean; lastActivity?: string }) => void;
+    // `lastActivity` is always emitted by the backend
+    // (status.service.ts -> UserPresencePayload — non-optional ISO string).
+    // Marking it required here makes the type contract honest with the
+    // wire reality and removes silent `undefined`-handling from every
+    // consumer (presence-context, chat-hub, storage).
+    'userStatus': (data: { userId: string; isOnline: boolean; lastActivity: string }) => void;
     'localMessageDeleted': (payload: { messageId: string; conversationId: ConversationId; newLastMessage?: Message }) => void;
     'notificationNew': (notification: HaemiNotification) => void;
     'notificationRead': (payload: { id: string }) => void;
@@ -115,10 +120,11 @@ const isMessageReactionPayload = (v: unknown): v is { messageId: string; userId:
     && typeof v.reactionType === 'string'
     && (v.action === 'added' || v.action === 'removed');
 
-const isUserStatusPayload = (v: unknown): v is { userId: string; isOnline: boolean; lastActivity?: string } =>
+const isUserStatusPayload = (v: unknown): v is { userId: string; isOnline: boolean; lastActivity: string } =>
     isRecord(v)
     && typeof v.userId === 'string'
-    && typeof v.isOnline === 'boolean';
+    && typeof v.isOnline === 'boolean'
+    && typeof v.lastActivity === 'string';
 
 const isHaemiNotification = (v: unknown): v is HaemiNotification =>
     isRecord(v) && typeof v.type === 'string';

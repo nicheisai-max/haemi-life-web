@@ -234,6 +234,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const storedRefreshToken = sessionStorage.getItem('refreshToken');
 
                 if (storedRefreshToken === null) {
+                    // Race-aware guard: a refresh-in-flight transiently clears the
+                    // refresh-token slot in `sessionStorage` while it rotates the
+                    // pair. Without this `isRefreshingRef` check, a tab-focus
+                    // event landing on that ~50 ms window would falsely classify
+                    // the rotation as a session-termination event, fire
+                    // `commitAuthState(null, null, 'unauthenticated')`, briefly
+                    // surface the login screen, and then bounce back to the
+                    // dashboard once the refresh completed — the precise
+                    // "flicker" pattern reported by the demo user. Skipping the
+                    // forced logout here lets the in-flight refresh resolve
+                    // naturally; if it fails, the API 401 interceptor will
+                    // terminate the session through the canonical logout path.
+                    if (isRefreshingRef.current) {
+                        logger.debug('[Auth] Focus Security: Refresh-in-flight detected, deferring identity guard.', {
+                            userId: currentUser.id
+                        });
+                        return;
+                    }
                     logger.warn('[Auth] Focus Security: Session token absent.', { userId: currentUser.id });
                     auditLogger.log('SESSION_TERMINATED', {
                         reason: 'TAB_FOCUS_TOKEN_ABSENT',

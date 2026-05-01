@@ -127,10 +127,10 @@ export const AdminDashboard: React.FC = () => {
                             size="lg"
                             variant="outline"
                             className="haemi-ignore-click-outside bg-white/10 text-white border-white/20 hover:bg-white hover:text-teal-900 focus-visible:bg-white/10 focus-visible:text-white active:bg-white active:text-teal-900 dark:hover:bg-white/20 dark:hover:text-white dark:focus-visible:bg-white/20 dark:focus-visible:text-white dark:active:bg-white/20 dark:active:text-white shadow-lg h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
-                            onClick={() => navigate(PATHS.ADMIN.USERS)}
+                            onClick={() => navigate(PATHS.ADMIN.SESSIONS)}
                         >
-                            <Users className="h-5 w-5" aria-hidden="true" />
-                            User Registry
+                            <LogOut className="h-5 w-5" aria-hidden="true" />
+                            Live Sessions
                         </Button>
                         <Button
                             size="lg"
