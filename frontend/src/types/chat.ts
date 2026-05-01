@@ -56,8 +56,19 @@ export interface MessageReaction {
 
 export interface ReplyPreview {
     id: MessageId;
+    /**
+     * Decrypted content of the original message being replied to.
+     */
     content: string;
-    senderName: string;
+    /**
+     * Display name of the original message's sender. Nullable because
+     * the backend resolves it via `LEFT JOIN users u ON m.sender_id = u.id`
+     * — if the original sender's account was subsequently deleted (or the
+     * row is missing for any reason), the JOIN yields NULL. Consumers
+     * must render a fallback like "Unknown sender" rather than letting
+     * the raw `null` bleed into the DOM.
+     */
+    senderName: string | null;
 }
 
 // --- Participants ---
@@ -81,6 +92,14 @@ export interface ParticipantMetadata {
 
 export type MessageType = 'text' | 'image' | 'document';
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+/**
+ * The four canonical actor roles in the platform. Mirrors the backend
+ * `UserRole` declared in `backend/src/types/socket.types.ts` and the
+ * `users.role` ENUM in the database — kept in lock-step with the
+ * server's domain so role-aware UI (clinical-priority styling, doctor
+ * badges, etc.) can branch on a closed set rather than a free string.
+ */
+export type SenderRole = 'patient' | 'doctor' | 'pharmacist' | 'admin' | 'system';
 
 export interface Message {
     id: MessageId;
@@ -96,6 +115,15 @@ export interface Message {
     readAt?: string;
     createdAt: string;
     senderName?: string;
+    /**
+     * The sender's role at the time of send. Backend already emits this
+     * on every chat socket frame and includes it in the REST mapper
+     * output; previously the frontend dropped the field at the type
+     * boundary, silently discarding wire data. Captured here so future
+     * UI affordances (role badges in the bubble, clinician-priority
+     * styling) can use a typed value without re-fetching the user.
+     */
+    senderRole?: SenderRole;
     isMe?: boolean;
     reactions?: MessageReaction[];
     replyTo?: ReplyPreview;

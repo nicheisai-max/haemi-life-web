@@ -17,8 +17,16 @@ export interface AuditLog {
 export interface SecurityEvent {
     id: string;
     userId: string | null;
-    userName?: string;
-    userEmail?: string;
+    /**
+     * Aligned with the backend wire shape (`security.repository.ts`):
+     * the backend LEFT-JOINs `users` and explicitly returns `null`
+     * when the audit event has no associated user (system-originated
+     * actions). Using `string | null` here is more honest than the
+     * previous `string | undefined` — `JSON.stringify` preserves null
+     * but drops undefined, so the over-the-wire reality is null.
+     */
+    userName: string | null;
+    userEmail: string | null;
     eventType: string;
     eventCategory: string | null;
     eventSeverity: string | null;

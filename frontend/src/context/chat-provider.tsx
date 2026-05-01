@@ -686,11 +686,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         logger.error('[ChatProvider] Read receipt sync failed:', err instanceof Error ? err.message : String(err));
                     });
                 } else {
-                    socketService.emit('ackDelivery', { 
-                        conversationId: message.conversationId, 
+                    socketService.emit('ackDelivery', {
+                        conversationId: message.conversationId,
                         messageId: message.id,
                         senderId: user.id as UserId,
-                        senderRole: (user?.role as string) || 'patient'
+                        // `user.role` is already the typed `UserRole` union;
+                        // nullish-coalesce is sufficient and the previous
+                        // `as string` widening cast was redundant.
+                        senderRole: user?.role ?? 'patient'
                     });
                     api.put<ApiResponse<void>>(`/chat/conversations/${message.conversationId}/delivered`).catch((err: unknown) => {
                         logger.error('[ChatProvider] Delivery acknowledgement failed:', err instanceof Error ? err.message : String(err));
@@ -898,6 +901,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             conversationId,
             senderId: user.id as UserId,
             senderName: user.name || 'Me',
+            // Wire `senderRole` through optimistic + reconciled state so the
+            // bubble's typed role survives the socket round-trip without a
+            // visual flicker on confirmation. `user.role` is the typed
+            // `UserRole` union — assignable to `SenderRole` directly via
+            // narrowing cast on the role-matched subset.
+            senderRole: user.role,
             content,
             messageType: resolvedType,
             status: 'sending',

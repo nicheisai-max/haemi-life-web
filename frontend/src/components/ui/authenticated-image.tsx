@@ -172,29 +172,42 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({
         };
     }, [src]);
 
-    // INSTITUTIONAL SKELETON: Synchronized with ratioClass
+    // INSTITUTIONAL SKELETON: Synchronized with ratioClass.
+    // Uses `bg-muted` and `text-muted-foreground` semantic tokens so the
+    // skeleton auto-themes against `:root` (light) and `.dark` overrides
+    // declared in index.css — no hardcoded slate-* values that would
+    // diverge from brand on either theme.
     if (loading) {
         return (
             <div className={cn(
-                "flex items-center justify-center bg-slate-100 dark:bg-slate-800 animate-pulse overflow-hidden rounded-[inherit]",
+                "flex items-center justify-center bg-muted animate-pulse overflow-hidden rounded-[inherit]",
                 ratioClass,
                 className
             )}>
                 {loadingFallback !== undefined ? (
                     loadingFallback
                 ) : (
-                    <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
+                    <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
                 )}
             </div>
         );
     }
 
     if (error || !imgUrl) {
-        // If the caller provides a fallback node, render it (e.g. lightbox error state).
-        // Otherwise provide a professional clinical placeholder to maintain UI integrity.
+        // Brand-aligned clinical placeholder. Uses semantic tokens so the
+        // visual contrast is correct in both light and dark themes without
+        // a manual `dark:` variant on every property:
+        //   • `bg-muted`            → `--muted` (light: gray-100; dark: dark-surface)
+        //   • `border-border`       → `--border` (auto-themes)
+        //   • `text-muted-foreground` → `--muted-foreground`
+        //     (light: gray-600; dark: muted teal — both readable)
+        // The icon opacity was previously 0.3 (barely visible in light
+        // mode); 0.6 keeps it subtle without hiding it. Text opacity was
+        // dropped because `--muted-foreground` is already low-contrast by
+        // design — stacking opacity on top hurt readability.
         return (
             <div className={cn(
-                "flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 gap-2 overflow-hidden rounded-[inherit]",
+                "flex flex-col items-center justify-center bg-muted border border-border text-muted-foreground gap-2 overflow-hidden rounded-[inherit]",
                 ratioClass,
                 className
             )}>
@@ -202,8 +215,8 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({
                     errorFallback
                 ) : (
                     <>
-                        <ImageOff className="h-6 w-6 opacity-30" />
-                        <span className="text-[10px] uppercase font-semibold tracking-wider opacity-50">Clinical Asset Unavailable</span>
+                        <ImageOff className="h-6 w-6 opacity-60" />
+                        <span className="text-[10px] uppercase font-semibold tracking-wider">Clinical Asset Unavailable</span>
                     </>
                 )}
             </div>

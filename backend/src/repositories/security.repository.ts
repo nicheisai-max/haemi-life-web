@@ -4,6 +4,16 @@ import { logger } from '../utils/logger';
 export interface SecurityEvent {
     id: string;
     userId: string | null;
+    /**
+     * The acting user's display name and email, joined in from the
+     * `users` table. Both are nullable because system-originated audit
+     * events (e.g. unauthenticated login attempts, scheduled jobs)
+     * carry no `user_id`, in which case the LEFT JOIN yields NULL.
+     * Consumers render a "System / internal" fallback in that case;
+     * see `security-monitoring.tsx` Actor cell.
+     */
+    userName: string | null;
+    userEmail: string | null;
     userRole: string | null;
     eventType: string;
     eventCategory: string | null;
@@ -82,9 +92,18 @@ export const securityRepository = {
                  LIMIT $1 OFFSET $2`,
                 [limit, offset]
             );
+            // SQL already selects `u.name as user_name` and
+            // `u.email as user_email` via the LEFT JOIN; the previous
+            // mapper dropped both fields, which is why every row in the
+            // Security Observability page rendered "System / internal"
+            // regardless of which user actually performed the action.
+            // Mapping them through here is the single change that
+            // restores the correct Actor identity in the admin surface.
             return result.rows.map(row => ({
                 id: row.id,
                 userId: row.user_id,
+                userName: row.user_name,
+                userEmail: row.user_email,
                 userRole: row.user_role,
                 eventType: row.event_type,
                 ipAddress: row.ip_address,

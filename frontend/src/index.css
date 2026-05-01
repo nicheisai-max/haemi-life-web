@@ -516,6 +516,270 @@
     transition: opacity var(--duration-hover) var(--ease-premium) !important;
   }
 
+  /* 🩺 HAEMI REACTION STACK — overlapping reaction icons on a message
+     bubble. Each child renders one reaction; nth-child rules give the
+     left-most icon the highest z-index so the stack reads as a fanned
+     deck (oldest reaction on top, like Slack / WhatsApp). Bounded at 4
+     because the upstream JSX clamps the array via `.slice(0, 4)`.
+     Pure CSS — replaces an inline `style={{ zIndex: 10 - i }}` so the
+     component layer carries no per-render style objects. */
+  .haemi-reaction-stack > * {
+    position: relative;
+  }
+  .haemi-reaction-stack > *:nth-child(1) { z-index: 4; }
+  .haemi-reaction-stack > *:nth-child(2) { z-index: 3; }
+  .haemi-reaction-stack > *:nth-child(3) { z-index: 2; }
+  .haemi-reaction-stack > *:nth-child(4) { z-index: 1; }
+
+  /* 🩺 HAEMI COMMAND PALETTE (Cmd+K Search Hub)
+     Linear / Notion / VS Code-grade keyboard-driven navigation. Every
+     visual driven from the existing brand-token system so the palette
+     auto-themes against `:root` (light) and `.dark` overrides without a
+     single hardcoded color. No `px` units anywhere — all sizing in `rem`
+     for fluid scaling from mobile to wide desktop. No inline style props
+     — this layer carries every visual concern.
+  */
+  .haemi-cmdk-trigger-mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 100rem;
+    color: var(--muted-foreground);
+    background-color: transparent;
+    transition:
+      background-color var(--duration-hover) var(--ease-premium),
+      color var(--duration-hover) var(--ease-premium);
+  }
+  .haemi-cmdk-trigger-mobile:hover {
+    background-color: color-mix(in srgb, var(--sidebar-active) 8%, transparent);
+    color: var(--sidebar-active);
+  }
+
+  .haemi-cmdk-trigger-desktop {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 16rem;
+    height: 2.5rem;
+    padding-inline: 1rem;
+    border-radius: var(--card-radius);
+    background-color: var(--muted);
+    color: var(--muted-foreground);
+    border: 0.0625rem solid var(--border);
+    transition:
+      background-color var(--duration-hover) var(--ease-premium),
+      border-color var(--duration-hover) var(--ease-premium),
+      color var(--duration-hover) var(--ease-premium);
+  }
+  @media (min-width: 64rem) {
+    .haemi-cmdk-trigger-desktop {
+      width: 20rem;
+    }
+  }
+  .haemi-cmdk-trigger-desktop:hover {
+    background-color: color-mix(in srgb, var(--sidebar-active) 6%, var(--muted));
+    border-color: color-mix(in srgb, var(--sidebar-active) 25%, var(--border));
+    color: var(--foreground);
+  }
+  .haemi-cmdk-trigger-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+  .haemi-cmdk-trigger-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    flex: 1;
+    text-align: left;
+  }
+  .haemi-cmdk-trigger-kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    padding-inline: 0.375rem;
+    padding-block: 0.125rem;
+    border-radius: var(--card-radius);
+    border: 0.0625rem solid var(--border);
+    background-color: var(--card);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    pointer-events: none;
+  }
+
+  /* Section headers (Pages / Actions / Recent / Suggestions) */
+  .haemi-cmdk-section-header {
+    font-size: 0.625rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    padding-block: 0.625rem;
+    padding-inline: 1rem;
+  }
+
+  /* Individual command item row */
+  .haemi-cmdk-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-inline: 1rem;
+    padding-block: 0.75rem;
+    border-radius: var(--card-radius);
+    color: var(--foreground);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-hover) var(--ease-premium),
+      color var(--duration-hover) var(--ease-premium);
+  }
+  .haemi-cmdk-item[data-selected="true"],
+  .haemi-cmdk-item:hover {
+    background-color: color-mix(in srgb, var(--sidebar-active) 12%, var(--card));
+    color: var(--sidebar-active);
+  }
+
+  .haemi-cmdk-item-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--card-radius);
+    background-color: color-mix(in srgb, var(--sidebar-active) 10%, transparent);
+    color: var(--sidebar-active);
+    flex-shrink: 0;
+    transition:
+      background-color var(--duration-hover) var(--ease-premium),
+      color var(--duration-hover) var(--ease-premium);
+  }
+  .haemi-cmdk-item[data-selected="true"] .haemi-cmdk-item-icon,
+  .haemi-cmdk-item:hover .haemi-cmdk-item-icon {
+    background-color: var(--sidebar-active);
+    color: var(--primary-foreground);
+  }
+  .haemi-cmdk-item-icon-svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .haemi-cmdk-item-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .haemi-cmdk-item-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .haemi-cmdk-item-meta {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    margin-top: 0.125rem;
+  }
+  .haemi-cmdk-item:hover .haemi-cmdk-item-meta,
+  .haemi-cmdk-item[data-selected="true"] .haemi-cmdk-item-meta {
+    color: color-mix(in srgb, var(--sidebar-active) 70%, var(--muted-foreground));
+  }
+  .haemi-cmdk-item-shortcut {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .haemi-cmdk-item-shortcut-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding-inline: 0.25rem;
+    border-radius: 0.25rem;
+    border: 0.0625rem solid var(--border);
+    background-color: var(--card);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+  .haemi-cmdk-item-arrow {
+    margin-left: auto;
+    width: 1rem;
+    height: 1rem;
+    color: var(--muted-foreground);
+    opacity: 0;
+    transform: translateX(-0.25rem);
+    transition: opacity var(--duration-hover) var(--ease-premium),
+                transform var(--duration-hover) var(--ease-premium);
+  }
+  .haemi-cmdk-item:hover .haemi-cmdk-item-arrow,
+  .haemi-cmdk-item[data-selected="true"] .haemi-cmdk-item-arrow {
+    opacity: 1;
+    transform: translateX(0);
+    color: var(--sidebar-active);
+  }
+
+  /* Empty state */
+  .haemi-cmdk-empty {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+
+  /* Footer hint bar */
+  .haemi-cmdk-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: 1.25rem;
+    padding-block: 0.875rem;
+    border-top: 0.0625rem solid var(--border);
+    background-color: var(--muted);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--muted-foreground);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .haemi-cmdk-footer-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .haemi-cmdk-footer-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .haemi-cmdk-footer-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.125rem;
+    height: 1.125rem;
+    padding-inline: 0.25rem;
+    border-radius: 0.25rem;
+    border: 0.0625rem solid var(--border);
+    background-color: var(--card);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .haemi-cmdk-footer-version {
+    color: var(--sidebar-active);
+    font-style: italic;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: lowercase;
+  }
+
   /* 🩺 HAEMI DATE SCROLLER (Premium Appointment Carousel)
      Tokens: every color, radius, and elevation drawn from the existing
      brand palette (`--sidebar-active`, `--card`, `--border`, `--card-radius`,

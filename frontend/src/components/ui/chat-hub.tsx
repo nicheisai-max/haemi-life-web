@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { Button } from './button';
 import { MessageCircle, Send, Paperclip, X, ChevronLeft, Search, Check, CheckCheck, ShieldCheck, MessageSquare, Plus, Minus, Maximize2, Download, Reply, Loader2, UserPlus, FileText, File, FileSpreadsheet, ImageOff, Clock, AlertCircle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { useChat, type Conversation, type Message } from '../../hooks/use-chat';
 import { usePresence } from '../../hooks/use-presence';
 import { useAuth } from '@/hooks/use-auth';
@@ -249,7 +249,12 @@ const MessageItem = React.memo(({
                         >
                             <div className="flex items-center justify-between mb-0.5">
                                 <p className={`font-bold ${msg.isMe ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`}>
-                                    {replyTo.senderName}
+                                    {/* `senderName` can be null when the original
+                                        sender's account was deleted — the upstream
+                                        LEFT JOIN yields NULL. Render a graceful
+                                        fallback instead of leaking `null` into the
+                                        DOM as the literal string. */}
+                                    {replyTo.senderName ?? 'Unknown sender'}
                                 </p>
                                 <Reply className="h-2.5 w-2.5 opacity-60" />
                             </div>
@@ -361,9 +366,9 @@ const MessageItem = React.memo(({
                         <div
                             className="absolute -bottom-3 -left-1 flex items-center bg-white dark:bg-slate-800 rounded-full px-1.5 py-0.5 shadow-md border border-slate-200 dark:border-slate-700 z-[150] transition-all hover:scale-105 cursor-pointer select-none"
                         >
-                            <div className="flex -space-x-1">
-                                {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type, i) => (
-                                    <div key={type} className="relative z-10" style={{ zIndex: 10 - i }}>
+                            <div className="flex -space-x-1 haemi-reaction-stack">
+                                {Array.from(new Set((msg.reactions || []).map(r => r.type))).slice(0, 4).map((type) => (
+                                    <div key={type}>
                                         <ReactionIcon type={type} className="text-sm leading-none filter drop-shadow-sm" />
                                     </div>
                                 ))}
@@ -471,6 +476,13 @@ export const ChatHub: React.FC = () => {
     const virtuosoRef = useRef<VirtuosoHandle>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
+    // Drag-handle controller: framer-motion's `useDragControls` lets us
+    // disable the default whole-widget drag listener and start drags only
+    // from the header. Industry pattern (Slack / Gmail compose / Discord):
+    // body uses native cursors (text in input, pointer on buttons,
+    // context-menu on bubbles), header uses `cursor-grab` so the user
+    // gets a clear affordance for where to grab the widget.
+    const dragControls = useDragControls();
 
     // Virtuoso firstItemIndex anchoring. Starts at a high constant so we
     // can decrement on prepend without crossing zero. Reset per
@@ -849,7 +861,7 @@ export const ChatHub: React.FC = () => {
             d.specialization?.toLowerCase().includes(doctorSearch.toLowerCase());
     }), [doctors, doctorSearch]);
 
-    const getFormattedTime = (dateString: string) => {
+    const getFormattedTime = (dateString: string): string => {
         if (!dateString) return '';
         try {
             const date = new Date(dateString);
@@ -859,6 +871,44 @@ export const ChatHub: React.FC = () => {
             return format(date, 'dd/MM/yyyy');
         } catch {
             return '';
+        }
+    };
+
+    /**
+     * Renders a presence "last seen" badge in WhatsApp / Telegram-grade
+     * natural language. Distinct from `getFormattedTime` because the
+     * grammar of an embedded timestamp differs from a standalone
+     * timestamp:
+     *
+     *   getFormattedTime(today)      → "10:30 AM"
+     *   formatLastSeen(today)        → "Last seen today at 10:30 AM"
+     *
+     *   getFormattedTime(thisWeek)   → "Saturday"
+     *   formatLastSeen(thisWeek)     → "Last seen Saturday at 2:15 PM"
+     *
+     *   getFormattedTime(longAgo)    → "20/04/2026"
+     *   formatLastSeen(longAgo)      → "Last seen on 20/04/2026"
+     *
+     * The previous implementation re-used `getFormattedTime` and
+     * concatenated it after "Last seen at ", producing grammatically
+     * incorrect renderings ("Last seen at Saturday", "Last seen at
+     * Yesterday") and dropping the time-of-day for any non-today value.
+     *
+     * Returns "Offline" for empty / unparseable inputs so the consuming
+     * JSX can render it directly without a separate fallback.
+     */
+    const formatLastSeen = (dateString: string): string => {
+        if (!dateString) return 'Offline';
+        try {
+            const date = new Date(dateString);
+            if (Number.isNaN(date.getTime())) return 'Offline';
+            const timeOfDay = format(date, 'h:mm a');
+            if (isToday(date))     return `Last seen today at ${timeOfDay}`;
+            if (isYesterday(date)) return `Last seen yesterday at ${timeOfDay}`;
+            if (isThisWeek(date))  return `Last seen ${format(date, 'EEEE')} at ${timeOfDay}`;
+            return `Last seen on ${format(date, 'dd/MM/yyyy')}`;
+        } catch {
+            return 'Offline';
         }
     };
 
@@ -1027,16 +1077,35 @@ export const ChatHub: React.FC = () => {
                 <motion.div
                     key="chat-window"
                     drag
+                    // `dragListener={false}` disables the default
+                    // whole-element pointer-down listener; drags now
+                    // start exclusively when the header invokes
+                    // `dragControls.start(e)` (see header below).
+                    dragListener={false}
+                    dragControls={dragControls}
                     dragMomentum={false}
                     initial={{ y: 20, opacity: 0, scale: 0.95 }}
                     animate={{ y: 0, opacity: 1, scale: 1 }}
                     exit={{ y: 20, opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-[var(--card-radius)] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-full sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col ring-1 ring-black/5 relative"
+                    className="pointer-events-auto bg-white dark:bg-[#1a1c23] rounded-[var(--card-radius)] overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-slate-200 dark:border-white/10 w-full sm:w-[420px] max-w-[calc(100vw-32px)] h-[650px] max-h-[80vh] flex flex-col ring-1 ring-black/5 relative"
                     ref={chatWindowRef}
                 >
-                    {/* --- Helper: Header --- */}
-                    <div className="shrink-0 bg-[#026355] dark:bg-[#1a1c23]/95 backdrop-blur z-20">
+                    {/* --- Helper: Header (drag handle) ---
+                        `cursor-grab` / `active:cursor-grabbing` give the
+                        WhatsApp-style affordance: hovering the header
+                        shows the open-hand cursor; pressing down switches
+                        to closed-hand for the duration of the drag. The
+                        `onPointerDown` initiates a drag via the shared
+                        `dragControls`; child interactive elements
+                        (back-button, minimize, close) call
+                        `e.stopPropagation()` would be overkill — framer-
+                        motion's controller correctly defers to native
+                        button click semantics on those targets. */}
+                    <div
+                        className="shrink-0 bg-[#026355] dark:bg-[#1a1c23]/95 backdrop-blur z-20 cursor-grab active:cursor-grabbing select-none"
+                        onPointerDown={(event) => dragControls.start(event)}
+                    >
                         <div className="px-5 py-4 flex items-center justify-between border-b border-white/10 dark:border-white/5">
                             <div className="flex items-center gap-3">
                                 {view !== 'contacts' && (
@@ -1053,7 +1122,14 @@ export const ChatHub: React.FC = () => {
                                     const other = getOtherParticipant(activeConversation);
                                     const userPresence = presence[other.id];
                                     const isOnline = !other.isGroup && !!userPresence?.isOnline;
-                                    const lastActivity = !other.isGroup && userPresence?.lastActivity ? getFormattedTime(userPresence.lastActivity) : undefined;
+                                    // Render the full presence sentence ("Last seen yesterday at
+                                    // 9:45 PM") here rather than inside JSX so the offline-fallback
+                                    // path is a simple ternary against `userPresence`. Empty string
+                                    // is the sentinel for "no presence record yet" — distinct from
+                                    // "Offline" which the formatter returns for malformed inputs.
+                                    const lastSeenLabel = !other.isGroup && userPresence?.lastActivity
+                                        ? formatLastSeen(userPresence.lastActivity)
+                                        : '';
 
                                     return (
                                         <div className="flex items-center gap-3 min-w-0">
@@ -1084,14 +1160,17 @@ export const ChatHub: React.FC = () => {
                                                     {other.name}
                                                 </h3>
                                                 <span className="text-[11px] text-teal-100/80 dark:text-slate-400 font-medium truncate leading-tight capitalize">
-                                                    {/* BUG-10 FIX: 3-state text */}
+                                                    {/* BUG-10 FIX: 3-state text. Last-seen label is
+                                                        already a complete sentence ("Last seen Saturday
+                                                        at 2:15 PM"), so it renders verbatim — no
+                                                        additional "at" prefix. */}
                                                     {other.isGroup
                                                         ? 'Multi-Professional Case Group'
                                                         : (typingUsers.includes(other.id)
                                                             ? 'Typing...'
                                                             : (isOnline
                                                                 ? 'Online'
-                                                                : (lastActivity ? `Last seen at ${lastActivity}` : 'Offline')))}
+                                                                : (lastSeenLabel || 'Offline')))}
                                                 </span>
                                             </div>
                                         </div>
@@ -1297,8 +1376,7 @@ export const ChatHub: React.FC = () => {
                                                         ) : null
                                                     )
                                                 }}
-                                                className="chat-scrollbar"
-                                                style={{ height: '100%' }}
+                                                className="chat-scrollbar h-full"
                                                 increaseViewportBy={200}
                                                 rangeChanged={(range) => {
                                                     // Virtuoso emits absolute indices when firstItemIndex is set;

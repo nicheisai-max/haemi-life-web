@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     CommandDialog,
     CommandInput,
@@ -11,189 +11,310 @@ import {
 } from './command';
 import {
     Search,
-    TrendingUp,
-    User,
     Calendar,
     FileText,
     Settings,
     Activity,
     Clock,
     ArrowRight,
-    Sparkles,
-    MapPin,
-    Pill,
     ClipboardList,
     Package,
-    ShieldCheck
+    ShieldCheck,
+    LayoutDashboard,
+    Stethoscope,
+    Users,
+    Lock,
+    Heart,
+    PillBottle,
+    Video,
+    BookOpen,
+    HelpCircle,
+    UserCog,
+    LogIn
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { PATHS } from '../../routes/paths';
+import { getRecentRoutes, recordRouteVisit } from '../../utils/recent-routes';
 
-// INSTITUTIONAL TYPES: Meta/Google Grade strictness
-interface TrendingItem {
-    label: string;
-    icon: React.ElementType;
-    color: string;
+/**
+ * 🩺 HAEMI COMMAND PALETTE (Cmd+K Search Hub)
+ *
+ * Linear / Notion / VS Code-grade keyboard-driven navigation. The entire
+ * route surface is auto-indexed via `COMMAND_REGISTRY` (typed against
+ * `PATHS` so a route rename surfaces here as a TypeScript error rather
+ * than silent drift). Role-filtering keeps the palette context-aware —
+ * a doctor doesn't see the patient appointment-booking action and vice
+ * versa.
+ *
+ * Visual concerns are entirely delegated to the `haemi-cmdk-*` class
+ * family in `index.css`. This file carries zero inline styles, zero
+ * pixel values, zero hardcoded `slate-*` / `gray-*` color utilities —
+ * every visual binds to a brand semantic token (`--sidebar-active`,
+ * `--card`, `--muted`, `--muted-foreground`, `--border`,
+ * `--card-radius`, motion tokens) so light + dark themes auto-resolve
+ * without any `dark:` variants in this component.
+ *
+ * Recent visits are read from localStorage via `getRecentRoutes()` and
+ * matched back against the registry so the displayed labels stay in
+ * sync with route renames automatically.
+ */
+
+type CommandRole = 'patient' | 'doctor' | 'pharmacist' | 'admin';
+
+interface CommandEntry {
+    /** Stable identifier so React keys + recent-route reconciliation are deterministic. */
+    readonly id: string;
+    /** Human-readable label rendered in the palette. */
+    readonly label: string;
+    /** Short clarifier shown beneath the label (route context, brief description). */
+    readonly description: string;
+    /** Lucide icon component. */
+    readonly icon: React.ElementType;
+    /** Concrete route the entry navigates to. */
+    readonly path: string;
+    /** Roles permitted to see + activate this entry. Empty = available to all authenticated users. */
+    readonly roles: readonly CommandRole[];
+    /** Search keywords beyond the label (e.g. synonyms, abbreviations). cmdk uses these for matching. */
+    readonly keywords?: readonly string[];
+    /** Logical bucket for the categorized rendering. */
+    readonly section: 'pages' | 'actions' | 'admin';
 }
 
-interface QuickActionItem {
-    label: string;
-    icon: React.ElementType;
-    path: string;
-    role: string[];
-}
+/**
+ * The single source of truth for the palette catalog. Each entry maps to
+ * a real `PATHS.*` member so a route rename in `paths.ts` surfaces here
+ * as a TypeScript error — eliminating the silent-drift class of bug
+ * where the sidebar gains a new page but the palette never finds out.
+ */
+const COMMAND_REGISTRY: readonly CommandEntry[] = [
+    // ─── Universal pages (every authenticated user sees these) ─────────
+    { id: 'dashboard', label: 'Dashboard', description: 'Your role-specific home hub', icon: LayoutDashboard, path: PATHS.DASHBOARD, roles: [], keywords: ['home', 'overview', 'main'], section: 'pages' },
+    { id: 'profile', label: 'Profile', description: 'Personal details and avatar', icon: UserCog, path: PATHS.PROFILE, roles: [], keywords: ['account', 'me'], section: 'pages' },
+    { id: 'settings', label: 'Settings', description: 'Preferences and configuration', icon: Settings, path: PATHS.SETTINGS, roles: [], keywords: ['preferences', 'config', 'options'], section: 'pages' },
+    { id: 'help', label: 'Help & Support', description: 'Documentation and contact', icon: HelpCircle, path: PATHS.HELP, roles: [], keywords: ['support', 'docs', 'faq'], section: 'pages' },
 
-const TRENDING_BOTSWANA: TrendingItem[] = [
-    { label: "Flu trends in Gaborone", icon: TrendingUp, color: "text-blue-500" },
-    { label: "Dr. Modise Availability", icon: Calendar, color: "text-emerald-500" },
-    { label: "Medication stock Maun", icon: Pill, color: "text-amber-500" },
-];
+    // ─── Patient ───────────────────────────────────────────────────────
+    { id: 'patient-appointments', label: 'My Appointments', description: 'Upcoming and past consultations', icon: Calendar, path: PATHS.PATIENT.APPOINTMENTS, roles: ['patient'], keywords: ['booking', 'visits'], section: 'pages' },
+    { id: 'patient-book', label: 'Book Appointment', description: 'Schedule a new consultation', icon: Calendar, path: PATHS.PATIENT.BOOK_APPOINTMENT, roles: ['patient'], keywords: ['new', 'schedule', 'create'], section: 'actions' },
+    { id: 'patient-prescriptions', label: 'My Prescriptions', description: 'Active and historical medications', icon: PillBottle, path: PATHS.PATIENT.PRESCRIPTIONS, roles: ['patient'], keywords: ['rx', 'medication', 'meds'], section: 'pages' },
+    { id: 'patient-records', label: 'Medical Records', description: 'Lab results and clinical history', icon: FileText, path: PATHS.PATIENT.MEDICAL_RECORDS, roles: ['patient'], keywords: ['ehr', 'history', 'labs'], section: 'pages' },
+    { id: 'patient-find-doctors', label: 'Find Specialists', description: 'Browse certified clinicians', icon: Stethoscope, path: PATHS.PATIENT.FIND_DOCTORS, roles: ['patient'], keywords: ['doctors', 'physicians', 'directory'], section: 'pages' },
+    { id: 'telemedicine', label: 'Telemedicine', description: 'Secure video consultations', icon: Video, path: PATHS.TELEMEDICINE, roles: ['patient'], keywords: ['video', 'call', 'remote'], section: 'pages' },
 
-const QUICK_ACTION_ITEMS: QuickActionItem[] = [
-    // Patient
-    { label: "Book Appointment", icon: Calendar, path: PATHS.PATIENT.BOOK_APPOINTMENT, role: ["patient"] },
-    { label: "My Appointments", icon: Calendar, path: PATHS.PATIENT.APPOINTMENTS, role: ["patient"] },
-    { label: "My Prescriptions", icon: FileText, path: PATHS.PATIENT.PRESCRIPTIONS, role: ["patient"] },
+    // ─── Doctor ────────────────────────────────────────────────────────
+    { id: 'doctor-schedule', label: 'My Schedule', description: 'Daily availability and appointments', icon: Clock, path: PATHS.DOCTOR.SCHEDULE, roles: ['doctor'], keywords: ['calendar', 'day', 'agenda'], section: 'pages' },
+    { id: 'doctor-patients', label: 'Patient List', description: 'Active panel and case load', icon: Heart, path: PATHS.DOCTOR.PATIENTS, roles: ['doctor'], keywords: ['panel', 'caseload', 'roster'], section: 'pages' },
+    { id: 'doctor-reports', label: 'Clinical Reports', description: 'Performance analytics and trends', icon: BookOpen, path: PATHS.DOCTOR.REPORTS, roles: ['doctor'], keywords: ['analytics', 'insights', 'metrics'], section: 'pages' },
 
-    // Doctor
-    { label: "My Schedule", icon: Clock, path: PATHS.DOCTOR.SCHEDULE, role: ["doctor"] },
-    { label: "Patient List", icon: User, path: PATHS.DOCTOR.PATIENTS, role: ["doctor"] },
+    // ─── Pharmacist ───────────────────────────────────────────────────
+    { id: 'pharmacist-queue', label: 'Prescription Queue', description: 'Pending dispense requests', icon: ClipboardList, path: PATHS.PHARMACIST.QUEUE, roles: ['pharmacist'], keywords: ['rx', 'pending', 'workflow'], section: 'pages' },
+    { id: 'pharmacist-inventory', label: 'Inventory', description: 'Stock levels and reorder thresholds', icon: Package, path: PATHS.PHARMACIST.INVENTORY, roles: ['pharmacist'], keywords: ['stock', 'medications', 'supply'], section: 'pages' },
+    { id: 'pharmacist-dispense', label: 'Dispense Workspace', description: 'Active dispensing surface', icon: PillBottle, path: PATHS.PHARMACIST.DISPENSE, roles: ['pharmacist'], keywords: ['dispense', 'fill', 'prepare'], section: 'pages' },
 
-    // Pharmacist
-    { label: "Prescription Queue", icon: ClipboardList, path: PATHS.PHARMACIST.QUEUE, role: ["pharmacist"] },
-    { label: "inventory", icon: Package, path: PATHS.PHARMACIST.INVENTORY, role: ["pharmacist"] },
+    // ─── Admin ────────────────────────────────────────────────────────
+    { id: 'admin-dashboard', label: 'System Health', description: 'Operational overview', icon: Activity, path: PATHS.ADMIN.DASHBOARD, roles: ['admin'], keywords: ['ops', 'status', 'health'], section: 'pages' },
+    { id: 'admin-users', label: 'User Management', description: 'Accounts, roles, status', icon: Users, path: PATHS.ADMIN.USERS, roles: ['admin'], keywords: ['accounts', 'permissions', 'people'], section: 'admin' },
+    { id: 'admin-verify-doctors', label: 'Verify Doctors', description: 'Pending clinician approvals', icon: ShieldCheck, path: PATHS.ADMIN.VERIFY_DOCTORS, roles: ['admin'], keywords: ['approve', 'credentials', 'verification'], section: 'admin' },
+    { id: 'admin-screening', label: 'Manage Screening', description: 'Pre-consult triage configuration', icon: ClipboardList, path: PATHS.ADMIN.SCREENING, roles: ['admin'], keywords: ['triage', 'questions', 'forms'], section: 'admin' },
+    { id: 'admin-logs', label: 'Audit Logs', description: 'System activity forensics', icon: BookOpen, path: PATHS.ADMIN.SYSTEM_LOGS, roles: ['admin'], keywords: ['forensics', 'audit', 'events'], section: 'admin' },
+    { id: 'admin-security', label: 'Security Observability', description: 'Real-time threat surface', icon: Lock, path: PATHS.ADMIN.SECURITY, roles: ['admin'], keywords: ['threats', 'monitoring', 'observability'], section: 'admin' },
+    { id: 'admin-sessions', label: 'Live Sessions', description: 'Active institutional access tokens', icon: LogIn, path: PATHS.ADMIN.SESSIONS, roles: ['admin'], keywords: ['tokens', 'sessions', 'active'], section: 'admin' },
+] as const;
 
-    // Admin
-    { label: "System Health", icon: Activity, path: PATHS.ADMIN.DASHBOARD, role: ["admin"] },
-    { label: "User Management", icon: Settings, path: PATHS.ADMIN.USERS, role: ["admin"] },
-    { label: "Verify Doctors", icon: ShieldCheck, path: PATHS.ADMIN.VERIFY_DOCTORS, role: ["admin"] },
-    { label: "System Logs", icon: ClipboardList, path: PATHS.ADMIN.SYSTEM_LOGS, role: ["admin"] },
-];
+const isCommandRole = (value: string | undefined): value is CommandRole =>
+    value === 'patient' || value === 'doctor' || value === 'pharmacist' || value === 'admin';
 
 export const CommandCenter: React.FC = () => {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState<boolean>(false);
     const { user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent): void => {
-            // P0 STRICT GUARD: Only intercept Cmd/Ctrl + K. 
-            // Broad Meta key capture (like Win+Shift+S) is explicitly ignored to prevent focus fighting.
-            if (e.key?.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                setOpen((prev) => !prev);
+        const handleKeyDown = (event: KeyboardEvent): void => {
+            // Strict capture: Cmd/Ctrl + K only. Avoid swallowing system
+            // shortcuts that also use the meta key.
+            if (event.key?.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                setOpen(prev => !prev);
             }
         };
-
-        try {
-            document.addEventListener("keydown", handleKeyDown);
-        } catch (err) {
-            console.error('[CommandCenter] Failed to attach keyboard boundary:', err);
-        }
-
-        return () => document.removeEventListener("keydown", handleKeyDown);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const runCommand = (command: () => void) => {
+    // Record every authenticated route visit into the localStorage ring
+    // buffer. CommandCenter is mounted exclusively in the authenticated
+    // app shell, so `location.pathname` here is always a post-login
+    // route — no login/signup pollution. Recording lives here (rather
+    // than inside `<App>`) because the palette itself owns the ring
+    // buffer's lifecycle: read on open, write on navigate.
+    useEffect(() => {
+        recordRouteVisit(location.pathname);
+    }, [location.pathname]);
+
+    const runCommand = (path: string): void => {
         setOpen(false);
-        command();
+        navigate(path);
     };
 
-    // MEMOIZED ROLE FILTERING: Optimized for sub-16ms typing experience
-    const quickActions = React.useMemo(() => {
-        const userRole = user?.role || '';
-        return QUICK_ACTION_ITEMS.filter(action => action.role.includes(userRole));
-    }, [user?.role]);
+    /** Active role-aware slice of the registry. Pre-extracting `userRole`
+     *  into a stable local before the hook keeps the dependency array a
+     *  flat scalar (`string | undefined`), which the React Compiler can
+     *  preserve when auto-memoizing — optional chaining inside the
+     *  dependency expression itself defeats the compiler's analysis. */
+    const userRole = user?.role;
+    const visibleEntries = useMemo((): readonly CommandEntry[] => {
+        const role = isCommandRole(userRole) ? userRole : null;
+        return COMMAND_REGISTRY.filter(entry => {
+            if (entry.roles.length === 0) return true; // universal
+            if (role === null) return false;
+            return entry.roles.includes(role);
+        });
+    }, [userRole]);
 
-    const trendingBotswana = TRENDING_BOTSWANA;
+    /** Hydrate recent visits and resolve them against the registry so the
+     *  rendered label stays in sync with route renames automatically. */
+    const recentEntries = useMemo<readonly CommandEntry[]>(() => {
+        if (!open) return [];
+        const recents = getRecentRoutes();
+        const byPath = new Map<string, CommandEntry>();
+        for (const entry of visibleEntries) {
+            byPath.set(entry.path, entry);
+        }
+        const resolved: CommandEntry[] = [];
+        for (const recent of recents) {
+            // Skip the page the user is currently on — they don't need to
+            // "navigate" to where they already are.
+            if (recent.path === location.pathname) continue;
+            const entry = byPath.get(recent.path);
+            if (entry) resolved.push(entry);
+        }
+        return resolved.slice(0, 5);
+    }, [open, visibleEntries, location.pathname]);
+
+    const pageEntries = useMemo(
+        () => visibleEntries.filter(e => e.section === 'pages'),
+        [visibleEntries]
+    );
+    const actionEntries = useMemo(
+        () => visibleEntries.filter(e => e.section === 'actions'),
+        [visibleEntries]
+    );
+    const adminEntries = useMemo(
+        () => visibleEntries.filter(e => e.section === 'admin'),
+        [visibleEntries]
+    );
+
+    /** Concatenate label + description + keywords into the value cmdk
+     *  scores against. Without this, cmdk only matches the visible label,
+     *  so e.g. typing "rx" against "My Prescriptions" would miss. */
+    const buildSearchValue = (entry: CommandEntry): string => {
+        const keywordPart = entry.keywords?.join(' ') ?? '';
+        return `${entry.label} ${entry.description} ${keywordPart}`.toLowerCase();
+    };
+
+    const renderItem = (entry: CommandEntry): React.ReactElement => {
+        const Icon = entry.icon;
+        return (
+            <CommandItem
+                key={entry.id}
+                value={buildSearchValue(entry)}
+                onSelect={() => runCommand(entry.path)}
+                className="haemi-cmdk-item"
+            >
+                <span className="haemi-cmdk-item-icon">
+                    <Icon className="haemi-cmdk-item-icon-svg" aria-hidden="true" />
+                </span>
+                <span className="haemi-cmdk-item-body">
+                    <span className="haemi-cmdk-item-label">{entry.label}</span>
+                    <span className="haemi-cmdk-item-meta">{entry.description}</span>
+                </span>
+                <ArrowRight className="haemi-cmdk-item-arrow" aria-hidden="true" />
+            </CommandItem>
+        );
+    };
 
     return (
         <>
-            {/* Mobile Trigger: Icon-only (Visible < md) */}
+            {/* Mobile trigger — icon only, visible below md breakpoint. */}
             <button
+                type="button"
                 onClick={() => setOpen(true)}
-                className="haemi-nav-search-trigger-mobile flex md:hidden items-center justify-center group transition-all haemi-ignore-click-outside"
-                aria-label="Search Hub"
+                className="haemi-cmdk-trigger-mobile flex md:hidden haemi-ignore-click-outside"
+                aria-label="Open Search Hub"
             >
-                <Search className="h-5 w-5 text-slate-500 group-hover:text-primary transition-colors" />
+                <Search className="haemi-cmdk-trigger-icon" aria-hidden="true" />
             </button>
 
-            {/* Desktop Trigger: Capsule (Visible >= md) */}
+            {/* Desktop trigger — full capsule with shortcut hint. */}
             <button
+                type="button"
                 onClick={() => setOpen(true)}
-                className="haemi-nav-action-capsule hidden md:flex items-center gap-3 group w-64 lg:w-80 shadow-inner overflow-hidden bg-slate-100 dark:bg-slate-800 haemi-ignore-click-outside"
+                className="haemi-cmdk-trigger-desktop hidden md:inline-flex haemi-ignore-click-outside"
+                aria-label="Open Search Hub"
             >
-                <Search className="h-4 w-4 text-slate-500 group-hover:text-primary transition-colors" />
-                <span className="text-sm font-bold text-slate-500 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Search Hub...</span>
-                <kbd className="ml-auto pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[var(--card-radius)] border bg-white dark:bg-slate-900 px-1.5 font-mono text-[10px] font-medium text-slate-400 group-hover:text-primary transition-colors opacity-100">
-                    <span className="text-xs">⌘</span>K
+                <Search className="haemi-cmdk-trigger-icon" aria-hidden="true" />
+                <span className="haemi-cmdk-trigger-label">Search Hub...</span>
+                <kbd className="haemi-cmdk-trigger-kbd" aria-hidden="true">
+                    <span>⌘</span>K
                 </kbd>
             </button>
 
             <CommandDialog open={open} onOpenChange={setOpen}>
-                <CommandInput placeholder="Type a command or search Botswana health trends..." />
+                <CommandInput placeholder="Search pages, actions, or recent..." />
                 <CommandList className="scrollbar-hide">
-                    <CommandEmpty>No results found.</CommandEmpty>
+                    <CommandEmpty className="haemi-cmdk-empty">
+                        Nothing matches your search. Try a different keyword or page name.
+                    </CommandEmpty>
 
-                    <CommandGroup heading="Trending in Botswana 🇧🇼">
-                        {trendingBotswana.map((item: TrendingItem, i: number) => (
-                            <CommandItem
-                                key={i}
-                                onSelect={() => { }}
-                                className="haemi-command-item-wrapper group"
-                            >
-                                <div className="haemi-command-icon-box">
-                                    <item.icon className={`h-5 w-5 ${item.color}`} />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="haemi-command-title text-sm flex items-center gap-2">
-                                        {item.label}
-                                        <Sparkles className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 group-data-[selected='true']:opacity-100 transition-all" />
-                                    </div>
-                                    <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium tracking-tight">Real-time demographic data</div>
-                                </div>
-                                <span className="haemi-trending-pill">Trending</span>
-                            </CommandItem>
-                        ))}
-                    </CommandGroup>
+                    {recentEntries.length > 0 ? (
+                        <>
+                            <CommandGroup heading="Recent">
+                                {recentEntries.map(renderItem)}
+                            </CommandGroup>
+                            <CommandSeparator />
+                        </>
+                    ) : null}
 
-                    <CommandSeparator />
+                    {pageEntries.length > 0 ? (
+                        <CommandGroup heading="Pages">
+                            {pageEntries.map(renderItem)}
+                        </CommandGroup>
+                    ) : null}
 
-                    <CommandGroup heading="Quick Intelligence">
-                        {quickActions.map((action, i) => (
-                            <CommandItem
-                                key={i}
-                                onSelect={() => runCommand(() => navigate(action.path))}
-                                className="haemi-command-item-wrapper group"
-                            >
-                                <div className="haemi-command-icon-box text-primary">
-                                    <action.icon className="h-5 w-5" />
-                                </div>
-                                <div className="haemi-command-title text-sm flex-1">{action.label}</div>
-                                <ArrowRight className="ml-auto h-4 w-4 text-slate-300 opacity-0 group-hover:opacity-100 group-data-[selected='true']:opacity-100 group-hover:translate-x-1 transition-all" />
-                            </CommandItem>
-                        ))}
-                    </CommandGroup>
+                    {actionEntries.length > 0 ? (
+                        <>
+                            <CommandSeparator />
+                            <CommandGroup heading="Actions">
+                                {actionEntries.map(renderItem)}
+                            </CommandGroup>
+                        </>
+                    ) : null}
 
-                    <CommandSeparator />
-
-                    <CommandGroup heading="Global Registry">
-                        <CommandItem className="flex items-center gap-3 py-4 opacity-60 cursor-default">
-                            <MapPin className="h-5 w-5 text-slate-400" />
-                            <span className="font-bold">Princess Marina Hospital, Gaborone</span>
-                        </CommandItem>
-                        <CommandItem className="flex items-center gap-3 py-4 opacity-60 cursor-default">
-                            <MapPin className="h-5 w-5 text-slate-400" />
-                            <span className="font-bold">Bokamoso Private Hospital, Mmopane</span>
-                        </CommandItem>
-                    </CommandGroup>
+                    {adminEntries.length > 0 ? (
+                        <>
+                            <CommandSeparator />
+                            <CommandGroup heading="Administration">
+                                {adminEntries.map(renderItem)}
+                            </CommandGroup>
+                        </>
+                    ) : null}
                 </CommandList>
-                <div className="pt-4 pb-4 px-5 border-t bg-slate-100 dark:bg-slate-900 flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                    <div className="flex gap-4">
-                        <span className="flex items-center gap-1"><kbd className="bg-white dark:bg-slate-800 p-1 rounded border">↵</kbd> Select</span>
-                        <span className="flex items-center gap-1"><kbd className="bg-white dark:bg-slate-800 p-1 rounded border">↑↓</kbd> Navigate</span>
+
+                <div className="haemi-cmdk-footer">
+                    <div className="haemi-cmdk-footer-left">
+                        <span className="haemi-cmdk-footer-hint">
+                            <kbd className="haemi-cmdk-footer-kbd">↵</kbd> Select
+                        </span>
+                        <span className="haemi-cmdk-footer-hint">
+                            <kbd className="haemi-cmdk-footer-kbd">↑↓</kbd> Navigate
+                        </span>
+                        <span className="haemi-cmdk-footer-hint">
+                            <kbd className="haemi-cmdk-footer-kbd">esc</kbd> Close
+                        </span>
                     </div>
-                    <div className="text-primary italic font-black lowercase tracking-normal">haemi command line v1.0.4</div>
+                    <div className="haemi-cmdk-footer-version">haemi command line v2.0</div>
                 </div>
             </CommandDialog>
         </>
