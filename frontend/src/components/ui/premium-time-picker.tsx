@@ -85,7 +85,7 @@ export const PremiumTimePicker: React.FC<PremiumTimePickerProps> = ({
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
                 className={cn(
-                    "flex items-center justify-between w-full h-11 px-4 rounded-xl border transition-all duration-200",
+                    "flex items-center justify-between w-full h-11 px-4 rounded-[var(--card-radius)] border transition-all duration-200",
                     "bg-card border-border hover:border-primary/50 text-foreground shadow-sm",
                     isOpen && "ring-2 ring-primary/20 border-primary"
                 )}
@@ -107,7 +107,7 @@ export const PremiumTimePicker: React.FC<PremiumTimePickerProps> = ({
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
                         className={cn(
-                            "absolute z-50 mt-1 w-64 bg-card border border-border rounded-2xl shadow-2xl p-4",
+                            "absolute z-50 mt-1 w-64 bg-card border border-border rounded-[var(--card-radius)] shadow-2xl p-4",
                             "flex flex-col gap-4 overflow-hidden"
                         )}
                     >
@@ -190,7 +190,7 @@ export const PremiumTimePicker: React.FC<PremiumTimePickerProps> = ({
                         <button
                             type="button"
                             onClick={() => setIsOpen(false)}
-                            className="mt-2 w-full py-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all duration-300 border border-primary/20"
+                            className="mt-2 w-full py-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-[var(--card-radius)] text-xs font-bold transition-all duration-300 border border-primary/20"
                         >
                             SET TIME
                         </button>

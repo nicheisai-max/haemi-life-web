@@ -146,7 +146,7 @@ export const DoctorScheduleManagement: React.FC = () => {
                             return (
                                 <div
                                     key={field.id}
-                                    className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border transition-all duration-200 ${isAvailable
+                                    className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-[var(--card-radius)] border transition-all duration-200 ${isAvailable
                                         ? 'bg-card border-border shadow-sm'
                                         : 'bg-muted/30 border-transparent opacity-80 hover:opacity-100'
                                         }`}
