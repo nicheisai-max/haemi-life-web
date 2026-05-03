@@ -44,6 +44,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 logger.info('[NotificationProvider] Fetch suppressed: session not active (expected during logout).');
             } else {
                 logger.error('[NotificationProvider] Failed to fetch notifications:', errorMessage);
+                // User-visible toast via the global `'system:error'`
+                // listener wired in toast-context.tsx. Suppressed for the
+                // expected-session-error branch above so logout flows do
+                // NOT emit a false "couldn't load" message during the
+                // milliseconds between auth-state-cleared and provider-
+                // unmounted.
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('system:error', {
+                        detail: { message: 'Unable to load notifications. Please check your connection.' },
+                    }));
+                }
             }
         } finally {
             setLoading(false);
@@ -170,6 +181,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 prev.map(n => n.id === id ? { ...n, isRead: false } : n)
             );
             setUnreadCount(prev => prev + 1);
+            // Notify the user that the optimistic action was rolled back —
+            // they need to know the notification is still unread on the
+            // server (rollback is otherwise invisible because the
+            // optimistic update flips back without explanation).
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('system:error', {
+                    detail: { message: 'Could not mark notification as read. Please try again.' },
+                }));
+            }
         }
     };
 
@@ -184,6 +204,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             logger.error('[NotificationProvider] Mark all as read failed:', error instanceof Error ? error.message : String(error));
             // Rollback
             await fetchNotifications();
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('system:error', {
+                    detail: { message: 'Could not mark all notifications as read. Please try again.' },
+                }));
+            }
         }
     };
 

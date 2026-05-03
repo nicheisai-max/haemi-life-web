@@ -220,9 +220,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             return uniqueConversations;
         } catch (err: unknown) {
-            if (axios.isCancel(err)) return; 
+            if (axios.isCancel(err)) return;
             const errorMessage = err instanceof Error ? err.message : 'Network layer synchronization failure';
             logger.error('[ChatProvider] Failed to fetch conversations', errorMessage);
+            // Surface a user-facing toast via the existing global
+            // `'system:error'` listener wired in toast-context.tsx. The
+            // previous behaviour was a silent logger.error() that left the
+            // chat sidebar stuck in an empty state with no explanation.
+            // The dispatch is dependency-free (no React hook coupling)
+            // so it works regardless of where in the lifecycle this fires.
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('system:error', {
+                    detail: { message: 'Unable to load conversations. Please check your connection.' },
+                }));
+            }
             if (isMountedRef.current) {
                 setLoading(false);
                 setIsHydrated(true); 
