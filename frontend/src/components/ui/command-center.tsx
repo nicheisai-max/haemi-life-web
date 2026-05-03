@@ -226,7 +226,7 @@ export const CommandCenter: React.FC = () => {
                 <span className="haemi-cmdk-item-icon">
                     <Icon className="haemi-cmdk-item-icon-svg" aria-hidden="true" />
                 </span>
-                <span className="haemi-cmdk-item-body">
+                <span className="haemi-cmdk-item-body flex flex-col gap-1">
                     <span className="haemi-cmdk-item-label">{entry.label}</span>
                     <span className="haemi-cmdk-item-meta">{entry.description}</span>
                 </span>
@@ -237,26 +237,34 @@ export const CommandCenter: React.FC = () => {
 
     return (
         <>
-            {/* Mobile trigger — icon only, visible below md breakpoint. */}
-            <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="haemi-cmdk-trigger-mobile flex md:hidden haemi-ignore-click-outside"
-                aria-label="Open Search Hub"
-            >
-                <Search className="haemi-cmdk-trigger-icon" aria-hidden="true" />
-            </button>
+            {/*
+              Single responsive trigger — one DOM node that morphs from
+              a circular icon button on mobile to a full search capsule
+              on md+. The previous design rendered two sibling buttons
+              gated by `flex md:hidden` / `hidden md:inline-flex`; at
+              the breakpoint edge under high zoom Tailwind's responsive
+              `display` rules and the haemi base classes raced in the
+              cascade and both buttons rendered at once. This one-node
+              architecture eliminates that whole class of bug at the
+              source — the trigger cannot duplicate itself.
 
-            {/* Desktop trigger — full capsule with shortcut hint. */}
+              The label and kbd hint live inside the same button. They
+              are intentionally collapsed below the md breakpoint via
+              the `haemi-cmdk-trigger` rule's `width: 2.5rem` clipping
+              their flex space to zero, plus `display: none` on each so
+              they are removed from the accessibility tree (the
+              `aria-label` carries the semantic meaning across all
+              breakpoints).
+            */}
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="haemi-cmdk-trigger-desktop hidden md:inline-flex haemi-ignore-click-outside"
+                className="haemi-cmdk-trigger haemi-ignore-click-outside"
                 aria-label="Open Search Hub"
             >
                 <Search className="haemi-cmdk-trigger-icon" aria-hidden="true" />
-                <span className="haemi-cmdk-trigger-label">Search Hub...</span>
-                <kbd className="haemi-cmdk-trigger-kbd" aria-hidden="true">
+                <span className="haemi-cmdk-trigger-label hidden md:inline">Search Hub...</span>
+                <kbd className="haemi-cmdk-trigger-kbd hidden md:inline-flex" aria-hidden="true">
                     <span>⌘</span>K
                 </kbd>
             </button>
