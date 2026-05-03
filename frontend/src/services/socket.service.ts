@@ -14,6 +14,19 @@ const RECONNECT_BACKOFF_BASE_MS = 1000;
 const RECONNECT_BACKOFF_MAX_MS = 30000;
 const RECONNECT_BACKOFF_MAX_EXPONENT = 6;
 
+/**
+ * Number of consecutive failed reconnect attempts after which the socket
+ * service raises the application-layer "backend unreachable" signal
+ * (`haemi:backend-down`). Single transient disconnects are common
+ * (network blip, suspended tab waking up) and must NOT surface a banner.
+ * Three sustained failures (≈ 1 + 2 + 4 = 7 s of attempted recovery)
+ * is the empirical threshold above which the user benefits from being
+ * told something is genuinely wrong upstream rather than waiting in
+ * confused silence. The boundary equality check at the dispatch site
+ * ensures the event fires exactly once per outage, not once per attempt.
+ */
+const SUSTAINED_RECONNECT_THRESHOLD = 3;
+
 export enum SocketState {
     IDLE = 'IDLE',
     CONNECTING = 'CONNECTING',
@@ -310,8 +323,16 @@ class SocketService {
                 this.becomeFollower();
                 return;
             }
+            // Successful connection clears the sustained-outage signal so
+            // the NetworkStatusProvider's backend-down banner dismisses.
+            // The dispatch is idempotent — broadcasting "recovered" while
+            // already-recovered is a no-op for the listener.
+            const wasOutage = this.reconnectionAttempts >= SUSTAINED_RECONNECT_THRESHOLD;
             this.transitionTo(SocketState.CONNECTED);
             this.reconnectionAttempts = 0;
+            if (wasOutage && typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('haemi:backend-recovered'));
+            }
         });
 
         socket.on('disconnect', (reason: string): void => {
@@ -328,6 +349,17 @@ class SocketService {
                 message: err.message,
                 reconnectionAttempts: this.reconnectionAttempts
             });
+
+            // Edge-trigger: after `SUSTAINED_RECONNECT_THRESHOLD` consecutive
+            // failed attempts (defined as a module-level constant alongside
+            // the existing backoff configuration), raise the application-
+            // layer outage signal. Single transient disconnects do NOT
+            // surface a banner — only sustained inability to reconnect.
+            // The threshold compare against `< +1` ensures we fire on the
+            // boundary attempt exactly once.
+            if (this.reconnectionAttempts + 1 === SUSTAINED_RECONNECT_THRESHOLD && typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('haemi:backend-down'));
+            }
 
             if (this.pendingFollowerTransition) {
                 this.becomeFollower();

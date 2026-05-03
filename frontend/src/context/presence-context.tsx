@@ -86,6 +86,25 @@ export const PresenceProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             } catch (err: unknown) {
                 const msg = err instanceof Error ? err.message : 'Institutional presence sync failed';
                 logger.error('[PresenceProvider] Failed to fetch presence', msg);
+                // DELIBERATE: no per-call user-facing toast here.
+                //
+                // Presence fetches fire frequently (every chat-list scroll,
+                // every conversation open, every typing indicator burst).
+                // Surfacing a toast on each transient failure would
+                // overwhelm the notification surface and train the user
+                // to ignore it — the opposite of what an error toast is
+                // for.
+                //
+                // Sustained presence failures are already covered by the
+                // umbrella `haemi:backend-down` signal raised by the
+                // axios circuit breaker (`api.ts` recordFailure) and the
+                // socket-service sustained-reconnect threshold. The
+                // NetworkStatusProvider banner provides the aggregate
+                // "service is having trouble" feedback without
+                // per-request noise. Individual stale-presence blips
+                // degrade gracefully (online dot may briefly show as
+                // offline) without UI alarm — the WhatsApp / Slack
+                // pattern.
             } finally {
                 activePresenceRequestRef.current = null;
             }

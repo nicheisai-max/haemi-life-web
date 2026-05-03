@@ -221,8 +221,17 @@ function checkCircuitBreaker(): boolean {
 }
 
 function recordSuccess() {
+    // Capture the prior state BEFORE mutating so the recovery event is only
+    // dispatched on an actual transition (closed -> closed is a no-op).
+    // The NetworkStatusProvider listens for `haemi:backend-recovered` and
+    // dismisses the destructive banner without us reaching into its state
+    // directly — pure event-driven decoupling.
+    const wasDown = circuitState !== 'CLOSED';
     failureCount = 0;
     circuitState = 'CLOSED';
+    if (wasDown && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('haemi:backend-recovered'));
+    }
 }
 
 function recordFailure(error: AxiosError<ApiResponse<unknown>>) {
@@ -241,6 +250,13 @@ function recordFailure(error: AxiosError<ApiResponse<unknown>>) {
         circuitState = 'OPEN';
         nextTryTime = Date.now() + COOLDOWN_PERIOD;
         logger.error(`[Circuit] Open for ${COOLDOWN_PERIOD / 1000}s. External connectivity refused.`);
+        // Edge-triggered: only fires on the closed/half-open -> open
+        // transition, not on every failure inside an already-open window.
+        // NetworkStatusProvider raises the destructive banner; the user
+        // gets exactly one notification per outage, not N.
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('haemi:backend-down'));
+        }
     } else if (circuitState === 'HALF_OPEN') {
         circuitState = 'OPEN';
         nextTryTime = Date.now() + COOLDOWN_PERIOD;
