@@ -181,3 +181,18 @@ jobs:
           ENCRYPTION_KEY: test-encryption-key
           GEMINI_API_KEY: dummy-ci-key
           NODE_ENV: test
+
+      # ─────────────────────────────────────────────────────────────────
+      # Frontend Tests (Vitest, jsdom)
+      #
+      # Added after the auth-context lifecycle suite was hardened against
+      # 4 race vectors (PR #97): top-level vi.mock for both auth.service
+      # and apiModule, persistent mockResolvedValue defaults, fake timers
+      # for the 5 s boot-fallback, and a 1.5 s waitFor cap. Local
+      # verification: 10 consecutive runs × 12/12 passed = 0 % flake.
+      #
+      # No env block needed — frontend tests run entirely in jsdom with
+      # mocked services (no network, no JWT, no DB, no encryption key).
+      # ─────────────────────────────────────────────────────────────────
+      - name: Frontend Tests
+        run: npm run test:frontend
