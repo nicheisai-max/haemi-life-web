@@ -79,6 +79,14 @@ export interface UserListItem {
     initials?: string;
     profileImage: string | null;
     createdAt: string;
+    /**
+     * Last-seen timestamp from `users.last_activity`. Phase 4 surfaces
+     * this in the admin User Management page so admins can see who is
+     * active right now versus dormant. `null` for users who have never
+     * had a session (newly-registered, no first login yet) — the UI
+     * renders a fallback string (e.g. "Never").
+     */
+    lastActivity: string | null;
 }
 
 export interface PendingVerification {

@@ -50,6 +50,8 @@ import type {
     SessionCreatedEvent,
     SessionRevokedEvent,
     DoctorVerifiedEvent,
+    UserRegisteredEvent,
+    UserStatusChangedEvent,
 } from '../../../shared/schemas/admin-events.schema';
 
 export interface ServerToClientEvents {
@@ -87,6 +89,8 @@ export interface ServerToClientEvents {
     'session:created': (payload: SessionCreatedEvent) => void;
     'session:revoked': (payload: SessionRevokedEvent) => void;
     'doctor:verified': (payload: DoctorVerifiedEvent) => void;
+    'user:registered': (payload: UserRegisteredEvent) => void;
+    'user:status_changed': (payload: UserStatusChangedEvent) => void;
 }
 
 export interface ClientToServerEvents {

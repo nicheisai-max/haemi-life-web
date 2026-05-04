@@ -155,12 +155,52 @@ export const DoctorVerifiedEventSchema = z.object({
 });
 export type DoctorVerifiedEvent = z.infer<typeof DoctorVerifiedEventSchema>;
 
+// ─── Event: User registered (Phase 4) ────────────────────────────────────────
+//
+// Emitted on every successful signup — exactly when a new row is
+// inserted into `users`. Payload mirrors the columns the admin User
+// Management table renders, plus role / status so the row can be
+// rendered immediately without a follow-up fetch. `lastActivity` is
+// always `null` at registration time but included for shape parity
+// with `user:status_changed` so frontend code paths stay symmetric.
+export const UserRegisteredEventSchema = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    email: z.string().nullable(),
+    phoneNumber: z.string().nullable(),
+    role: z.string(),
+    status: z.string(),
+    initials: z.string().nullable(),
+    profileImage: z.string().nullable(),
+    createdAt: z.string().datetime(),
+    lastActivity: z.string().datetime().nullable(),
+});
+export type UserRegisteredEvent = z.infer<typeof UserRegisteredEventSchema>;
+
+// ─── Event: User status changed (Phase 4) ────────────────────────────────────
+//
+// Emitted when an admin activates / deactivates / suspends a user via
+// the User Management page. Payload carries enough information for the
+// admin UI to update the row in-place (`status`, `name` for the toast)
+// AND a `previousStatus` discriminator so the audit/visual cue can
+// differentiate "Activated" from "Deactivated" without a server lookup.
+export const UserStatusChangedEventSchema = z.object({
+    userId: z.string().uuid(),
+    name: z.string(),
+    email: z.string().nullable(),
+    role: z.string(),
+    previousStatus: z.string(),
+    newStatus: z.string(),
+    changedBy: z.string().uuid(),
+    timestamp: z.string().datetime(),
+});
+export type UserStatusChangedEvent = z.infer<typeof UserStatusChangedEventSchema>;
+
 // ─── Event Name Union ────────────────────────────────────────────────────────
 //
-// Phase 3 extends the union with `session:created`, `session:revoked`,
-// `doctor:verified`. (`doctor:pending` deferred — no clear backend write
-// path for doctor_profiles INSERT exists in the current codebase; the
-// admin Verify Doctors page works with seeded / migrated data.)
+// Phase 4 extends the union with `user:registered` and
+// `user:status_changed`. Phase 5 will add system-health observability
+// events.
 export const AdminEventNameSchema = z.enum([
     'screening:reordered',
     'audit:new',
@@ -168,6 +208,8 @@ export const AdminEventNameSchema = z.enum([
     'session:created',
     'session:revoked',
     'doctor:verified',
+    'user:registered',
+    'user:status_changed',
 ]);
 export type AdminEventName = z.infer<typeof AdminEventNameSchema>;
 
@@ -183,6 +225,8 @@ export interface AdminEventMap {
     'session:created': SessionCreatedEvent;
     'session:revoked': SessionRevokedEvent;
     'doctor:verified': DoctorVerifiedEvent;
+    'user:registered': UserRegisteredEvent;
+    'user:status_changed': UserStatusChangedEvent;
 }
 
 // ─── Runtime validator lookup ────────────────────────────────────────────────
@@ -200,6 +244,8 @@ export const AdminEventSchemaMap = {
     'session:created': SessionCreatedEventSchema,
     'session:revoked': SessionRevokedEventSchema,
     'doctor:verified': DoctorVerifiedEventSchema,
+    'user:registered': UserRegisteredEventSchema,
+    'user:status_changed': UserStatusChangedEventSchema,
 } as const satisfies { [E in AdminEventName]: z.ZodType<AdminEventMap[E]> };
 
 // ─── Type guard: is the value an admin event name we know about? ─────────────

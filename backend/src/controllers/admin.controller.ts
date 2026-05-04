@@ -141,10 +141,13 @@ export const getAllUsers = async (req: Request, res: Response) => {
         });
 
         // P0 SOFT-DELETE GUARD: admin user list must hide soft-deleted accounts.
+        // Phase 4: surface `last_activity` so the admin User Management page
+        // can render a live "Last seen X ago" cell. The column already
+        // exists; the previous SELECT simply did not project it.
         let query = `
             SELECT
                 id, name, email, phone_number, profile_image, profile_image_mime,
-                role, status, initials, created_at,
+                role, status, initials, created_at, last_activity,
                 COUNT(*) OVER() as total_count
             FROM users
             WHERE deleted_at IS NULL
@@ -214,12 +217,27 @@ export const updateUserStatus = async (req: Request, res: Response) => {
         try {
             await client.query('BEGIN');
 
+            // Capture the previous status BEFORE the UPDATE so the live
+            // admin broadcast carries an accurate `previousStatus` —
+            // critical for downstream UI cues ("Activated" vs
+            // "Deactivated") that cannot be inferred from `newStatus`
+            // alone (e.g. ACTIVE → SUSPENDED is neither).
+            const priorResult = await client.query<{ status: string }>(
+                `SELECT status FROM users WHERE id = $1 FOR UPDATE`,
+                [id]
+            );
+            const priorRow: { status: string } | undefined = priorResult.rows[0];
+            if (priorRow === undefined) {
+                throw new Error('User not found');
+            }
+            const previousStatus: string = priorRow.status;
+
             const result = await client.query<UserEntity>(`
                 UPDATE users
                 SET status = $1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = $2
                 RETURNING id, name, email, phone_number, profile_image, profile_image_mime,
-                          role, status, initials, created_at
+                          role, status, initials, created_at, last_activity
             `, [status, id]);
 
             if (result.rows.length === 0) {
@@ -237,14 +255,33 @@ export const updateUserStatus = async (req: Request, res: Response) => {
                 'UPDATE_USER_STATUS',
                 'user',
                 id,
-                JSON.stringify({ status })
+                JSON.stringify({ previousStatus, newStatus: status })
             ]);
 
             await client.query('COMMIT');
+            const updatedRow: UserEntity = result.rows[0];
             const updatedUser = {
-                ...result.rows[0],
-                phone_number: result.rows[0].phone_number ? decrypt(result.rows[0].phone_number) : ''
+                ...updatedRow,
+                phone_number: updatedRow.phone_number ? decrypt(updatedRow.phone_number) : ''
             };
+
+            // Best-effort admin broadcast — the row updates in-place on
+            // every admin's User Management page in real time. Failures
+            // logged inside `emitToAdmins` and never block the response.
+            emitToAdmins({
+                event: 'user:status_changed',
+                payload: {
+                    userId: updatedRow.id,
+                    name: updatedRow.name,
+                    email: updatedRow.email,
+                    role: updatedRow.role,
+                    previousStatus,
+                    newStatus: updatedRow.status,
+                    changedBy: String(user.id),
+                    timestamp: new Date().toISOString(),
+                },
+            });
+
             return sendResponse(res, 200, true, 'User status updated', { user: mapUserToResponse(updatedUser) });
         } catch (error: unknown) {
             await client.query('ROLLBACK');

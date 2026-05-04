@@ -11,12 +11,16 @@ import {
     SessionCreatedEventSchema,
     SessionRevokedEventSchema,
     DoctorVerifiedEventSchema,
+    UserRegisteredEventSchema,
+    UserStatusChangedEventSchema,
     type ScreeningReorderedEvent,
     type AuditLogEvent,
     type SecurityEvent,
     type SessionCreatedEvent,
     type SessionRevokedEvent,
     type DoctorVerifiedEvent,
+    type UserRegisteredEvent,
+    type UserStatusChangedEvent,
 } from '../../../shared/schemas/admin-events.schema';
 
 /**
@@ -125,6 +129,8 @@ const subscribeOne = (
         onSessionCreated: (payload: SessionCreatedEvent) => void;
         onSessionRevoked: (payload: SessionRevokedEvent) => void;
         onDoctorVerified: (payload: DoctorVerifiedEvent) => void;
+        onUserRegistered: (payload: UserRegisteredEvent) => void;
+        onUserStatusChanged: (payload: UserStatusChangedEvent) => void;
     }
 ): () => void => {
     switch (event) {
@@ -151,6 +157,14 @@ const subscribeOne = (
         case 'doctor:verified': {
             socketService.on('doctor:verified', handlers.onDoctorVerified);
             return () => socketService.off('doctor:verified', handlers.onDoctorVerified);
+        }
+        case 'user:registered': {
+            socketService.on('user:registered', handlers.onUserRegistered);
+            return () => socketService.off('user:registered', handlers.onUserRegistered);
+        }
+        case 'user:status_changed': {
+            socketService.on('user:status_changed', handlers.onUserStatusChanged);
+            return () => socketService.off('user:status_changed', handlers.onUserStatusChanged);
         }
         default: {
             const exhaustive: never = event;
@@ -307,6 +321,28 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
             dispatchToConsumer('doctor:verified', r.data);
         };
 
+        const onUserRegistered = (payload: UserRegisteredEvent): void => {
+            const r = UserRegisteredEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] user:registered payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('user:registered', r.data);
+        };
+
+        const onUserStatusChanged = (payload: UserStatusChangedEvent): void => {
+            const r = UserStatusChangedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] user:status_changed payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('user:status_changed', r.data);
+        };
+
         // Wire up only the requested events. The handlers are constructed
         // once per effect run; their references are stable for the
         // lifetime of the subscription so the cleanup off()s the same
@@ -319,6 +355,8 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
                 onSessionCreated,
                 onSessionRevoked,
                 onDoctorVerified,
+                onUserRegistered,
+                onUserStatusChanged,
             })
         );
 
