@@ -135,13 +135,18 @@ import {
     ObservabilityBatch
 } from '../../../shared/schemas/observability.schema';
 
+import {
+    ScreeningReorderedEvent,
+} from '../../../shared/schemas/admin-events.schema';
+
 export type {
     SessionMetadata,
     SessionStartedEvent,
     SessionEndedEvent,
     LoginEvent,
     TokenRefreshedEvent,
-    ObservabilityBatch
+    ObservabilityBatch,
+    ScreeningReorderedEvent,
 };
 
 /* ---------------- EVENT INTERFACES ---------------- */
@@ -195,6 +200,13 @@ export interface ServerToClientEvents {
 
     // The Governor: Observability Mirroring
     adminMirrorEvent: (payload: AdminMirrorPayload) => void;
+
+    // ─── Admin observability events (typed contract — see
+    //     shared/schemas/admin-events.schema.ts for the full vocabulary
+    //     and emit-side validation logic in services/admin-broadcast.service.ts).
+    //     Each event listed here MUST have a matching Zod schema in the
+    //     shared schema map so the wire payload is validated at both ends.
+    'screening:reordered': (payload: ScreeningReorderedEvent) => void;
 }
 
 export interface ClientToServerEvents {

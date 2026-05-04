@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { ToastContext } from './toast-context-def';
 import type { ToastType, Toast } from './toast-context-def';
+import { logger } from '../utils/logger';
 
 interface ToastProviderProps {
     children: ReactNode;
@@ -58,13 +59,50 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     // Phase 4: Institutional Safety Layer - Global Error Listener
     React.useEffect(() => {
         const handleSystemError: EventListener = (e) => {
-            const { message } = (e as CustomEvent<{ message?: string }>).detail;
-            error(message || 'A critical system error occurred.');
+            // Defensive narrowing: the event detail crosses a custom-event
+            // boundary so its shape is not statically known. Treat it as
+            // `unknown`, structurally check the message field, and fall
+            // through to the safe default if the payload is malformed —
+            // strict-TS posture without a double-cast.
+            const detail: unknown = (e as CustomEvent<unknown>).detail;
+            const message: string | undefined =
+                typeof detail === 'object'
+                && detail !== null
+                && typeof (detail as { message?: unknown }).message === 'string'
+                    ? (detail as { message: string }).message
+                    : undefined;
+            error(message ?? 'A critical system error occurred.');
         };
 
         window.addEventListener('system:error', handleSystemError);
         return () => window.removeEventListener('system:error', handleSystemError);
     }, [error]);
+
+    // Symmetric success channel — mirrors `system:error` so admin
+    // mutations (screening reorder, doctor verify, user status update) can
+    // dispatch a single CustomEvent and surface a consistent toast UX
+    // without each call site importing and using the toast context
+    // directly. Detail shape: `{ message: string }`. Other shapes are
+    // ignored after a structural check (no double-cast).
+    React.useEffect(() => {
+        const handleSystemSuccess: EventListener = (e) => {
+            const detail: unknown = (e as CustomEvent<unknown>).detail;
+            const message: string | undefined =
+                typeof detail === 'object'
+                && detail !== null
+                && typeof (detail as { message?: unknown }).message === 'string'
+                    ? (detail as { message: string }).message
+                    : undefined;
+            if (message === undefined) {
+                logger.warn('[ToastProvider] system:success dispatched without a string message; ignoring');
+                return;
+            }
+            success(message);
+        };
+
+        window.addEventListener('system:success', handleSystemSuccess);
+        return () => window.removeEventListener('system:success', handleSystemSuccess);
+    }, [success]);
 
     const getIcon = (type: ToastType): React.ReactElement => {
         switch (type) {
