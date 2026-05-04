@@ -44,6 +44,18 @@ export interface UserSession {
     sessionId: string;
     ipAddress: string | null;
     userAgent: string | null;
+    /**
+     * Server-side parsed UA fields persisted at session creation time
+     * (`user_sessions.browser_name` / `os_name` / `device_type` columns).
+     * Phase 3 surfaces these in the admin Sessions page so the device
+     * column reads "Chrome 124 · macOS · Desktop" rather than the raw
+     * user-agent string. The columns can be `null` for sessions
+     * created before the parser was added to the signup/login flow —
+     * consumers fall back to `userAgent` in that case.
+     */
+    browserName?: string | null;
+    osName?: string | null;
+    deviceType?: string | null;
     createdAt: string;
     // P1 CASING FIX (Phase 12): camelCase across the API surface.
     lastActivity: string | null;
@@ -79,6 +91,17 @@ export interface PendingVerification {
     licenseNumber: string;
     yearsOfExperience: number;
     bio: string;
+    /**
+     * Optional richer profile fields backfilled by the doctor through
+     * the profile completion flow. Surfaced on the admin Verify Doctors
+     * card in Phase 3 so admins can review the full clinical profile
+     * before approving — replaces the previous bare name/license-only
+     * card. `null` (not undefined) when the doctor has yet to complete
+     * the profile, mirroring the DB column nullability honestly.
+     */
+    consultationFee?: number | null;
+    canVideoConsult?: boolean | null;
+    profileImage?: string | null;
 }
 
 export interface SystemStats {

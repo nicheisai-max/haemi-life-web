@@ -9,6 +9,7 @@ import { mapUserToResponse } from '../utils/user.mapper';
 import { mapDoctorToResponse } from '../utils/doctor.mapper';
 import { UserEntity, JoinedDoctorRow } from '../types/db.types';
 import { decrypt } from '../utils/security';
+import { emitToAdmins } from '../services/admin-broadcast.service';
 
 // Get pending doctor verifications (Admin only)
 export const getPendingVerifications = async (req: Request, res: Response) => {
@@ -18,7 +19,8 @@ export const getPendingVerifications = async (req: Request, res: Response) => {
         const result = await pool.query<JoinedDoctorRow>(`
             SELECT
                 u.id, u.name, u.email, u.phone_number, u.profile_image, u.profile_image_mime, u.created_at,
-                dp.specialization, dp.license_number, dp.years_of_experience, dp.bio
+                dp.specialization, dp.license_number, dp.years_of_experience, dp.bio,
+                dp.consultation_fee, dp.can_video_consult
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
             WHERE u.role = 'doctor' AND dp.is_verified = false AND u.status = 'ACTIVE'
@@ -81,6 +83,26 @@ export const verifyDoctor = async (req: Request, res: Response) => {
             ]);
 
             await client.query('COMMIT');
+
+            // Best-effort admin broadcast — the verified/rejected doctor
+            // disappears from every admin's Verify Doctors page in real
+            // time, and any admin who triggered the action also receives
+            // the toast confirmation via the same event. Failures logged
+            // inside `emitToAdmins` and do not propagate.
+            const updatedRow: { id: string; user_id: string } | undefined = result.rows[0];
+            if (updatedRow !== undefined) {
+                emitToAdmins({
+                    event: 'doctor:verified',
+                    payload: {
+                        profileId: String(updatedRow.id),
+                        userId: String(updatedRow.user_id),
+                        outcome: verified ? 'approved' : 'rejected',
+                        verifiedBy: String(user.id),
+                        timestamp: new Date().toISOString(),
+                    },
+                });
+            }
+
             return sendResponse(res, 200, true, verified ? 'Doctor verified successfully' : 'Doctor rejected', {
                 profile: mapDoctorToResponse(result.rows[0])
             });
@@ -499,8 +521,22 @@ export const revokeSession = async (req: Request, res: Response) => {
     const { sessionId } = req.params;
     try {
         if (typeof sessionId !== 'string') return sendError(res, 400, 'Invalid Session ID');
-        const success = await securityRepository.revokeSession(sessionId);
-        if (success) {
+        const revoked = await securityRepository.revokeSession(sessionId);
+        if (revoked !== null) {
+            // Best-effort admin broadcast — the revoked session disappears
+            // from every admin's Sessions page in real time. Failures
+            // logged inside `emitToAdmins` and do not propagate to the
+            // HTTP response.
+            emitToAdmins({
+                event: 'session:revoked',
+                payload: {
+                    id: revoked.id,
+                    sessionId: revoked.sessionId,
+                    userId: revoked.userId,
+                    reason: 'admin_revoked',
+                    revokedAt: revoked.revokedAt.toISOString(),
+                },
+            });
             return sendResponse(res, 200, true, 'Session revoked successfully');
         } else {
             return sendError(res, 404, 'Session not found or already inactive');
