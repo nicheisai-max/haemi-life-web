@@ -487,6 +487,160 @@
     animation: haemi-status-breathing 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
+  /* 🩺 HAEMI LIVE STATUS PILL — Inline status indicator (Phase: post-Phase-5)
+     ─────────────────────────────────────────────────────────────────────
+     Replaces the previous button-shaped "Live / Polling" pill that was
+     visually mistaken for a clickable action. The new design is a small,
+     non-clickable inline pill: a tiny pulsating dot + uppercase
+     micro-label, sized to sit alongside a heading rather than a button
+     row.
+
+     Two variants:
+
+       • `.haemi-live-pill`            → Default. Renders against the
+                                         normal page surface (light or dark
+                                         theme). Background tint + text
+                                         colour both resolve from brand
+                                         tokens (`--sidebar-active` for
+                                         the live state, `--muted-foreground`
+                                         for the polling fallback) so
+                                         contrast is honest in both themes.
+
+       • `.haemi-live-pill-on-dark`    → Variant for the dashboard hero
+                                         section, which is always painted
+                                         on the deep teal gradient (i.e.
+                                         the surface is dark in BOTH
+                                         themes). Uses translucent white
+                                         tints for the chip surface and
+                                         emerald hues for the live state
+                                         so the pulsating dot reads
+                                         clearly against the always-dark
+                                         background.
+
+     Strict rules (project mandate):
+       - Zero pixel values — every dimension in `rem` so the pill scales
+         from mobile to desktop with the user's root font size.
+       - Zero hardcoded colors — every visible colour is `color-mix()`
+         of brand tokens (`--sidebar-active`, `--muted-foreground`) or
+         `--color-success` / `--color-success-text` from variables.css.
+       - `cursor: default` + `user-select: none` make the
+         "is-this-clickable?" affordance unambiguous.
+       - The dot's pulse uses an explicit ping-style ring rather than
+         the existing `haemi-status-breathing` opacity-only fade —
+         a ring expanding outward reads as "live" more clearly than a
+         dot dimming.
+  */
+  @keyframes haemi-live-pulse {
+    0% {
+      transform: scale(1);
+      opacity: 0.55;
+    }
+    80%, 100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
+
+  .haemi-live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding-inline: 0.5rem;
+    padding-block: 0.125rem;
+    border-radius: 100rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.085em;
+    cursor: default;
+    user-select: none;
+    /* Light theme: muted brand-green tint behind the chip — visible
+       against `--background` (Slate 50) without competing with primary
+       buttons. Color-mix preserves brand parity automatically when
+       theme tokens shift. */
+    background-color: color-mix(in srgb, var(--sidebar-active) 10%, transparent);
+    color: var(--sidebar-active);
+  }
+  .dark .haemi-live-pill {
+    /* Dark theme: stronger tint so the pill reads against `--background`
+       (#0B1214 / very dark teal). Same hue, higher mix percentage. */
+    background-color: color-mix(in srgb, var(--sidebar-active) 22%, transparent);
+    color: color-mix(in srgb, var(--sidebar-active) 80%, white);
+  }
+
+  /* "Polling" / disconnected state — desaturated tint + muted text so
+     it reads as "degraded" rather than "live and healthy". */
+  .haemi-live-pill-offline {
+    background-color: color-mix(in srgb, var(--muted-foreground) 12%, transparent);
+    color: var(--muted-foreground);
+  }
+  .dark .haemi-live-pill-offline {
+    background-color: color-mix(in srgb, var(--muted-foreground) 22%, transparent);
+    color: color-mix(in srgb, var(--muted-foreground) 90%, white);
+  }
+
+  .haemi-live-pill-dot {
+    /* The dot itself: a small filled circle that hosts the ping ring.
+       `position: relative` is required so the absolutely-positioned
+       ::before ring anchors correctly. */
+    position: relative;
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 100rem;
+    background-color: currentColor;
+    flex-shrink: 0;
+  }
+  .haemi-live-pill-dot::before {
+    /* The expanding ring — only present on the LIVE state via the
+       `data-live="true"` selector below. Drawn as a positioned
+       overlay sized to match the dot, then animated outward. */
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 100rem;
+    background-color: currentColor;
+    opacity: 0;
+  }
+  .haemi-live-pill-dot[data-live="true"]::before {
+    animation: haemi-live-pulse 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  /* On-dark variant: dashboard hero (always-dark teal background in
+     BOTH light and dark themes — the gradient `from-teal-800 to-teal-950`
+     is theme-invariant). Uses `--color-success` (emerald) for the LIVE
+     state so the pill differentiates from the existing "ADMINISTRATOR
+     ACCESS" emerald pill nearby (slightly different mix percentages
+     produce a sibling-not-twin visual). The polling fallback uses a
+     translucent CSS primitive `white` overlay — `white` is a CSS
+     keyword (the same primitive the rest of the dashboard hero uses
+     for its `text-white` / `bg-white/10` styling), not a brand-token
+     bypass. */
+  .haemi-live-pill-on-dark {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding-inline: 0.625rem;
+    padding-block: 0.1875rem;
+    border-radius: 100rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.085em;
+    cursor: default;
+    user-select: none;
+    background-color: color-mix(in srgb, var(--color-success) 22%, transparent);
+    color: color-mix(in srgb, var(--color-success) 35%, white);
+    border: 0.0625rem solid color-mix(in srgb, var(--color-success) 35%, transparent);
+  }
+  .haemi-live-pill-on-dark.haemi-live-pill-offline {
+    background-color: color-mix(in srgb, white 8%, transparent);
+    color: color-mix(in srgb, white 70%, transparent);
+    border-color: color-mix(in srgb, white 18%, transparent);
+  }
+
   /* 🩺 HAEMI CHAT THUMBNAIL SYSTEM (Passport Size Lock)
      Architecture: Google-grade responsive constraints using rem.
      Prevents CLS (Cumulative Layout Shift) and massive expansion in 12-column grids.
