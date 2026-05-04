@@ -151,6 +151,32 @@ export const signup = async (req: Request, res: Response) => {
 
             await client.query('COMMIT');
 
+            // Best-effort admin observability broadcast — the new user
+            // appears live on the admin User Management page without a
+            // refresh. Emit failures are logged inside `emitToAdmins`
+            // and never propagate; the user's signup is unaffected.
+            // Coerce `created_at` from `Date | string` (the user
+            // repository returns either depending on the driver
+            // configuration) to a strict ISO string for the wire schema.
+            const createdAtIso: string = newUser.created_at instanceof Date
+                ? newUser.created_at.toISOString()
+                : new Date(newUser.created_at).toISOString();
+            emitToAdmins({
+                event: 'user:registered',
+                payload: {
+                    id: newUser.id,
+                    name: newUser.name,
+                    email: newUser.email,
+                    phoneNumber: null,
+                    role: newUser.role,
+                    status: newUser.status,
+                    initials: newUser.initials ?? null,
+                    profileImage: null,
+                    createdAt: createdAtIso,
+                    lastActivity: null,
+                },
+            });
+
             // PHASE 1: Persistent Session record
             const sessionId = crypto.randomUUID();
             const accessJti = crypto.randomBytes(16).toString('hex');
