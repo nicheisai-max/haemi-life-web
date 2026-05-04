@@ -12,7 +12,8 @@ import {
     getSecurityEvents,
     getActiveSessions,
     revokeSession,
-    getRevenueStats
+    getRevenueStats,
+    getSystemHealth
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -35,5 +36,6 @@ router.get('/security-events', getSecurityEvents);
 router.get('/active-sessions', getActiveSessions);
 router.delete('/sessions/:sessionId', revokeSession);
 router.get('/revenue-stats', getRevenueStats);
+router.get('/system-health', getSystemHealth);
 
 export default router;
