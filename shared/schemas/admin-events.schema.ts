@@ -39,14 +39,72 @@ export const ScreeningReorderedEventSchema = z.object({
 });
 export type ScreeningReorderedEvent = z.infer<typeof ScreeningReorderedEventSchema>;
 
+// ─── Event: Audit log row written (Phase 2) ──────────────────────────────────
+//
+// Emitted *after* a successful INSERT into `audit_logs`. Payload is the full
+// row plus the actor's display fields (joined from `users`) so admin pages
+// can render without an immediate refetch. Nullables match the SQL nullability
+// honestly: `userId` is non-null (Zero-Trust policy enforces a sentinel
+// `00000000-...` for system actions), but the joined display fields can be
+// null when the actor row no longer exists. `details` is the raw JSONB —
+// consumers parse / expand it client-side.
+export const AuditLogEventSchema = z.object({
+    id: z.string().uuid(),
+    userId: z.string().uuid(),
+    action: z.string().min(1),
+    entityType: z.string().nullable(),
+    entityId: z.string().nullable(),
+    /**
+     * The DB column is `JSONB`; over the wire the value can be a structured
+     * object/array, a JSON string (legacy writes), or `null`. We accept any
+     * of those shapes here and let the consumer decide how to render —
+     * coercing to a strict shape would make us responsible for keeping every
+     * existing audit-writer in lock-step.
+     */
+    details: z.union([z.record(z.string(), z.unknown()), z.string(), z.null()]),
+    ipAddress: z.string().nullable(),
+    userAgent: z.string().nullable(),
+    createdAt: z.string().datetime(),
+    userName: z.string().nullable(),
+    userEmail: z.string().nullable(),
+    userRole: z.string().nullable(),
+});
+export type AuditLogEvent = z.infer<typeof AuditLogEventSchema>;
+
+// ─── Event: Security event observed (Phase 2) ────────────────────────────────
+//
+// Currently the security-events surface is *derived* from `audit_logs` rows
+// matching `%SECURITY%`, `%LOGIN%`, or `%REVOKE%` (see
+// `securityRepository.getSecurityEvents`). The emit follows the same rule —
+// the same audit row that triggers `audit:new` ALSO triggers `security:event`
+// when the action matches the security pattern. This means the same DB row
+// flows through two channels, which is intentional: admins viewing the
+// Security page should see the event even if they have never opened the
+// Audit Logs page.
+export const SecurityEventSchema = z.object({
+    id: z.string().uuid(),
+    userId: z.string().uuid().nullable(),
+    eventType: z.string().min(1),
+    eventCategory: z.string().nullable(),
+    eventSeverity: z.string().nullable(),
+    ipAddress: z.string().nullable(),
+    userAgent: z.string().nullable(),
+    isSuspicious: z.boolean(),
+    createdAt: z.string().datetime(),
+    userName: z.string().nullable(),
+    userEmail: z.string().nullable(),
+    userRole: z.string().nullable(),
+});
+export type SecurityEvent = z.infer<typeof SecurityEventSchema>;
+
 // ─── Event Name Union ────────────────────────────────────────────────────────
 //
-// Phase 1 ships a single event so the wiring can be exercised end-to-end with
-// minimum surface area. Phases 2-5 extend this union with `audit:new`,
-// `session:created`, `session:revoked`, `security:event`, `user:registered`,
-// `user:status_changed`, `doctor:pending`, `doctor:verified`.
+// Phase 2 extends the union with `audit:new` and `security:event`. Phases 3-5
+// will further extend with session/user/doctor events.
 export const AdminEventNameSchema = z.enum([
     'screening:reordered',
+    'audit:new',
+    'security:event',
 ]);
 export type AdminEventName = z.infer<typeof AdminEventNameSchema>;
 
@@ -57,15 +115,22 @@ export type AdminEventName = z.infer<typeof AdminEventNameSchema>;
 // so the payload is narrowed without `any` and without manual assertions.
 export interface AdminEventMap {
     'screening:reordered': ScreeningReorderedEvent;
+    'audit:new': AuditLogEvent;
+    'security:event': SecurityEvent;
 }
 
 // ─── Runtime validator lookup ────────────────────────────────────────────────
 //
 // `AdminEventSchemaMap[E]` returns the Zod schema for event name `E`. Both
 // the emitter (before send) and the consumer (after receive) call
-// `.parse(payload)` to guarantee wire-shape correctness.
+// `.parse(payload)` to guarantee wire-shape correctness. The `satisfies`
+// clause makes TypeScript prove that every event name has a matching
+// validator — adding an event to the union without a schema is a compile
+// error, never a runtime gap.
 export const AdminEventSchemaMap = {
     'screening:reordered': ScreeningReorderedEventSchema,
+    'audit:new': AuditLogEventSchema,
+    'security:event': SecurityEventSchema,
 } as const satisfies { [E in AdminEventName]: z.ZodType<AdminEventMap[E]> };
 
 // ─── Type guard: is the value an admin event name we know about? ─────────────
@@ -74,4 +139,29 @@ export const AdminEventSchemaMap = {
 export const isAdminEventName = (value: string): value is AdminEventName => {
     const result = AdminEventNameSchema.safeParse(value);
     return result.success;
+};
+
+// ─── Security-event suspicion classifier ─────────────────────────────────────
+//
+// Frontend-side classifier that decides whether a `SecurityEvent` should be
+// treated as suspicious for threat-level computation. Lives in shared/
+// because the backend may want to apply the same rule when persisting
+// `security_events.is_suspicious` in a future phase. Single source of truth.
+//
+// Patterns deliberately use word-boundary anchors and `i` flag so that
+// `LOGIN_FAILURE`, `LOGIN_FAILED`, and `FAILED_LOGIN` all match without
+// false positives on `LOGIN_SUCCESS` / `LOGIN_REFRESH`.
+const SUSPICIOUS_EVENT_PATTERNS: ReadonlyArray<RegExp> = [
+    /\bLOGIN[_ ]?FAIL/i,
+    /\bFAILED[_ ]?LOGIN/i,
+    /\bFORBIDDEN/i,
+    /\bUNAUTHORIZED/i,
+    /\bREVOKE/i,
+    /\bINTRUSION/i,
+    /\bBREACH/i,
+];
+
+export const isSuspiciousSecurityEvent = (event: Pick<SecurityEvent, 'eventType' | 'isSuspicious'>): boolean => {
+    if (event.isSuspicious) return true;
+    return SUSPICIOUS_EVENT_PATTERNS.some((pattern) => pattern.test(event.eventType));
 };

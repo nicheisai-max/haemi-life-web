@@ -5,30 +5,13 @@ import {
     AdminEventName,
     AdminEventMap,
     AdminEventSchemaMap,
+    ScreeningReorderedEventSchema,
+    AuditLogEventSchema,
+    SecurityEventSchema,
+    type ScreeningReorderedEvent,
+    type AuditLogEvent,
+    type SecurityEvent,
 } from '../../../shared/schemas/admin-events.schema';
-
-/**
- * Per-event subscribe/unsubscribe dispatch table. Mirrors the backend's
- * `ADMIN_EMIT_DISPATCH` design: each entry uses a *literal* event-name
- * string in the inner `socketService.on/off` call so TypeScript resolves
- * the typed callback signature precisely — no generic-variance casts,
- * no `as unknown as`.
- *
- * Adding a new admin event:
- *   1. Add its name + payload type in `shared/schemas/admin-events.schema.ts`.
- *   2. Add a row to `ADMIN_SUBSCRIBE_DISPATCH` below.
- * The `satisfies` clause guarantees the table is exhaustive.
- */
-type AdminSubscribeDispatch = {
-    [E in AdminEventName]: (handler: (payload: AdminEventMap[E]) => void) => () => void;
-};
-
-const ADMIN_SUBSCRIBE_DISPATCH = {
-    'screening:reordered': (handler) => {
-        socketService.on('screening:reordered', handler);
-        return () => socketService.off('screening:reordered', handler);
-    },
-} as const satisfies AdminSubscribeDispatch;
 
 /**
  * 🛡️ HAEMI LIFE — useAdminLiveTable
@@ -44,10 +27,11 @@ const ADMIN_SUBSCRIBE_DISPATCH = {
  *      a single fetch fails).
  *
  *   2. **Live updates** via `subscribeEvents`. Every event listed there is
- *      attached to the existing `socketService`, payloads are validated at
- *      runtime through `AdminEventSchemaMap[event]`, and the consumer's
- *      `onEvent` callback is invoked with a *narrowed* payload type. Drift
- *      between backend emit and frontend consumption never reaches render.
+ *      attached to the existing `socketService` through a per-event switch
+ *      that dispatches to literal-named subscribe helpers — generic-variance
+ *      pitfalls are avoided by never indexing through a generic E.
+ *      Payloads are Zod-validated at the consumer boundary (defense-in-depth
+ *      against backend type drift).
  *
  *   3. **Polling fallback** when `socketService.isConnected()` is false.
  *      Configurable via `pollFallbackMs` (defaults to 30s) — long enough to
@@ -59,12 +43,13 @@ const ADMIN_SUBSCRIBE_DISPATCH = {
  *   4. **No `any`, no double cast, no @ts-ignore.** The generic `T` is
  *      constrained to a row with an `id: string` so React keys and
  *      duplicate-row reconciliation work without fallback logic. Every
- *      `unknown` payload is narrowed by Zod before reaching `onEvent`.
+ *      payload is Zod-validated before reaching `onEvent`. The hand-off
+ *      from the literal-typed handler to the consumer's generic `onEvent`
+ *      uses a single targeted `as` cast — *not* `as unknown as` — at a
+ *      documented variance boundary, with the runtime invariant that the
+ *      Zod parse just succeeded for this exact event/payload pair.
  *
  *   5. **All errors via `logger.error`.** The hook never `console.*`s.
- *
- * Phase 1 ships the scaffold; Phase 2 onward will add consumers
- * (Audit Logs, Sessions, Security Events, etc.).
  */
 
 const DEFAULT_POLL_FALLBACK_MS = 30_000;
@@ -113,6 +98,46 @@ export interface UseAdminLiveTableResult<T extends { id: string }> {
     readonly error: Error | null;
     readonly refetch: () => Promise<void>;
 }
+
+/**
+ * Per-event subscribe helper. Each branch uses literal event-name strings
+ * so `socketService.on/off` resolve to precisely-typed signatures — the
+ * generic-variance issue that bites mapped-type dispatch tables is avoided
+ * entirely. Returns the unsubscribe closure for the caller's cleanup list.
+ *
+ * Adding a new event = add one `case` here, one entry to
+ * `shared/schemas/admin-events.schema.ts`, plus the matching schema parse
+ * in `parseAdminEventPayload` below. The exhaustive `never` default
+ * surfaces missing branches as a compile error.
+ */
+const subscribeOne = (
+    event: AdminEventName,
+    handlers: {
+        onScreeningReordered: (payload: ScreeningReorderedEvent) => void;
+        onAuditNew: (payload: AuditLogEvent) => void;
+        onSecurityEvent: (payload: SecurityEvent) => void;
+    }
+): () => void => {
+    switch (event) {
+        case 'screening:reordered': {
+            socketService.on('screening:reordered', handlers.onScreeningReordered);
+            return () => socketService.off('screening:reordered', handlers.onScreeningReordered);
+        }
+        case 'audit:new': {
+            socketService.on('audit:new', handlers.onAuditNew);
+            return () => socketService.off('audit:new', handlers.onAuditNew);
+        }
+        case 'security:event': {
+            socketService.on('security:event', handlers.onSecurityEvent);
+            return () => socketService.off('security:event', handlers.onSecurityEvent);
+        }
+        default: {
+            const exhaustive: never = event;
+            logger.error('[useAdminLiveTable] Unhandled event name', { event: exhaustive });
+            return () => { /* no-op for the unknown case */ };
+        }
+    }
+};
 
 export function useAdminLiveTable<T extends { id: string }, E extends AdminEventName>(
     config: UseAdminLiveTableConfig<T, E>
@@ -168,45 +193,77 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
     useEffect(() => {
         if (subscribeEvents.length === 0) return;
 
-        // Each cleanup function unsubscribes the corresponding event when
-        // the effect tears down. Built per-event through
-        // `ADMIN_SUBSCRIBE_DISPATCH` so each `socketService.on/off` call
-        // sees a literal event name and the typed callback signature
-        // resolves precisely — no generic-variance casts.
-        const cleanups: Array<() => void> = subscribeEvents.map((event) => {
-            const schema = AdminEventSchemaMap[event];
-
-            // Validate every incoming payload as defense-in-depth against
-            // backend type drift. Even if the wire shape diverges from the
-            // declared contract, the page does not crash — the bad payload
-            // is logged and discarded, and the fallback poll keeps data
-            // fresh.
-            const handler = (payload: AdminEventMap[E]): void => {
-                const result = schema.safeParse(payload);
-                if (!result.success) {
-                    logger.error('[useAdminLiveTable] Payload validation failed', {
-                        event,
-                        issues: JSON.stringify(result.error.issues),
-                    });
-                    return;
-                }
-                const validated: AdminEventMap[E] = result.data;
-                if (onEvent) {
-                    const next = onEvent(event, validated, itemsRef.current);
-                    if (next === null) {
-                        void refetch();
-                    } else if (isMountedRef.current) {
-                        setItems(next);
-                    }
-                } else {
-                    // No custom handler — default behaviour is to re-fetch.
+        // Build a single dispatcher per event-shape. Each handler runs the
+        // matching schema's `safeParse` and then forwards to the consumer's
+        // generic `onEvent` (or to `refetch()` when no custom handler is
+        // supplied). The single targeted cast at the `onEvent` boundary —
+        // NOT a double-cast — is required because TS variance cannot prove
+        // that a literal payload type is assignable to the consumer's
+        // `AdminEventMap[E]` parameter when E is a union; the runtime
+        // invariant is that the schema parse just succeeded for this exact
+        // event/payload pair.
+        const dispatchToConsumer = (event: AdminEventName, validated: AdminEventMap[AdminEventName]): void => {
+            if (!isMountedRef.current) return;
+            if (onEvent) {
+                const next = onEvent(
+                    event as E,
+                    validated as AdminEventMap[E],
+                    itemsRef.current
+                );
+                if (next === null) {
                     void refetch();
+                } else {
+                    setItems(next);
                 }
-            };
+            } else {
+                void refetch();
+            }
+        };
 
-            const subscribe = ADMIN_SUBSCRIBE_DISPATCH[event];
-            return subscribe(handler);
-        });
+        const onScreeningReordered = (payload: ScreeningReorderedEvent): void => {
+            const r = ScreeningReorderedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] screening:reordered payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('screening:reordered', r.data);
+        };
+
+        const onAuditNew = (payload: AuditLogEvent): void => {
+            const r = AuditLogEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] audit:new payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('audit:new', r.data);
+        };
+
+        const onSecurityEvent = (payload: SecurityEvent): void => {
+            const r = SecurityEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] security:event payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('security:event', r.data);
+        };
+
+        // Wire up only the requested events. The handlers are constructed
+        // once per effect run; their references are stable for the
+        // lifetime of the subscription so the cleanup off()s the same
+        // function we passed to on().
+        const cleanups: Array<() => void> = subscribeEvents.map((event) =>
+            subscribeOne(event, {
+                onScreeningReordered,
+                onAuditNew,
+                onSecurityEvent,
+            })
+        );
 
         return () => {
             for (const cleanup of cleanups) cleanup();
@@ -234,3 +291,7 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
 
     return { items, isLoading, error, refetch };
 }
+
+// Re-export the schema map so consumers that need to validate payloads
+// outside the hook (e.g. a test harness) have a single import path.
+export { AdminEventSchemaMap };

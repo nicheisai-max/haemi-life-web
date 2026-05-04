@@ -43,7 +43,11 @@ export enum SocketState {
 // through `AdminEventSchemaMap` at the call site (defense-in-depth), but
 // the static contract here gives compile-time autocompletion for
 // `socketService.on('screening:reordered', ...)`.
-import type { ScreeningReorderedEvent } from '../../../shared/schemas/admin-events.schema';
+import type {
+    ScreeningReorderedEvent,
+    AuditLogEvent,
+    SecurityEvent as AdminSecurityEvent,
+} from '../../../shared/schemas/admin-events.schema';
 
 export interface ServerToClientEvents {
     'typingStarted': (data: { userId: UserId; conversationId: ConversationId; name: string }) => void;
@@ -75,6 +79,8 @@ export interface ServerToClientEvents {
     'connect_error': (error: Error) => void;
     // ─── Admin observability (typed contract — see shared/schemas/admin-events.schema.ts)
     'screening:reordered': (payload: ScreeningReorderedEvent) => void;
+    'audit:new': (payload: AuditLogEvent) => void;
+    'security:event': (payload: AdminSecurityEvent) => void;
 }
 
 export interface ClientToServerEvents {

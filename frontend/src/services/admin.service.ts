@@ -101,9 +101,42 @@ export interface PaginatedResponse<T> {
     };
 }
 
-// Named exports for components that expect direct imports
-export const getAuditLogs = async (limit = 50, offset = 0): Promise<AuditLog[]> => {
-    const response = await api.get<ApiResponse<AuditLog[]>>('/admin/audit-logs', { params: { limit, offset } });
+// ─── Audit logs (server-side filter + pagination) ───────────────────────────
+//
+// Backend returns `{ items, pagination: { total, limit, offset } }` so the
+// admin UI can render an accurate "X of Y" footer and disable next-page
+// when the result set is exhausted. All filter params are optional —
+// passing none returns the most recent page across all logs.
+export interface AuditLogQuery {
+    readonly limit?: number;
+    readonly offset?: number;
+    readonly q?: string;
+    readonly action?: string;
+    readonly entityType?: string;
+}
+
+export interface AuditLogPage {
+    readonly items: ReadonlyArray<AuditLog>;
+    readonly pagination: {
+        readonly total: number;
+        readonly limit: number;
+        readonly offset: number;
+    };
+}
+
+export const getAuditLogs = async (query: AuditLogQuery = {}): Promise<AuditLogPage> => {
+    // Compose query params explicitly so empty / null filters are NOT sent
+    // as `?q=` or `?action=` (which the backend would interpret as "exact
+    // match on empty string"). Numeric defaults are always sent.
+    const params: Record<string, string | number> = {
+        limit: query.limit ?? 50,
+        offset: query.offset ?? 0,
+    };
+    if (query.q !== undefined && query.q.length > 0) params.q = query.q;
+    if (query.action !== undefined && query.action.length > 0) params.action = query.action;
+    if (query.entityType !== undefined && query.entityType.length > 0) params.entityType = query.entityType;
+
+    const response = await api.get<ApiResponse<AuditLogPage>>('/admin/audit-logs', { params });
     return normalizeResponse(response);
 };
 
