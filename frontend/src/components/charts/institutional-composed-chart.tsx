@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { memo, useState, useEffect, useMemo } from 'react';
 import {
     ComposedChart,
     Area,
@@ -67,14 +67,35 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, p
 };
 
 /**
- * Institutional Composed Chart (Google/Meta Grade)
- * 
- * - Generic Type Support
- * - Layered Area + Line visualization
- * - Dual SVG gradients for depth
- * - Institutional Legend and interactive Tooltips
+ * 🩺 HAEMI LIFE — Institutional Composed Chart (Google/Meta Grade)
+ *
+ * Phase 5 follow-up performance fixes:
+ *
+ *   1. **`React.memo` boundary** — heavy SVG subtree. Without `memo`,
+ *      every parent state update (live KPI counter changes on the
+ *      admin dashboard) re-runs the entire chart render even when the
+ *      chart's own props are unchanged — manifesting as React scheduler
+ *      `[Violation] 'message' handler took 200ms+` errors. The custom
+ *      equality function (declared below) compares the props that
+ *      actually affect render.
+ *
+ *   2. **Animation durations tightened** — were 2000 ms (Area) and
+ *      2500 ms (Line); now both 400 ms. Industry standard for
+ *      transitions; long animations were the direct cause of
+ *      `requestAnimationFrame` budget violations.
+ *
+ *   3. **Mount gate (300 ms)** — preserved from the original (was
+ *      already in this component). Lets the parent layout settle
+ *      before Recharts measures it.
+ *
+ * Strict-TS posture (project mandate):
+ *   - Zero `any`. Zero `as unknown as`. Zero `@ts-ignore`.
+ *   - Single `as typeof InnerInstitutionalComposedChart` cast on the
+ *     memoised export preserves the generic signature across
+ *     `React.memo`'s widening — NOT `as unknown as`.
+ *   - All errors via `logger`. No `console.*`.
  */
-export const InstitutionalComposedChart = <T extends object>({
+const InnerInstitutionalComposedChart = <T extends object>({
     title,
     description,
     data,
@@ -86,7 +107,7 @@ export const InstitutionalComposedChart = <T extends object>({
     height = 350,
     valuePrefix = '',
     valueSuffix = ''
-}: InstitutionalComposedChartProps<T>) => {
+}: InstitutionalComposedChartProps<T>): React.ReactElement => {
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
@@ -164,7 +185,7 @@ export const InstitutionalComposedChart = <T extends object>({
                                     strokeWidth={3}
                                     fillOpacity={1}
                                     fill={`url(#composedAreaGradient-${String(areaKey)})`}
-                                    animationDuration={2000}
+                                    animationDuration={400}
                                 />
 
                                 <Line
@@ -175,7 +196,7 @@ export const InstitutionalComposedChart = <T extends object>({
                                     strokeWidth={3}
                                     dot={{ r: 0 }}
                                     activeDot={{ r: 4, strokeWidth: 0, fill: lineColor }}
-                                    animationDuration={2500}
+                                    animationDuration={400}
                                 />
                             </ComposedChart>
                         </ResponsiveContainer>
@@ -189,3 +210,40 @@ export const InstitutionalComposedChart = <T extends object>({
         </Card>
     );
 };
+
+/**
+ * Custom prop-equality function for `React.memo`. Returns `true` when
+ * upstream props are equivalent enough that a re-render would produce
+ * the same SVG output — letting React skip the chart's heavy
+ * reconciliation entirely. Identity equality on `data` is sufficient
+ * because callers either pass the same constant reference or a new
+ * array reference when data genuinely changes; deep comparison would
+ * defeat memoisation.
+ */
+const arePropsEqual = <T extends object>(
+    prev: InstitutionalComposedChartProps<T>,
+    next: InstitutionalComposedChartProps<T>
+): boolean =>
+    prev.data === next.data
+    && prev.areaKey === next.areaKey
+    && prev.lineKey === next.lineKey
+    && prev.categoryKey === next.categoryKey
+    && prev.title === next.title
+    && prev.description === next.description
+    && prev.areaColor === next.areaColor
+    && prev.lineColor === next.lineColor
+    && prev.height === next.height
+    && prev.valuePrefix === next.valuePrefix
+    && prev.valueSuffix === next.valueSuffix;
+
+/**
+ * Memoised export. Single `as typeof InnerInstitutionalComposedChart`
+ * cast preserves the generic signature across `React.memo`'s
+ * `MemoExoticComponent<unknown>` widening — the canonical TypeScript
+ * pattern for generic memoised components. Single cast, structurally
+ * narrowing to a known-correct type, NOT `as unknown as`.
+ */
+export const InstitutionalComposedChart = memo(
+    InnerInstitutionalComposedChart,
+    arePropsEqual
+) as typeof InnerInstitutionalComposedChart;
