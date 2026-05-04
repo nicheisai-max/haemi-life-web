@@ -222,6 +222,32 @@ export const getRevenueStats = async (): Promise<RevenueStat[]> => {
     return normalizeResponse(response);
 };
 
+// ─── System health (Phase 5) ─────────────────────────────────────────────────
+//
+// Returned by `GET /admin/system-health` — the admin dashboard polls this
+// every 5 seconds (Phase 5 design) to render its System Load card live.
+// Field shapes mirror the backend wire schema in
+// `admin.controller.getSystemHealth` exactly; values are integer-rounded
+// percentages clamped to [0, 100] on the server side.
+export interface DbConnectionStats {
+    readonly total: number;
+    readonly idle: number;
+    readonly waiting: number;
+}
+
+export interface SystemHealth {
+    readonly cpuPercent: number;
+    readonly memoryPercent: number;
+    readonly dbConnections: DbConnectionStats;
+    readonly uptimeSeconds: number;
+    readonly timestamp: string;
+}
+
+export const getSystemHealth = async (): Promise<SystemHealth> => {
+    const response = await api.get<ApiResponse<SystemHealth>>('/admin/system-health');
+    return normalizeResponse(response);
+};
+
 // Object-based export for backward compatibility
 export const adminSettingsService = {
     getSessionTimeout: async (): Promise<{ timeout: number }> => {

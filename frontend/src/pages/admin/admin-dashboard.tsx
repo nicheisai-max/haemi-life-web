@@ -1,26 +1,71 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import {
     Users, ShieldCheck, Activity, Server, AlertTriangle,
     Settings, FileText,
-    Globe, ShieldAlert, LogOut
+    Globe, ShieldAlert, LogOut, Radio
 } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/gradient-mesh';
-import { getSystemStats, getRevenueStats, getActiveSessions, getSecurityEvents } from '../../services/admin.service';
-import type { SystemStats, RevenueStat } from '../../services/admin.service';
+import {
+    getSystemStats,
+    getRevenueStats,
+    getActiveSessions,
+    getSecurityEvents,
+    getAuditLogs,
+} from '../../services/admin.service';
+import type {
+    RevenueStat,
+    AuditLog,
+} from '../../services/admin.service';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PredictiveInsights } from '@/components/ui/predictive-insights';
-import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { PATHS } from '../../routes/paths';
 import { PremiumBarChart } from '@/components/charts/premium-bar-chart';
 import { InstitutionalComposedChart } from '@/components/charts/institutional-composed-chart';
+import { useSystemHealth } from '@/hooks/use-system-health';
+import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
+import { useRelativeTime } from '@/hooks/use-relative-time';
+import { socketService } from '@/services/socket.service';
+import { logger } from '@/utils/logger';
+import {
+    UserRegisteredEventSchema,
+    SessionCreatedEventSchema,
+    SessionRevokedEventSchema,
+    DoctorVerifiedEventSchema,
+    type UserRegisteredEvent,
+    type SessionCreatedEvent,
+    type SessionRevokedEvent,
+    type DoctorVerifiedEvent,
+} from '../../../../shared/schemas/admin-events.schema';
 
-// Realistic Growth Data for a National Platform
+/**
+ * 🛡️ HAEMI LIFE — Admin Dashboard (Phase 5: live KPIs + system health)
+ *
+ * Replaces the static one-shot fetch + hardcoded "34%" placeholder with:
+ *   - `useSystemHealth` polling `GET /admin/system-health` every 5 s
+ *     (CPU / memory / DB connections / uptime — actual measurements,
+ *     not placeholders).
+ *   - Live KPI counters subscribing to `user:registered`,
+ *     `session:created`, `session:revoked`, `doctor:verified` so the
+ *     "Total Users" / "Live Sessions" / "Verification Queue" cards
+ *     auto-update without a refresh.
+ *   - "Recent Activity" feed via `useAdminLiveTable<AuditLog, 'audit:new'>`
+ *     surfacing the last 10 audit entries with live append.
+ *
+ * Strict-TS posture (project mandate):
+ *   - Zero `any`. Zero `as unknown as`. Zero `@ts-ignore`.
+ *   - Every socket payload Zod-validated at the consumer boundary
+ *     (defense-in-depth against backend drift).
+ *   - All errors via `logger`. Zero `console.*`.
+ */
+
+const RECENT_ACTIVITY_LIMIT = 10;
+
 interface GrowthDataPoint { name: string; users: number;[key: string]: string | number | undefined; }
 const SYSTEM_GROWTH_DATA: GrowthDataPoint[] = [
     { name: 'Jan', users: 1200 },
@@ -31,74 +76,264 @@ const SYSTEM_GROWTH_DATA: GrowthDataPoint[] = [
     { name: 'Jun', users: 4200 },
 ];
 
+/**
+ * Map a CPU / memory percentage into a qualitative band so the "System
+ * Load" card description and trend indicator can read accurately
+ * without further math at render time. Thresholds calibrated for a
+ * single-instance backend; revisit if horizontal scaling lands.
+ */
+const classifyLoad = (percent: number): { label: string; trend: 'up' | 'down' | 'neutral'; description: string } => {
+    if (percent >= 90) {
+        return {
+            label: 'Critical',
+            trend: 'up',
+            description: 'Server capacity is critical. Investigate active workloads immediately.',
+        };
+    }
+    if (percent >= 70) {
+        return {
+            label: 'Elevated',
+            trend: 'up',
+            description: 'Server capacity is elevated. Monitor closely; consider scaling.',
+        };
+    }
+    if (percent >= 40) {
+        return {
+            label: 'Stable',
+            trend: 'neutral',
+            description: 'Server capacity is healthy and operating within normal range.',
+        };
+    }
+    return {
+        label: 'Optimal',
+        trend: 'down',
+        description: 'Server capacity is optimal with significant headroom available.',
+    };
+};
+
+const formatUptime = (seconds: number): string => {
+    if (seconds < 60) return `${seconds}s`;
+    const days = Math.floor(seconds / 86_400);
+    const hours = Math.floor((seconds % 86_400) / 3_600);
+    const minutes = Math.floor((seconds % 3_600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+};
+
 export const AdminDashboard: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState<SystemStats | null>(null);
-    const [revenueData, setRevenueData] = useState<RevenueStat[]>([]);
-    const [activeSessions, setActiveSessions] = useState(0);
-    const [securityAlerts, setSecurityAlerts] = useState(0);
 
-    // Fetch system statistics and new intelligence data
+    const [loading, setLoading] = useState<boolean>(true);
+    const [revenueData, setRevenueData] = useState<RevenueStat[]>([]);
+    const [activeSessions, setActiveSessions] = useState<number>(0);
+    const [securityAlerts, setSecurityAlerts] = useState<number>(0);
+    const [pendingVerifications, setPendingVerifications] = useState<number>(0);
+    const [totalUsers, setTotalUsers] = useState<number>(0);
+
+    // Initial fetch — populates all KPI baselines in parallel. Subsequent
+    // updates flow via socket events (counters) and polling (system
+    // health), not a periodic full refetch.
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchInitial = async (): Promise<void> => {
             try {
                 setLoading(true);
                 const [sysStats, revStats, sessions, events] = await Promise.all([
                     getSystemStats(),
                     getRevenueStats(),
                     getActiveSessions(),
-                    getSecurityEvents()
+                    getSecurityEvents(),
                 ]);
 
-                setStats(sysStats);
                 setRevenueData(revStats);
                 setActiveSessions(sessions.length);
                 setSecurityAlerts(events.filter(e => e.isSuspicious).length);
-            } catch (error) {
-                console.error('Error fetching dashboard data:', error);
+                setPendingVerifications(sysStats.pendingVerifications);
+                setTotalUsers(sysStats.totalUsers);
+            } catch (error: unknown) {
+                logger.error('[AdminDashboard] Initial fetch failed', {
+                    error: error instanceof Error ? error.message : String(error),
+                });
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchData();
+        void fetchInitial();
     }, []);
+
+    // Live KPI counter subscriptions. Each handler validates the payload
+    // through its literal-named Zod schema (defense-in-depth) before
+    // mutating counter state — the runtime invariant matches the
+    // architecture established in Phase 1's `useAdminLiveTable`.
+    useEffect(() => {
+        const onUserRegistered = (payload: UserRegisteredEvent): void => {
+            const r = UserRegisteredEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[AdminDashboard] user:registered validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            setTotalUsers((prev) => prev + 1);
+        };
+        const onSessionCreated = (payload: SessionCreatedEvent): void => {
+            const r = SessionCreatedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[AdminDashboard] session:created validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            setActiveSessions((prev) => prev + 1);
+        };
+        const onSessionRevoked = (payload: SessionRevokedEvent): void => {
+            const r = SessionRevokedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[AdminDashboard] session:revoked validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            setActiveSessions((prev) => Math.max(0, prev - 1));
+        };
+        const onDoctorVerified = (payload: DoctorVerifiedEvent): void => {
+            const r = DoctorVerifiedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[AdminDashboard] doctor:verified validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            // Verification — approved or rejected — removes the doctor
+            // from the pending queue either way.
+            setPendingVerifications((prev) => Math.max(0, prev - 1));
+        };
+
+        socketService.on('user:registered', onUserRegistered);
+        socketService.on('session:created', onSessionCreated);
+        socketService.on('session:revoked', onSessionRevoked);
+        socketService.on('doctor:verified', onDoctorVerified);
+
+        return () => {
+            socketService.off('user:registered', onUserRegistered);
+            socketService.off('session:created', onSessionCreated);
+            socketService.off('session:revoked', onSessionRevoked);
+            socketService.off('doctor:verified', onDoctorVerified);
+        };
+    }, []);
+
+    // System health polling (5 s cadence; pauses when tab hidden).
+    const { health, error: healthError } = useSystemHealth();
+
+    // Recent activity feed — live-streamed via the existing `audit:new`
+    // channel. Reuses `useAdminLiveTable` so error / poll-fallback /
+    // visibility behaviour stays consistent with the audit logs page.
+    const recentActivityFetcher = useCallback(async (): Promise<ReadonlyArray<AuditLog>> => {
+        try {
+            const page = await getAuditLogs({ limit: RECENT_ACTIVITY_LIMIT, offset: 0 });
+            return page.items;
+        } catch (error: unknown) {
+            logger.error('[AdminDashboard] Recent-activity fetch failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+        }
+    }, []);
+    const subscribeEvents = useMemo(() => ['audit:new'] as const, []);
+
+    const { items: recentAuditItems } = useAdminLiveTable<AuditLog, 'audit:new'>({
+        fetcher: recentActivityFetcher,
+        subscribeEvents,
+        // Every audit:new event prepends an entry; we cap the visible
+        // slice at RECENT_ACTIVITY_LIMIT so the dashboard surface stays
+        // bounded while showing the freshest activity.
+        onEvent: (_event, payload, current) => {
+            // Defensive narrowing: the union has only `audit:new` here so
+            // payload is already AuditLogEvent at the type level. We treat
+            // it as the existing AuditLog row shape (compatible columns)
+            // for the in-memory list — no cast needed since both shapes
+            // share the surface fields the dashboard renders.
+            const next: AuditLog = {
+                id: payload.id,
+                userId: payload.userId,
+                action: payload.action,
+                entityType: payload.entityType ?? '',
+                entityId: payload.entityId ?? '',
+                details: payload.details,
+                ipAddress: payload.ipAddress ?? '',
+                createdAt: payload.createdAt,
+                userName: payload.userName ?? undefined,
+                userEmail: payload.userEmail ?? undefined,
+            };
+            // Avoid duplicates if the fetcher already returned this id
+            // (race between socket arrival and HTTP response).
+            if (current.some((existing) => existing.id === next.id)) return current;
+            return [next, ...current].slice(0, RECENT_ACTIVITY_LIMIT);
+        },
+    });
+
+    // Compose the predictive-insights cards. System Load card now shows
+    // the real CPU percentage (rounded server-side) plus a memory hint
+    // in the description; falls back to a degraded "Unknown" state if
+    // the health fetch has not landed yet (initial page-load window
+    // ≤ 5 s) or has errored.
+    const insightsData = useMemo(() => {
+        let systemLoadValue: string;
+        let systemLoadDescription: string;
+        let systemLoadTrend: 'up' | 'down' | 'neutral';
+        if (health !== null) {
+            const classification = classifyLoad(health.cpuPercent);
+            systemLoadValue = `${health.cpuPercent}%`;
+            systemLoadDescription = `${classification.description} Memory: ${health.memoryPercent}% · DB: ${health.dbConnections.total} connections · Uptime: ${formatUptime(health.uptimeSeconds)}.`;
+            systemLoadTrend = classification.trend;
+        } else if (healthError !== null) {
+            systemLoadValue = '—';
+            systemLoadDescription = 'System health metrics unavailable. Monitor will retry automatically.';
+            systemLoadTrend = 'neutral';
+        } else {
+            systemLoadValue = '…';
+            systemLoadDescription = 'Sampling system health…';
+            systemLoadTrend = 'neutral';
+        }
+
+        return [
+            {
+                label: 'System Load',
+                value: systemLoadValue,
+                description: systemLoadDescription,
+                trend: systemLoadTrend,
+                trendValue: health !== null ? classifyLoad(health.cpuPercent).label : 'Pending',
+                icon: Server,
+                variant: 'primary' as const,
+            },
+            {
+                label: 'Security Shield',
+                value: securityAlerts > 0 ? securityAlerts.toString() : 'Active',
+                description: securityAlerts > 0 ? `${securityAlerts} suspicious events detected.` : 'No critical threats detected.',
+                trend: securityAlerts > 0 ? 'up' as const : 'neutral' as const,
+                trendValue: securityAlerts > 0 ? 'Alert' : 'Secure',
+                icon: ShieldCheck,
+                variant: securityAlerts > 0 ? 'accent' as const : 'secondary' as const,
+            },
+            {
+                label: 'Active Sessions',
+                value: activeSessions.toString(),
+                description: 'Current authenticated institutional connections.',
+                trend: 'neutral' as const,
+                trendValue: 'Live',
+                icon: Activity,
+                variant: 'accent' as const,
+            },
+        ];
+    }, [health, healthError, securityAlerts, activeSessions]);
+
+    const isLiveConnected: boolean = socketService.isConnected();
 
     if (loading) {
         return <MedicalLoader message="Synchronizing institutional controls..." />;
     }
-
-    const insightsData = [
-        {
-            label: 'System Load',
-            value: '34%',
-            description: 'Server capacity is optimal. Peak load expected at 09:00 CAT.',
-            trend: 'neutral' as const,
-            trendValue: 'Stable',
-            icon: Server,
-            variant: 'primary' as const
-        },
-        {
-            label: 'Security Shield',
-            value: securityAlerts > 0 ? securityAlerts.toString() : 'Active',
-            description: securityAlerts > 0 ? `${securityAlerts} suspicious events detected.` : 'No critical threats detected.',
-            trend: securityAlerts > 0 ? 'up' as const : 'neutral' as const,
-            trendValue: securityAlerts > 0 ? 'Alert' : 'Secure',
-            icon: ShieldCheck,
-            variant: securityAlerts > 0 ? 'accent' as const : 'secondary' as const
-        },
-        {
-            label: 'Active Sessions',
-            value: activeSessions.toString(),
-            description: 'Current authenticated institutional connections.',
-            trend: 'neutral' as const,
-            trendValue: 'Live',
-            icon: Activity,
-            variant: 'accent' as const
-        }
-    ];
 
     return (
         <div className="space-y-8">
@@ -115,14 +350,19 @@ export const AdminDashboard: React.FC = () => {
                         </h1>
                         <p className="text-emerald-50/70 text-sm font-bold uppercase tracking-[0.2em] mb-1">System Overview</p>
                         <div className="page-subheading !text-white/80 !opacity-100 italic">
-                            {loading
-                                ? <PremiumLoader size="md" className="justify-start h-8 w-auto text-white" />
-                                : `Platform is operating normally. All services are online.`
-                            }
+                            {`Platform is operating normally. All services are online.`}
                         </div>
-
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
+                        {/* Live indicator pill — consistent with audit / sessions / users pages. */}
+                        <div
+                            className="px-3 py-2 flex items-center gap-2 rounded-[var(--card-radius)] bg-white/10 border border-white/20 text-xs font-semibold text-white"
+                            aria-live="polite"
+                            title={isLiveConnected ? 'Live event stream connected' : 'Polling fallback (socket disconnected)'}
+                        >
+                            <Radio className={`h-3.5 w-3.5 ${isLiveConnected ? 'text-green-300' : 'text-white/50'}`} />
+                            <span>{isLiveConnected ? 'Live' : 'Polling'}</span>
+                        </div>
                         <Button
                             size="lg"
                             variant="outline"
@@ -144,14 +384,14 @@ export const AdminDashboard: React.FC = () => {
                 </div>
             </TransitionItem>
 
-            {/* Stats Grid - Standardized Premium UX (v8.5 Sync) */}
+            {/* Stats Grid - live counters from socket events. */}
             <section className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-label="Key Metrics">
                 <TransitionItem>
                     <DashboardCard className="flex flex-col items-center justify-center gap-4 p-6 hover:border-primary/50 dark:hover:border-primary/80 hover:shadow-lg hover:shadow-primary/10 dark:hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300 text-center group cursor-pointer" noPadding>
                         <IconWrapper icon={Globe} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                {loading ? <PremiumLoader size="sm" className="h-9" /> : stats?.totalUsers || "0"}
+                                {totalUsers}
                             </div>
                             <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-primary transition-colors">Total Users</div>
                         </div>
@@ -163,7 +403,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={Activity} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                {loading ? <PremiumLoader size="sm" className="h-9" /> : activeSessions}
+                                {activeSessions}
                             </div>
                             <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">Live Sessions</div>
                         </div>
@@ -175,7 +415,7 @@ export const AdminDashboard: React.FC = () => {
                         <IconWrapper icon={AlertTriangle} variant="warning" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                {loading ? <PremiumLoader size="sm" className="h-9" /> : stats?.pendingVerifications || "0"}
+                                {pendingVerifications}
                             </div>
                             <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-amber-500 transition-colors">Verification Queue</div>
                         </div>
@@ -197,7 +437,7 @@ export const AdminDashboard: React.FC = () => {
                         data={SYSTEM_GROWTH_DATA}
                         dataKey="users"
                         categoryKey="name"
-                        color="#148C8B" // Primary-700
+                        color="#148C8B"
                         valueSuffix=" users"
                         height={350}
                     />
@@ -210,13 +450,44 @@ export const AdminDashboard: React.FC = () => {
                         areaKey="revenue"
                         lineKey="expenses"
                         categoryKey="name"
-                        areaColor="#148C8B" // Primary-700
-                        lineColor="#2563EB" // Info-500
+                        areaColor="#148C8B"
+                        lineColor="#2563EB"
                         valueSuffix=" BWP"
                         height={350}
                     />
                 </TransitionItem>
             </div>
+
+            {/* Recent Activity Feed — live audit log stream (last 10). */}
+            <TransitionItem>
+                <DashboardCard className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold text-foreground">Recent Activity</h2>
+                            <p className="text-xs text-muted-foreground italic">Live audit log feed</p>
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-[var(--card-radius)] text-xs"
+                            onClick={() => navigate(PATHS.ADMIN.SYSTEM_LOGS)}
+                        >
+                            View all
+                        </Button>
+                    </div>
+                    {recentAuditItems.length === 0 ? (
+                        <p className="text-center text-muted-foreground italic py-8 text-sm">
+                            No audit activity recorded yet.
+                        </p>
+                    ) : (
+                        <ul className="space-y-1">
+                            {recentAuditItems.map((entry) => (
+                                <RecentActivityRow key={entry.id} entry={entry} />
+                            ))}
+                        </ul>
+                    )}
+                </DashboardCard>
+            </TransitionItem>
 
             {/* Quick Actions Grid */}
             <TransitionItem>
@@ -301,6 +572,36 @@ export const AdminDashboard: React.FC = () => {
                     ))}
                 </div>
             </TransitionItem>
+
         </div>
+    );
+};
+
+/* ─── Internal: recent activity row with live "X ago" ─────────────────────── */
+
+interface RecentActivityRowProps {
+    readonly entry: AuditLog;
+}
+
+const RecentActivityRow: React.FC<RecentActivityRowProps> = ({ entry }) => {
+    const relativeTime: string = useRelativeTime(entry.createdAt, {
+        granularity: 'minute',
+        fallback: 'Just now',
+    });
+    return (
+        <li className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-b-0 text-sm">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+                <span className="px-2 py-0.5 rounded-[var(--card-radius)] bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+                    {entry.action}
+                </span>
+                <span className="text-foreground font-medium truncate">{entry.userName ?? 'System'}</span>
+                {entry.userEmail && (
+                    <span className="text-xs text-muted-foreground truncate hidden sm:inline">{entry.userEmail}</span>
+                )}
+            </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap" title={new Date(entry.createdAt).toLocaleString()}>
+                {relativeTime}
+            </span>
+        </li>
     );
 };

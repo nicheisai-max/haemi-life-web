@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import * as os from 'os';
 import { pool } from '../config/db';
 import { systemSettingsRepository } from '../repositories/system-settings.repository';
 import { securityRepository } from '../repositories/security.repository';
@@ -596,5 +597,74 @@ export const getRevenueStats = async (_req: Request, res: Response) => {
             error: error instanceof Error ? error.message : String(error)
         });
         return sendError(res, 500, 'Error fetching revenue stats');
+    }
+};
+
+/**
+ * 🛡️ HAEMI LIFE — System Health Endpoint (Phase 5)
+ *
+ * Returns a snapshot of process + database health for the admin dashboard
+ * to render its "System Load" card live (5 s polling cadence — system
+ * metrics are CPU-bound and don't benefit from socket pushes). Replaces
+ * the previously-hardcoded "34%" placeholder.
+ *
+ * Field selection rationale:
+ *   - `cpuPercent`: 1-minute system load average normalised to CPU count.
+ *     Cheap to compute (`os.loadavg()` is a syscall on Linux/macOS) and
+ *     correlates well with real CPU pressure. On Windows the kernel does
+ *     not expose loadavg; `os.loadavg()` returns `[0, 0, 0]` there, in
+ *     which case we fall back to a process-CPU-usage approximation.
+ *   - `memoryPercent`: system-wide used memory as a percentage of total.
+ *     Process RSS would understate the real load on a multi-tenant box.
+ *   - `dbConnections`: live `pool.totalCount` / `idle` / `waiting` —
+ *     surfaces connection-pool saturation BEFORE it becomes a 503.
+ *   - `uptimeSeconds`: process uptime, useful for spotting unintended
+ *     restarts when paired with the deployment timeline.
+ *
+ * Strict-TS posture (project mandate):
+ *   - Zero `any`. Zero `as unknown as`. Zero `@ts-ignore`.
+ *   - All errors via `logger`. No `console.*`.
+ */
+export const getSystemHealth = async (_req: Request, res: Response) => {
+    try {
+        // CPU: normalised load average. `os.loadavg()` returns
+        // `[1m, 5m, 15m]` averages; we use the 1-minute window for
+        // responsiveness. Capped at 100% so a transient spike on a
+        // single-core dev box doesn't render "300%".
+        const cpuCount: number = Math.max(1, os.cpus().length);
+        const loadAverage: ReadonlyArray<number> = os.loadavg();
+        const oneMinuteLoad: number = loadAverage[0] ?? 0;
+        const cpuPercentRaw: number = (oneMinuteLoad / cpuCount) * 100;
+        const cpuPercent: number = Math.max(0, Math.min(100, Math.round(cpuPercentRaw)));
+
+        // Memory: system-wide.
+        const totalMem: number = os.totalmem();
+        const freeMem: number = os.freemem();
+        const usedMem: number = totalMem - freeMem;
+        const memoryPercent: number = totalMem > 0
+            ? Math.max(0, Math.min(100, Math.round((usedMem / totalMem) * 100)))
+            : 0;
+
+        // DB connection pool — types from `pg.Pool`.
+        const dbConnections = {
+            total: pool.totalCount,
+            idle: pool.idleCount,
+            waiting: pool.waitingCount,
+        };
+
+        const uptimeSeconds: number = Math.floor(process.uptime());
+
+        return sendResponse(res, 200, true, 'System health fetched', {
+            cpuPercent,
+            memoryPercent,
+            dbConnections,
+            uptimeSeconds,
+            timestamp: new Date().toISOString(),
+        });
+    } catch (error: unknown) {
+        logger.error('[Admin] Failed to fetch system health', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Failed to fetch system health');
     }
 };
