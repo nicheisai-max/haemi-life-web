@@ -47,6 +47,9 @@ import type {
     ScreeningReorderedEvent,
     AuditLogEvent,
     SecurityEvent as AdminSecurityEvent,
+    SessionCreatedEvent,
+    SessionRevokedEvent,
+    DoctorVerifiedEvent,
 } from '../../../shared/schemas/admin-events.schema';
 
 export interface ServerToClientEvents {
@@ -81,6 +84,9 @@ export interface ServerToClientEvents {
     'screening:reordered': (payload: ScreeningReorderedEvent) => void;
     'audit:new': (payload: AuditLogEvent) => void;
     'security:event': (payload: AdminSecurityEvent) => void;
+    'session:created': (payload: SessionCreatedEvent) => void;
+    'session:revoked': (payload: SessionRevokedEvent) => void;
+    'doctor:verified': (payload: DoctorVerifiedEvent) => void;
 }
 
 export interface ClientToServerEvents {

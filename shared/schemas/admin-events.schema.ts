@@ -97,14 +97,77 @@ export const SecurityEventSchema = z.object({
 });
 export type SecurityEvent = z.infer<typeof SecurityEventSchema>;
 
+// ─── Event: Session created (Phase 3) ────────────────────────────────────────
+//
+// Emitted on every successful signup or login — exactly when a row is
+// inserted into `user_sessions`. Payload shape mirrors the columns the
+// admin Sessions page already renders, plus the device-parse fields
+// (`browserName`, `osName`, `deviceType`) which the backend stores at
+// session creation time and which Phase 3 surfaces in the UI.
+export const SessionCreatedEventSchema = z.object({
+    id: z.string().uuid(),
+    sessionId: z.string(),
+    userId: z.string().uuid(),
+    userRole: z.string(),
+    userName: z.string().nullable(),
+    userEmail: z.string().nullable(),
+    profileImage: z.string().nullable(),
+    ipAddress: z.string().nullable(),
+    userAgent: z.string().nullable(),
+    browserName: z.string().nullable(),
+    osName: z.string().nullable(),
+    deviceType: z.string().nullable(),
+    createdAt: z.string().datetime(),
+    lastActivity: z.string().datetime().nullable(),
+});
+export type SessionCreatedEvent = z.infer<typeof SessionCreatedEventSchema>;
+
+// ─── Event: Session revoked (Phase 3) ────────────────────────────────────────
+//
+// Emitted on successful revocation — admin-initiated via the Sessions
+// page or self-initiated via logout. The payload is intentionally lean:
+// `id`/`sessionId` so consumers can locate and remove the row, plus a
+// `reason` for diagnostic logging. Consumers re-fetch if they need
+// authoritative state.
+export const SessionRevokedEventSchema = z.object({
+    id: z.string().uuid(),
+    sessionId: z.string(),
+    userId: z.string().uuid().nullable(),
+    reason: z.string().nullable(),
+    revokedAt: z.string().datetime(),
+});
+export type SessionRevokedEvent = z.infer<typeof SessionRevokedEventSchema>;
+
+// ─── Event: Doctor verified (Phase 3) ────────────────────────────────────────
+//
+// Emitted when an admin approves or rejects a pending doctor — both
+// outcomes flow through the same channel because the admin Verify
+// Doctors page treats them identically (the verified/rejected doctor
+// disappears from the pending queue either way). The `outcome` field
+// carries the discriminator so consumers can render the appropriate
+// toast text without an extra fetch.
+export const DoctorVerifiedEventSchema = z.object({
+    profileId: z.string(),
+    userId: z.string().uuid(),
+    outcome: z.enum(['approved', 'rejected']),
+    verifiedBy: z.string().uuid(),
+    timestamp: z.string().datetime(),
+});
+export type DoctorVerifiedEvent = z.infer<typeof DoctorVerifiedEventSchema>;
+
 // ─── Event Name Union ────────────────────────────────────────────────────────
 //
-// Phase 2 extends the union with `audit:new` and `security:event`. Phases 3-5
-// will further extend with session/user/doctor events.
+// Phase 3 extends the union with `session:created`, `session:revoked`,
+// `doctor:verified`. (`doctor:pending` deferred — no clear backend write
+// path for doctor_profiles INSERT exists in the current codebase; the
+// admin Verify Doctors page works with seeded / migrated data.)
 export const AdminEventNameSchema = z.enum([
     'screening:reordered',
     'audit:new',
     'security:event',
+    'session:created',
+    'session:revoked',
+    'doctor:verified',
 ]);
 export type AdminEventName = z.infer<typeof AdminEventNameSchema>;
 
@@ -117,6 +180,9 @@ export interface AdminEventMap {
     'screening:reordered': ScreeningReorderedEvent;
     'audit:new': AuditLogEvent;
     'security:event': SecurityEvent;
+    'session:created': SessionCreatedEvent;
+    'session:revoked': SessionRevokedEvent;
+    'doctor:verified': DoctorVerifiedEvent;
 }
 
 // ─── Runtime validator lookup ────────────────────────────────────────────────
@@ -131,6 +197,9 @@ export const AdminEventSchemaMap = {
     'screening:reordered': ScreeningReorderedEventSchema,
     'audit:new': AuditLogEventSchema,
     'security:event': SecurityEventSchema,
+    'session:created': SessionCreatedEventSchema,
+    'session:revoked': SessionRevokedEventSchema,
+    'doctor:verified': DoctorVerifiedEventSchema,
 } as const satisfies { [E in AdminEventName]: z.ZodType<AdminEventMap[E]> };
 
 // ─── Type guard: is the value an admin event name we know about? ─────────────

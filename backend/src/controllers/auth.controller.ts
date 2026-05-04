@@ -5,6 +5,7 @@ import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
 import { logger } from '../utils/logger';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
+import { emitToAdmins } from '../services/admin-broadcast.service';
 import { getSessionTimeoutMinutes, getJwtAccessExpiry, getJwtRefreshExpiry } from '../utils/config.util';
 import { parseUA } from '../utils/ua-parser.util';
 import { sendResponse, sendError } from '../utils/response';
@@ -16,6 +17,29 @@ import { mapUserToResponse } from '../utils/user.mapper';
 import { UserEntity, UserSessionEntity } from '../types/db.types';
 import { JWTPayload } from '../types/express';
 import { statusService } from '../services/status.service';
+
+/**
+ * Row shape returned by the `user_sessions` INSERT ... RETURNING used by
+ * the signup and login flows. The shape mirrors the columns we surface
+ * to admins via the `session:created` event so the broadcast payload is
+ * built from the canonical post-INSERT state — id, created_at, and
+ * last_activity (initially NULL on insert) come from the DB rather than
+ * being guessed locally. Captured here so the type is shared between
+ * the two call sites without `any`.
+ */
+interface InsertedSessionRow {
+    id: string;
+    user_id: string;
+    user_role: string;
+    session_id: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    browser_name: string | null;
+    os_name: string | null;
+    device_type: string | null;
+    created_at: Date;
+    last_activity: Date | null;
+}
 
 interface SignupRequest {
     email: string;
@@ -135,11 +159,41 @@ export const signup = async (req: Request, res: Response) => {
             const userAgent = getUA(req);
             const { browser, os, device } = parseUA(userAgent);
 
-            await pool.query(
+            const sessionInsert = await pool.query<InsertedSessionRow>(
                 `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, browser_name, os_name, device_type)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                 RETURNING id, user_id, user_role, session_id, ip_address, user_agent, browser_name, os_name, device_type, created_at, last_activity`,
                 [newUser.id, newUser.role, sessionId, accessJti, refreshJti, req.ip || null, userAgent, browser, os, device]
             );
+
+            // Best-effort admin observability broadcast — the new session
+            // appears live on the admin Sessions page without a refresh.
+            // Emit failures are logged inside `emitToAdmins` and never
+            // propagate; the user's signup is unaffected.
+            const insertedSessionRow: InsertedSessionRow | undefined = sessionInsert.rows[0];
+            if (insertedSessionRow !== undefined) {
+                emitToAdmins({
+                    event: 'session:created',
+                    payload: {
+                        id: insertedSessionRow.id,
+                        sessionId: insertedSessionRow.session_id,
+                        userId: insertedSessionRow.user_id,
+                        userRole: insertedSessionRow.user_role,
+                        userName: newUser.name ?? null,
+                        userEmail: newUser.email ?? null,
+                        profileImage: null,
+                        ipAddress: insertedSessionRow.ip_address,
+                        userAgent: insertedSessionRow.user_agent,
+                        browserName: insertedSessionRow.browser_name,
+                        osName: insertedSessionRow.os_name,
+                        deviceType: insertedSessionRow.device_type,
+                        createdAt: insertedSessionRow.created_at.toISOString(),
+                        lastActivity: insertedSessionRow.last_activity !== null
+                            ? insertedSessionRow.last_activity.toISOString()
+                            : null,
+                    },
+                });
+            }
 
             // Generate Access Token (15m)
             const accessToken = jwt.sign(
@@ -327,11 +381,41 @@ export const login = async (req: Request, res: Response) => {
         const { browser, os, device } = parseUA(userAgent);
 
         // Persistent Session record
-        await pool.query(
+        const sessionInsert = await pool.query<InsertedSessionRow>(
             `INSERT INTO user_sessions (user_id, user_role, session_id, access_token_jti, refresh_token_jti, ip_address, user_agent, browser_name, os_name, device_type)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             RETURNING id, user_id, user_role, session_id, ip_address, user_agent, browser_name, os_name, device_type, created_at, last_activity`,
             [user.id, user.role, sessionId, accessJti, refreshJti, req.ip, userAgent, browser, os, device]
         );
+
+        // Best-effort admin observability broadcast — the new session
+        // appears live on the admin Sessions page without a refresh.
+        // Emit failures are logged inside `emitToAdmins` and never
+        // propagate; the user's login is unaffected.
+        const insertedSessionRow: InsertedSessionRow | undefined = sessionInsert.rows[0];
+        if (insertedSessionRow !== undefined) {
+            emitToAdmins({
+                event: 'session:created',
+                payload: {
+                    id: insertedSessionRow.id,
+                    sessionId: insertedSessionRow.session_id,
+                    userId: insertedSessionRow.user_id,
+                    userRole: insertedSessionRow.user_role,
+                    userName: user.name ?? null,
+                    userEmail: user.email ?? null,
+                    profileImage: null,
+                    ipAddress: insertedSessionRow.ip_address,
+                    userAgent: insertedSessionRow.user_agent,
+                    browserName: insertedSessionRow.browser_name,
+                    osName: insertedSessionRow.os_name,
+                    deviceType: insertedSessionRow.device_type,
+                    createdAt: insertedSessionRow.created_at.toISOString(),
+                    lastActivity: insertedSessionRow.last_activity !== null
+                        ? insertedSessionRow.last_activity.toISOString()
+                        : null,
+                },
+            });
+        }
 
         // Audit Successful Login
         await auditService.log({

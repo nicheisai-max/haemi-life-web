@@ -8,6 +8,9 @@ import {
     ScreeningReorderedEventSchema,
     AuditLogEventSchema,
     SecurityEventSchema,
+    SessionCreatedEventSchema,
+    SessionRevokedEventSchema,
+    DoctorVerifiedEventSchema,
 } from '../../../shared/schemas/admin-events.schema';
 
 /**
@@ -51,7 +54,10 @@ const ADMIN_OBSERVABILITY_ROOM = 'admin:observability' as const;
 export type AdminEmitArgs =
     | { readonly event: 'screening:reordered'; readonly payload: AdminEventMap['screening:reordered'] }
     | { readonly event: 'audit:new'; readonly payload: AdminEventMap['audit:new'] }
-    | { readonly event: 'security:event'; readonly payload: AdminEventMap['security:event'] };
+    | { readonly event: 'security:event'; readonly payload: AdminEventMap['security:event'] }
+    | { readonly event: 'session:created'; readonly payload: AdminEventMap['session:created'] }
+    | { readonly event: 'session:revoked'; readonly payload: AdminEventMap['session:revoked'] }
+    | { readonly event: 'doctor:verified'; readonly payload: AdminEventMap['doctor:verified'] };
 
 /**
  * Format a Zod validation error as a compact JSON string for the audit log.
@@ -123,6 +129,42 @@ export function emitToAdmins(args: AdminEmitArgs): boolean {
                     return false;
                 }
                 socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('security:event', result.data);
+                return true;
+            }
+            case 'session:created': {
+                const result = SessionCreatedEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('session:created', result.data);
+                return true;
+            }
+            case 'session:revoked': {
+                const result = SessionRevokedEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('session:revoked', result.data);
+                return true;
+            }
+            case 'doctor:verified': {
+                const result = DoctorVerifiedEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('doctor:verified', result.data);
                 return true;
             }
             default: {

@@ -167,16 +167,42 @@ export const securityRepository = {
         }
     },
 
-    async revokeSession(sessionId: string): Promise<boolean> {
+    /**
+     * Revokes a session by id OR session_id (the admin UI uses either).
+     * Returns the canonical post-update row so the caller can build an
+     * authoritative `session:revoked` admin broadcast payload — `null`
+     * when no row matched (already revoked or non-existent). The wider
+     * row shape replaces the previous `boolean` return value, which
+     * forced the caller to lose all per-session information needed for
+     * a useful broadcast.
+     */
+    async revokeSession(sessionId: string): Promise<{
+        id: string;
+        sessionId: string;
+        userId: string | null;
+        revokedAt: Date;
+    } | null> {
         try {
-            const result = await pool.query<{ id: string }>(
-                `UPDATE user_sessions 
-                 SET revoked = TRUE, logout_time = NOW() 
+            const result = await pool.query<{
+                id: string;
+                session_id: string;
+                user_id: string | null;
+                logout_time: Date;
+            }>(
+                `UPDATE user_sessions
+                 SET revoked = TRUE, logout_time = NOW()
                  WHERE session_id = $1 OR id::text = $1
-                 RETURNING id`,
+                 RETURNING id, session_id, user_id, logout_time`,
                 [sessionId]
             );
-            return result.rows.length > 0;
+            const row: { id: string; session_id: string; user_id: string | null; logout_time: Date } | undefined = result.rows[0];
+            if (row === undefined) return null;
+            return {
+                id: row.id,
+                sessionId: row.session_id,
+                userId: row.user_id,
+                revokedAt: row.logout_time,
+            };
         } catch (error: unknown) {
             logger.error('Failed to revoke session', {
                 error: error instanceof Error ? error.message : String(error),

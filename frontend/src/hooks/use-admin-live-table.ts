@@ -8,9 +8,15 @@ import {
     ScreeningReorderedEventSchema,
     AuditLogEventSchema,
     SecurityEventSchema,
+    SessionCreatedEventSchema,
+    SessionRevokedEventSchema,
+    DoctorVerifiedEventSchema,
     type ScreeningReorderedEvent,
     type AuditLogEvent,
     type SecurityEvent,
+    type SessionCreatedEvent,
+    type SessionRevokedEvent,
+    type DoctorVerifiedEvent,
 } from '../../../shared/schemas/admin-events.schema';
 
 /**
@@ -116,6 +122,9 @@ const subscribeOne = (
         onScreeningReordered: (payload: ScreeningReorderedEvent) => void;
         onAuditNew: (payload: AuditLogEvent) => void;
         onSecurityEvent: (payload: SecurityEvent) => void;
+        onSessionCreated: (payload: SessionCreatedEvent) => void;
+        onSessionRevoked: (payload: SessionRevokedEvent) => void;
+        onDoctorVerified: (payload: DoctorVerifiedEvent) => void;
     }
 ): () => void => {
     switch (event) {
@@ -130,6 +139,18 @@ const subscribeOne = (
         case 'security:event': {
             socketService.on('security:event', handlers.onSecurityEvent);
             return () => socketService.off('security:event', handlers.onSecurityEvent);
+        }
+        case 'session:created': {
+            socketService.on('session:created', handlers.onSessionCreated);
+            return () => socketService.off('session:created', handlers.onSessionCreated);
+        }
+        case 'session:revoked': {
+            socketService.on('session:revoked', handlers.onSessionRevoked);
+            return () => socketService.off('session:revoked', handlers.onSessionRevoked);
+        }
+        case 'doctor:verified': {
+            socketService.on('doctor:verified', handlers.onDoctorVerified);
+            return () => socketService.off('doctor:verified', handlers.onDoctorVerified);
         }
         default: {
             const exhaustive: never = event;
@@ -253,6 +274,39 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
             dispatchToConsumer('security:event', r.data);
         };
 
+        const onSessionCreated = (payload: SessionCreatedEvent): void => {
+            const r = SessionCreatedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] session:created payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('session:created', r.data);
+        };
+
+        const onSessionRevoked = (payload: SessionRevokedEvent): void => {
+            const r = SessionRevokedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] session:revoked payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('session:revoked', r.data);
+        };
+
+        const onDoctorVerified = (payload: DoctorVerifiedEvent): void => {
+            const r = DoctorVerifiedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] doctor:verified payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('doctor:verified', r.data);
+        };
+
         // Wire up only the requested events. The handlers are constructed
         // once per effect run; their references are stable for the
         // lifetime of the subscription so the cleanup off()s the same
@@ -262,6 +316,9 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
                 onScreeningReordered,
                 onAuditNew,
                 onSecurityEvent,
+                onSessionCreated,
+                onSessionRevoked,
+                onDoctorVerified,
             })
         );
 
