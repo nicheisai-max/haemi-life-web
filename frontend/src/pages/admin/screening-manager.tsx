@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical, Undo2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -16,6 +16,27 @@ import screeningService, { ScreeningQuestion } from '@/services/screening.servic
 import { TransitionItem } from '@/components/layout/page-transition';
 import { MedicalLoader } from '../../components/ui/medical-loader';
 import { useConfirm } from '@/hooks/use-confirm';
+
+/**
+ * Result of a successful reorder. Captures the previous order so the
+ * Undo affordance can restore it within the visible window. Held in a
+ * dedicated state slice (rather than mixed into `success`) so the toast
+ * UX can be distinct: the success banner has an action button, an
+ * automatic countdown, and a diff summary — none of which apply to the
+ * generic save / delete success messages.
+ */
+interface ReorderUndoState {
+    /** Snapshot of the order BEFORE the drag operation, for Undo. */
+    readonly previousOrder: ReadonlyArray<{ id: string; sort_order: number }>;
+    /** Question text and old/new positions of the row that actually moved. */
+    readonly movedQuestionText: string;
+    readonly fromPosition: number;
+    readonly toPosition: number;
+    /** Wall-clock millis at which the Undo offer expires and auto-dismisses. */
+    readonly expiresAt: number;
+}
+
+const UNDO_WINDOW_MS = 10_000;
 
 
 /**
@@ -40,6 +61,23 @@ export const ScreeningManager: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [generalError, setGeneralError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    // Persistent reorder confirmation. Replaces the previous 3-second
+    // auto-dismiss banner that gave the user no time to verify the change
+    // and no way to revert. While this is non-null, the UI shows the
+    // change diff plus an Undo button.
+    const [reorderUndo, setReorderUndo] = useState<ReorderUndoState | null>(null);
+    const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Cleanup the Undo timer on unmount so a stale closure cannot fire
+    // setState after teardown — strict-mode-safe.
+    useEffect(() => {
+        return () => {
+            if (undoTimerRef.current !== null) {
+                clearTimeout(undoTimerRef.current);
+                undoTimerRef.current = null;
+            }
+        };
+    }, []);
 
     useEffect(() => {
         loadQuestions();
@@ -150,6 +188,16 @@ export const ScreeningManager: React.FC = () => {
 
         if (sourceIndex === destinationIndex) return;
 
+        // Snapshot the previous order BEFORE the optimistic mutation. This is
+        // what `handleUndoReorder` restores if the admin clicks Undo. Stored
+        // as a lean { id, sort_order } projection — the question content
+        // itself does not need to be re-uploaded since only ordering changed.
+        const previousOrder: ReadonlyArray<{ id: string; sort_order: number }> = questions.map((q) => ({
+            id: q.id,
+            sort_order: q.sort_order,
+        }));
+        const movedQuestion = questions[sourceIndex];
+
         const updatedQuestions = Array.from(questions);
         const [reorderedItem] = updatedQuestions.splice(sourceIndex, 1);
         updatedQuestions.splice(destinationIndex, 0, reorderedItem);
@@ -160,20 +208,51 @@ export const ScreeningManager: React.FC = () => {
         }));
 
         setQuestions(finalQuestions);
-        
+
         try {
             setSaving(true);
             setGeneralError(null);
             setSuccess(null);
-            
+
             const updates = finalQuestions.map(q => ({
                 id: q.id,
                 sort_order: q.sort_order
             }));
-            
+
             await screeningService.reorderQuestions(updates);
-            setSuccess('Questions reordered successfully!');
-            setTimeout(() => setSuccess(null), 3000);
+
+            // Persistent confirmation with diff + Undo. Replaces the prior
+            // 3-second auto-dismiss banner. Toast surface (system:success)
+            // gives a global confirmation for any admin glancing at the
+            // page; the inline panel below carries the actionable Undo.
+            const undoState: ReorderUndoState = {
+                previousOrder,
+                movedQuestionText: movedQuestion.question_text || movedQuestion.disease_tag || 'Unnamed question',
+                fromPosition: sourceIndex + 1,
+                toPosition: destinationIndex + 1,
+                expiresAt: Date.now() + UNDO_WINDOW_MS,
+            };
+            setReorderUndo(undoState);
+
+            // Dispatch the global success toast through the symmetric
+            // `system:success` channel wired in toast-context.tsx — admin
+            // does not need the inline panel open to know the save landed.
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('system:success', {
+                    detail: {
+                        message: `Order saved · ${updates.length} questions reordered`,
+                    },
+                }));
+            }
+
+            // Auto-dismiss the Undo affordance after the window closes.
+            if (undoTimerRef.current !== null) {
+                clearTimeout(undoTimerRef.current);
+            }
+            undoTimerRef.current = setTimeout(() => {
+                setReorderUndo(null);
+                undoTimerRef.current = null;
+            }, UNDO_WINDOW_MS);
         } catch (error: unknown) {
             logger.error('[ScreeningManager] Reorder failure', error instanceof Error ? error : new Error(String(error)));
             setGeneralError('Failed to save the new order. Restoring original order.');
@@ -181,6 +260,68 @@ export const ScreeningManager: React.FC = () => {
         } finally {
             setSaving(false);
         }
+    };
+
+    /**
+     * Restore the order captured before the most recent drag. The previous
+     * snapshot is sent through the same reorder endpoint so the audit trail
+     * records a *second* reorder (not a special "undo" verb) — admins
+     * downstream see exactly what happened in the audit log.
+     *
+     * Failure is loud here: an Undo that silently fails is worse than no
+     * Undo at all because the admin has no signal that their intent did
+     * not land.
+     */
+    const handleUndoReorder = async (): Promise<void> => {
+        if (reorderUndo === null) return;
+        const snapshot: ReadonlyArray<{ id: string; sort_order: number }> = reorderUndo.previousOrder;
+
+        try {
+            setSaving(true);
+            setGeneralError(null);
+            setSuccess(null);
+
+            await screeningService.reorderQuestions([...snapshot]);
+
+            // Reapply the snapshot to local state by re-projecting it onto
+            // the current questions array. This avoids re-fetching from the
+            // server while still keeping local state authoritative until
+            // the next mutation.
+            setQuestions((prev) => {
+                const orderById = new Map(snapshot.map((row) => [row.id, row.sort_order]));
+                const next = prev
+                    .map((q) => {
+                        const restored: number | undefined = orderById.get(q.id);
+                        return restored === undefined ? q : { ...q, sort_order: restored };
+                    })
+                    .sort((a, b) => a.sort_order - b.sort_order);
+                return next;
+            });
+
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('system:success', {
+                    detail: { message: 'Reorder undone — previous order restored.' },
+                }));
+            }
+        } catch (error: unknown) {
+            logger.error('[ScreeningManager] Undo reorder failure', error instanceof Error ? error : new Error(String(error)));
+            setGeneralError('Could not undo the reorder. The previous order remains saved on the server only if the original save failed.');
+        } finally {
+            if (undoTimerRef.current !== null) {
+                clearTimeout(undoTimerRef.current);
+                undoTimerRef.current = null;
+            }
+            setReorderUndo(null);
+            setSaving(false);
+        }
+    };
+
+    const handleDismissUndo = (): void => {
+        if (undoTimerRef.current !== null) {
+            clearTimeout(undoTimerRef.current);
+            undoTimerRef.current = null;
+        }
+        setReorderUndo(null);
     };
 
     if (loading || saving) {
@@ -218,6 +359,46 @@ export const ScreeningManager: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <CheckCircle2 className="h-4 w-4" />
                             <AlertDescription className="font-medium">{success}</AlertDescription>
+                        </div>
+                    </Alert>
+                )}
+
+                {reorderUndo && (
+                    <Alert className="border-primary/50 bg-primary/5 text-foreground rounded-[var(--card-radius)]">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                            <div className="flex items-start gap-3">
+                                <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                                <AlertDescription className="font-medium">
+                                    <span className="font-semibold">Order saved.</span>{' '}
+                                    <span className="text-muted-foreground">
+                                        &ldquo;{reorderUndo.movedQuestionText}&rdquo; moved from position{' '}
+                                        <span className="font-semibold text-foreground">{reorderUndo.fromPosition}</span>
+                                        {' → '}
+                                        <span className="font-semibold text-foreground">{reorderUndo.toPosition}</span>
+                                        .
+                                    </span>
+                                </AlertDescription>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => { void handleUndoReorder(); }}
+                                    disabled={saving}
+                                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider border-primary/40 text-primary hover:bg-primary/10 rounded-[var(--card-radius)] flex items-center gap-1.5"
+                                >
+                                    <Undo2 className="h-3.5 w-3.5" />
+                                    Undo
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={handleDismissUndo}
+                                    className="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground rounded-[var(--card-radius)]"
+                                >
+                                    Dismiss
+                                </Button>
+                            </div>
                         </div>
                     </Alert>
                 )}

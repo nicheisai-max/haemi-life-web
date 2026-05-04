@@ -37,6 +37,14 @@ export enum SocketState {
     FOLLOWER = 'FOLLOWER'
 }
 
+// Admin observability event payloads — mirrored from the shared schema in
+// shared/schemas/admin-events.schema.ts so backend and frontend share one
+// type contract. Frontend consumers should still parse incoming payloads
+// through `AdminEventSchemaMap` at the call site (defense-in-depth), but
+// the static contract here gives compile-time autocompletion for
+// `socketService.on('screening:reordered', ...)`.
+import type { ScreeningReorderedEvent } from '../../../shared/schemas/admin-events.schema';
+
 export interface ServerToClientEvents {
     'typingStarted': (data: { userId: UserId; conversationId: ConversationId; name: string }) => void;
     'typingStopped': (data: { userId: UserId; conversationId: ConversationId; name: string }) => void;
@@ -65,6 +73,8 @@ export interface ServerToClientEvents {
     'disconnect': (reason: string) => void;
     'error': (error: Error) => void;
     'connect_error': (error: Error) => void;
+    // ─── Admin observability (typed contract — see shared/schemas/admin-events.schema.ts)
+    'screening:reordered': (payload: ScreeningReorderedEvent) => void;
 }
 
 export interface ClientToServerEvents {

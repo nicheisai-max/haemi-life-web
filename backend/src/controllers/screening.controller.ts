@@ -4,6 +4,7 @@ import { preScreeningRepository, PreScreeningDefinition } from '../repositories/
 import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
+import { emitToAdmins } from '../services/admin-broadcast.service';
 import { PreScreeningResponse } from '../repositories/pre-screening.repository';
 import {
     ScreeningQuestionRow,
@@ -154,7 +155,16 @@ export const toggleQuestionStatus = async (req: Request, res: Response): Promise
 // Reorder screening questions (Admin Only)
 export const reorderQuestions = async (req: Request, res: Response): Promise<void> => {
     const user = req.user;
-    const updates = req.body.updates as { id: string; sort_order: number }[];
+    // Validate the wire shape of `updates` defensively rather than relying on
+    // a blind `as` cast: the body originates from a network boundary so
+    // narrowing through `unknown` plus a structural check keeps the strict-TS
+    // posture and surfaces malformed input as a 400 instead of a 500.
+    const rawUpdates: unknown = req.body?.updates;
+    const isValidUpdate = (value: unknown): value is { id: string; sort_order: number } =>
+        typeof value === 'object'
+        && value !== null
+        && typeof (value as { id?: unknown }).id === 'string'
+        && typeof (value as { sort_order?: unknown }).sort_order === 'number';
 
     try {
         if (!user || user.role !== 'admin') {
@@ -162,12 +172,13 @@ export const reorderQuestions = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        if (!updates || !Array.isArray(updates)) {
+        if (!Array.isArray(rawUpdates) || !rawUpdates.every(isValidUpdate)) {
             sendError(res, 400, 'Valid updates array is required.');
             return;
         }
+        const updates: ReadonlyArray<{ id: string; sort_order: number }> = rawUpdates;
 
-        await preScreeningRepository.reorderDefinitions(updates);
+        await preScreeningRepository.reorderDefinitions([...updates]);
 
         await auditService.log({
             userId: String(user.id),
@@ -175,6 +186,16 @@ export const reorderQuestions = async (req: Request, res: Response): Promise<voi
             entityId: 'BATCH',
             entityType: 'SCREENING_DEFINITION',
             metadata: { count: updates.length }
+        });
+
+        // Broadcast the reorder to any admin currently connected to the
+        // observability room. Fire-and-forget — emit failures are logged
+        // inside `emitToAdmins` and never block the controller's response.
+        emitToAdmins('screening:reordered', {
+            actorId: String(user.id),
+            actorRole: 'admin',
+            questionCount: updates.length,
+            timestamp: new Date().toISOString(),
         });
 
         sendResponse(res, 200, true, 'Screening questions reordered successfully');
