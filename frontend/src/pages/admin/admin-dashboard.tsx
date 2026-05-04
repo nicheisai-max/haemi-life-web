@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import {
     Users, ShieldCheck, Activity, Server, AlertTriangle,
     Settings, FileText,
-    Globe, ShieldAlert, LogOut, Radio
+    Globe, ShieldAlert, LogOut
 } from 'lucide-react';
+import { LiveStatusPill } from '@/components/ui/live-status-pill';
 import { GradientMesh } from '@/components/ui/gradient-mesh';
 import {
     getSystemStats,
@@ -342,8 +343,15 @@ export const AdminDashboard: React.FC = () => {
                 <GradientMesh variant="primary" className="opacity-20" />
                 <div className="relative z-10 p-6 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div className="space-y-3 max-w-2xl">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
-                            ADMINISTRATOR ACCESS
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-100 text-[11px] font-bold border border-emerald-500/30 backdrop-blur-sm">
+                                ADMINISTRATOR ACCESS
+                            </div>
+                            {/* Inline pulsating live indicator — sits next to the
+                                "ADMINISTRATOR ACCESS" pill so the dashboard hero
+                                clearly communicates real-time status without
+                                dressing the chip as a clickable action. */}
+                            <LiveStatusPill isConnected={isLiveConnected} variant="onDark" />
                         </div>
                         <h1 className="page-heading !text-white !mb-0 transition-all duration-300">
                             Welcome, {user?.name}
@@ -354,15 +362,6 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full sm:w-auto">
-                        {/* Live indicator pill — consistent with audit / sessions / users pages. */}
-                        <div
-                            className="px-3 py-2 flex items-center gap-2 rounded-[var(--card-radius)] bg-white/10 border border-white/20 text-xs font-semibold text-white"
-                            aria-live="polite"
-                            title={isLiveConnected ? 'Live event stream connected' : 'Polling fallback (socket disconnected)'}
-                        >
-                            <Radio className={`h-3.5 w-3.5 ${isLiveConnected ? 'text-green-300' : 'text-white/50'}`} />
-                            <span>{isLiveConnected ? 'Live' : 'Polling'}</span>
-                        </div>
                         <Button
                             size="lg"
                             variant="outline"

@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getAllUsers, updateUserStatus, getSystemStats } from '../../services/admin.service';
 import type { UserListItem, SystemStats, PaginatedResponse } from '../../services/admin.service';
-import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail, CheckCircle2, CircleOff, Filter, Radio } from 'lucide-react';
+import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail, CheckCircle2, CircleOff, Filter } from 'lucide-react';
+import { LiveStatusPill } from '@/components/ui/live-status-pill';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
@@ -299,22 +300,14 @@ export const UserManagement: React.FC = () => {
     return (<div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 className="page-heading !mb-0 transition-all duration-300">User Management</h1>
+                <div className="flex items-center gap-3 flex-wrap">
+                    <h1 className="page-heading !mb-0 transition-all duration-300">User Management</h1>
+                    <LiveStatusPill isConnected={isLiveConnected} />
+                </div>
                 <p className="page-subheading italic">Manage user accounts and permissions</p>
             </div>
 
-            {/* Live indicator + stats */}
             <div className="flex gap-4 items-stretch">
-                <div
-                    className="px-4 py-2 flex items-center gap-2 rounded-[var(--card-radius)] bg-muted/50 border border-muted-foreground/20 text-xs font-semibold"
-                    aria-live="polite"
-                    title={isLiveConnected ? 'Live event stream connected' : 'Polling fallback (socket disconnected)'}
-                >
-                    <Radio className={`h-3.5 w-3.5 ${isLiveConnected ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    <span className={isLiveConnected ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
-                        {isLiveConnected ? 'Live' : 'Polling'}
-                    </span>
-                </div>
                 <Card className="px-4 py-2 flex flex-col items-center justify-center min-w-[100px]">
                     <span className="text-2xl font-bold text-primary leading-none">{totalItems}</span>
                     <span className="text-xs text-muted-foreground font-medium mt-1">Total Users</span>

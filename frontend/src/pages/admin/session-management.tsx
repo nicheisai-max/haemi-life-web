@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Activity, LogOut, RefreshCw, Smartphone, Monitor, Globe, Tablet, Radio } from 'lucide-react';
+import { Activity, LogOut, RefreshCw, Smartphone, Monitor, Globe, Tablet } from 'lucide-react';
+import { LiveStatusPill } from '@/components/ui/live-status-pill';
 import { getActiveSessions, revokeSession } from '../../services/admin.service';
 import type { UserSession } from '../../services/admin.service';
 import { MedicalLoader } from '@/components/ui/medical-loader';
@@ -229,22 +230,15 @@ export const SessionManagement: React.FC = () => {
         <div className="space-y-8">
             <TransitionItem className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="page-heading !mb-0 transition-all duration-300">
-                        Live Session Manager
-                    </h1>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <h1 className="page-heading !mb-0 transition-all duration-300">
+                            Live Session Manager
+                        </h1>
+                        <LiveStatusPill isConnected={isLiveConnected} />
+                    </div>
                     <p className="page-subheading italic">Monitor and control active institutional access tokens</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div
-                        className="h-10 px-3 flex items-center gap-2 rounded-[var(--card-radius)] bg-muted/50 border border-muted-foreground/20 text-xs font-semibold"
-                        aria-live="polite"
-                        title={isLiveConnected ? 'Live event stream connected' : 'Polling fallback (socket disconnected)'}
-                    >
-                        <Radio className={`h-3.5 w-3.5 ${isLiveConnected ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        <span className={isLiveConnected ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
-                            {isLiveConnected ? 'Live' : 'Polling'}
-                        </span>
-                    </div>
                     <Button
                         variant="outline"
                         className="h-10 px-4 rounded-[var(--card-radius)] border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-semibold transition-all hover:scale-105 active:scale-95 gap-2"

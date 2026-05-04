@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getPendingVerifications, verifyDoctor } from '../../services/admin.service';
 import type { PendingVerification } from '../../services/admin.service';
-import { Clock, AlertCircle, X, ShieldCheck, User, Check, Mail, Phone, Calendar, Briefcase, FileText, DollarSign, Video, Radio } from 'lucide-react';
+import { Clock, AlertCircle, X, ShieldCheck, User, Check, Mail, Phone, Calendar, Briefcase, FileText, DollarSign, Video } from 'lucide-react';
+import { LiveStatusPill } from '@/components/ui/live-status-pill';
 import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
 import { logger } from '@/utils/logger';
 import { socketService } from '@/services/socket.service';
@@ -108,20 +109,13 @@ export const VerifyDoctors: React.FC = () => {
     return (<div className="space-y-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-                <h1 className="page-heading !mb-0 transition-all duration-300">Verify Doctors</h1>
+                <div className="flex items-center gap-3 flex-wrap">
+                    <h1 className="page-heading !mb-0 transition-all duration-300">Verify Doctors</h1>
+                    <LiveStatusPill isConnected={isLiveConnected} />
+                </div>
                 <p className="page-subheading italic">Review and approve doctor registrations</p>
             </div>
             <div className="flex items-center gap-3">
-                <div
-                    className="h-10 px-3 flex items-center gap-2 rounded-[var(--card-radius)] bg-muted/50 border border-muted-foreground/20 text-xs font-semibold"
-                    aria-live="polite"
-                    title={isLiveConnected ? 'Live event stream connected' : 'Polling fallback (socket disconnected)'}
-                >
-                    <Radio className={`h-3.5 w-3.5 ${isLiveConnected ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    <span className={isLiveConnected ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
-                        {isLiveConnected ? 'Live' : 'Polling'}
-                    </span>
-                </div>
                 <Badge variant="secondary" className="px-3 py-1.5 text-sm font-medium flex items-center gap-2 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400">
                     <Clock className="h-4 w-4" />
                     {items.length} Pending
