@@ -276,25 +276,105 @@ export const getSystemStats = async (req: Request, res: Response) => {
     }
 };
 
-// Get audit logs (Admin only)
+// Get audit logs (Admin only) — server-side filter + pagination
+//
+// Query params (all optional):
+//   `limit`       page size (1-200, default 50)
+//   `offset`      page offset (default 0)
+//   `q`           free-text search across `action`, `entity_type`, `details`
+//   `action`      exact match on the action verb (case-insensitive prefix match)
+//   `entityType`  exact match on the entity_type
+//
+// Replaces the previous client-side full-load + filter pattern that broke
+// past ~10k rows. The response shape now includes a `pagination.total`
+// field so the UI can render an accurate "X of Y" footer.
+//
+// Strict-TS: every query param is narrowed from `unknown` (Express types
+// `req.query` as `ParsedQs`, which is `string | ParsedQs | (string | ParsedQs)[] | undefined`)
+// through dedicated narrowing helpers — no `as` casts, no implicit `any`.
+const parseStringParam = (raw: unknown): string | null => {
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    return trimmed.length === 0 ? null : trimmed;
+};
+
+const parseLimitParam = (raw: unknown, fallback: number, max: number): number => {
+    if (typeof raw !== 'string') return fallback;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.min(parsed, max);
+};
+
+const parseOffsetParam = (raw: unknown, fallback: number): number => {
+    if (typeof raw !== 'string') return fallback;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+    return parsed;
+};
+
+interface AuditLogRow {
+    id: string;
+    action: string;
+    details: unknown;
+    entity_type: string | null;
+    entity_id: string | null;
+    ip_address: string | null;
+    created_at: Date;
+    user_id: string;
+    user_name: string | null;
+    user_email: string | null;
+    user_role: string | null;
+}
+
 export const getAuditLogs = async (req: Request, res: Response) => {
-    const { limit = 50, offset = 0 } = req.query;
+    const limit = parseLimitParam(req.query.limit, 50, 200);
+    const offset = parseOffsetParam(req.query.offset, 0);
+    const q = parseStringParam(req.query.q);
+    const action = parseStringParam(req.query.action);
+    const entityType = parseStringParam(req.query.entityType);
 
     try {
-        const result = await pool.query<{
-            id: string,
-            action: string,
-            details: string,
-            entity_type: string,
-            entity_id: string,
-            ip_address: string,
-            created_at: Date,
-            user_id: string,
-            user_name: string,
-            user_email: string,
-            user_role: string
-        }>(`
-            SELECT 
+        // Compose the WHERE clause + parameter list dynamically. Each filter
+        // appends a parameter so SQL injection is impossible — values flow
+        // through `pg` parameter binding, never string interpolation.
+        const whereClauses: string[] = [];
+        const sqlParams: Array<string | number> = [];
+        let paramIndex = 1;
+
+        if (q !== null) {
+            whereClauses.push(`(al.action ILIKE $${paramIndex} OR al.entity_type ILIKE $${paramIndex} OR al.details::text ILIKE $${paramIndex})`);
+            sqlParams.push(`%${q}%`);
+            paramIndex += 1;
+        }
+        if (action !== null) {
+            whereClauses.push(`al.action ILIKE $${paramIndex}`);
+            sqlParams.push(`${action}%`);
+            paramIndex += 1;
+        }
+        if (entityType !== null) {
+            whereClauses.push(`al.entity_type = $${paramIndex}`);
+            sqlParams.push(entityType);
+            paramIndex += 1;
+        }
+
+        const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+        // Total count (matching the same WHERE) for accurate pagination UI.
+        // Computed in a second query rather than `COUNT(*) OVER ()` because
+        // the latter forces a full materialisation under deep `audit_logs`
+        // partitions; a separate count is faster on the existing index.
+        const countResult = await pool.query<{ total: string }>(
+            `SELECT COUNT(*)::text as total FROM audit_logs al ${whereSql}`,
+            sqlParams
+        );
+        const totalRow: { total: string } | undefined = countResult.rows[0];
+        const total: number = totalRow !== undefined ? Number.parseInt(totalRow.total, 10) : 0;
+
+        // Page query with the same WHERE plus LIMIT/OFFSET appended.
+        const limitIndex = paramIndex;
+        const offsetIndex = paramIndex + 1;
+        const rowsResult = await pool.query<AuditLogRow>(
+            `SELECT
                 al.id,
                 al.action,
                 al.details,
@@ -308,11 +388,13 @@ export const getAuditLogs = async (req: Request, res: Response) => {
                 u.role as user_role
             FROM audit_logs al
             LEFT JOIN users u ON al.user_id = u.id
+            ${whereSql}
             ORDER BY al.created_at DESC
-            LIMIT $1 OFFSET $2
-        `, [limit, offset]);
+            LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
+            [...sqlParams, limit, offset]
+        );
 
-        const auditLogs = result.rows.map(row => ({
+        const auditLogs = rowsResult.rows.map((row: AuditLogRow) => ({
             id: row.id,
             userId: row.user_id,
             action: row.action,
@@ -323,16 +405,26 @@ export const getAuditLogs = async (req: Request, res: Response) => {
             createdAt: row.created_at,
             userName: row.user_name,
             userEmail: row.user_email,
-            userRole: row.user_role
+            userRole: row.user_role,
         }));
 
-        return sendResponse(res, 200, true, 'Audit logs fetched', auditLogs);
+        return sendResponse(res, 200, true, 'Audit logs fetched', {
+            items: auditLogs,
+            pagination: {
+                total,
+                limit,
+                offset,
+            },
+        });
     } catch (error: unknown) {
         logger.error('Error fetching audit logs:', {
             error: error instanceof Error ? error.message : String(error),
             adminId: req.user?.id,
             limit,
-            offset
+            offset,
+            q,
+            action,
+            entityType,
         });
         return sendError(res, 500, 'Error fetching audit logs');
     }

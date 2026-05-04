@@ -191,11 +191,14 @@ export const reorderQuestions = async (req: Request, res: Response): Promise<voi
         // Broadcast the reorder to any admin currently connected to the
         // observability room. Fire-and-forget — emit failures are logged
         // inside `emitToAdmins` and never block the controller's response.
-        emitToAdmins('screening:reordered', {
-            actorId: String(user.id),
-            actorRole: 'admin',
-            questionCount: updates.length,
-            timestamp: new Date().toISOString(),
+        emitToAdmins({
+            event: 'screening:reordered',
+            payload: {
+                actorId: String(user.id),
+                actorRole: 'admin',
+                questionCount: updates.length,
+                timestamp: new Date().toISOString(),
+            },
         });
 
         sendResponse(res, 200, true, 'Screening questions reordered successfully');

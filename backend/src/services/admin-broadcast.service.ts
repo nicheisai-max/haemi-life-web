@@ -5,21 +5,10 @@ import {
     AdminEventName,
     AdminEventMap,
     AdminEventSchemaMap,
+    ScreeningReorderedEventSchema,
+    AuditLogEventSchema,
+    SecurityEventSchema,
 } from '../../../shared/schemas/admin-events.schema';
-
-/**
- * Per-event emit dispatch table. Each entry uses the *literal* event-name
- * string in the inner `socketIO.to(...).emit(...)` call so TypeScript
- * resolves the typed emit signature precisely against `ServerToClientEvents`
- * — no generic-variance issues, no casts, zero `as unknown as`. Adding a
- * new admin event is one new row here plus one row in
- * `shared/schemas/admin-events.schema.ts`. The `satisfies` clause makes
- * TypeScript verify that this table is exhaustive against `AdminEventName`
- * — a missing entry is a compile error, not a runtime gap.
- */
-type AdminEmitDispatch = {
-    [E in AdminEventName]: (payload: AdminEventMap[E]) => void;
-};
 
 /**
  * 🛡️ HAEMI LIFE — ADMIN BROADCAST SERVICE
@@ -43,32 +32,32 @@ type AdminEmitDispatch = {
  *
  * Strict-TS posture (project mandate):
  *   - Zero `any`, zero `as unknown as`, zero `@ts-ignore`.
- *   - The payload type is narrowed by the generic `E extends AdminEventName`
- *     so each call site auto-completes the correct shape.
- *   - The `unknown` returned by `safeParse` is narrowed by the result's
- *     `success` discriminant — no manual cast needed.
+ *   - Caller-side narrowing is achieved via a *discriminated argument*
+ *     shape (`AdminEmitArgs`) rather than a generic `(event, payload)`
+ *     pair. TypeScript narrows `args.payload` correctly through the
+ *     `args.event` discriminator inside each `case` of the implementation
+ *     switch — zero casts at the emit site.
  */
 
 const ADMIN_OBSERVABILITY_ROOM = 'admin:observability' as const;
 
 /**
- * Per-event emit dispatch table. Each entry uses a *literal* event-name
- * string at the inner `socketIO.to(...).emit(...)` call so TypeScript can
- * resolve the typed emit signature precisely against `ServerToClientEvents`
- * — no generic-variance issues, no casts, zero `as unknown as`.
- *
- * Adding a new admin event:
- *   1. Add its name + payload type in `shared/schemas/admin-events.schema.ts`.
- *   2. Add a new entry below.
- * The `satisfies AdminEmitDispatch` clause makes TypeScript verify the
- * table is exhaustive — a missing entry is a compile error.
+ * Discriminated-union argument shape for the public `emitToAdmins`
+ * chokepoint. Adding a new event = add one branch here, one branch in
+ * `shared/schemas/admin-events.schema.ts`, and one case in the
+ * implementation `switch` below. The `never` exhaustiveness check at the
+ * default branch makes a missing case a compile error, never a runtime gap.
  */
-const ADMIN_EMIT_DISPATCH = {
-    'screening:reordered': (payload) => {
-        if (!socketIO) return;
-        socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('screening:reordered', payload);
-    },
-} as const satisfies AdminEmitDispatch;
+export type AdminEmitArgs =
+    | { readonly event: 'screening:reordered'; readonly payload: AdminEventMap['screening:reordered'] }
+    | { readonly event: 'audit:new'; readonly payload: AdminEventMap['audit:new'] }
+    | { readonly event: 'security:event'; readonly payload: AdminEventMap['security:event'] };
+
+/**
+ * Format a Zod validation error as a compact JSON string for the audit log.
+ * Centralised so each emit branch is identical.
+ */
+const formatZodIssues = (error: ZodError): string => JSON.stringify(error.issues);
 
 /**
  * Emit a typed event to every admin currently joined to the observability
@@ -79,55 +68,90 @@ const ADMIN_EMIT_DISPATCH = {
  * flow — this function is best-effort observability, not a transactional
  * guarantee.
  */
-export function emitToAdmins<E extends AdminEventName>(
-    event: E,
-    payload: AdminEventMap[E]
-): boolean {
+export function emitToAdmins(args: AdminEmitArgs): boolean {
     if (!socketIO) {
         // Socket server not yet initialised. This is expected during early
         // boot or in test environments where sockets are not wired. Log at
-        // `info` (not `error`) since this is a known degraded state, not a
-        // fault.
+        // `info` (not `error`) since this is a known degraded state, not
+        // a fault.
         logger.info('[AdminBroadcast] Skipped emit — socket server not ready', {
-            event,
-        });
-        return false;
-    }
-
-    const schema = AdminEventSchemaMap[event];
-    const validation = schema.safeParse(payload);
-
-    if (!validation.success) {
-        // Schema mismatch — the payload shape diverged from the contract.
-        // Log the Zod issues for diagnosis but DO NOT throw: the caller's
-        // primary action (e.g. a successful screening reorder) has already
-        // happened and must not be reverted by an observability bug.
-        const issues: string =
-            validation.error instanceof ZodError
-                ? JSON.stringify(validation.error.issues)
-                : 'unknown';
-        logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
-            event,
-            issues,
+            event: args.event,
         });
         return false;
     }
 
     try {
-        // Per-event dispatch — resolves through the literal-keyed table
-        // so the inner emit call sees a precise event-name + payload pair
-        // and TypeScript validates against `ServerToClientEvents` without
-        // generic-variance casts.
-        const dispatcher = ADMIN_EMIT_DISPATCH[event];
-        dispatcher(validation.data);
-        return true;
+        // Per-event branch: each case validates with the literal-named
+        // schema and emits with the literal-named event. TypeScript narrows
+        // `args.payload` via the `args.event` discriminator so every emit
+        // call is precisely typed against `ServerToClientEvents` — zero
+        // casts, zero generic-variance issues. The Zod parse is
+        // defense-in-depth: drifted payloads are logged and dropped, never
+        // shipped over the wire.
+        switch (args.event) {
+            case 'screening:reordered': {
+                const result = ScreeningReorderedEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('screening:reordered', result.data);
+                return true;
+            }
+            case 'audit:new': {
+                const result = AuditLogEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('audit:new', result.data);
+                return true;
+            }
+            case 'security:event': {
+                const result = SecurityEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('security:event', result.data);
+                return true;
+            }
+            default: {
+                // Exhaustiveness check — adding an event without a case
+                // here surfaces as a compile error instead of a runtime
+                // silent skip. The `never` assignment is the canonical TS
+                // pattern for this guarantee.
+                const exhaustive: never = args;
+                logger.error('[AdminBroadcast] Unhandled event name', {
+                    args: JSON.stringify(exhaustive),
+                });
+                return false;
+            }
+        }
     } catch (error: unknown) {
         const message: string =
             error instanceof Error ? error.message : String(error);
         logger.error('[AdminBroadcast] Socket emit threw', {
-            event,
+            event: args.event,
             error: message,
         });
         return false;
     }
 }
+
+/**
+ * Re-exported for callers that need to enumerate the valid event names
+ * (e.g. a future admin-side feature flag). Saves the import line for the
+ * common case.
+ */
+export { AdminEventSchemaMap };
+export type { AdminEventName, AdminEventMap };

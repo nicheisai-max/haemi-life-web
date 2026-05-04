@@ -137,6 +137,8 @@ import {
 
 import {
     ScreeningReorderedEvent,
+    AuditLogEvent,
+    SecurityEvent as AdminSecurityEvent,
 } from '../../../shared/schemas/admin-events.schema';
 
 export type {
@@ -147,6 +149,8 @@ export type {
     TokenRefreshedEvent,
     ObservabilityBatch,
     ScreeningReorderedEvent,
+    AuditLogEvent,
+    AdminSecurityEvent,
 };
 
 /* ---------------- EVENT INTERFACES ---------------- */
@@ -207,6 +211,8 @@ export interface ServerToClientEvents {
     //     Each event listed here MUST have a matching Zod schema in the
     //     shared schema map so the wire payload is validated at both ends.
     'screening:reordered': (payload: ScreeningReorderedEvent) => void;
+    'audit:new': (payload: AuditLogEvent) => void;
+    'security:event': (payload: AdminSecurityEvent) => void;
 }
 
 export interface ClientToServerEvents {

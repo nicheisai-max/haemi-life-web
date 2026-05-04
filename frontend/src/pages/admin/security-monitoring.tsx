@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShieldAlert, ShieldCheck, RefreshCw } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, RefreshCw, Radio } from 'lucide-react';
 import { getSecurityEvents } from '../../services/admin.service';
 import type { SecurityEvent } from '../../services/admin.service';
 import { MedicalLoader } from '@/components/ui/medical-loader';
@@ -11,70 +11,168 @@ import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { getInitials, getProfileImageUrl } from '../../utils/avatar.resolver';
+import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
+import { isSuspiciousSecurityEvent } from '../../../../shared/schemas/admin-events.schema';
+import { logger } from '@/utils/logger';
+import { socketService } from '@/services/socket.service';
+
+/**
+ * 🛡️ HAEMI LIFE — Security Observability (Phase 2: live + dynamic threat level)
+ *
+ * Replaces the previous static "Sync Data" button + hardcoded "Low" threat
+ * level with: a live `security:event` socket subscription delivered via
+ * `useAdminLiveTable`, and a frontend-computed threat level derived from
+ * the count of suspicious events in the last hour.
+ *
+ * Strict-TS posture (project mandate):
+ *   - Zero `any`. Zero `as unknown as`. Zero `@ts-ignore`.
+ *   - All errors flow through `logger`. No `console.*`.
+ */
+
+const PAGE_SIZE = 10;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+type ThreatLevel = 'Low' | 'Medium' | 'High' | 'Critical';
+
+interface ThreatAssessment {
+    readonly level: ThreatLevel;
+    readonly suspiciousLastHour: number;
+    readonly description: string;
+    readonly trend: 'up' | 'down' | 'neutral';
+}
+
+/**
+ * Compute the current threat level from the loaded security events. Pure
+ * function over the event list — recomputes automatically on every state
+ * change without an effect or extra fetch. Threshold mapping documented
+ * inline so adjusting levels later is a one-place edit.
+ */
+const computeThreatLevel = (events: ReadonlyArray<SecurityEvent>): ThreatAssessment => {
+    const oneHourAgo = Date.now() - ONE_HOUR_MS;
+    const suspiciousLastHour = events.filter((event) => {
+        if (!isSuspiciousSecurityEvent(event)) return false;
+        const eventTime = new Date(event.createdAt).getTime();
+        return Number.isFinite(eventTime) && eventTime >= oneHourAgo;
+    }).length;
+
+    // Threshold mapping. Calibrated for a small-team admin surface — adjust
+    // as production data grows. The bands are ordered most-permissive first
+    // so the dispatch is a single chain of comparisons.
+    let level: ThreatLevel;
+    let description: string;
+    let trend: 'up' | 'down' | 'neutral';
+    if (suspiciousLastHour >= 50) {
+        level = 'Critical';
+        description = `${suspiciousLastHour} suspicious events in the last hour. Immediate review recommended.`;
+        trend = 'up';
+    } else if (suspiciousLastHour >= 20) {
+        level = 'High';
+        description = `${suspiciousLastHour} suspicious events in the last hour. Elevated activity detected.`;
+        trend = 'up';
+    } else if (suspiciousLastHour >= 5) {
+        level = 'Medium';
+        description = `${suspiciousLastHour} suspicious events in the last hour.`;
+        trend = 'neutral';
+    } else if (suspiciousLastHour > 0) {
+        level = 'Low';
+        description = `${suspiciousLastHour} suspicious event${suspiciousLastHour === 1 ? '' : 's'} in the last hour.`;
+        trend = 'neutral';
+    } else {
+        level = 'Low';
+        description = 'No suspicious events detected in the last hour.';
+        trend = 'down';
+    }
+
+    return { level, suspiciousLastHour, description, trend };
+};
+
+const getSeverityColor = (severity: string | null): string => {
+    switch (severity?.toUpperCase()) {
+        case 'CRITICAL': return 'bg-red-500/10 text-red-600 border-red-200 dark:border-red-900/50';
+        case 'HIGH': return 'bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-900/50';
+        case 'MEDIUM': return 'bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-900/50';
+        default: return 'bg-slate-500/10 text-slate-600 border-slate-200 dark:border-slate-800';
+    }
+};
+
+const getThreatLevelIcon = (level: ThreatLevel): React.ElementType => {
+    return level === 'Low' ? ShieldCheck : ShieldAlert;
+};
 
 export const SecurityMonitoring: React.FC = () => {
-    const [events, setEvents] = useState<SecurityEvent[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
+    const [page, setPage] = useState<number>(1);
 
-    useEffect(() => {
-        fetchEvents();
+    // Stable fetcher: no filters yet on this page (Phase 2 ships live + threat
+    // level; richer filtering belongs on a future iteration). The list is
+    // bounded to a reasonable upper limit so threat-level computation has a
+    // representative window without paginating through the whole table.
+    const fetcher = useCallback(async (): Promise<ReadonlyArray<SecurityEvent>> => {
+        try {
+            return await getSecurityEvents(200, 0);
+        } catch (error: unknown) {
+            logger.error('[SecurityMonitoring] Failed to fetch security events', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+        }
     }, []);
 
-    const fetchEvents = async () => {
-        try {
-            setLoading(true);
-            const data = await getSecurityEvents();
-            setEvents(data);
-        } catch (err) {
-            console.error("Failed to fetch security events:", err);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    };
+    const subscribeEvents = useMemo(() => ['security:event'] as const, []);
 
-    const getSeverityColor = (severity: string | null) => {
-        switch (severity?.toUpperCase()) {
-            case 'CRITICAL': return 'bg-red-500/10 text-red-600 border-red-200 dark:border-red-900/50';
-            case 'HIGH': return 'bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-900/50';
-            case 'MEDIUM': return 'bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-900/50';
-            default: return 'bg-slate-500/10 text-slate-600 border-slate-200 dark:border-slate-800';
-        }
-    };
+    const { items, isLoading, error, refetch } = useAdminLiveTable<SecurityEvent, 'security:event'>({
+        fetcher,
+        subscribeEvents,
+        // Default behaviour (return null -> refetch) is what we want here:
+        // a new security event flips threat-level computation and may shift
+        // the "last hour" window, so refetch keeps everything coherent.
+        onEvent: () => null,
+    });
 
-    const insightsData = [
+    // ─── Derived: threat level + insights cards ──────────────────────────────
+    const threatAssessment = useMemo<ThreatAssessment>(
+        () => computeThreatLevel(items),
+        [items]
+    );
+
+    const totalSuspicious = useMemo<number>(
+        () => items.filter(isSuspiciousSecurityEvent).length,
+        [items]
+    );
+
+    const insightsData = useMemo(() => [
         {
             label: 'Threat Level',
-            value: 'Low',
-            description: 'No critical security breaches detected in the last 48 hours.',
-            trend: 'down' as const,
-            trendValue: '-12%',
-            icon: ShieldCheck,
-            variant: 'primary' as const
+            value: threatAssessment.level,
+            description: threatAssessment.description,
+            trend: threatAssessment.trend,
+            trendValue: `${threatAssessment.suspiciousLastHour}/h`,
+            icon: getThreatLevelIcon(threatAssessment.level),
+            variant: 'primary' as const,
         },
         {
             label: 'Suspicious Activities',
-            value: events.filter(e => e.isSuspicious).length.toString(),
-            description: 'Login attempts from unusual locations flagged for review.',
-            trend: 'neutral' as const,
-            trendValue: 'Stable',
+            value: totalSuspicious.toString(),
+            description: 'Events flagged by the heuristic across the visible window.',
+            trend: totalSuspicious > 0 ? ('up' as const) : ('neutral' as const),
+            trendValue: totalSuspicious > 0 ? 'Active' : 'Stable',
             icon: ShieldAlert,
-            variant: 'primary' as const
-        }
-    ];
+            variant: 'primary' as const,
+        },
+    ], [threatAssessment, totalSuspicious]);
 
-    const itemsPerPage = 10;
-    const totalItems = events.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-    const showPagination = totalItems > itemsPerPage;
-    
-    const paginatedEvents = events.slice(startIndex, endIndex);
+    // ─── Pagination over the loaded slice ────────────────────────────────────
+    const totalItems = items.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+    const startIndex = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+    const endIndex = Math.min(page * PAGE_SIZE, totalItems);
+    const showPagination = totalItems > PAGE_SIZE;
+    const paginatedEvents = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    if (loading) return <MedicalLoader variant="global" message="Analyzing Security Matrix..." />;
+    const isLiveConnected = socketService.isConnected();
+
+    if (isLoading && items.length === 0) {
+        return <MedicalLoader variant="global" message="Analyzing Security Matrix..." />;
+    }
 
     return (
         <div className="space-y-8">
@@ -86,17 +184,35 @@ export const SecurityMonitoring: React.FC = () => {
                     <p className="page-subheading italic">Real-time monitoring of institutional security events</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <div
+                        className="h-10 px-3 flex items-center gap-2 rounded-[var(--card-radius)] bg-muted/50 border border-muted-foreground/20 text-xs font-semibold"
+                        aria-live="polite"
+                        title={isLiveConnected ? 'Live event stream connected' : 'Polling fallback (socket disconnected)'}
+                    >
+                        <Radio className={`h-3.5 w-3.5 ${isLiveConnected ? 'text-green-500' : 'text-muted-foreground'}`} />
+                        <span className={isLiveConnected ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
+                            {isLiveConnected ? 'Live' : 'Polling'}
+                        </span>
+                    </div>
                     <Button
                         variant="outline"
                         className="h-10 px-4 rounded-[var(--card-radius)] border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-semibold transition-all hover:scale-105 active:scale-95 gap-2"
-                        onClick={() => { setRefreshing(true); fetchEvents(); }}
-                        disabled={refreshing}
+                        onClick={() => { void refetch(); }}
+                        disabled={isLoading}
                     >
-                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                         Sync Data
                     </Button>
                 </div>
             </TransitionItem>
+
+            {error !== null && (
+                <TransitionItem>
+                    <Card className="p-4 border-rose-500/30 bg-rose-500/5">
+                        <p className="text-sm text-rose-500 font-medium">{error.message}</p>
+                    </Card>
+                </TransitionItem>
+            )}
 
             <TransitionItem>
                 <PredictiveInsights insights={insightsData} />
@@ -110,7 +226,7 @@ export const SecurityMonitoring: React.FC = () => {
                             Live Security Feed
                         </h2>
                         <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider">
-                            {events.length} Events Logged
+                            {totalItems} Events Logged
                         </Badge>
                     </div>
                     <div className="overflow-x-auto">
@@ -125,7 +241,7 @@ export const SecurityMonitoring: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/50">
-                                {events.length === 0 ? (
+                                {paginatedEvents.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground italic">
                                             No security events detected in the current cycle.
@@ -142,17 +258,6 @@ export const SecurityMonitoring: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
-                                                    {/* Institutional Actor cell — same pattern shipped to
-                                                        `system-logs.tsx` and `user-management.tsx`. The
-                                                        Radix `<AvatarImage>` resolves the actor's profile
-                                                        picture from `/api/files/profile/:userId`; on 204
-                                                        (no picture) or any load error, the primitive
-                                                        transparently swaps in the `<AvatarFallback>` —
-                                                        which renders proper first+last initials via the
-                                                        canonical `getInitials` resolver (e.g.
-                                                        "Dr. Mpho Modise" → "MM", not "D"). For genuinely
-                                                        system-originated events (`user_id` NULL upstream
-                                                        of the LEFT JOIN), the "SY" sentinel renders. */}
                                                     <Avatar className="h-7 w-7">
                                                         <AvatarImage
                                                             src={getProfileImageUrl(event.userId)}
@@ -190,13 +295,13 @@ export const SecurityMonitoring: React.FC = () => {
                         </table>
                     </div>
                     <TablePagination
-                        currentPage={currentPage}
+                        currentPage={page}
                         totalPages={totalPages}
                         totalItems={totalItems}
                         startIndex={startIndex}
                         endIndex={endIndex}
                         showPagination={showPagination}
-                        onPageChange={setCurrentPage}
+                        onPageChange={setPage}
                         itemLabel="events"
                     />
                 </Card>
