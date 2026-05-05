@@ -164,6 +164,13 @@
   --record-notes: var(--gray-600);
   --record-general: var(--gray-400);
 
+  /* Appointment overdue tint (Light) — amber family, WCAG AA on background.
+     Used by `.appointment-card-overdue` and `.appointment-awaiting-pill`. */
+  --appointment-overdue-bg: rgba(245, 158, 11, 0.06);
+  --appointment-overdue-pill-bg: rgba(245, 158, 11, 0.12);
+  --appointment-overdue-border: rgba(217, 119, 6, 0.45);
+  --appointment-overdue-fg: #B45309;
+
   /* Typography Scale - Premium Institutional Standard (GLOBAL) - FLUID Implementation */
   /* Formula: clamp(min-size, responsive-formula, max-size) */
   /* Recalibrated: ~30% total reduction ΓÇö 100% zoom matches previous 90%-zoom visual density */
@@ -246,6 +253,13 @@
   --record-immunization: var(--primary-500);
   --record-notes: var(--gray-400);
   --record-general: var(--gray-500);
+
+  /* Appointment overdue tint (Dark) — softer amber to maintain WCAG AA on
+     dark surfaces while preserving recognisable hue parity with light mode. */
+  --appointment-overdue-bg: rgba(251, 191, 36, 0.08);
+  --appointment-overdue-pill-bg: rgba(251, 191, 36, 0.16);
+  --appointment-overdue-border: rgba(251, 191, 36, 0.5);
+  --appointment-overdue-fg: #FBBF24;
 
   /* Dark Mode Gradient (Official) */
   --primary-gradient: linear-gradient(135deg, #1BA7A6 0%, #3FC2B5 100%);
@@ -2550,4 +2564,85 @@
 .dark .triage-icon-box.bg-slate-100 {
   background-color: rgba(31, 59, 64, 0.5) !important;
   color: #648285 !important;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   APPOINTMENT — OVERDUE / AWAITING TINT (Doctor-side UX)
+   ────────────────────────────────────────────────────────────────────────────
+   Surfaced on doctor's My Appointments rows when the backend cron emits
+   `appointment:overdue` (scheduled appointment > 15 minutes past start without
+   a doctor decision). Visual contract:
+
+     • Subtle amber surface tint — recognisable as "needs attention" without
+       implying error/destruction (red is reserved for cancel/delete).
+     • Amber left border accent — ties the row to the same hue family as
+       the warning toast surfaced on the same event.
+     • A "Awaiting patient · Nm late" pill rendered in-row.
+
+   Tokens are theme-driven (`--appointment-overdue-*`) so the palette is
+   the single source of truth and dark mode contrast is engineered, not
+   accidental. No raw hex is used in component CSS, no inline colors are
+   used in the JSX. Spacing is rem-based; px values are forbidden by
+   project mandate.
+*/
+
+.appointment-card-overdue {
+  border-left: 0.1875rem solid var(--appointment-overdue-border);
+  background-color: var(--appointment-overdue-bg);
+  transition: background-color 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.appointment-awaiting-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--appointment-overdue-fg);
+  background-color: var(--appointment-overdue-pill-bg);
+  border: 1px solid var(--appointment-overdue-border);
+  white-space: nowrap;
+}
+
+.appointment-awaiting-pill__dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background-color: var(--appointment-overdue-fg);
+  animation: appointment-awaiting-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes appointment-awaiting-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* No-Show button — destructive-adjacent action that intentionally uses the
+   amber family (not red) because no-show is a clinical observation, not a
+   user-initiated cancellation. Hue parity with the awaiting pill keeps the
+   visual story consistent: amber = needs decision / doctor decided absent. */
+.appointment-noshow-btn {
+  color: var(--appointment-overdue-fg);
+  background-color: transparent;
+  border: 1px solid var(--appointment-overdue-border);
+  transition: background-color 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              color 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.appointment-noshow-btn:hover {
+  background-color: var(--appointment-overdue-pill-bg);
+  border-color: var(--appointment-overdue-fg);
 }

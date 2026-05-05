@@ -104,6 +104,32 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
         return () => window.removeEventListener('system:success', handleSystemSuccess);
     }, [success]);
 
+    // Symmetric warning channel — completes the success/error/warning trio
+    // so non-blocking advisory signals (e.g. doctor's appointment overdue
+    // nudge from the backend cron) can fire a single CustomEvent without
+    // every call site importing the toast context. Detail shape:
+    // `{ message: string }`. Malformed payloads are logged and ignored —
+    // never `console.*`, always `logger`.
+    React.useEffect(() => {
+        const handleSystemWarning: EventListener = (e) => {
+            const detail: unknown = (e as CustomEvent<unknown>).detail;
+            const message: string | undefined =
+                typeof detail === 'object'
+                && detail !== null
+                && typeof (detail as { message?: unknown }).message === 'string'
+                    ? (detail as { message: string }).message
+                    : undefined;
+            if (message === undefined) {
+                logger.warn('[ToastProvider] system:warning dispatched without a string message; ignoring');
+                return;
+            }
+            warning(message);
+        };
+
+        window.addEventListener('system:warning', handleSystemWarning);
+        return () => window.removeEventListener('system:warning', handleSystemWarning);
+    }, [warning]);
+
     const getIcon = (type: ToastType): React.ReactElement => {
         switch (type) {
             case 'success':

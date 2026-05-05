@@ -196,11 +196,42 @@ export const UserStatusChangedEventSchema = z.object({
 });
 export type UserStatusChangedEvent = z.infer<typeof UserStatusChangedEventSchema>;
 
+// ─── Event: Appointment overdue (post-Phase-5) ───────────────────────────────
+//
+// Emitted by the backend's overdue-monitor cron when a scheduled
+// appointment has passed `appointment_time + 15 minutes` without the
+// doctor marking it complete or no-show. Drives the doctor's UI to
+// flip the row's tint to amber and surface both "Mark Complete" and
+// "Mark No-Show" buttons (instead of just "Mark Complete"), and
+// triggers a non-blocking warning toast on the doctor's currently
+// open browser tab.
+//
+// Crucially, this event does NOT change the appointment's status —
+// the doctor decides whether the patient ultimately attended (Mark
+// Complete) or not (Mark No-Show). Auto-flipping status would be a
+// liability transfer and is explicitly rejected by the design.
+//
+// `minutesLate` is computed at emit time (cron tick - appointment
+// instant, in minutes) so the consumer can render
+// "Awaiting patient · 15m late" without recomputing on the client.
+export const AppointmentOverdueEventSchema = z.object({
+    appointmentId: z.number().int().positive(),
+    doctorId: z.string().uuid(),
+    patientId: z.string().uuid(),
+    patientName: z.string().nullable(),
+    appointmentDate: z.string(),
+    appointmentTime: z.string(),
+    minutesLate: z.number().int().nonnegative(),
+    timestamp: z.string().datetime(),
+});
+export type AppointmentOverdueEvent = z.infer<typeof AppointmentOverdueEventSchema>;
+
 // ─── Event Name Union ────────────────────────────────────────────────────────
 //
-// Phase 4 extends the union with `user:registered` and
-// `user:status_changed`. Phase 5 will add system-health observability
-// events.
+// Phase 4 extended the union with `user:registered` /
+// `user:status_changed`. Phase 5 added system-health polling (no event
+// — the dashboard polls). Post-Phase-5 adds `appointment:overdue` for
+// the doctor-side appointment-lifecycle UX.
 export const AdminEventNameSchema = z.enum([
     'screening:reordered',
     'audit:new',
@@ -210,6 +241,7 @@ export const AdminEventNameSchema = z.enum([
     'doctor:verified',
     'user:registered',
     'user:status_changed',
+    'appointment:overdue',
 ]);
 export type AdminEventName = z.infer<typeof AdminEventNameSchema>;
 
@@ -227,6 +259,7 @@ export interface AdminEventMap {
     'doctor:verified': DoctorVerifiedEvent;
     'user:registered': UserRegisteredEvent;
     'user:status_changed': UserStatusChangedEvent;
+    'appointment:overdue': AppointmentOverdueEvent;
 }
 
 // ─── Runtime validator lookup ────────────────────────────────────────────────
@@ -246,6 +279,7 @@ export const AdminEventSchemaMap = {
     'doctor:verified': DoctorVerifiedEventSchema,
     'user:registered': UserRegisteredEventSchema,
     'user:status_changed': UserStatusChangedEventSchema,
+    'appointment:overdue': AppointmentOverdueEventSchema,
 } as const satisfies { [E in AdminEventName]: z.ZodType<AdminEventMap[E]> };
 
 // ─── Type guard: is the value an admin event name we know about? ─────────────

@@ -139,7 +139,21 @@ export class AppointmentRepository {
         }
     }
 
-    async findByUserId(userId: string, status?: string, upcoming?: boolean): Promise<AppointmentWithDetails[]> {
+    /**
+     * Find appointments for a user (patient or doctor).
+     *
+     * Doctor-side filter: when `viewerRole === 'doctor'`, rows where
+     * `doctor_archived = true` are hidden from the response — these are
+     * appointments the doctor has cleaned up from their list. The patient
+     * still sees them in their own view (the doctor's archive flag is
+     * independent of the patient's `deleted_at` soft-delete).
+     */
+    async findByUserId(
+        userId: string,
+        viewerRole: 'patient' | 'doctor' | undefined,
+        status?: string,
+        upcoming?: boolean
+    ): Promise<AppointmentWithDetails[]> {
         try {
             let query = `
                 SELECT
@@ -168,6 +182,12 @@ export class AppointmentRepository {
 
             const params: string[] = [userId];
 
+            // Doctor-side housekeeping: hide rows the doctor archived.
+            // Patient view is unaffected.
+            if (viewerRole === 'doctor') {
+                query += ' AND a.doctor_archived = false';
+            }
+
             if (status) {
                 params.push(status);
                 query += ` AND a.status = $${params.length}`;
@@ -186,6 +206,7 @@ export class AppointmentRepository {
             logger.error('Failed to find appointments by user ID', {
                 error: error instanceof Error ? error.message : String(error),
                 userId,
+                viewerRole,
                 status,
                 upcoming
             });
@@ -344,6 +365,111 @@ export class AppointmentRepository {
                 error: error instanceof Error ? error.message : String(error),
                 id,
                 patientId
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Doctor-side soft-archive: hides the row from the doctor's list while
+     * leaving the patient's view, audit trail, and clinical record intact.
+     * Restricted to terminal-state rows (completed / cancelled / no-show)
+     * so a doctor cannot accidentally remove a still-active appointment
+     * from their own view. Returns `true` only when a row matched and was
+     * updated.
+     */
+    async archiveForDoctor(id: number, doctorId: string): Promise<boolean> {
+        try {
+            const result = await this.db.query(`
+                UPDATE appointments
+                SET doctor_archived = true, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+                  AND doctor_id = $2
+                  AND deleted_at IS NULL
+                  AND doctor_archived = false
+                  AND status IN ('completed', 'cancelled', 'no-show')
+            `, [id, doctorId]);
+            return (result.rowCount ?? 0) > 0;
+        } catch (error: unknown) {
+            logger.error('Failed to archive appointment for doctor', {
+                error: error instanceof Error ? error.message : String(error),
+                id,
+                doctorId
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Overdue scan for the cron monitor. Returns scheduled appointments
+     * whose start instant + 15 minutes has passed AND that have NOT yet
+     * been notified (`overdue_notified_at IS NULL`). The 15-minute grace
+     * window is fixed in the WHERE clause; if it ever needs to be
+     * configurable per doctor, the threshold becomes a parameter.
+     *
+     * Returns the rows joined with patient name so the broadcast payload
+     * can render "Tebogo did not arrive" without the consumer doing a
+     * second lookup.
+     */
+    async findOverdueScheduled(graceMinutes: number = 15): Promise<Array<{
+        id: number;
+        patient_id: string;
+        doctor_id: string;
+        appointment_date: string;
+        appointment_time: string;
+        patient_name: string | null;
+    }>> {
+        try {
+            const result = await this.db.query<{
+                id: number;
+                patient_id: string;
+                doctor_id: string;
+                appointment_date: string;
+                appointment_time: string;
+                patient_name: string | null;
+            }>(`
+                SELECT
+                    a.id,
+                    a.patient_id,
+                    a.doctor_id,
+                    a.appointment_date::text AS appointment_date,
+                    a.appointment_time::text AS appointment_time,
+                    u_patient.name AS patient_name
+                FROM appointments a
+                LEFT JOIN users u_patient ON a.patient_id = u_patient.id
+                WHERE a.status = 'scheduled'
+                  AND a.deleted_at IS NULL
+                  AND a.overdue_notified_at IS NULL
+                  AND (a.appointment_date + a.appointment_time + ($1 * INTERVAL '1 minute')) <= CURRENT_TIMESTAMP
+            `, [graceMinutes]);
+            return result.rows;
+        } catch (error: unknown) {
+            logger.error('Failed to find overdue scheduled appointments', {
+                error: error instanceof Error ? error.message : String(error),
+                graceMinutes
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Stamp `overdue_notified_at` on a row that the monitor has just
+     * broadcast for. Idempotent — subsequent ticks skip rows whose stamp
+     * is non-null. Returns `true` when the row was successfully marked.
+     */
+    async markOverdueNotified(id: number): Promise<boolean> {
+        try {
+            const result = await this.db.query(`
+                UPDATE appointments
+                SET overdue_notified_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+                  AND overdue_notified_at IS NULL
+            `, [id]);
+            return (result.rowCount ?? 0) > 0;
+        } catch (error: unknown) {
+            logger.error('Failed to mark appointment overdue-notified', {
+                error: error instanceof Error ? error.message : String(error),
+                id
             });
             throw error;
         }

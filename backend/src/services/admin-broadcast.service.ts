@@ -13,6 +13,7 @@ import {
     DoctorVerifiedEventSchema,
     UserRegisteredEventSchema,
     UserStatusChangedEventSchema,
+    AppointmentOverdueEventSchema,
 } from '../../../shared/schemas/admin-events.schema';
 
 /**
@@ -61,7 +62,8 @@ export type AdminEmitArgs =
     | { readonly event: 'session:revoked'; readonly payload: AdminEventMap['session:revoked'] }
     | { readonly event: 'doctor:verified'; readonly payload: AdminEventMap['doctor:verified'] }
     | { readonly event: 'user:registered'; readonly payload: AdminEventMap['user:registered'] }
-    | { readonly event: 'user:status_changed'; readonly payload: AdminEventMap['user:status_changed'] };
+    | { readonly event: 'user:status_changed'; readonly payload: AdminEventMap['user:status_changed'] }
+    | { readonly event: 'appointment:overdue'; readonly payload: AdminEventMap['appointment:overdue'] };
 
 /**
  * Format a Zod validation error as a compact JSON string for the audit log.
@@ -193,6 +195,18 @@ export function emitToAdmins(args: AdminEmitArgs): boolean {
                     return false;
                 }
                 socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('user:status_changed', result.data);
+                return true;
+            }
+            case 'appointment:overdue': {
+                const result = AppointmentOverdueEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('appointment:overdue', result.data);
                 return true;
             }
             default: {

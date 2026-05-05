@@ -28,6 +28,7 @@ import { env } from './config/env';
 import { schemaIntegrityService } from './services/schema-integrity.service';
 import { cleanupService } from './services/cleanup.service';
 import { StorageBootstrapper } from './services/storage-bootstrapper.service';
+import { appointmentOverdueMonitor } from './services/appointment-overdue-monitor.service';
 import { corsMiddleware } from './middleware/cors.middleware';
 import { statusService } from './services/status.service';
 import { isJWTPayload } from './utils/type-guards';
@@ -179,6 +180,11 @@ const startServer = async () => {
         });
 
         setupSockets(socketIO);
+
+        // Boot the appointment overdue monitor AFTER sockets are wired —
+        // emits flow through `emitToAdmins` which expects `socketIO` to
+        // be defined. Single instance, idempotent re-init.
+        appointmentOverdueMonitor.initialize();
 
         const PORT = env.port;
 

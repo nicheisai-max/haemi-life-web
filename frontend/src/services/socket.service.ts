@@ -52,6 +52,7 @@ import type {
     DoctorVerifiedEvent,
     UserRegisteredEvent,
     UserStatusChangedEvent,
+    AppointmentOverdueEvent,
 } from '../../../shared/schemas/admin-events.schema';
 
 export interface ServerToClientEvents {
@@ -91,6 +92,7 @@ export interface ServerToClientEvents {
     'doctor:verified': (payload: DoctorVerifiedEvent) => void;
     'user:registered': (payload: UserRegisteredEvent) => void;
     'user:status_changed': (payload: UserStatusChangedEvent) => void;
+    'appointment:overdue': (payload: AppointmentOverdueEvent) => void;
 }
 
 export interface ClientToServerEvents {

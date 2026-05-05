@@ -185,8 +185,19 @@ export const getMyAppointments = async (req: Request, res: Response): Promise<vo
         }
         const userId = user.id;
 
+        // Pass the caller's role so the repo can apply the doctor-side
+        // `doctor_archived = false` filter when relevant. Patient view is
+        // unaffected. Narrow `user.role` to the literal union the repo
+        // accepts — anything else falls through as `undefined` (patient
+        // default behaviour).
+        const viewerRole: 'patient' | 'doctor' | undefined =
+            user.role === 'patient' ? 'patient'
+            : user.role === 'doctor' ? 'doctor'
+            : undefined;
+
         const appointments = await appointmentRepository.findByUserId(
             userId,
+            viewerRole,
             typeof status === 'string' ? status : undefined,
             upcoming === 'true'
         );
@@ -308,6 +319,55 @@ export const deleteAppointment = async (req: Request, res: Response): Promise<vo
     } catch (error: unknown) {
         logger.error('Error deleting appointment:', { error: error instanceof Error ? error.message : String(error), appointmentId: id });
         sendError(res, 500, 'Error deleting appointment');
+    }
+};
+
+/**
+ * Archive an appointment from the doctor's view (Doctor only).
+ *
+ * Doctor's analogue of the patient's `deleteAppointment`: sets the
+ * `doctor_archived` flag on the row so it disappears from the doctor's
+ * list. The patient continues to see the appointment in their own
+ * history; the audit trail and clinical record are preserved.
+ *
+ * Restricted to terminal-state rows (`completed` / `cancelled` /
+ * `no-show`) at the repository layer — a doctor cannot archive an
+ * appointment that is still actionable.
+ */
+export const archiveAppointmentForDoctor = async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    const user = req.user;
+
+    try {
+        if (!user) {
+            sendError(res, 401, 'Unauthorized');
+            return;
+        }
+
+        if (user.role !== 'doctor') {
+            res.status(403).json({ message: 'Only doctors can archive appointments from their view' });
+            return;
+        }
+
+        const archived = await appointmentRepository.archiveForDoctor(Number(id), user.id);
+
+        if (!archived) {
+            sendError(
+                res,
+                404,
+                'Appointment not found, already archived, or not in a terminal state (completed / cancelled / no-show)'
+            );
+            return;
+        }
+
+        sendResponse(res, 200, true, 'Appointment archived from your view');
+    } catch (error: unknown) {
+        logger.error('Error archiving appointment for doctor:', {
+            error: error instanceof Error ? error.message : String(error),
+            appointmentId: id,
+            doctorId: user?.id
+        });
+        sendError(res, 500, 'Error archiving appointment');
     }
 };
 
