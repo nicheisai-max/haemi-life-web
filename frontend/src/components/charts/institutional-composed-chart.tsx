@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect, useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import {
     ComposedChart,
     Area,
@@ -11,7 +11,33 @@ import {
     Legend
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ChartMountGate } from './chart-mount-gate';
 import { logger } from '../../utils/logger';
+
+/**
+ * 🩺 HAEMI LIFE — InstitutionalComposedChart (Google/Meta Grade)
+ *
+ * Mount discipline (same architecture as `PremiumBarChart`):
+ *   The chart's Recharts subtree is gated by `<ChartMountGate>`, which
+ *   uses `ResizeObserver` to defer rendering until the wrapper has
+ *   measured non-zero dimensions. Replaces the previous 300 ms timer
+ *   band-aid that was fragile against Framer Motion spring entrances.
+ *
+ * Layout discipline:
+ *   `.haemi-chart-frame` (index.css) provides the wrapper sizing
+ *   contract. No inline styles, no `px` values.
+ *
+ * Re-render discipline:
+ *   `React.memo` with hand-written `arePropsEqual` so live KPI updates
+ *   on the parent dashboard skip this heavy SVG subtree's reconciliation.
+ *
+ * Strict-TS posture (project mandate):
+ *   - Zero `any`. Zero `as unknown as`. Zero `@ts-ignore`.
+ *   - Single `as typeof InnerInstitutionalComposedChart` cast on the
+ *     memoised export preserves the generic signature across
+ *     `React.memo`'s widening — single-cast, NOT double-cast.
+ *   - All errors via `logger`. Zero `console.*`.
+ */
 
 interface InstitutionalComposedChartProps<T extends object> {
     title: string;
@@ -29,7 +55,6 @@ interface InstitutionalComposedChartProps<T extends object> {
     categoryKey: string;
     areaColor?: string;
     lineColor?: string;
-    height?: number;
     valuePrefix?: string;
     valueSuffix?: string;
 }
@@ -66,35 +91,12 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, p
     return null;
 };
 
-/**
- * 🩺 HAEMI LIFE — Institutional Composed Chart (Google/Meta Grade)
- *
- * Phase 5 follow-up performance fixes:
- *
- *   1. **`React.memo` boundary** — heavy SVG subtree. Without `memo`,
- *      every parent state update (live KPI counter changes on the
- *      admin dashboard) re-runs the entire chart render even when the
- *      chart's own props are unchanged — manifesting as React scheduler
- *      `[Violation] 'message' handler took 200ms+` errors. The custom
- *      equality function (declared below) compares the props that
- *      actually affect render.
- *
- *   2. **Animation durations tightened** — were 2000 ms (Area) and
- *      2500 ms (Line); now both 400 ms. Industry standard for
- *      transitions; long animations were the direct cause of
- *      `requestAnimationFrame` budget violations.
- *
- *   3. **Mount gate (300 ms)** — preserved from the original (was
- *      already in this component). Lets the parent layout settle
- *      before Recharts measures it.
- *
- * Strict-TS posture (project mandate):
- *   - Zero `any`. Zero `as unknown as`. Zero `@ts-ignore`.
- *   - Single `as typeof InnerInstitutionalComposedChart` cast on the
- *     memoised export preserves the generic signature across
- *     `React.memo`'s widening — NOT `as unknown as`.
- *   - All errors via `logger`. No `console.*`.
- */
+const ChartSkeleton: React.FC = () => (
+    <div className="w-full h-full flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/10 animate-pulse rounded-[var(--card-radius)]">
+        <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Initializing Intelligence...</span>
+    </div>
+);
+
 const InnerInstitutionalComposedChart = <T extends object>({
     title,
     description,
@@ -104,18 +106,10 @@ const InnerInstitutionalComposedChart = <T extends object>({
     categoryKey,
     areaColor = '#148C8B', // Primary-700
     lineColor = '#2563EB', // Info-500
-    height = 350,
     valuePrefix = '',
     valueSuffix = ''
 }: InstitutionalComposedChartProps<T>): React.ReactElement => {
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        const timer = setTimeout(() => setIsMounted(true), 300);
-        return () => clearTimeout(timer);
-    }, []);
-
-    // Audit check for institutional data integrity
+    // Audit check for institutional data integrity.
     useMemo(() => {
         if (!data || data.length === 0) {
             logger.warn(`[Charts] InstitutionalComposedChart('${title}') received null/empty data set.`);
@@ -129,96 +123,85 @@ const InnerInstitutionalComposedChart = <T extends object>({
                 {description && <CardDescription className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">{description}</CardDescription>}
             </CardHeader>
             <CardContent>
-                <div style={{ width: '100%', height: height, position: 'relative' }}>
-                    {isMounted ? (
-                        <ResponsiveContainer width="100%" height="100%" debounce={50}>
-                            <ComposedChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: -20 }}>
-                                <defs>
-                                    <linearGradient id={`composedAreaGradient-${String(areaKey)}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%"  stopColor={areaColor} stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor={areaColor} stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
+                <ChartMountGate fallback={<ChartSkeleton />}>
+                    <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                        <ComposedChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: -20 }}>
+                            <defs>
+                                <linearGradient id={`composedAreaGradient-${String(areaKey)}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={areaColor} stopOpacity={0.2} />
+                                    <stop offset="95%" stopColor={areaColor} stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
 
-                                <CartesianGrid 
-                                    vertical={false} 
-                                    strokeDasharray="3 3" 
-                                    strokeOpacity={0.05} 
-                                    className="stroke-slate-950 dark:stroke-slate-50"
-                                />
+                            <CartesianGrid
+                                vertical={false}
+                                strokeDasharray="3 3"
+                                strokeOpacity={0.05}
+                                className="stroke-slate-950 dark:stroke-slate-50"
+                            />
 
-                                <XAxis
-                                    dataKey={categoryKey}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 700 }}
-                                    tickMargin={12}
-                                    className="text-slate-400 dark:text-slate-500"
-                                />
+                            <XAxis
+                                dataKey={categoryKey}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 700 }}
+                                tickMargin={12}
+                                className="text-slate-400 dark:text-slate-500"
+                            />
 
-                                <YAxis
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 700 }}
-                                    tickFormatter={(value) => `${valuePrefix}${value.toLocaleString()}${valueSuffix}`}
-                                    className="text-slate-400 dark:text-slate-500"
-                                />
+                            <YAxis
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 700 }}
+                                tickFormatter={(value) => `${valuePrefix}${value.toLocaleString()}${valueSuffix}`}
+                                className="text-slate-400 dark:text-slate-500"
+                            />
 
-                                <Tooltip
-                                    content={<CustomTooltip prefix={valuePrefix} suffix={valueSuffix} />}
-                                    cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.3 }}
-                                />
+                            <Tooltip
+                                content={<CustomTooltip prefix={valuePrefix} suffix={valueSuffix} />}
+                                cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.3 }}
+                            />
 
-                                <Legend 
-                                    verticalAlign="top" 
-                                    align="right" 
-                                    height={36}
-                                    iconType="circle"
-                                    formatter={(value: string) => <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{value}</span>}
-                                />
+                            <Legend
+                                verticalAlign="top"
+                                align="right"
+                                height={36}
+                                iconType="circle"
+                                formatter={(value: string) => <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{value}</span>}
+                            />
 
-                                <Area
-                                    type="monotone"
-                                    name="Revenue"
-                                    dataKey={areaKey}
-                                    stroke={areaColor}
-                                    strokeWidth={3}
-                                    fillOpacity={1}
-                                    fill={`url(#composedAreaGradient-${String(areaKey)})`}
-                                    animationDuration={400}
-                                />
+                            <Area
+                                type="monotone"
+                                name="Revenue"
+                                dataKey={areaKey}
+                                stroke={areaColor}
+                                strokeWidth={3}
+                                fillOpacity={1}
+                                fill={`url(#composedAreaGradient-${String(areaKey)})`}
+                                animationDuration={400}
+                            />
 
-                                <Line
-                                    type="monotone"
-                                    name="Expenses"
-                                    dataKey={lineKey}
-                                    stroke={lineColor}
-                                    strokeWidth={3}
-                                    dot={{ r: 0 }}
-                                    activeDot={{ r: 4, strokeWidth: 0, fill: lineColor }}
-                                    animationDuration={400}
-                                />
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/10 animate-pulse rounded-[var(--card-radius)]">
-                            <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Initializing Intelligence...</span>
-                        </div>
-                    )}
-                </div>
+                            <Line
+                                type="monotone"
+                                name="Expenses"
+                                dataKey={lineKey}
+                                stroke={lineColor}
+                                strokeWidth={3}
+                                dot={{ r: 0 }}
+                                activeDot={{ r: 4, strokeWidth: 0, fill: lineColor }}
+                                animationDuration={400}
+                            />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </ChartMountGate>
             </CardContent>
         </Card>
     );
 };
 
 /**
- * Custom prop-equality function for `React.memo`. Returns `true` when
- * upstream props are equivalent enough that a re-render would produce
- * the same SVG output — letting React skip the chart's heavy
- * reconciliation entirely. Identity equality on `data` is sufficient
- * because callers either pass the same constant reference or a new
- * array reference when data genuinely changes; deep comparison would
- * defeat memoisation.
+ * Custom prop-equality function for `React.memo`. Identity equality on
+ * `data`; primitive equality on every other render-affecting prop.
  */
 const arePropsEqual = <T extends object>(
     prev: InstitutionalComposedChartProps<T>,
@@ -232,16 +215,13 @@ const arePropsEqual = <T extends object>(
     && prev.description === next.description
     && prev.areaColor === next.areaColor
     && prev.lineColor === next.lineColor
-    && prev.height === next.height
     && prev.valuePrefix === next.valuePrefix
     && prev.valueSuffix === next.valueSuffix;
 
 /**
  * Memoised export. Single `as typeof InnerInstitutionalComposedChart`
- * cast preserves the generic signature across `React.memo`'s
- * `MemoExoticComponent<unknown>` widening — the canonical TypeScript
- * pattern for generic memoised components. Single cast, structurally
- * narrowing to a known-correct type, NOT `as unknown as`.
+ * cast preserves the generic signature across `React.memo`'s widening
+ * — canonical pattern for generic memoised components.
  */
 export const InstitutionalComposedChart = memo(
     InnerInstitutionalComposedChart,

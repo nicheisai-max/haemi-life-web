@@ -641,6 +641,33 @@
     border-color: color-mix(in srgb, white 18%, transparent);
   }
 
+  /* 🩺 HAEMI CHART FRAME — Recharts Sizing Contract
+     ──────────────────────────────────────────────────────
+     Replaces the previous inline `style={{ width: '100%', height: 350,
+     minHeight: '300px' }}` pattern that lived inside every chart
+     component. Single CSS class, rem-based (responsive across the
+     mobile→desktop range without px values), gives Recharts'
+     <ResponsiveContainer> a stable parent contract.
+
+     Used by `<ChartMountGate>` in components/charts/chart-mount-gate.tsx
+     — that component pairs this class with a `ResizeObserver`-based
+     mount gate that defers the Recharts subtree until the wrapper has
+     measured non-zero dimensions, eliminating the
+     `width(-1)/height(-1)` warning at the source (no 300 ms timer
+     band-aid, no Framer Motion entrance interference).
+
+     `position: relative` is required because Recharts' SVG layer
+     positions itself absolutely against this frame. `min-height` is
+     the lower bound below which the chart should never collapse —
+     guarantees a non-zero measured height even before content lands.
+  */
+  .haemi-chart-frame {
+    position: relative;
+    width: 100%;
+    height: 21.875rem;
+    min-height: 18.75rem;
+  }
+
   /* 🩺 HAEMI CHAT THUMBNAIL SYSTEM (Passport Size Lock)
      Architecture: Google-grade responsive constraints using rem.
      Prevents CLS (Cumulative Layout Shift) and massive expansion in 12-column grids.
