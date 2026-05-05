@@ -9,7 +9,7 @@ export const PrivacyPolicy: React.FC = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="public-page-shell space-y-8 animate-in fade-in duration-500">
             <div className="space-y-4">
                 <button
                     onClick={() => navigate(-1)}

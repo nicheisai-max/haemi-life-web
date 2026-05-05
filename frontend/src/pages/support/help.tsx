@@ -121,7 +121,7 @@ export const Help: React.FC = () => {
     });
 
     return (
-        <div className="space-y-8">
+        <div className="public-page-shell space-y-8">
             <div className="space-y-4">
                 <button
                     onClick={() => navigate(-1)}
