@@ -2646,3 +2646,58 @@
   background-color: var(--appointment-overdue-pill-bg);
   border-color: var(--appointment-overdue-fg);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   PUBLIC PAGE SHELL (Help / Support / Privacy / Terms / Style-Guide)
+   ────────────────────────────────────────────────────────────────────────────
+   Provides the same outer breathing space that authenticated pages inherit
+   from `MainClinicalLayout` (sidebar offset + horizontal padding + ultra-
+   wide cap), but for routes that intentionally render without the
+   dashboard chrome (Help, Privacy, Terms, etc.). Without this shell, the
+   page content collapses against the viewport edges.
+
+   Token-driven and responsive — three breakpoints mirror the established
+   `--layout-px-{mobile,tablet,desktop}` rhythm so every public page gets
+   the same horizontal cadence as the rest of the platform. Pure rem
+   units, zero pixels, brand tokens only.
+
+   Usage:
+     <div className="public-page-shell space-y-8">
+       ... page content ...
+     </div>
+
+   The shell does NOT add a header/sidebar — it is layout-agnostic
+   padding only. If a page later moves under MainClinicalLayout, the
+   shell's max-width still composes correctly because it bounds the
+   inner content rather than the viewport. */
+
+.public-page-shell {
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--layout-px-mobile);
+  padding-right: var(--layout-px-mobile);
+  padding-top: 2rem;
+  padding-bottom: 4rem;
+}
+
+@media (min-width: 40rem) {
+
+  /* sm — tablet */
+  .public-page-shell {
+    padding-left: var(--layout-px-tablet);
+    padding-right: var(--layout-px-tablet);
+    padding-top: 2.5rem;
+  }
+}
+
+@media (min-width: 64rem) {
+
+  /* lg — desktop */
+  .public-page-shell {
+    padding-left: var(--layout-px-desktop);
+    padding-right: var(--layout-px-desktop);
+    padding-top: 3rem;
+  }
+}
