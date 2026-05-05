@@ -211,7 +211,7 @@ export const DoctorReports: React.FC = () => {
                     dataKey="value"
                     categoryKey="name"
                     color="#148C8B"
-                    height={350}
+                    size="lg"
                 />
             </TransitionItem>
 

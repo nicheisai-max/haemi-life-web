@@ -176,7 +176,7 @@ export const PatientDashboard: React.FC = () => {
                             categoryKey="name"
                             color="#0E6B74"
                             valueSuffix=" pts"
-                            height={250}
+                            size="sm"
                         />
                     </section>
 

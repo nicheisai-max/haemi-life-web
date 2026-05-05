@@ -1,10 +1,38 @@
 import React from 'react';
-import { 
-    Radar, RadarChart, PolarGrid, 
-    PolarAngleAxis, ResponsiveContainer 
+import {
+    Radar, RadarChart, PolarGrid,
+    PolarAngleAxis, ResponsiveContainer
 } from 'recharts';
 import { Activity, Minus } from 'lucide-react';
+import { ChartMountGate } from './chart-mount-gate';
 import { logger } from '../../utils/logger';
+import type { ChartSize } from './premium-area-chart';
+
+/**
+ * 🩺 HAEMI LIFE — InstitutionalRadarChart (Google/Meta Grade)
+ *
+ * Mount discipline:
+ *   The Recharts subtree is gated by `<ChartMountGate>`. Replaces the
+ *   previous `style={{ height: \`${height}px\` }}` inline-pixel wrapper
+ *   that violated the project's "no px in JSX" mandate AND fired the
+ *   Recharts `width(-1)/height(-1)` warning when measured before the
+ *   parent settled.
+ *
+ * Layout discipline:
+ *   The wrapper is now a `.haemi-chart-frame--{sm|md|lg}` rem-based
+ *   class — three sizes mirror the previous `height` prop's range
+ *   (250/300/350 → sm/md/lg). The single existing caller does not pass
+ *   a height, so the default `'md'` (18.75rem ≈ 300px) preserves the
+ *   prior visual.
+ *
+ * Strict-TS posture (project mandate):
+ *   - Zero `any`. Zero `as unknown as`. Zero `@ts-ignore`.
+ *   - `size` prop is a literal-type union, not a number. Pixel values
+ *     are inadmissible at the call boundary.
+ *   - Empty-data path renders the existing diagnostic-flux placeholder
+ *     and returns early — gate is not engaged in that case (nothing to
+ *     measure).
+ */
 
 export interface RadarDataPoint {
     readonly subject: string;
@@ -17,36 +45,41 @@ interface InstitutionalRadarChartProps {
     readonly title?: string;
     readonly subtitle?: string;
     readonly isCalibrating?: boolean;
-    readonly height?: number;
+    /**
+     * Frame height. Maps to `.haemi-chart-frame--{size}` (rem-based).
+     * Defaults to `'md'` (18.75rem) for visual parity with the previous
+     * `height = 300` default.
+     */
+    readonly size?: ChartSize;
 }
 
-/**
- * InstitutionalRadarChart Component
- * State-of-the-art efficiency diagnostic visualization.
- * Features:
- * - Dynamic theme-aware color mapping (Teal/Slate) via CSS variables
- * - Calibration Overlay with pulsing animations
- * - Institutional branding and metadata
- * 
- * Standards: Google/Meta-grade TypeScript, No JSX in try-catch, Institutional Logging.
- */
+const FRAME_CLASS_BY_SIZE: Readonly<Record<ChartSize, string>> = {
+    sm: 'haemi-chart-frame--sm',
+    md: 'haemi-chart-frame--md',
+    lg: 'haemi-chart-frame--lg',
+};
+
+const RadarSkeleton: React.FC = () => (
+    <div className="w-full h-full flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/10 animate-pulse rounded-[var(--card-radius)]">
+        <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Calibrating Diagnostic Matrix...</span>
+    </div>
+);
+
 export const InstitutionalRadarChart: React.FC<InstitutionalRadarChartProps> = ({
     data,
     title = "Operational Efficiency Matrix",
     subtitle = "Multi-axial performance throughput diagnostics",
     isCalibrating = false,
-    height = 300
+    size = 'md'
 }): React.ReactElement => {
-    // 🛡️ Institutional Audit: Diagnostic state tracking
     if (isCalibrating) {
         logger.info('[InstitutionalRadarChart] Initializing in Calibration Mode');
     }
 
-    // 🛡️ Data Integrity Check
     if (!data || data.length === 0) {
         logger.warn('[InstitutionalRadarChart] Empty dataset provided to diagnostic module.');
         return (
-            <div className="flex flex-col items-center justify-center p-8 min-h-[250px] space-y-4 bg-slate-50 dark:bg-slate-900/10 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col items-center justify-center p-8 min-h-[15.625rem] space-y-4 bg-slate-50 dark:bg-slate-900/10 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                 <Minus className="h-10 w-10 text-slate-300 dark:text-slate-700" />
                 <p className="text-xs font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest">
                     Diagnostic Flux: No Input Detected
@@ -55,7 +88,8 @@ export const InstitutionalRadarChart: React.FC<InstitutionalRadarChartProps> = (
         );
     }
 
-    const themeColor = 'var(--primary)'; 
+    const themeColor = 'var(--primary)';
+    const frameClass: string = FRAME_CLASS_BY_SIZE[size];
 
     return (
         <div className="relative flex flex-col justify-between h-full space-y-4">
@@ -78,10 +112,10 @@ export const InstitutionalRadarChart: React.FC<InstitutionalRadarChartProps> = (
 
             {/* 📊 Balanced Visualization Area: Distributed spacing for premium feel */}
             <div className="flex-grow flex flex-col items-center justify-center py-6">
-                <div className="relative w-full" style={{ height: `${height}px` }}>
+                <ChartMountGate fallback={<RadarSkeleton />} className={frameClass}>
                     {isCalibrating && (
                         <div className="absolute inset-x-0 inset-y-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-900/40 backdrop-blur-[2px] rounded-[var(--card-radius)]">
-                                <div className="relative mb-4">
+                            <div className="relative mb-4">
                                 <Activity className="h-10 w-10 text-primary opacity-20" />
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -101,19 +135,19 @@ export const InstitutionalRadarChart: React.FC<InstitutionalRadarChartProps> = (
 
                     <ResponsiveContainer width="100%" height="100%">
                         <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
-                            <PolarGrid 
-                                stroke="var(--border)" 
-                                className="dark:opacity-30 opacity-60" 
+                            <PolarGrid
+                                stroke="var(--border)"
+                                className="dark:opacity-30 opacity-60"
                             />
-                            <PolarAngleAxis 
-                                dataKey="subject" 
-                                tick={{ 
-                                    fill: 'var(--foreground)', 
-                                    fontSize: 10, 
+                            <PolarAngleAxis
+                                dataKey="subject"
+                                tick={{
+                                    fill: 'var(--foreground)',
+                                    fontSize: 10,
                                     fontWeight: 700,
                                     fontFamily: 'Roboto',
                                     opacity: 0.7
-                                }} 
+                                }}
                             />
                             <Radar
                                 name="Efficiency"
@@ -127,7 +161,7 @@ export const InstitutionalRadarChart: React.FC<InstitutionalRadarChartProps> = (
                             />
                         </RadarChart>
                     </ResponsiveContainer>
-                </div>
+                </ChartMountGate>
 
                 {/* 🏷️ Centered Legend: Institutional horizontal axis alignment */}
                 <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 mt-4">

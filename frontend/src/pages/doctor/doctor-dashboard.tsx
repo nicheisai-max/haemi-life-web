@@ -235,7 +235,7 @@ export const DoctorDashboard = () => {
                     categoryKey="name"
                     color="#0E6B74" // Primary-800
                     valueSuffix=" pts"
-                    height={300}
+                    size="md"
                 />
             </TransitionItem>
 

@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect, useRef } from 'react';
+import React from 'react';
 import {
     PieChart,
     Pie,
@@ -9,7 +9,34 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { ChartMountGate } from './chart-mount-gate';
 import { PremiumLoader } from '../ui/premium-loader';
+
+/**
+ * 🩺 HAEMI LIFE — PremiumPieChart (Google/Meta Grade)
+ *
+ * Mount discipline:
+ *   The Recharts subtree is gated by `<ChartMountGate>` (shared helper),
+ *   replacing this component's previous bespoke ResizeObserver +
+ *   `isLayoutReady` state — the same pattern duplicated inline. The
+ *   shared gate is the single source of truth for "wait until parent is
+ *   measured" logic, so all charts in the codebase behave identically.
+ *
+ * Layout discipline:
+ *   The wrapper sizing is controlled by the caller via the `className`
+ *   prop (existing API) — the gate composes seamlessly because it only
+ *   sets `position: relative` + size tokens; the caller's flex/grid
+ *   context cascades through. Zero inline styles, zero `px` values
+ *   originating in this file.
+ *
+ * Strict-TS posture (project mandate):
+ *   - Zero `any`. Zero `as unknown as`. Zero `@ts-ignore`.
+ *   - Empty-data path renders an italic "No clinical data available"
+ *     message INSIDE the gate's children — i.e. the gate fires `fallback`
+ *     until the parent is measured, then we either show the chart or the
+ *     empty state. This separates "is the layout ready?" from "is there
+ *     data?" — two orthogonal questions.
+ */
 
 interface ChartDataItem {
     name?: string;
@@ -23,12 +50,16 @@ interface PremiumPieChartProps {
     data: ChartDataItem[];
     dataKey: string;
     categoryKey: string;
-    height?: number | string; // Phase 16: Institutional Flexibility (Relative Units supported)
     valuePrefix?: string;
     valueSuffix?: string;
     noCard?: boolean;
     titleClassName?: string;
-    className?: string; // Standardized prop for layout injection
+    /**
+     * Standardised prop for layout injection. The caller decides the
+     * frame's width/height via Tailwind/CSS classes; no pixel values
+     * are accepted at this boundary.
+     */
+    className?: string;
 }
 
 interface CustomTooltipProps {
@@ -52,6 +83,12 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, prefix, 
     return null;
 };
 
+const PieChartFallback: React.FC = () => (
+    <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground opacity-50 h-full w-full">
+        <PremiumLoader size="md" />
+    </div>
+);
+
 export const PremiumPieChart: React.FC<PremiumPieChartProps> = ({
     title,
     description,
@@ -64,50 +101,24 @@ export const PremiumPieChart: React.FC<PremiumPieChartProps> = ({
     titleClassName = '',
     className
 }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [isLayoutReady, setIsLayoutReady] = useState(false);
+    const hasData: boolean = data.length > 0;
 
-    // Phase 17: Layout Synchronization Guard
-    // Prevents Recharts from firing with width(-1) during the first-paint transition.
-    useLayoutEffect(() => {
-        if (!containerRef.current) return;
-        
-        const checkDimensions = () => {
-            if (containerRef.current) {
-                const { width, height: h } = containerRef.current.getBoundingClientRect();
-                if (width > 0 && h > 0) {
-                    setIsLayoutReady(true);
-                }
-            }
-        };
-
-        checkDimensions();
-        
-        // Handle window resizing or dynamic layout shifts
-        const observer = new ResizeObserver(checkDimensions);
-        observer.observe(containerRef.current);
-        
-        return () => observer.disconnect();
-    }, []);
-
-    const hasData = data && data.length > 0;
+    // Compose the gate's wrapper class with the caller's layout class.
+    // The gate's default `.haemi-chart-frame` would impose a fixed height
+    // here, but pie charts are placed in flex/grid containers managed by
+    // the caller; we override the default to a fluid pass-through that
+    // honours the parent's intrinsic sizing.
+    const frameClass: string = cn(
+        'flex items-center justify-center relative overflow-hidden',
+        noCard ? 'w-full h-full' : 'w-full min-h-0',
+        className
+    );
 
     const chartContent = (
-        <div 
-            ref={containerRef}
-            className={cn(
-                "flex items-center justify-center relative overflow-hidden",
-                noCard ? "w-full h-full" : "w-full min-h-0", // Phase 18: Zero Pixel Policy (min-h-0)
-                className
-            )}
-        >
-            {!isLayoutReady || !hasData ? (
+        <ChartMountGate fallback={<PieChartFallback />} className={frameClass}>
+            {!hasData ? (
                 <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground opacity-50 h-full w-full">
-                    {!hasData ? (
-                        <p className="text-sm font-medium italic">No clinical data available</p>
-                    ) : (
-                        <PremiumLoader size="md" />
-                    )}
+                    <p className="text-sm font-medium italic">No clinical data available</p>
                 </div>
             ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -115,7 +126,7 @@ export const PremiumPieChart: React.FC<PremiumPieChartProps> = ({
                         <Pie
                             data={data}
                             cx="50%"
-                            cy="42%" // Phase 19: Vertical Balance Lift (Institutional Grade)
+                            cy="42%"
                             innerRadius={60}
                             outerRadius={80}
                             paddingAngle={5}
@@ -139,7 +150,7 @@ export const PremiumPieChart: React.FC<PremiumPieChartProps> = ({
                     </PieChart>
                 </ResponsiveContainer>
             )}
-        </div>
+        </ChartMountGate>
     );
 
     if (noCard) {
