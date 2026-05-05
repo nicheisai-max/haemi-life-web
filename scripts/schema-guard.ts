@@ -519,7 +519,7 @@ function validateManifestSelfConsistency(): void {
 
     // Invariant 3: per-table column lists must be non-empty and have no
     // duplicates. Empty/duplicated lists are always operator error.
-    const tableColumnsMap = SCHEMA_MANIFEST.tableColumns as unknown as Record<string, ReadonlyArray<string>>;
+    const tableColumnsMap: Readonly<Record<string, ReadonlyArray<string>>> = SCHEMA_MANIFEST.tableColumns;
     for (const tableName of tableColumnsKeys) {
         const cols = tableColumnsMap[tableName];
         if (cols.length === 0) {
@@ -575,7 +575,7 @@ function validateManifestSelfConsistency(): void {
 // manifest's literal types fully derivable for IDE autocomplete.
 function getManifestColumns(): Map<string, Set<string>> {
     const result = new Map<string, Set<string>>();
-    const map = SCHEMA_MANIFEST.tableColumns as unknown as Record<string, ReadonlyArray<string>>;
+    const map: Readonly<Record<string, ReadonlyArray<string>>> = SCHEMA_MANIFEST.tableColumns;
     for (const tableName of Object.keys(map)) {
         const set = new Set<string>(map[tableName].map(c => c.toLowerCase()));
         result.set(tableName.toLowerCase(), set);
