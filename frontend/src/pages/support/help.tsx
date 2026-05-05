@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, ChevronDown, ChevronUp, Headphones, Mail, Phone, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Search, ChevronDown, ChevronUp, Headphones, Mail, Phone, MessageCircle, Printer, Home } from 'lucide-react';
+import { PATHS } from '../../routes/paths';
 
 interface FAQItem {
     id: number;
@@ -248,6 +249,25 @@ export const Help: React.FC = () => {
                     Start Live Chat
                 </Button>
             </Card>
+
+            <div className="flex flex-col sm:flex-row justify-center gap-4 print:hidden">
+                <Button
+                    variant="outline"
+                    onClick={() => window.print()}
+                    className="flex items-center gap-2"
+                >
+                    <Printer className="h-4 w-4" />
+                    Print Help Guide
+                </Button>
+                <Button
+                    variant="default"
+                    onClick={() => navigate(PATHS.LOGIN)}
+                    className="flex items-center gap-2"
+                >
+                    <Home className="h-4 w-4" />
+                    Back to Home
+                </Button>
+            </div>
         </div>
     );
 };
