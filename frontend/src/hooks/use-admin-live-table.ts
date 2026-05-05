@@ -196,6 +196,18 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
     const isMountedRef = useRef<boolean>(true);
 
     const refetch = useCallback(async (): Promise<void> => {
+        // Mark loading at the start of the fetch so consumers' spinner +
+        // disabled-button affordances correctly reflect "in flight" — not
+        // just on the very first fetch after mount. Without this line,
+        // every Refresh-button click on every admin page (audit logs,
+        // security, sessions, verify-doctors, user-management) executes
+        // the network call but produces ZERO visual feedback because
+        // `isLoading` only ever flips false (in the `finally` below) and
+        // never flips back to true. Setting it here is correct and
+        // sufficient because React batches the synchronous `setIsLoading`
+        // with the subsequent render, so the spinner animation starts
+        // before `await fetcher()` yields the microtask.
+        setIsLoading(true);
         try {
             const next = await fetcher();
             if (!isMountedRef.current) return;
