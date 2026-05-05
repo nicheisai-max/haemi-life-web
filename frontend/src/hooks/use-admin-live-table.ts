@@ -13,6 +13,7 @@ import {
     DoctorVerifiedEventSchema,
     UserRegisteredEventSchema,
     UserStatusChangedEventSchema,
+    AppointmentOverdueEventSchema,
     type ScreeningReorderedEvent,
     type AuditLogEvent,
     type SecurityEvent,
@@ -21,6 +22,7 @@ import {
     type DoctorVerifiedEvent,
     type UserRegisteredEvent,
     type UserStatusChangedEvent,
+    type AppointmentOverdueEvent,
 } from '../../../shared/schemas/admin-events.schema';
 
 /**
@@ -131,6 +133,7 @@ const subscribeOne = (
         onDoctorVerified: (payload: DoctorVerifiedEvent) => void;
         onUserRegistered: (payload: UserRegisteredEvent) => void;
         onUserStatusChanged: (payload: UserStatusChangedEvent) => void;
+        onAppointmentOverdue: (payload: AppointmentOverdueEvent) => void;
     }
 ): () => void => {
     switch (event) {
@@ -165,6 +168,10 @@ const subscribeOne = (
         case 'user:status_changed': {
             socketService.on('user:status_changed', handlers.onUserStatusChanged);
             return () => socketService.off('user:status_changed', handlers.onUserStatusChanged);
+        }
+        case 'appointment:overdue': {
+            socketService.on('appointment:overdue', handlers.onAppointmentOverdue);
+            return () => socketService.off('appointment:overdue', handlers.onAppointmentOverdue);
         }
         default: {
             const exhaustive: never = event;
@@ -355,6 +362,17 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
             dispatchToConsumer('user:status_changed', r.data);
         };
 
+        const onAppointmentOverdue = (payload: AppointmentOverdueEvent): void => {
+            const r = AppointmentOverdueEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] appointment:overdue payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('appointment:overdue', r.data);
+        };
+
         // Wire up only the requested events. The handlers are constructed
         // once per effect run; their references are stable for the
         // lifetime of the subscription so the cleanup off()s the same
@@ -369,6 +387,7 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
                 onDoctorVerified,
                 onUserRegistered,
                 onUserStatusChanged,
+                onAppointmentOverdue,
             })
         );
 

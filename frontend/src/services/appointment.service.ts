@@ -96,6 +96,16 @@ export const deleteAppointment = async (id: number) => {
     return normalizeResponse(response);
 };
 
+// Doctor-side soft-archive — hides the row from THIS doctor's My Appointments
+// list while preserving the appointment for the patient and the audit trail.
+// Backend restricts this to terminal states (completed / cancelled / no-show);
+// scheduled appointments cannot be archived. The row is preserved (no
+// `deleted_at`), only `doctor_archived` flips to true.
+export const archiveAppointmentForDoctor = async (id: number): Promise<void> => {
+    const response = await api.post<ApiResponse<void>>(`/appointments/${id}/archive`);
+    return normalizeResponse(response);
+};
+
 // Get available time slots
 export const getAvailableSlots = async (doctorId: string, date: string): Promise<AvailableSlots> => {
     const response = await api.get<ApiResponse<AvailableSlots>>('/appointments/available-slots', {
@@ -122,6 +132,7 @@ export default {
     updateAppointmentStatus,
     cancelAppointment,
     deleteAppointment,
+    archiveAppointmentForDoctor,
     getAvailableSlots,
     getPreScreeningQuestions,
     submitPreScreening

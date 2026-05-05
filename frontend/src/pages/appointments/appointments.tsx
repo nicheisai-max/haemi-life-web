@@ -1,20 +1,83 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { getMyAppointments, cancelAppointment, updateAppointmentStatus, deleteAppointment } from '../../services/appointment.service';
+import {
+    getMyAppointments,
+    cancelAppointment,
+    updateAppointmentStatus,
+    deleteAppointment,
+    archiveAppointmentForDoctor,
+} from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
-import { Plus, AlertCircle, CalendarX, Clock, Calendar, Trash2 } from 'lucide-react';
+import {
+    Plus,
+    AlertCircle,
+    CalendarX,
+    Clock,
+    Calendar,
+    Trash2,
+    CheckCircle2,
+    UserX,
+    Archive,
+} from 'lucide-react';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
 
 import { TransitionItem } from '../../components/layout/page-transition';
 import { getErrorMessage } from '../../lib/error';
+import { socketService } from '../../services/socket.service';
+import { logger } from '@/utils/logger';
+import {
+    AppointmentOverdueEventSchema,
+    type AppointmentOverdueEvent,
+} from '../../../../shared/schemas/admin-events.schema';
 
 import { PATHS } from '../../routes/paths';
+
+/**
+ * 🩺 Doctor-side appointment lifecycle (rationale)
+ *
+ * The state machine the UI exposes is:
+ *
+ *   scheduled (future / on-time)
+ *      → doctor sees: [Mark Complete]   (single action — happy path)
+ *
+ *   scheduled (≥ 15 min past start, no doctor decision yet)
+ *      → backend cron emits `appointment:overdue`
+ *      → row tints amber, shows "Awaiting patient · Nm late" pill
+ *      → doctor sees: [Mark Complete] [Mark No-Show]
+ *      → toast surfaces ONCE per overdue event for any tab open at the time
+ *
+ *   terminal (completed / cancelled / no-show)
+ *      → doctor sees: [Archive]   (soft-hide for THIS doctor only;
+ *                                  patient view + audit trail unaffected)
+ *
+ * Patient-side flows (Cancel before, Delete after) are unchanged.
+ *
+ * Auto-flipping a `scheduled` row to `no-show` is explicitly NOT done.
+ * Transferring that decision from the doctor (manual clinical judgment)
+ * to the platform (automated) is a known anti-pattern in scheduling
+ * systems — we nudge with a visual tint + non-blocking toast and let
+ * the doctor decide.
+ */
+const OVERDUE_GRACE_MINUTES = 15;
+
+function isOverdueScheduled(apt: Appointment, nowMs: number): boolean {
+    if (apt.status !== 'scheduled') return false;
+    const startMs = new Date(`${apt.appointmentDate}T${apt.appointmentTime}`).getTime();
+    if (!Number.isFinite(startMs)) return false;
+    return nowMs - startMs >= OVERDUE_GRACE_MINUTES * 60_000;
+}
+
+function minutesLateOf(apt: Appointment, nowMs: number): number {
+    const startMs = new Date(`${apt.appointmentDate}T${apt.appointmentTime}`).getTime();
+    if (!Number.isFinite(startMs)) return 0;
+    return Math.max(0, Math.floor((nowMs - startMs) / 60_000));
+}
 
 export const Appointments: React.FC = () => {
     const navigate = useNavigate();
@@ -110,9 +173,56 @@ export const Appointments: React.FC = () => {
     const handleComplete = async (appointmentId: number) => {
         try {
             await updateAppointmentStatus(appointmentId, 'completed');
+            window.dispatchEvent(new CustomEvent('system:success', {
+                detail: { message: 'Appointment marked as complete.' },
+            }));
             await fetchAppointments();
         } catch (err: unknown) {
             setError(getErrorMessage(err, 'Failed to update appointment'));
+        }
+    };
+
+    const handleNoShow = async (appointmentId: number) => {
+        const isConfirmed = await confirm({
+            title: 'Mark as No-Show',
+            message:
+                'Confirm that the patient did not arrive for this appointment. This is a clinical record and cannot be undone from this view.',
+            type: 'warning',
+            confirmText: 'Mark No-Show',
+            cancelText: 'Cancel',
+        });
+        if (!isConfirmed) return;
+
+        try {
+            await updateAppointmentStatus(appointmentId, 'no-show');
+            window.dispatchEvent(new CustomEvent('system:success', {
+                detail: { message: 'Appointment marked as no-show.' },
+            }));
+            await fetchAppointments();
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to update appointment'));
+        }
+    };
+
+    const handleArchive = async (appointmentId: number) => {
+        const isConfirmed = await confirm({
+            title: 'Archive Appointment',
+            message:
+                'Archive this appointment from your list? The patient will still see it in their history; only your view is affected.',
+            type: 'warning',
+            confirmText: 'Archive',
+            cancelText: 'Cancel',
+        });
+        if (!isConfirmed) return;
+
+        try {
+            await archiveAppointmentForDoctor(appointmentId);
+            setAppointments(prev => prev.filter(a => a.id !== appointmentId));
+            window.dispatchEvent(new CustomEvent('system:success', {
+                detail: { message: 'Appointment archived from your list.' },
+            }));
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to archive appointment'));
         }
     };
 
@@ -123,6 +233,60 @@ export const Appointments: React.FC = () => {
         now.setHours(0, 0, 0, 0);
         return aptDate < now || apt.status === 'completed' || apt.status === 'cancelled';
     };
+
+    // Tick once per minute so the "Nm late" pill text refreshes without a
+    // re-fetch. The minute granularity matches the precision of the pill
+    // itself — sub-minute ticks would just churn the render tree.
+    const [nowMs, setNowMs] = useState<number>(() => Date.now());
+    useEffect(() => {
+        const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+        return () => window.clearInterval(id);
+    }, []);
+
+    // Doctor-only: subscribe to backend `appointment:overdue` events. The
+    // backend cron stamps `overdue_notified_at` once per row, so each row
+    // produces at most one event per overdue cycle. We surface a non-blocking
+    // warning toast and rely on the local `isOverdueScheduled` time check
+    // for the visual tint (so doctors who load the page mid-overdue still
+    // see the amber state, even if they missed the live socket event).
+    const isDoctor = user?.role === 'doctor';
+    useEffect(() => {
+        if (!isDoctor) return;
+
+        const handler = (raw: AppointmentOverdueEvent): void => {
+            const parsed = AppointmentOverdueEventSchema.safeParse(raw);
+            if (!parsed.success) {
+                logger.error('[Appointments] appointment:overdue payload validation failed', {
+                    issues: JSON.stringify(parsed.error.issues),
+                });
+                return;
+            }
+            const ev = parsed.data;
+            const patient = ev.patientName ?? 'A patient';
+            window.dispatchEvent(new CustomEvent('system:warning', {
+                detail: {
+                    message: `${patient} is ${ev.minutesLate}m late — review the appointment to mark complete or no-show.`,
+                },
+            }));
+            // Force a tick refresh so the row picks up its overdue tint
+            // immediately, without waiting on the 30s cadence above.
+            setNowMs(Date.now());
+        };
+
+        socketService.on('appointment:overdue', handler);
+        return () => {
+            socketService.off('appointment:overdue', handler);
+        };
+    }, [isDoctor]);
+
+    const overdueIdSet = useMemo<ReadonlySet<number>>(() => {
+        const ids = new Set<number>();
+        if (!isDoctor) return ids;
+        for (const apt of appointments) {
+            if (isOverdueScheduled(apt, nowMs)) ids.add(apt.id);
+        }
+        return ids;
+    }, [appointments, nowMs, isDoctor]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -216,8 +380,19 @@ export const Appointments: React.FC = () => {
                         </Button>
                     </Card>
                 ) : (
-                    paginatedAppointments.map((appointment) => (
-                        <Card key={appointment.id} className="group hover:shadow-md transition-all duration-200">
+                    paginatedAppointments.map((appointment) => {
+                        const isOverdue = overdueIdSet.has(appointment.id);
+                        const isTerminalForDoctor = isDoctor && (
+                            appointment.status === 'completed'
+                            || appointment.status === 'cancelled'
+                            || appointment.status === 'no-show'
+                        );
+                        const cardOverdueClass = isOverdue ? 'appointment-card-overdue' : '';
+                        return (
+                        <Card
+                            key={appointment.id}
+                            className={`group hover:shadow-md transition-all duration-200 ${cardOverdueClass}`.trim()}
+                        >
                             <div className="p-6 flex flex-col md:flex-row gap-6">
                                 {/* Date Badge */}
                                 <div className="flex-shrink-0 w-16 h-16 bg-primary/10 rounded-[var(--card-radius)] flex flex-col items-center justify-center text-primary border border-primary/20">
@@ -233,25 +408,74 @@ export const Appointments: React.FC = () => {
                                 <div className="flex-1 space-y-4">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         <div className="space-y-1">
-                                            <h3 className="font-semibold text-lg flex items-center gap-3">
+                                            <h3 className="font-semibold text-lg flex items-center gap-3 flex-wrap">
                                                 {user?.role === 'doctor' ? appointment.otherPartyName || 'Patient' : appointment.otherPartyName || 'Doctor'}
                                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getStatusColor(appointment.status)}`}>
                                                     {appointment.status}
                                                 </span>
+                                                {isOverdue && (
+                                                    <span
+                                                        className="appointment-awaiting-pill"
+                                                        aria-label={`Patient awaiting — ${minutesLateOf(appointment, nowMs)} minutes late`}
+                                                    >
+                                                        <span className="appointment-awaiting-pill__dot" aria-hidden="true" />
+                                                        Awaiting patient · {minutesLateOf(appointment, nowMs)}m late
+                                                    </span>
+                                                )}
                                             </h3>
                                             <p className="text-muted-foreground">{appointment.reason}</p>
                                         </div>
 
-                                        {/* Action Buttons */}
+                                        {/* Action Buttons — exactly ONE state at a time so the doctor
+                                            never sees a clutter of overlapping CTAs. State machine:
+                                              scheduled (on-time)  → [Mark Complete]
+                                              scheduled (overdue)  → [Mark Complete] [Mark No-Show]
+                                              terminal             → [Archive]
+                                        */}
                                         <div className="flex flex-row sm:flex-col md:flex-row gap-2 items-center">
-                                            {/* Doctor: Mark Complete */}
-                                            {appointment.status === 'scheduled' && user?.role === 'doctor' && (
+                                            {/* Doctor: Mark Complete (always for scheduled) */}
+                                            {appointment.status === 'scheduled' && isDoctor && (
                                                 <Button
                                                     variant="default"
                                                     size="sm"
                                                     onClick={() => handleComplete(appointment.id)}
+                                                    className="gap-1.5"
                                                 >
+                                                    <CheckCircle2 className="h-3.5 w-3.5" />
                                                     Mark Complete
+                                                </Button>
+                                            )}
+
+                                            {/* Doctor: Mark No-Show (only when scheduled + overdue) */}
+                                            {appointment.status === 'scheduled' && isDoctor && isOverdue && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleNoShow(appointment.id)}
+                                                    className="appointment-noshow-btn gap-1.5 font-medium text-sm"
+                                                >
+                                                    <UserX className="h-3.5 w-3.5" />
+                                                    Mark No-Show
+                                                </Button>
+                                            )}
+
+                                            {/* Doctor: Archive (terminal states only — soft-hide for THIS doctor,
+                                                preserves patient view + audit trail) */}
+                                            {isTerminalForDoctor && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleArchive(appointment.id)}
+                                                    className="
+                                                        gap-1.5 font-medium text-sm
+                                                        text-muted-foreground hover:text-foreground
+                                                        hover:bg-muted
+                                                        border border-border hover:border-foreground/30
+                                                        transition-all duration-150
+                                                    "
+                                                >
+                                                    <Archive className="h-3.5 w-3.5" />
+                                                    Archive
                                                 </Button>
                                             )}
 
@@ -314,7 +538,8 @@ export const Appointments: React.FC = () => {
                                 </div>
                             </div>
                         </Card>
-                    ))
+                        );
+                    })
                 )}
                 <TablePagination
                     currentPage={currentPage}

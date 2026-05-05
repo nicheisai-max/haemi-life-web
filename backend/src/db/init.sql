@@ -274,6 +274,14 @@ CREATE TABLE IF NOT EXISTS appointments (
     referral_recommendation TEXT,
     reason TEXT,
     notes TEXT,
+    -- Doctor-side soft-hide flag (Phase: appointment lifecycle).
+    -- When the doctor archives a terminal-state appointment, this flag
+    -- is set; the row disappears from the doctor's list but remains
+    -- visible to the patient. Independent of patient's `deleted_at`.
+    doctor_archived BOOLEAN NOT NULL DEFAULT false,
+    -- Idempotency anchor for the overdue-monitor cron. Stamped on first
+    -- emission of `appointment:overdue` to prevent duplicate notifications.
+    overdue_notified_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ
@@ -284,6 +292,17 @@ CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_dat
 CREATE INDEX IF NOT EXISTS idx_appointments_doctor_date ON appointments(doctor_id, appointment_date);
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
 CREATE INDEX IF NOT EXISTS idx_appointments_deleted_at ON appointments(deleted_at);
+-- Hot-path index for the overdue monitor scan.
+CREATE INDEX IF NOT EXISTS idx_appointments_overdue_scan
+    ON appointments (appointment_date, appointment_time)
+    WHERE status = 'scheduled'
+      AND deleted_at IS NULL
+      AND overdue_notified_at IS NULL;
+-- Doctor-side list-rendering index.
+CREATE INDEX IF NOT EXISTS idx_appointments_doctor_active
+    ON appointments (doctor_id)
+    WHERE doctor_archived = false
+      AND deleted_at IS NULL;
 
 -- Idempotent Migration: Appointments deleted_at
 DO $$

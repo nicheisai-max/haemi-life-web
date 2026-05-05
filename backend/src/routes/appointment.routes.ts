@@ -7,6 +7,7 @@ import {
     updateAppointmentStatus,
     cancelAppointment,
     deleteAppointment,
+    archiveAppointmentForDoctor,
     getAvailableSlots,
     getPreScreeningQuestions,
     submitPreScreening
@@ -25,6 +26,9 @@ router.get('/my-appointments', authenticateToken, authorizeRole(['patient', 'doc
 router.get('/:id', authenticateToken, authorizeRole(['patient', 'doctor']), getAppointmentById);
 router.put('/:id/status', authenticateToken, authorizeRole(['doctor']), updateAppointmentStatus);
 router.delete('/:id/permanent', authenticateToken, authorizeRole(['patient']), deleteAppointment);
+// Doctor-side soft-archive (hides from doctor's list, patient view unaffected).
+// POST (not DELETE) because the row is preserved — only a flag flips.
+router.post('/:id/archive', authenticateToken, authorizeRole(['doctor']), archiveAppointmentForDoctor);
 router.delete('/:id', authenticateToken, authorizeRole(['patient', 'doctor']), cancelAppointment);
 
 export default router;
