@@ -682,6 +682,43 @@
     min-height: 18.75rem;
   }
 
+  /* Size variants for charts that need a tighter or looser vertical
+     footprint than the 21.875rem default (Phase: route-gates-chart-coverage).
+     Each variant matches a previously-hardcoded pixel height that was
+     passed inline as `style={{ height: 250|300|350 }}`:
+
+       --sm  → 15.625rem (was 250px) — patient dashboard wellness trend
+       --md  → 18.75rem  (was 300px) — doctor dashboard clinical load,
+                                       radar chart default
+       --lg  → 21.875rem (was 350px) — reports page volume trend, default
+                                       for `.haemi-chart-frame`
+
+     `min-height` is intentionally smaller than `height` so that on
+     extremely narrow viewports the chart can shrink without blowing up
+     the page layout, while still reserving enough vertical room for
+     Recharts to render legible axes. */
+
+  .haemi-chart-frame--sm {
+    position: relative;
+    width: 100%;
+    height: 15.625rem;
+    min-height: 12.5rem;
+  }
+
+  .haemi-chart-frame--md {
+    position: relative;
+    width: 100%;
+    height: 18.75rem;
+    min-height: 15.625rem;
+  }
+
+  .haemi-chart-frame--lg {
+    position: relative;
+    width: 100%;
+    height: 21.875rem;
+    min-height: 18.75rem;
+  }
+
   /* 🩺 HAEMI CHAT THUMBNAIL SYSTEM (Passport Size Lock)
      Architecture: Google-grade responsive constraints using rem.
      Prevents CLS (Cumulative Layout Shift) and massive expansion in 12-column grids.

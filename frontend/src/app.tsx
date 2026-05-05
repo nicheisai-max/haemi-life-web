@@ -145,9 +145,9 @@ const AppRoutes = React.memo(() => {
             <Route path={PATHS.DASHBOARD} element={<RoleRouter />} />
             <Route path={PATHS.PROFILE} element={<Profile />} />
             <Route path={PATHS.SETTINGS} element={<Settings />} />
-            <Route path={PATHS.PATIENT.FIND_DOCTORS} element={<FindDoctors />} />
-            <Route path={PATHS.PATIENT.BOOK_APPOINTMENT} element={<BookAppointment />} />
-            <Route path={PATHS.PATIENT.APPOINTMENTS} element={<Appointments />} />
+            <Route path={PATHS.PATIENT.FIND_DOCTORS} element={<RoleRoute allowedRoles={['patient']}><FindDoctors /></RoleRoute>} />
+            <Route path={PATHS.PATIENT.BOOK_APPOINTMENT} element={<RoleRoute allowedRoles={['patient']}><BookAppointment /></RoleRoute>} />
+            <Route path={PATHS.PATIENT.APPOINTMENTS} element={<RoleRoute allowedRoles={['patient', 'doctor']}><Appointments /></RoleRoute>} />
             <Route path={PATHS.PATIENT.PRESCRIPTIONS} element={<RoleRoute allowedRoles={['patient', 'doctor', 'pharmacist']}><Prescriptions /></RoleRoute>} />
             <Route path={PATHS.PATIENT.MEDICAL_RECORDS} element={<RoleRoute allowedRoles={['patient']}><MedicalRecords /></RoleRoute>} />
 
