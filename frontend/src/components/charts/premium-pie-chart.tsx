@@ -116,39 +116,45 @@ export const PremiumPieChart: React.FC<PremiumPieChartProps> = ({
 
     const chartContent = (
         <ChartMountGate fallback={<PieChartFallback />} className={frameClass}>
-            {!hasData ? (
-                <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground opacity-50 h-full w-full">
-                    <p className="text-sm font-medium italic">No clinical data available</p>
-                </div>
-            ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                            data={data}
-                            cx="50%"
-                            cy="42%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey={dataKey}
-                            nameKey={categoryKey}
-                        >
-                            {data.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color || `hsl(var(--primary-${(index + 1) * 100}))`} strokeWidth={0} />
-                            ))}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip prefix={valuePrefix} suffix={valueSuffix} />} />
-                        <Legend
-                            verticalAlign="bottom"
-                            iconType="circle"
-                            formatter={(value) => (
-                                <span className="text-[11px] font-bold text-muted-foreground/80 lowercase tracking-wide ml-1">
-                                    {value}
-                                </span>
-                            )}
-                        />
-                    </PieChart>
-                </ResponsiveContainer>
+            {(size) => (
+                !hasData ? (
+                    <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground opacity-50 h-full w-full">
+                        <p className="text-sm font-medium italic">No clinical data available</p>
+                    </div>
+                ) : (
+                    <ResponsiveContainer
+                        width="100%"
+                        height="100%"
+                        initialDimension={size}
+                    >
+                        <PieChart>
+                            <Pie
+                                data={data}
+                                cx="50%"
+                                cy="42%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey={dataKey}
+                                nameKey={categoryKey}
+                            >
+                                {data.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color || `hsl(var(--primary-${(index + 1) * 100}))`} strokeWidth={0} />
+                                ))}
+                            </Pie>
+                            <Tooltip content={<CustomTooltip prefix={valuePrefix} suffix={valueSuffix} />} />
+                            <Legend
+                                verticalAlign="bottom"
+                                iconType="circle"
+                                formatter={(value) => (
+                                    <span className="text-[11px] font-bold text-muted-foreground/80 lowercase tracking-wide ml-1">
+                                        {value}
+                                    </span>
+                                )}
+                            />
+                        </PieChart>
+                    </ResponsiveContainer>
+                )
             )}
         </ChartMountGate>
     );

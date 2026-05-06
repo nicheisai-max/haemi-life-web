@@ -122,7 +122,13 @@ const InnerPremiumBarChart = <T extends object>({
             </CardHeader>
             <CardContent>
                 <ChartMountGate fallback={<ChartSkeleton />}>
-                    <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                    {(size) => (
+                    <ResponsiveContainer
+                        width="100%"
+                        height="100%"
+                        debounce={50}
+                        initialDimension={size}
+                    >
                         <BarChart
                             data={data}
                             margin={{ top: 20, right: 30, left: -20, bottom: 0 }}
@@ -181,6 +187,7 @@ const InnerPremiumBarChart = <T extends object>({
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
+                    )}
                 </ChartMountGate>
             </CardContent>
         </Card>

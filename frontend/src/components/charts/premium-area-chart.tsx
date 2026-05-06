@@ -125,7 +125,14 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
             </CardHeader>
             <CardContent className="px-2 pb-4 sm:px-6">
                 <ChartMountGate fallback={<ChartSkeleton />} className={frameClass}>
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={50}>
+                    {(size) => (
+                    <ResponsiveContainer
+                        width="100%"
+                        height="100%"
+                        minWidth={0}
+                        debounce={50}
+                        initialDimension={size}
+                    >
                         <AreaChart
                             data={data}
                             margin={{
@@ -191,6 +198,7 @@ export const PremiumAreaChart: React.FC<PremiumAreaChartProps> = ({
                             />
                         </AreaChart>
                     </ResponsiveContainer>
+                    )}
                 </ChartMountGate>
             </CardContent>
         </Card>
