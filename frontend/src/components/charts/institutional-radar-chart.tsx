@@ -113,54 +113,62 @@ export const InstitutionalRadarChart: React.FC<InstitutionalRadarChartProps> = (
             {/* 📊 Balanced Visualization Area: Distributed spacing for premium feel */}
             <div className="flex-grow flex flex-col items-center justify-center py-6">
                 <ChartMountGate fallback={<RadarSkeleton />} className={frameClass}>
-                    {isCalibrating && (
-                        <div className="absolute inset-x-0 inset-y-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-900/40 backdrop-blur-[2px] rounded-[var(--card-radius)]">
-                            <div className="relative mb-4">
-                                <Activity className="h-10 w-10 text-primary opacity-20" />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    {(size) => (
+                    <>
+                        {isCalibrating && (
+                            <div className="absolute inset-x-0 inset-y-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-900/40 backdrop-blur-[2px] rounded-[var(--card-radius)]">
+                                <div className="relative mb-4">
+                                    <Activity className="h-10 w-10 text-primary opacity-20" />
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                                    </div>
+                                    <div className="absolute -inset-2 bg-primary/10 rounded-full animate-ping opacity-20" />
                                 </div>
-                                <div className="absolute -inset-2 bg-primary/10 rounded-full animate-ping opacity-20" />
+                                <div className="text-center px-6">
+                                    <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 tracking-widest mb-1">
+                                        Calibration Active
+                                    </p>
+                                    <p className="text-[9px] text-slate-500 dark:text-slate-400 italic max-w-[180px]">
+                                        Institutional engine is learning your documentation cadence. ETA: 48h.
+                                    </p>
+                                </div>
                             </div>
-                            <div className="text-center px-6">
-                                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 tracking-widest mb-1">
-                                    Calibration Active
-                                </p>
-                                <p className="text-[9px] text-slate-500 dark:text-slate-400 italic max-w-[180px]">
-                                    Institutional engine is learning your documentation cadence. ETA: 48h.
-                                </p>
-                            </div>
-                        </div>
-                    )}
+                        )}
 
-                    <ResponsiveContainer width="100%" height="100%">
-                        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
-                            <PolarGrid
-                                stroke="var(--border)"
-                                className="dark:opacity-30 opacity-60"
-                            />
-                            <PolarAngleAxis
-                                dataKey="subject"
-                                tick={{
-                                    fill: 'var(--foreground)',
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    fontFamily: 'Roboto',
-                                    opacity: 0.7
-                                }}
-                            />
-                            <Radar
-                                name="Efficiency"
-                                dataKey="value"
-                                stroke={themeColor}
-                                fill={themeColor}
-                                fillOpacity={0.4}
-                                strokeWidth={2}
-                                animationDuration={1500}
-                                animationEasing="ease-in-out"
-                            />
-                        </RadarChart>
-                    </ResponsiveContainer>
+                        <ResponsiveContainer
+                            width="100%"
+                            height="100%"
+                            initialDimension={size}
+                        >
+                            <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
+                                <PolarGrid
+                                    stroke="var(--border)"
+                                    className="dark:opacity-30 opacity-60"
+                                />
+                                <PolarAngleAxis
+                                    dataKey="subject"
+                                    tick={{
+                                        fill: 'var(--foreground)',
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        fontFamily: 'Roboto',
+                                        opacity: 0.7
+                                    }}
+                                />
+                                <Radar
+                                    name="Efficiency"
+                                    dataKey="value"
+                                    stroke={themeColor}
+                                    fill={themeColor}
+                                    fillOpacity={0.4}
+                                    strokeWidth={2}
+                                    animationDuration={1500}
+                                    animationEasing="ease-in-out"
+                                />
+                            </RadarChart>
+                        </ResponsiveContainer>
+                    </>
+                    )}
                 </ChartMountGate>
 
                 {/* 🏷️ Centered Legend: Institutional horizontal axis alignment */}

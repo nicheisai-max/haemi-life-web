@@ -124,7 +124,13 @@ const InnerInstitutionalComposedChart = <T extends object>({
             </CardHeader>
             <CardContent>
                 <ChartMountGate fallback={<ChartSkeleton />}>
-                    <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                    {(size) => (
+                    <ResponsiveContainer
+                        width="100%"
+                        height="100%"
+                        debounce={50}
+                        initialDimension={size}
+                    >
                         <ComposedChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: -20 }}>
                             <defs>
                                 <linearGradient id={`composedAreaGradient-${String(areaKey)}`} x1="0" y1="0" x2="0" y2="1">
@@ -193,6 +199,7 @@ const InnerInstitutionalComposedChart = <T extends object>({
                             />
                         </ComposedChart>
                     </ResponsiveContainer>
+                    )}
                 </ChartMountGate>
             </CardContent>
         </Card>
