@@ -25,7 +25,25 @@ export const env = {
     isDemoMode: process.env.DEMO_MODE === 'true',
     port: process.env.PORT || 5000,
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+    // Default-development whitelist. Real production deploys MUST override
+    // via the `ALLOWED_ORIGINS` env var with the actual public domain(s) —
+    // none of these localhost ports are reachable in a deployed environment,
+    // so this list is purely a developer-experience baseline.
+    //
+    //   :5173  → Vite dev server (`npm run dev`)
+    //   :4173  → Vite production preview (`npm run preview`) — required for
+    //            running the production build locally to compare console
+    //            output against the dev server (StrictMode + unbundled
+    //            modules cause real perf delta between the two modes).
+    //
+    // Both `localhost` and `127.0.0.1` variants are listed because some
+    // operating systems / proxies resolve one but not the other.
     allowedOrigins: process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-        : ['http://localhost:5173', 'http://127.0.0.1:5173']
+        : [
+            'http://localhost:5173',
+            'http://127.0.0.1:5173',
+            'http://localhost:4173',
+            'http://127.0.0.1:4173',
+        ]
 };
