@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useConfirm } from '@/hooks/use-confirm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { getPendingPrescriptions, updatePrescriptionStatus } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
 import { AlertCircle, X, CheckCircle2, AlertTriangle, Clock, Calendar, Pill, Check } from 'lucide-react';
-import { MedicalLoader } from '../../components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { getErrorMessage } from '../../lib/error';
 
@@ -68,9 +68,8 @@ export const PrescriptionQueue: React.FC = () => {
         }
     };
 
-    if (loading) {
-        return <MedicalLoader message="Retrieving prescription queue..." />;
-    }
+    usePageLoader(loading, 'Retrieving prescription queue...');
+    if (loading) return null;
 
     return (
         <div className="animate-in fade-in duration-500 space-y-8">

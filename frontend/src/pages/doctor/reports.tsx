@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
@@ -8,7 +8,7 @@ import { PremiumAreaChart } from '@/components/charts/premium-area-chart';
 import { GradientMesh } from '@/components/ui/gradient-mesh';
 import { getGrowthStats, getClinicalPerformance } from '../../services/analytics.service';
 import type { GrowthStat, ClinicalPerformance } from '../../services/analytics.service';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { DiagnosticPrevalenceList } from '@/components/ui/diagnostic-prevalence-list';
 import { InstitutionalRadarChart } from '@/components/charts/institutional-radar-chart';
 import { ClinicalErrorBoundary } from '@/components/ui/clinical-error-boundary';
@@ -102,9 +102,8 @@ export const DoctorReports: React.FC = () => {
         }
     }, [performance]);
 
-    if (loading) {
-        return <MedicalLoader message="Compiling clinical data..." />;
-    }
+    usePageLoader(loading, 'Compiling clinical data...');
+    if (loading) return null;
 
     return (
         <div className="space-y-8">

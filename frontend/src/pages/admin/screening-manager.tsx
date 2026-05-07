@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical, Undo2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
@@ -14,7 +14,7 @@ import {
 import { logger } from '@/utils/logger';
 import screeningService, { ScreeningQuestion } from '@/services/screening.service';
 import { TransitionItem } from '@/components/layout/page-transition';
-import { MedicalLoader } from '../../components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { useConfirm } from '@/hooks/use-confirm';
 
 /**
@@ -324,9 +324,10 @@ export const ScreeningManager: React.FC = () => {
         setReorderUndo(null);
     };
 
-    if (loading || saving) {
-        return <MedicalLoader variant="global" message={saving ? "Saving Changes..." : "Synchronizing Clinical Triage Data..."} />;
-    }
+    const isBusy: boolean = loading || saving;
+    const busyMessage: string = saving ? 'Saving Changes...' : 'Synchronizing Clinical Triage Data...';
+    usePageLoader(isBusy, busyMessage);
+    if (isBusy) return null;
 
     return (
         <TransitionItem>

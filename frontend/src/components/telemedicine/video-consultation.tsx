@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import Peer from 'simple-peer';
@@ -10,7 +10,7 @@ import {
     ShieldCheck, Settings, AlertCircle, Info, User, ArrowLeft
 } from 'lucide-react';
 import { PremiumLoader } from '../ui/premium-loader';
-import { MedicalLoader } from '../ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import appointmentService from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
 import { toast } from 'sonner';
@@ -224,13 +224,8 @@ export const VideoConsultation: React.FC = () => {
         setTimeout(() => navigate('/dashboard'), 3000);
     };
 
-    if (loading) {
-        return (
-            <div className="h-screen w-full flex flex-col items-center justify-center bg-background">
-                <MedicalLoader variant="global" message="Securing end-to-end encrypted connection..." />
-            </div>
-        );
-    }
+    usePageLoader(loading, 'Securing end-to-end encrypted connection...');
+    if (loading) return null;
 
     if (status === 'ended') {
         return (

@@ -1,4 +1,4 @@
-import React, { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import { TransitionItem } from '../../components/layout/page-transition';
 import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { PATHS } from '../../routes/paths';
 import { useSystemHealth } from '@/hooks/use-system-health';
 import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
@@ -381,9 +381,8 @@ export const AdminDashboard: React.FC = () => {
 
     const isLiveConnected: boolean = socketService.isConnected();
 
-    if (loading) {
-        return <MedicalLoader message="Synchronizing institutional controls..." />;
-    }
+    usePageLoader(loading, 'Synchronizing institutional controls...');
+    if (loading) return null;
 
     return (
         <div className="space-y-8">

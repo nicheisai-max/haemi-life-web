@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getInitials } from '@/utils/avatar.resolver';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -10,7 +10,7 @@ import { getAllUsers, updateUserStatus, getSystemStats } from '../../services/ad
 import type { UserListItem, SystemStats, PaginatedResponse } from '../../services/admin.service';
 import { Search, Users, AlertCircle, X, Shield, ShieldAlert, Heart, Stethoscope, Briefcase, Mail, CheckCircle2, CircleOff, Filter } from 'lucide-react';
 import { LiveStatusPill } from '@/components/ui/live-status-pill';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -293,9 +293,9 @@ export const UserManagement: React.FC = () => {
         });
     };
 
-    if (isLoading && items.length === 0) {
-        return <MedicalLoader message="Retrieving user database..." />;
-    }
+    const isInitialLoad: boolean = isLoading && items.length === 0;
+    usePageLoader(isInitialLoad, 'Retrieving user database...');
+    if (isInitialLoad) return null;
 
     return (<div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

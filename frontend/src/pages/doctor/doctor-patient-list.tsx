@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getInitials } from '@/utils/avatar.resolver';
 import { getDoctorPatients, Patient } from '@/services/doctor.service';
 import { toast } from 'sonner';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 
 
 export const DoctorPatientList: React.FC = () => {
@@ -44,9 +44,8 @@ export const DoctorPatientList: React.FC = () => {
         p.email?.toLowerCase().includes(search.toLowerCase())
     );
 
-    if (loading) {
-        return <MedicalLoader message="Synchronizing with regional patient registry..." />;
-    }
+    usePageLoader(loading, 'Synchronizing with regional patient registry...');
+    if (loading) return null;
 
     return (
         <div className="space-y-6">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import { AnimatedEmptyState } from '@/components/ui/animated-empty-state';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 
 const CLINICAL_VOLUME_DATA = [
     { name: '08:00', patients: 3 },
@@ -121,9 +121,8 @@ export const DoctorDashboard = () => {
 
     const pendingReviews = appointments.filter(a => a.status === 'completed').length;
 
-    if (loading) {
-        return <MedicalLoader message="Hydrating clinical intelligence..." />;
-    }
+    usePageLoader(loading, 'Hydrating clinical intelligence...');
+    if (loading) return null;
 
     return (
         <div className="space-y-8">
