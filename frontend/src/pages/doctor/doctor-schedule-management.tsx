@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { getDoctorSchedule, updateDoctorSchedule } from '../../services/doctor.service';
 import { Save, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/premium-loader';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { PremiumTimePicker } from '@/components/ui/premium-time-picker';
 import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
 
@@ -89,9 +89,8 @@ export const DoctorScheduleManagement: React.FC = () => {
         }
     };
 
-    if (loading) {
-        return <MedicalLoader message="Synchronizing clinical calendar..." />;
-    }
+    usePageLoader(loading, 'Synchronizing clinical calendar...');
+    if (loading) return null;
 
     return (<div className="space-y-8">
         <Form {...form}>

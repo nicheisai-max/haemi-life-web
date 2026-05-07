@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
@@ -24,7 +24,7 @@ import {
     UserX,
     Archive,
 } from 'lucide-react';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
 
 import { TransitionItem } from '../../components/layout/page-transition';
@@ -304,9 +304,8 @@ export const Appointments: React.FC = () => {
     const endIndex = Math.min(startIndex + itemsPerPage, filteredAppointments.length);
     const paginatedAppointments = filteredAppointments.slice(startIndex, endIndex);
 
-    if (loading) {
-        return <MedicalLoader message="Syncing clinical appointments..." />;
-    }
+    usePageLoader(loading, 'Syncing clinical appointments...');
+    if (loading) return null;
 
     return (
         <div className="space-y-8">

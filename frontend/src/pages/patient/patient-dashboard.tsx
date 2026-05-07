@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import { TransitionItem } from '../../components/layout/page-transition';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 
 // REALISTIC BOTSWANA CONTEXT DATA
 const HEALTH_TRENDS_DATA = [
@@ -85,9 +85,8 @@ export const PatientDashboard: React.FC = () => {
     const upcomingAppointments = appointments.slice(0, 3);
     const activePrescriptions = prescriptions.filter(p => p.status === 'pending' || p.status === 'filled');
 
-    if (loading) {
-        return <MedicalLoader message="Syncing your health vault..." />;
-    }
+    usePageLoader(loading, 'Syncing your health vault...');
+    if (loading) return null;
 
     return (
 

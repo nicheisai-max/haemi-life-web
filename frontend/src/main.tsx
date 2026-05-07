@@ -90,6 +90,7 @@ window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => 
 });
 
 import { BrowserRouter } from 'react-router-dom';
+import { GlobalLoaderProvider } from './context/global-loader-context';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -97,8 +98,10 @@ if (!rootElement) {
 }
 createRoot(rootElement).render(
   <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <GlobalLoaderProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </GlobalLoaderProvider>
   </StrictMode>,
 )

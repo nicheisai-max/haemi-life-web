@@ -1,7 +1,8 @@
-import React from 'react';
+﻿import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
-import { MedicalLoader } from '../ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
+import { logger } from '@/utils/logger';
 
 interface RoleRouteProps {
     children: React.ReactElement;
@@ -12,16 +13,15 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ children, allowedRoles }) 
     const { user, isLoading, isAuthenticated, authStatus } = useAuth();
     const location = useLocation();
 
-    if (isLoading) {
-        return <MedicalLoader variant="global" message="Verifying clinical identity..." />;
-    }
+    usePageLoader(isLoading, 'Verifying clinical identity...');
+    if (isLoading) return null;
 
     if (!isAuthenticated || authStatus !== 'authenticated' || !user) {
         return <Navigate to="/login" state={{ from: location?.pathname }} replace />;
     }
 
     if (!allowedRoles.includes(user.role)) {
-        console.warn(`[RoleRoute] Access denied: role '${user.role}' cannot access route requiring '${allowedRoles.join(', ')}'.`);
+        logger.warn(`[RoleRoute] Access denied: role '${user.role}' cannot access route requiring '${allowedRoles.join(', ')}'.`);
         const dashboardMap: Record<string, string> = {
             'patient': '/dashboard',
             'doctor': '/dashboard',

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,7 +15,7 @@ import { SignaturePad } from '@/components/ui/signature-pad';
 import { cn } from '@/lib/utils';
 import { PATHS } from '@/routes/paths';
 import * as consentService from '../../services/consent.service';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { useAuth } from '@/hooks/use-auth';
 
 export const TelemedicineConsent: React.FC = () => {
@@ -75,9 +75,8 @@ export const TelemedicineConsent: React.FC = () => {
     const signature = useWatch({ control: form.control, name: 'signature' });
 
     // 🩺 GATED RENDER 1: Waiting for Absolute Truth (Fills the Right Panel smoothly)
-    if (isVerifying) {
-        return <MedicalLoader variant="global" message="Verifying institutional consent..." />;
-    }
+    usePageLoader(isVerifying, 'Verifying institutional consent...');
+    if (isVerifying) return null;
 
     // 🩺 GATED RENDER 2: 100% DB confirmed consent -> Handled by TelemedicineGuard
     // Redirection logic removed to prevent mount-loops and ensure SSO.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { getDoctors, getSpecializations } from '../../services/doctor.service';
 import type { DoctorProfile } from '../../services/doctor.service';
 import { AlertCircle, Search, SearchX, User, BadgeCheck, BadgeInfo, Briefcase, ChevronDown, CheckCircle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MedicalLoader } from '../../components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PATHS } from '../../routes/paths';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -80,9 +80,8 @@ export const FindDoctors: React.FC = () => {
         navigate(`${PATHS.PATIENT.BOOK_APPOINTMENT}?doctorId=${doctorId}`);
     };
 
-    if (loading) {
-        return <MedicalLoader message="Retrieving Specialist Directory..." />;
-    }
+    usePageLoader(loading, 'Retrieving Specialist Directory...');
+    if (loading) return null;
 
     return (
         <div className="space-y-8">

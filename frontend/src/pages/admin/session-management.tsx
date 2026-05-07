@@ -1,11 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react';
+﻿import React, { useCallback, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Activity, LogOut, RefreshCw, Smartphone, Monitor, Globe, Tablet } from 'lucide-react';
 import { LiveStatusPill } from '@/components/ui/live-status-pill';
 import { getActiveSessions, revokeSession } from '../../services/admin.service';
 import type { UserSession } from '../../services/admin.service';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { Badge } from '@/components/ui/badge';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { TablePagination } from '@/components/ui/table-pagination';
@@ -222,9 +222,9 @@ export const SessionManagement: React.FC = () => {
 
     const isLiveConnected = socketService.isConnected();
 
-    if (isLoading && items.length === 0) {
-        return <MedicalLoader variant="global" message="Enumerating Live Sessions..." />;
-    }
+    const isInitialLoad: boolean = isLoading && items.length === 0;
+    usePageLoader(isInitialLoad, 'Enumerating Live Sessions...');
+    if (isInitialLoad) return null;
 
     return (
         <div className="space-y-8">

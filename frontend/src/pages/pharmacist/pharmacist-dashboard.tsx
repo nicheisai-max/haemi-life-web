@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
     ClipboardList, CheckCircle2, AlertOctagon,
@@ -111,9 +112,8 @@ export const PharmacistDashboard = () => {
     const pendingOrders = orders.filter(o => o.status === 'Pending' && !o.is_government_subsidized);
     const govOrders = orders.filter(o => o.status === 'Pending' && o.is_government_subsidized);
 
-    if (loading) {
-        return <MedicalLoader message="Synchronizing Haemi Private Pharmacy Network..." />;
-    }
+    usePageLoader(loading, 'Synchronizing Haemi Private Pharmacy Network...');
+    if (loading) return null;
 
     return (
         <div className="space-y-8">

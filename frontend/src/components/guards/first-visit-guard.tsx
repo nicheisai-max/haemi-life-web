@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { MedicalLoader } from '../ui/medical-loader';
+import { SuspenseLoaderTrigger } from '@/context/global-loader-context';
+import { usePageLoader } from '@/hooks/use-page-loader';
 
 const Onboarding = lazy(() =>
     import('../../pages/onboarding/onboarding').then(m => ({ default: m.Onboarding }))
@@ -37,10 +38,10 @@ export const FirstVisitGuard: React.FC<FirstVisitGuardProps> = ({ children }) =>
     }, []);
 
 
-    // Auth still resolving — show loader to prevent flicker.
-    if (isLoading) {
-        return <MedicalLoader variant="global" message="Initializing Haemi Life..." />;
-    }
+    // Auth still resolving — drive the persistent loader; render nothing
+    // here so the loader's portal-mounted DOM remains the only thing visible.
+    usePageLoader(isLoading, 'Initializing Haemi Life...');
+    if (isLoading) return null;
 
     // Authenticated users never see onboarding.
     if (isAuthenticated) {
@@ -54,7 +55,7 @@ export const FirstVisitGuard: React.FC<FirstVisitGuardProps> = ({ children }) =>
 
     // Unauthenticated + fresh load → show Onboarding.
     return (
-        <Suspense fallback={<MedicalLoader variant="global" message="Initializing Haemi Life..." />}>
+        <Suspense fallback={<SuspenseLoaderTrigger message="Initializing Haemi Life..." />}>
             <Onboarding />
         </Suspense>
     );

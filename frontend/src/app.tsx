@@ -16,7 +16,8 @@ import { PresenceProvider } from './context/presence-context';
 
 // Components & Utils
 import { ErrorBoundary } from './components/ui/error-boundary';
-import { MedicalLoader } from './components/ui/medical-loader';
+import { SuspenseLoaderTrigger } from './context/global-loader-context';
+import { usePageLoader } from './hooks/use-page-loader';
 import { PageTransition } from './components/layout/page-transition';
 import { PATHS } from './routes/paths';
 import { useAuth } from './hooks/use-auth';
@@ -64,8 +65,11 @@ const DispensePrescription = lazy(() => import('./pages/pharmacist/dispense-pres
 const DoctorPatientList = lazy(() => import('./pages/doctor/doctor-patient-list').then(m => ({ default: m.DoctorPatientList })));
 const ScreeningManager = lazy(() => import('./pages/admin/screening-manager').then(m => ({ default: m.ScreeningManager })));
 
-const LoadingFallback = () => <MedicalLoader variant="global" message="Securing clinical session..." />;
-const DelayedFallback = () => <MedicalLoader variant="global" message="Restoring clinical records..." />;
+// Stable Suspense-fallback elements. These render `null` and drive the
+// single persistent loader via `usePageLoader` inside SuspenseLoaderTrigger
+// — no per-mount entrance animation, no replay on phase transitions.
+const SessionLoaderFallback = <SuspenseLoaderTrigger message="Securing clinical session..." />;
+const DashboardLoaderFallback = <SuspenseLoaderTrigger message="Restoring clinical records..." />;
 
 
 // ─── INSTITUTIONAL WRAPPERS (STABILIZED REFS) ────────────────────────────────
@@ -74,7 +78,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
-  if (isLoading) return <LoadingFallback />;
+  usePageLoader(isLoading, 'Securing clinical session...');
+
+  if (isLoading) return null;
 
   if (!isAuthenticated) {
     logger.warn('[App] Session invalid or expired', { path: location.pathname });
@@ -87,7 +93,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 const MainClinicalLayout = React.memo(() => (
   <ProtectedRoute>
     <AuthGatedNotifications>
-      <Suspense fallback={<DelayedFallback />}>
+      <Suspense fallback={DashboardLoaderFallback}>
         <LazyDashboardLayout>
           <PageTransition>
             <Outlet />
@@ -112,7 +118,8 @@ const AuthGatedNotifications: React.FC<{ children: React.ReactNode }> = ({ child
 
 const IdentityGate = () => {
   const { isAuthenticated, user, isLoading } = useAuth();
-  if (isLoading) return <LoadingFallback />;
+  usePageLoader(isLoading, 'Securing clinical session...');
+  if (isLoading) return null;
   if (isAuthenticated && user) {
     return <Navigate to={user.role === 'admin' ? PATHS.ADMIN.DASHBOARD : PATHS.DASHBOARD} replace />;
   }
@@ -125,10 +132,11 @@ const AppRoutes = React.memo(() => {
   const location = useLocation();
   const { isLoading } = useAuth();
 
-  if (isLoading) return <LoadingFallback />;
+  usePageLoader(isLoading, 'Securing clinical session...');
+  if (isLoading) return null;
 
   return (
-    <Suspense fallback={<LoadingFallback />}>
+    <Suspense fallback={SessionLoaderFallback}>
       <AnimatePresence mode="wait" initial={false}>
         <Routes location={location}>
           {/* Public Routes */}

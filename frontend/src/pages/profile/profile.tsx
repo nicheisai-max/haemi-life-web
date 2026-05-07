@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -6,7 +6,7 @@ import { PremiumLoader } from '@/components/ui/premium-loader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MedicalLoader } from '../../components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { AlertCircle, CheckCircle2, Pencil, Save, Shield, Calendar, BadgeCheck, Settings as SettingsIcon, Lock, User, Camera } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -111,9 +111,8 @@ export const Profile: React.FC = () => {
         setGeneralError(null);
     };
 
-    if (loading) {
-        return <MedicalLoader message="Loading your profile..." />;
-    }
+    usePageLoader(loading, 'Loading your profile...');
+    if (loading) return null;
 
     return (
         <div className="space-y-8">

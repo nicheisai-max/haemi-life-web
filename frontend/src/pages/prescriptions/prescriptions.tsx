@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MedicalLoader } from '../../components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -146,9 +146,8 @@ export const Prescriptions: React.FC = () => {
     const uploadedEndIndex = Math.min(uploadedStartIndex + itemsPerPage, uploadedRecords.length);
     const paginatedUploaded = uploadedRecords.slice(uploadedStartIndex, uploadedEndIndex);
 
-    if (loading) {
-        return <MedicalLoader message="Retrieving institutional prescription history..." />;
-    }
+    usePageLoader(loading, 'Retrieving institutional prescription history...');
+    if (loading) return null;
 
     return (
         <div className="space-y-8">

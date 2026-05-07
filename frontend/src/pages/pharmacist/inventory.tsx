@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Package, AlertTriangle, TrendingUp, Search, Pill, Edit, PlusCircle, Activity, Microscope, Zap, Heart, Wind, Filter, Loader2, Calendar } from 'lucide-react';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 
 import { inventorySchema } from '../../lib/validation/inventory.schema';
 import { PremiumNumberInput } from '@/components/ui/premium-number-input';
@@ -132,9 +132,9 @@ export const Inventory: React.FC = () => {
         return { status: 'good', text: expiry.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) };
     };
 
-    if (loading && inventory.length === 0) {
-        return <MedicalLoader message="Hydrating pharmaceutical inventories..." />;
-    }
+    const isInitialLoad: boolean = loading && inventory.length === 0;
+    usePageLoader(isInitialLoad, 'Hydrating pharmaceutical inventories...');
+    if (isInitialLoad) return null;
 
     return (
         <div className="space-y-8">

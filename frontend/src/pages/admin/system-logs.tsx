@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+﻿import React, { useCallback, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Search, Monitor, RefreshCw, History, ChevronDown, ChevronRight } from 'lucide-react';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { getAuditLogs } from '../../services/admin.service';
 import type { AuditLog } from '../../services/admin.service';
-import { MedicalLoader } from '@/components/ui/medical-loader';
+import { usePageLoader } from '@/hooks/use-page-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -147,9 +147,9 @@ export const SystemLogs: React.FC = () => {
         || debouncedFilters.action.length > 0
         || debouncedFilters.entityType.length > 0;
 
-    if (isLoading && items.length === 0) {
-        return <MedicalLoader message="Syncing System Logs..." />;
-    }
+    const isInitialLoad: boolean = isLoading && items.length === 0;
+    usePageLoader(isInitialLoad, 'Syncing System Logs...');
+    if (isInitialLoad) return null;
 
     return (<div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
