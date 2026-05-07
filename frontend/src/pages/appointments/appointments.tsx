@@ -249,7 +249,8 @@ export const Appointments: React.FC = () => {
     // warning toast and rely on the local `isOverdueScheduled` time check
     // for the visual tint (so doctors who load the page mid-overdue still
     // see the amber state, even if they missed the live socket event).
-    const isDoctor = user?.role === 'doctor';
+    const isDoctor: boolean = user?.role === 'doctor';
+    const isPatient: boolean = user?.role === 'patient';
     useEffect(() => {
         if (!isDoctor) return;
 
@@ -314,14 +315,21 @@ export const Appointments: React.FC = () => {
                     <h1 className="page-heading !mb-0 transition-all duration-300">My Appointments</h1>
                     <p className="page-subheading italic">View and manage your appointments</p>
                 </div>
-                <Button
-                    variant="default"
-                    className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
-                    onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
-                >
-                    <Plus className="h-5 w-5" />
-                    Book New
-                </Button>
+                {/* Patient-only privilege — booking is initiated by the patient.
+                    Doctors land on this same `/appointments` page for the
+                    "My Appointments" doctor-side view (see PR #110) and must
+                    not see the "Book New" affordance, which would otherwise
+                    drive them into the patient-only consent + booking flow. */}
+                {isPatient && (
+                    <Button
+                        variant="default"
+                        className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:brightness-110 shadow-lg shadow-teal-900/20 border-0 transition-all duration-300"
+                        onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
+                    >
+                        <Plus className="h-5 w-5" />
+                        Book New
+                    </Button>
+                )}
             </TransitionItem>
 
             {error && (
