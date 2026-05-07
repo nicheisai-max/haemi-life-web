@@ -38,6 +38,26 @@ import { cn } from '@/lib/utils';
 
 export type MedicalLoaderSize = 'sm' | 'md' | 'nav' | 'auth' | 'lg' | 'xl' | 'xxl';
 
+/**
+ * 🩺 Institutional entrance-animation token.
+ *
+ * Single Tailwind utility-class string composed from the project's
+ * existing `tailwindcss-animate` plugin (loaded in `index.css`). Use this
+ * constant — never duplicate the literal — wherever a `MedicalLoaderContent`
+ * is mounted inline AND the caller wants a smooth fade-in/zoom entrance
+ * (typical: panel-scope loaders inside chat-hub, dispense modal, etc.).
+ *
+ * The persistent application loader (mounted by `GlobalLoaderProvider`)
+ * does NOT use this — it manages its own opacity transition because it
+ * never unmounts, so an entrance-animation class would never re-fire.
+ *
+ * Defined here (next to the consumer-facing components) so callers see
+ * the token in autocomplete alongside `MedicalLoader` / `MedicalLoaderContent`,
+ * and the lint rule against component+function mixed exports tolerates
+ * the constant export.
+ */
+export const MEDICAL_LOADER_ENTRANCE = 'animate-in fade-in zoom-in-95 duration-500';
+
 export interface MedicalLoaderContentProps {
     readonly message?: string;
     readonly size?: MedicalLoaderSize;

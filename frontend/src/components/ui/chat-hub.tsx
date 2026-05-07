@@ -15,7 +15,7 @@ import { useOverlay } from '@/hooks/use-overlay';
 import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
 import api from '../../services/api';
 import type { DoctorProfile } from '../../services/doctor.service';
-import { MedicalLoader } from './medical-loader';
+import { MedicalLoaderContent, MEDICAL_LOADER_ENTRANCE } from './medical-loader';
 import { PremiumLoader } from './premium-loader';
 import doctor01 from '../../assets/images/doctors/doctor_01.jpg';
 import doctor02 from '../../assets/images/doctors/doctor_02.png';
@@ -1347,7 +1347,10 @@ export const ChatHub: React.FC = () => {
                                     <div className="flex-1 overflow-hidden z-0 bg-slate-50 dark:bg-slate-950">
                                         {isLoadingMessages ? (
                                             <div className="h-full flex items-center justify-center">
-                                                <MedicalLoader message="Retrieving messages..." />
+                                                <MedicalLoaderContent
+                                                    message="Retrieving messages..."
+                                                    className={MEDICAL_LOADER_ENTRANCE}
+                                                />
                                             </div>
                                         ) : messages.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center h-full opacity-40 text-center px-8">
@@ -1371,7 +1374,10 @@ export const ChatHub: React.FC = () => {
                                                     Header: (): React.ReactElement | null => (
                                                         isLoadingOlder ? (
                                                             <div className="flex items-center justify-center py-4">
-                                                                <MedicalLoader message="Loading older messages..." />
+                                                                <MedicalLoaderContent
+                                                                    message="Loading older messages..."
+                                                                    className={MEDICAL_LOADER_ENTRANCE}
+                                                                />
                                                             </div>
                                                         ) : null
                                                     )
