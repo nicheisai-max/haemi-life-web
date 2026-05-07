@@ -375,26 +375,82 @@ export const Appointments: React.FC = () => {
                 {filteredAppointments.length === 0 ? (
                     <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
                         <CalendarX className="h-16 w-16 text-muted-foreground/30" />
-                        <p className="text-muted-foreground text-lg">
-                            No {filter === 'all' ? '' : filter} appointments found
-                        </p>
-                        <Button
-                            variant="default"
-                            onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
-                            className="mt-4"
-                        >
-                            Book Your First Appointment
-                        </Button>
+                        {/* Role-aware empty state. Patient and doctor have
+                            opposite jobs-to-be-done on this page:
+                              • Patient wants to book a doctor.
+                              • Doctor wants their schedule active so
+                                patients book them.
+                            A single "Book Your First Appointment" CTA
+                            collapsed both flows incorrectly — when clicked
+                            by a doctor it routed them through the patient-
+                            only `/appointments/book` path which is now
+                            role-gated (PR #113), causing a redirect to
+                            dashboard. The role-aware split below maps each
+                            role to the action they actually have privilege
+                            to take. */}
+                        {isDoctor ? (
+                            <>
+                                <p className="text-muted-foreground text-lg">
+                                    No {filter === 'all' ? '' : filter} consultations
+                                </p>
+                                <p className="text-sm text-muted-foreground/70 max-w-md">
+                                    Patients book consultations based on your active
+                                    schedule and available slots.
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                                    <Button
+                                        variant="default"
+                                        onClick={() => navigate(PATHS.DOCTOR.SCHEDULE)}
+                                    >
+                                        Manage Schedule
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => navigate(PATHS.DOCTOR.PATIENTS)}
+                                    >
+                                        View Patient Registry
+                                    </Button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-muted-foreground text-lg">
+                                    No {filter === 'all' ? '' : filter} appointments found
+                                </p>
+                                <p className="text-sm text-muted-foreground/70 max-w-md">
+                                    Connect with verified specialists for video or
+                                    in-person consultations.
+                                </p>
+                                <Button
+                                    variant="default"
+                                    onClick={() => navigate(PATHS.PATIENT.BOOK_APPOINTMENT)}
+                                    className="mt-4"
+                                >
+                                    {appointments.length === 0
+                                        ? 'Book Your First Appointment'
+                                        : 'Book Appointment'}
+                                </Button>
+                            </>
+                        )}
                     </Card>
                 ) : (
                     paginatedAppointments.map((appointment) => {
-                        const isOverdue = overdueIdSet.has(appointment.id);
-                        const isTerminalForDoctor = isDoctor && (
+                        // Overdue indicator + amber tint are doctor-only UX —
+                        // the "Awaiting patient · Nm late" label and the
+                        // Mark-No-Show flow it advertises are both doctor-
+                        // facing decisions. The `overdueIdSet` upstream
+                        // already returns an empty Set for non-doctors, so
+                        // `isOverdue` is naturally false for patients; the
+                        // explicit `&& isDoctor` below is defense-in-depth
+                        // so future refactors of the upstream guard cannot
+                        // accidentally surface this pill to patients.
+                        const isOverdue: boolean = isDoctor && overdueIdSet.has(appointment.id);
+                        const isTerminalForDoctor: boolean = isDoctor && (
                             appointment.status === 'completed'
                             || appointment.status === 'cancelled'
                             || appointment.status === 'no-show'
                         );
-                        const cardOverdueClass = isOverdue ? 'appointment-card-overdue' : '';
+                        const cardOverdueClass: string = isOverdue ? 'appointment-card-overdue' : '';
                         return (
                         <Card
                             key={appointment.id}
@@ -416,7 +472,7 @@ export const Appointments: React.FC = () => {
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         <div className="space-y-1">
                                             <h3 className="font-semibold text-lg flex items-center gap-3 flex-wrap">
-                                                {user?.role === 'doctor' ? appointment.otherPartyName || 'Patient' : appointment.otherPartyName || 'Doctor'}
+                                                {isDoctor ? appointment.otherPartyName || 'Patient' : appointment.otherPartyName || 'Doctor'}
                                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getStatusColor(appointment.status)}`}>
                                                     {appointment.status}
                                                 </span>
@@ -487,7 +543,7 @@ export const Appointments: React.FC = () => {
                                             )}
 
                                             {/* Patient: Cancel (upcoming/scheduled only) */}
-                                            {appointment.status === 'scheduled' && user?.role === 'patient' && (
+                                            {appointment.status === 'scheduled' && isPatient && (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -499,7 +555,7 @@ export const Appointments: React.FC = () => {
                                             )}
 
                                             {/* Patient: Delete (past/completed/cancelled only) */}
-                                            {user?.role === 'patient' && isPastAppointment(appointment) && (
+                                            {isPatient && isPastAppointment(appointment) && (
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
