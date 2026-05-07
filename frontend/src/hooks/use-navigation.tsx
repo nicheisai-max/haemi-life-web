@@ -34,6 +34,14 @@ export const useNavigation = () => {
         doctor: [
             { icon: LayoutDashboard, label: 'Dashboard', path: PATHS.DOCTOR.DASHBOARD },
             { icon: Calendar, label: 'Schedule', path: PATHS.DOCTOR.SCHEDULE },
+            // `My Appointments` is the doctor-side view of `/appointments`
+            // (added by PR #110 — overdue indicator, mark-complete /
+            // mark-no-show / archive actions). The route is shared with
+            // patients but the page renders a doctor-specific UI when
+            // `user.role === 'doctor'`. Without this entry, doctors
+            // landing on `/appointments` saw no highlighted nav item and
+            // had no first-class entry-point from the sidebar.
+            { icon: ClipboardList, label: 'My Appointments', path: PATHS.PATIENT.APPOINTMENTS },
             { icon: Users, label: 'Patients', path: PATHS.DOCTOR.PATIENTS },
             { icon: BarChart3, label: 'Clinical Reports', path: PATHS.DOCTOR.REPORTS },
             { icon: Settings, label: 'Settings', path: PATHS.SETTINGS },

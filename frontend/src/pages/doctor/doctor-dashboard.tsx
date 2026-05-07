@@ -163,7 +163,7 @@ export const DoctorDashboard = () => {
                         <Button
                             size="lg"
                             className="bg-white text-teal-900 hover:bg-teal-50 border border-transparent dark:bg-primary dark:text-teal-950 dark:hover:bg-primary/90 shadow-[0_0_20px_rgba(255,255,255,0.3)] dark:shadow-[0_0_20px_rgba(63,194,181,0.3)] h-12 text-sm font-bold rounded-[var(--card-radius)] gap-2 group w-full sm:w-auto transition-all duration-300 hover:scale-105 active:scale-95"
-                            onClick={() => navigate('/appointments')}
+                            onClick={() => navigate(PATHS.DOCTOR.SCHEDULE)}
                         >
                             <CalendarCheck className="h-5 w-5" aria-hidden="true" />
                             Manage Schedule
