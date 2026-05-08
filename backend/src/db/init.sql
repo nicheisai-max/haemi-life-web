@@ -181,6 +181,11 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
     is_verified BOOLEAN DEFAULT false,
     profile_image VARCHAR(255),
     can_video_consult BOOLEAN DEFAULT true,
+    -- Authoritative IANA timezone for this doctor's clinic. Patients in
+    -- the doctor's vicinity see slot times rendered in this timezone.
+    -- See migration 20260508120000_timezone_sovereignty_phase_1.sql
+    -- and `frontend/src/components/ui/timezone-selector.tsx` (Phase 3).
+    clinic_timezone TEXT NOT NULL DEFAULT 'Africa/Gaborone',
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -282,6 +287,14 @@ CREATE TABLE IF NOT EXISTS appointments (
     -- Idempotency anchor for the overdue-monitor cron. Stamped on first
     -- emission of `appointment:overdue` to prevent duplicate notifications.
     overdue_notified_at TIMESTAMPTZ NULL,
+    -- UTC instant for this appointment, computed at write time from
+    -- (appointment_date + appointment_time) AT TIME ZONE
+    -- doctor_profiles.clinic_timezone. NULLABLE during Phase 1 because
+    -- the writer (Phase 2 backend) has not yet been added; legacy rows
+    -- are backfilled in migration 20260508120000_timezone_sovereignty_phase_1.sql
+    -- under the assumption of Africa/Gaborone (matching the prior
+    -- application-wide implicit timezone).
+    appointment_start_utc TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ
