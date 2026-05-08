@@ -108,4 +108,10 @@ export interface JoinedDoctorRow extends UserEntity {
     is_verified: boolean;
     can_video_consult: boolean;
     license_number?: string | null;
+    // Phase 2 — Timezone Sovereignty. IANA timezone string for the
+    // doctor's clinic; canonical authority for slot rendering. Optional
+    // here because not every SELECT projects it (legacy callers pre-Phase-2
+    // can omit it); the consuming mapper falls back to the institutional
+    // default via `resolveClinicTimezone`.
+    clinic_timezone?: string | null;
 }

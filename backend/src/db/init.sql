@@ -752,8 +752,14 @@ BEGIN
     SELECT id INTO v_patient_id FROM users WHERE email = 'patient@haemilife.com';
 
     -- 7. Create Appointment
+    --    Phase 2 (Timezone Sovereignty): seed inserts also populate
+    --    `appointment_start_utc` so newly-seeded environments don't rely
+    --    on the post-hoc backfill from migration 20260508120000. The
+    --    UTC anchor is computed from (date + time) AT TIME ZONE
+    --    'Africa/Gaborone', matching the default `clinic_timezone` for
+    --    seeded doctors.
     IF NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = v_patient_id AND appointment_date = CURRENT_DATE) THEN
-        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, consultation_type, reason)
+        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, consultation_type, reason, appointment_start_utc)
         VALUES (
             v_patient_id,
             v_doctor_id,
@@ -761,12 +767,13 @@ BEGIN
             '14:00'::TIME,
             'scheduled',
             'video',
-            'Follow-up Consultation'
+            'Follow-up Consultation',
+            ((CURRENT_DATE + '14:00'::TIME) AT TIME ZONE 'Africa/Gaborone')
         );
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM appointments WHERE patient_id = v_patient_id AND appointment_date = (CURRENT_DATE + INTERVAL '2 days')::DATE) THEN
-        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, consultation_type, reason)
+        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, consultation_type, reason, appointment_start_utc)
         VALUES (
             v_patient_id,
             v_doctor_id,
@@ -774,7 +781,8 @@ BEGIN
             '10:00'::TIME,
             'scheduled',
             'video',
-            'General Checkup'
+            'General Checkup',
+            (((CURRENT_DATE + INTERVAL '2 days')::DATE + '10:00'::TIME) AT TIME ZONE 'Africa/Gaborone')
         );
     END IF;
 

@@ -1,6 +1,7 @@
 import { appointmentRepository } from '../repositories/appointment.repository';
 import { emitToAdmins } from './admin-broadcast.service';
 import { logger } from '../utils/logger';
+import { minutesLateFromUtc } from '../utils/timezone.utils';
 
 /**
  * 🩺 HAEMI LIFE — Appointment Overdue Monitor
@@ -94,15 +95,14 @@ class AppointmentOverdueMonitor {
             const nowIso: string = new Date().toISOString();
 
             for (const row of overdueRows) {
-                // Compute minutes-late at emit time. The DB stores date
-                // and time separately; we re-compose the start instant
-                // (UTC-ish, since both columns are stored without TZ
-                // information and the server runs UTC by convention).
-                const startInstant = new Date(`${row.appointment_date}T${row.appointment_time}`);
-                const minutesLate: number = Math.max(
-                    0,
-                    Math.floor((Date.now() - startInstant.getTime()) / 60_000)
-                );
+                // Phase 2 — Timezone Sovereignty: minutes-late is computed
+                // from the row's stored UTC anchor (`appointment_start_utc`)
+                // — no more re-composing date+time and assuming the server
+                // runs UTC. The repository's `findOverdueScheduled` query
+                // COALESCEs the anchor with `(date + time)` for any row
+                // missing the anchor, so this branch handles both Phase 2
+                // writes and the (vanishingly rare) legacy fallback.
+                const minutesLate: number = minutesLateFromUtc(row.appointment_start_utc);
 
                 emitToAdmins({
                     event: 'appointment:overdue',

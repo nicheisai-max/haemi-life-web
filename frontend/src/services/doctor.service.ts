@@ -18,6 +18,13 @@ export interface DoctorProfile {
     isVerified: boolean;
     profileImage?: string | null;
     canVideoConsult: boolean;
+    // Phase 2 — Timezone Sovereignty. Always populated by the backend
+    // (mapDoctorToResponse falls back to the institutional default when
+    // the row is read pre-Phase-1). Optional here so older fixtures /
+    // mocks that predate the rollout still satisfy the type. Phase 3
+    // surfaces this as the doctor-side selector + patient-side
+    // contextual banner.
+    clinicTimezone?: string;
 }
 
 export interface DoctorSchedule {

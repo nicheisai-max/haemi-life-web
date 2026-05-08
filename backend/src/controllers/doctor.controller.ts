@@ -7,6 +7,7 @@ import { mapUserToResponse } from '../utils/user.mapper';
 import { JoinedDoctorRow, UserEntity } from '../types/db.types';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 import { decrypt } from '../utils/security';
+import { isValidIanaTimezone, INSTITUTIONAL_DEFAULT_TIMEZONE } from '../utils/timezone.utils';
 
 /**
  * Decrypts the encrypted PII columns on a row joined from `users`. Mirror
@@ -49,7 +50,8 @@ export const listDoctors = async (req: Request, res: Response) => {
         let query = `
             SELECT
                 u.id, u.name, u.email, u.phone_number, u.profile_image, u.profile_image_mime, u.initials,
-                dp.specialization, dp.years_of_experience, dp.bio, dp.consultation_fee, dp.can_video_consult
+                dp.specialization, dp.years_of_experience, dp.bio, dp.consultation_fee, dp.can_video_consult,
+                dp.clinic_timezone
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
             WHERE u.role = 'doctor' AND u.status = 'ACTIVE'
@@ -96,7 +98,8 @@ export const getDoctorProfile = async (req: Request, res: Response) => {
             SELECT
                 u.id, u.name, u.email, u.phone_number, u.profile_image, u.profile_image_mime, u.initials,
                 dp.specialization, dp.license_number, dp.years_of_experience,
-                dp.bio, dp.consultation_fee, dp.is_verified, dp.can_video_consult
+                dp.bio, dp.consultation_fee, dp.is_verified, dp.can_video_consult,
+                dp.clinic_timezone
             FROM users u
             JOIN doctor_profiles dp ON u.id = dp.user_id
             WHERE u.id = $1 AND u.role = 'doctor'
@@ -173,7 +176,8 @@ export const updateDoctorProfile = async (req: Request, res: Response) => {
                 u.id, u.name, u.email, u.phone_number, u.profile_image, u.profile_image_mime,
                 u.initials, u.role, u.created_at,
                 updated.specialization, updated.license_number, updated.years_of_experience,
-                updated.bio, updated.consultation_fee, updated.is_verified, updated.can_video_consult
+                updated.bio, updated.consultation_fee, updated.is_verified, updated.can_video_consult,
+                updated.clinic_timezone
             FROM updated
             JOIN users u ON u.id = updated.user_id
         `, [specialization || null, yearsOfExperience || null, bio || null, consultationFee || null, doctorId]);
@@ -276,6 +280,73 @@ export const updateDoctorSchedule = async (req: Request, res: Response) => {
             doctorId
         });
         return sendError(res, 500, 'Error updating schedule');
+    }
+};
+
+/**
+ * Update the doctor's clinic timezone (Phase 2 — Timezone Sovereignty).
+ *
+ * The doctor's `clinic_timezone` is the canonical authority for that
+ * doctor's entire scheduling surface. Patients in the doctor's vicinity
+ * see slot times in this timezone. Existing future appointments are NOT
+ * silently shifted — their stored wall-clock + UTC anchor remain pinned
+ * to the doctor's timezone at the time of booking. Only NEW slot
+ * computations and NEW appointment writes use the updated value.
+ *
+ * Validation: payload must be a known IANA timezone (e.g.
+ * 'Africa/Gaborone', 'Asia/Kolkata'). Anything else returns 400 — we
+ * never silently fall back to the institutional default at the write
+ * boundary, only at the read boundary (`resolveClinicTimezone` mapper).
+ *
+ * Audit: every TZ change is recorded with previous + new values for
+ * forensic reconstruction. This is high-impact state — investors,
+ * compliance officers, and oncall need to see who changed it and when.
+ */
+export const updateDoctorClinicTimezone = async (req: Request, res: Response) => {
+    const doctorId = req.user?.id;
+    const rawTz: unknown = (req.body as { timezone?: unknown }).timezone;
+
+    try {
+        if (!doctorId) return sendError(res, 401, 'Unauthorized');
+
+        if (typeof rawTz !== 'string' || rawTz.length === 0) {
+            return sendError(res, 400, 'Timezone must be a non-empty string');
+        }
+        if (!isValidIanaTimezone(rawTz)) {
+            return sendError(res, 400, `Not a valid IANA timezone: ${rawTz}. Examples: ${INSTITUTIONAL_DEFAULT_TIMEZONE}, Asia/Kolkata, America/New_York.`);
+        }
+
+        // Read previous value first so the audit log records the diff.
+        const prior = await pool.query<{ clinic_timezone: string | null }>(
+            'SELECT clinic_timezone FROM doctor_profiles WHERE user_id = $1',
+            [doctorId]
+        );
+        if (prior.rows.length === 0) {
+            return sendError(res, 404, 'Doctor profile not found');
+        }
+        const previousTz: string = prior.rows[0].clinic_timezone ?? INSTITUTIONAL_DEFAULT_TIMEZONE;
+
+        await pool.query(
+            `UPDATE doctor_profiles
+                SET clinic_timezone = $1,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE user_id = $2`,
+            [rawTz, doctorId]
+        );
+
+        await auditService.log({
+            userId: doctorId,
+            action: 'DOCTOR_CLINIC_TIMEZONE_UPDATED',
+            entityId: doctorId,
+            entityType: 'DOCTOR_PROFILE',
+            metadata: { previousClinicTimezone: previousTz, newClinicTimezone: rawTz }
+        });
+
+        return sendResponse(res, 200, true, 'Clinic timezone updated', { clinicTimezone: rawTz });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Error updating clinic timezone:', { error: message, doctorId });
+        return sendError(res, 500, 'Error updating clinic timezone');
     }
 };
 

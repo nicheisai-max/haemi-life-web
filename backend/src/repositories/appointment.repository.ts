@@ -14,6 +14,12 @@ export interface Appointment {
     reason: string | null;
     status: string;
     notes: string | null;
+    // Phase 2 — Timezone Sovereignty. UTC instant computed at write time
+    // from (date + time) AT TIME ZONE doctor.clinic_timezone. Used by the
+    // overdue monitor + admin cross-TZ reports + audit forensics. Nullable
+    // because legacy rows pre-migration 20260508120000 may briefly carry
+    // NULL during the apply window; production rows are always populated.
+    appointment_start_utc: Date | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -38,6 +44,30 @@ export class AppointmentRepository {
 
     constructor(db: Pool = pool) {
         this.db = db;
+    }
+
+    /**
+     * Fetch the IANA `clinic_timezone` for a doctor. Returns `null` if
+     * the doctor has no profile row (caller resolves to the institutional
+     * default via `resolveClinicTimezone`). Centralising this lookup here
+     * keeps booking, slot-list, and overdue paths agreeing on a single
+     * source of truth.
+     */
+    async getDoctorTimezone(doctorId: string): Promise<string | null> {
+        try {
+            const result = await this.db.query<{ clinic_timezone: string | null }>(
+                'SELECT clinic_timezone FROM doctor_profiles WHERE user_id = $1',
+                [doctorId]
+            );
+            if (result.rows.length === 0) return null;
+            return result.rows[0].clinic_timezone;
+        } catch (error: unknown) {
+            logger.error('Failed to fetch doctor clinic timezone', {
+                error: error instanceof Error ? error.message : String(error),
+                doctorId
+            });
+            throw error;
+        }
     }
 
     async checkDoctorVerified(doctorId: string): Promise<boolean> {
@@ -85,7 +115,7 @@ export class AppointmentRepository {
             // Locking the potential conflict rows to prevent race conditions during peak booking bursts.
             const conflictCheck = await client.query(`
                 SELECT id FROM appointments
-                WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3 
+                WHERE doctor_id = $1 AND appointment_date = $2 AND appointment_time = $3
                 AND status != 'cancelled' AND deleted_at IS NULL
                 FOR UPDATE
             `, [data.doctor_id, data.appointment_date, data.appointment_time]);
@@ -93,15 +123,26 @@ export class AppointmentRepository {
             if (conflictCheck.rows.length > 0) {
                 const conflictError: Error = new Error('This time slot has just been reserved by another patient.');
                 // Attaching institutional error code for controller-level handling
-                (conflictError as InstitutionalError).code = 'SLOT_ALREADY_BOOKED'; 
+                (conflictError as InstitutionalError).code = 'SLOT_ALREADY_BOOKED';
                 throw conflictError;
             }
 
+            // Phase 2: `appointment_start_utc` is REQUIRED at the controller
+            // boundary — `bookAppointment` computes it via Luxon from the
+            // doctor's clinic_timezone and passes it in. The repository
+            // refuses to insert without it so legacy code paths cannot
+            // silently land NULL anchors in production.
+            if (!data.appointment_start_utc) {
+                const missingAnchorError: Error = new Error('appointment_start_utc is required (Phase 2 timezone-sovereignty contract)');
+                (missingAnchorError as InstitutionalError).code = 'MISSING_UTC_ANCHOR';
+                throw missingAnchorError;
+            }
+
             const result = await client.query<Appointment>(`
-                INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status)
-                VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
+                INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status, appointment_start_utc)
+                VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7)
                 RETURNING *
-            `, [data.patient_id, data.doctor_id, data.appointment_date, data.appointment_time, data.consultation_type, data.reason]);
+            `, [data.patient_id, data.doctor_id, data.appointment_date, data.appointment_time, data.consultation_type, data.reason, data.appointment_start_utc]);
 
             await client.query('COMMIT');
             return result.rows[0];
@@ -194,7 +235,13 @@ export class AppointmentRepository {
             }
 
             if (upcoming) {
-                query += ` AND (a.appointment_date + a.appointment_time) >= CURRENT_TIMESTAMP`;
+                // Phase 2: prefer the UTC anchor for the upcoming filter so
+                // the comparison is timezone-correct regardless of the
+                // server's `timezone` setting. The COALESCE fallback keeps
+                // legacy rows (those with NULL anchor — should not exist in
+                // production after migration 20260508120000 backfill, but
+                // defensive) included rather than silently dropped.
+                query += ` AND COALESCE(a.appointment_start_utc, (a.appointment_date + a.appointment_time)) >= CURRENT_TIMESTAMP`;
                 query += ' ORDER BY a.appointment_date ASC, a.appointment_time ASC';
             } else {
                 query += ' ORDER BY a.appointment_date DESC, a.appointment_time DESC';
@@ -417,15 +464,24 @@ export class AppointmentRepository {
         doctor_id: string;
         appointment_date: string;
         appointment_time: string;
+        appointment_start_utc: Date;
         patient_name: string | null;
     }>> {
         try {
+            // Phase 2: the overdue threshold is now compared against the
+            // UTC anchor (`appointment_start_utc`), not the naive
+            // (date + time) sum. The previous comparison silently broke
+            // when the server's local timezone differed from the doctor's
+            // clinic timezone. The COALESCE fallback covers the (vanishingly
+            // rare) NULL-anchor case — it preserves prior behaviour for
+            // rows that somehow escaped the Phase 1 backfill.
             const result = await this.db.query<{
                 id: number;
                 patient_id: string;
                 doctor_id: string;
                 appointment_date: string;
                 appointment_time: string;
+                appointment_start_utc: Date;
                 patient_name: string | null;
             }>(`
                 SELECT
@@ -434,13 +490,14 @@ export class AppointmentRepository {
                     a.doctor_id,
                     a.appointment_date::text AS appointment_date,
                     a.appointment_time::text AS appointment_time,
+                    COALESCE(a.appointment_start_utc, (a.appointment_date + a.appointment_time)) AS appointment_start_utc,
                     u_patient.name AS patient_name
                 FROM appointments a
                 LEFT JOIN users u_patient ON a.patient_id = u_patient.id
                 WHERE a.status = 'scheduled'
                   AND a.deleted_at IS NULL
                   AND a.overdue_notified_at IS NULL
-                  AND (a.appointment_date + a.appointment_time + ($1 * INTERVAL '1 minute')) <= CURRENT_TIMESTAMP
+                  AND COALESCE(a.appointment_start_utc, (a.appointment_date + a.appointment_time)) + ($1 * INTERVAL '1 minute') <= CURRENT_TIMESTAMP
             `, [graceMinutes]);
             return result.rows;
         } catch (error: unknown) {
