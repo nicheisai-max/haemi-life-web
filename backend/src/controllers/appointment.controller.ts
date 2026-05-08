@@ -6,6 +6,13 @@ import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import { notificationService } from '../services/notification.service';
 import { mapAppointmentToResponse } from '../utils/clinical.mapper';
+import {
+    toUtcInstant,
+    resolveClinicTimezone,
+    getTodayInTimezone,
+    getNowMinutesInTimezone,
+    InvalidTimezoneError
+} from '../utils/timezone.utils';
 
 interface BookAppointmentRequest {
     doctorId: string;
@@ -36,26 +43,13 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
         }
         const patientId = user.id;
 
-        // Server-clock guard: reject appointments whose start instant has
-        // already passed (with the same lead-time buffer the slot list uses).
-        // Defense-in-depth against:
-        //   - clock-skewed clients,
-        //   - stale slot lists held in a tab for hours,
-        //   - hand-crafted POSTs that bypass the UI entirely.
-        // Both inputs are user-provided strings; we parse defensively so a
-        // malformed payload is rejected as 400 rather than silently coerced.
-        const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(appointmentDate ?? '');
-        const timeMatch = /^(\d{2}):(\d{2})$/.exec(appointmentTime ?? '');
+        // Format guard — both inputs are user-provided strings; defensive
+        // parsing rejects malformed payloads as 400 rather than silently
+        // coercing in Luxon downstream.
+        const dateMatch = /^\d{4}-\d{2}-\d{2}$/.exec(appointmentDate ?? '');
+        const timeMatch = /^\d{2}:\d{2}$/.exec(appointmentTime ?? '');
         if (!dateMatch || !timeMatch) {
             sendError(res, 400, 'Invalid appointment date or time format');
-            return;
-        }
-        const [, y, mo, d] = dateMatch;
-        const [, hh, mm] = timeMatch;
-        const slotInstant = new Date(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), 0, 0);
-        const earliestBookableMs = Date.now() + BOOKING_LEAD_TIME_MINUTES * 60_000;
-        if (slotInstant.getTime() < earliestBookableMs) {
-            sendError(res, 400, 'This appointment slot has already passed. Please choose a future time.');
             return;
         }
 
@@ -63,6 +57,36 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
         const isVerified = await appointmentRepository.checkDoctorVerified(doctorId);
         if (!isVerified) {
             sendError(res, 404, 'Doctor not found or not verified');
+            return;
+        }
+
+        // Phase 2 — Timezone Sovereignty. Resolve the doctor's clinic
+        // timezone, interpret the (date, time) wall-clock pair through it,
+        // and obtain the absolute UTC instant. All downstream comparisons
+        // (lead-time guard, UTC anchor for the row) flow from this single
+        // anchor — no server-local-clock leak.
+        const doctorTimezoneRaw: string | null = await appointmentRepository.getDoctorTimezone(doctorId);
+        const doctorTimezone: string = resolveClinicTimezone(doctorTimezoneRaw);
+        let appointmentStartUtc: Date;
+        try {
+            appointmentStartUtc = toUtcInstant(appointmentDate, appointmentTime, doctorTimezone);
+        } catch (e: unknown) {
+            const reason: string = e instanceof InvalidTimezoneError
+                ? `Doctor's clinic timezone is invalid: ${e.timezone}`
+                : (e instanceof Error ? e.message : 'Unparseable appointment datetime');
+            sendError(res, 400, reason);
+            return;
+        }
+
+        // Server-clock guard: reject appointments whose UTC start instant
+        // has already passed (with the same lead-time buffer the slot list
+        // uses). Defense-in-depth against:
+        //   - clock-skewed clients,
+        //   - stale slot lists held in a tab for hours,
+        //   - hand-crafted POSTs that bypass the UI entirely.
+        const earliestBookableMs: number = Date.now() + BOOKING_LEAD_TIME_MINUTES * 60_000;
+        if (appointmentStartUtc.getTime() < earliestBookableMs) {
+            sendError(res, 400, 'This appointment slot has already passed. Please choose a future time.');
             return;
         }
 
@@ -91,7 +115,9 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
             appointment_date: appointmentDate,
             appointment_time: appointmentTime,
             consultation_type: consultationType,
-            reason
+            reason,
+            // Phase 2 contract: repository refuses to insert without anchor.
+            appointment_start_utc: appointmentStartUtc
         });
         
         // --- Clinical Screening Linkage ---
@@ -441,17 +467,29 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        const [year, month, day] = date.split('-').map(Number);
-        const dateObj = new Date(year, month - 1, day);
-        const dayOfWeek = dateObj.getDay();
+        // Phase 2 — Timezone Sovereignty. "Today", "now", and the
+        // day-of-week index for the requested date must be resolved in
+        // the DOCTOR'S clinic timezone, not the server's local zone.
+        // Otherwise a Botswana doctor's "Tuesday 9 AM" slots could be
+        // wrongly listed as past/missing when the server runs UTC and
+        // the request arrives near midnight Africa/Gaborone.
+        const doctorTimezoneRaw: string | null = await appointmentRepository.getDoctorTimezone(doctorId);
+        const doctorTimezone: string = resolveClinicTimezone(doctorTimezoneRaw);
 
-        // Reject queries for dates strictly before today on the server clock.
-        // (Same-day with no remaining slots returns an empty list, not 400 —
-        // the frontend renders a clean "All slots have passed" state.)
-        const now = new Date();
-        const startOfRequestedDay = new Date(year, month - 1, day);
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        if (startOfRequestedDay.getTime() < startOfToday.getTime()) {
+        const dayOfWeekMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+        if (!dayOfWeekMatch) {
+            res.status(400).json({ message: 'date must be in YYYY-MM-DD format' });
+            return;
+        }
+        const [, yStr, moStr, dStr] = dayOfWeekMatch;
+        const dayOfWeek: number = new Date(Date.UTC(Number(yStr), Number(moStr) - 1, Number(dStr))).getUTCDay();
+
+        const todayInDoctorTz: string = getTodayInTimezone(doctorTimezone);
+        // Reject queries for dates strictly before today in the doctor's
+        // wall clock. (Same-day with no remaining slots returns an empty
+        // list, not 400 — the frontend renders a clean
+        // "All slots have passed" state.)
+        if (date < todayInDoctorTz) {
             sendResponse(res, 200, true, 'Date is in the past', { date, slots: [] });
             return;
         }
@@ -465,12 +503,13 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
 
         const bookedTimes = await appointmentRepository.getBookedTimes(doctorId, date);
 
-        const isToday = startOfRequestedDay.getTime() === startOfToday.getTime();
+        const isToday: boolean = date === todayInDoctorTz;
         // For same-day requests, suppress slots that start before
-        // (now + lead time). Comparison is done in minutes-since-midnight
-        // so it is independent of the schedule-row epoch (`2000-01-01`).
-        const earliestMinutes = isToday
-            ? now.getHours() * 60 + now.getMinutes() + BOOKING_LEAD_TIME_MINUTES
+        // (now + lead time) in the doctor's clinic timezone. Comparison
+        // is done in minutes-since-midnight so the slot iterator's
+        // epoch-anchored times can be matched directly.
+        const earliestMinutes: number = isToday
+            ? getNowMinutesInTimezone(doctorTimezone) + BOOKING_LEAD_TIME_MINUTES
             : -1;
 
         const slots: string[] = [];
