@@ -6,19 +6,48 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { getDoctorSchedule, updateDoctorSchedule } from '../../services/doctor.service';
+import {
+    getDoctorSchedule,
+    updateDoctorSchedule,
+    getDoctorProfile,
+    updateClinicTimezone,
+} from '../../services/doctor.service';
 import { Save, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { PremiumTimePicker } from '@/components/ui/premium-time-picker';
+import { ClinicTimezoneCard } from '@/components/ui/clinic-timezone-card';
+import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import { logger } from '@/utils/logger';
 import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
+
+/**
+ * Institutional default — mirrors `INSTITUTIONAL_DEFAULT_TIMEZONE` in
+ * `backend/src/utils/timezone.utils.ts`. Used as the optimistic display
+ * value while the doctor profile load is in flight (or if the profile
+ * fetch fails entirely — the picker remains usable so the doctor can
+ * recover by selecting any zone).
+ */
+const DEFAULT_CLINIC_TIMEZONE: string = 'Africa/Gaborone';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const DoctorScheduleManagement: React.FC = () => {
+    const { user } = useAuth();
+    const toast = useToast();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+
+    // Phase 3 — Timezone Sovereignty. The doctor's authoritative clinic
+    // timezone is loaded alongside the schedule and surfaced via
+    // <ClinicTimezoneCard /> at the top of the page. Changes persist
+    // through the PATCH endpoint added in Phase 2; existing appointments
+    // are NOT silently shifted (UTC-anchored), only NEW slot
+    // computations follow the updated value.
+    const [clinicTimezone, setClinicTimezone] = useState<string>(DEFAULT_CLINIC_TIMEZONE);
+    const [tzUpdating, setTzUpdating] = useState<boolean>(false);
 
     const form = useForm<FullDoctorScheduleFormData>({
         resolver: zodResolver(doctorScheduleSchema),
@@ -44,7 +73,27 @@ export const DoctorScheduleManagement: React.FC = () => {
     const fetchSchedule = useCallback(async () => {
         try {
             setLoading(true);
-            const data = await getDoctorSchedule();
+            // Phase 3: load schedule + doctor profile in parallel so the
+            // timezone card hydrates from the same network round-trip
+            // that powers the schedule grid. Profile fetch is awaited
+            // alongside the schedule fetch — if it fails, we keep the
+            // institutional-default optimistic value rather than
+            // blocking the whole page (the doctor can still set/edit
+            // schedule rows; the TZ card stays interactive).
+            const profilePromise = user?.id
+                ? getDoctorProfile(user.id).catch((profileErr: unknown) => {
+                    logger.warn('[Schedule] Failed to hydrate clinic timezone from profile', {
+                        error: profileErr instanceof Error ? profileErr.message : String(profileErr),
+                    });
+                    return null;
+                })
+                : Promise.resolve(null);
+
+            const [data, profile] = await Promise.all([getDoctorSchedule(), profilePromise]);
+
+            if (profile && typeof profile.clinicTimezone === 'string' && profile.clinicTimezone.length > 0) {
+                setClinicTimezone(profile.clinicTimezone);
+            }
 
             // Map data to ensure all days are present
             const fullSchedule = DAYS_OF_WEEK.map((_, index) => {
@@ -69,11 +118,43 @@ export const DoctorScheduleManagement: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [form]);
+    }, [form, user?.id]);
 
     useEffect(() => {
         fetchSchedule();
     }, [fetchSchedule]);
+
+    /**
+     * Persist a new clinic timezone. Optimistic UI: we set the local
+     * value before the network round-trip so the card reflects the
+     * pick instantly, and roll back to the previous value if the
+     * server rejects it. The server is the authority for IANA
+     * validation (Phase 2 controller); on a 4xx the server message is
+     * surfaced verbatim so the doctor sees what failed.
+     */
+    const handleTimezoneChange = useCallback(async (next: string): Promise<void> => {
+        const previous: string = clinicTimezone;
+        setTzUpdating(true);
+        setClinicTimezone(next);
+        try {
+            const result = await updateClinicTimezone(next);
+            // Trust the server's echoed value — covers any normalisation
+            // it might apply (e.g. canonical IANA aliasing).
+            setClinicTimezone(result.clinicTimezone);
+            toast.success(`Clinic timezone updated to ${result.clinicTimezone}`);
+        } catch (err: unknown) {
+            setClinicTimezone(previous); // Roll back on failure.
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            const message: string = apiErr.response?.data?.message ?? 'Failed to update clinic timezone';
+            toast.error(message);
+            logger.error('[Schedule] Clinic timezone update failed', {
+                attempted: next,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            setTzUpdating(false);
+        }
+    }, [clinicTimezone, toast]);
 
     const onSubmit = async (data: FullDoctorScheduleFormData) => {
         try {
@@ -136,6 +217,12 @@ export const DoctorScheduleManagement: React.FC = () => {
                         <AlertDescription>{success}</AlertDescription>
                     </Alert>
                 )}
+
+                <ClinicTimezoneCard
+                    value={clinicTimezone}
+                    onChange={handleTimezoneChange}
+                    isUpdating={tzUpdating}
+                />
 
                 <Card className="p-6">
                     <div className="space-y-4">

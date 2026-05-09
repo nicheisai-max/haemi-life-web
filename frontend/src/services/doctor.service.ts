@@ -98,6 +98,24 @@ export const getDoctorPatients = async () => {
     return normalizeResponse(response);
 };
 
+// Phase 3 — Timezone Sovereignty.
+// Updates the doctor's authoritative clinic timezone. Wraps the
+// PATCH /api/doctor/me/clinic-timezone endpoint added in Phase 2.
+// The server validates IANA + emits a DOCTOR_CLINIC_TIMEZONE_UPDATED
+// audit event, so the client just supplies a string and surfaces the
+// outcome via toast.
+export interface UpdateClinicTimezoneResponse {
+    clinicTimezone: string;
+}
+
+export const updateClinicTimezone = async (timezone: string): Promise<UpdateClinicTimezoneResponse> => {
+    const response = await api.patch<ApiResponse<UpdateClinicTimezoneResponse>>(
+        '/doctor/me/clinic-timezone',
+        { timezone }
+    );
+    return normalizeResponse(response);
+};
+
 // Alias for listDoctors (used by some components)
 export const getDoctors = listDoctors;
 
@@ -109,5 +127,6 @@ export default {
     updateDoctorProfile,
     getDoctorSchedule,
     updateDoctorSchedule,
+    updateClinicTimezone,
     getDoctorPatients
 };
