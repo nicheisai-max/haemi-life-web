@@ -1018,6 +1018,187 @@
     text-transform: lowercase;
   }
 
+  /* 🌍 HAEMI CLINIC TIMEZONE CARD + SELECTOR (Phase 3 — Timezone Sovereignty)
+     Surfaces the doctor's authoritative `clinic_timezone` at the top of
+     the Schedule Management page and provides the searchable IANA picker
+     used to change it. Every value here resolves through brand tokens
+     (`--card`, `--border`, `--foreground`, `--muted-foreground`,
+     `--sidebar-active`, `--card-radius`) so light + dark themes auto-
+     resolve without `dark:` variants. The card stacks vertically on
+     mobile (single column) and lays out horizontally at `sm` and above
+     so the action button anchors to the right edge.
+  */
+  .haemi-clinic-tz-card {
+    padding: 1.25rem;
+    border-radius: var(--card-radius);
+  }
+  .haemi-clinic-tz-card-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  @media (min-width: 40rem) {
+    .haemi-clinic-tz-card {
+      padding: 1.5rem;
+    }
+    .haemi-clinic-tz-card-row {
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 1.25rem;
+    }
+  }
+  .haemi-clinic-tz-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 100rem;
+    background-color: color-mix(in srgb, var(--sidebar-active) 12%, transparent);
+    color: var(--sidebar-active);
+    flex-shrink: 0;
+  }
+  .haemi-clinic-tz-card-icon-svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .haemi-clinic-tz-card-body {
+    flex: 1;
+    min-width: 0; /* enables text-overflow inside flex children */
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+  .haemi-clinic-tz-card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--foreground);
+    letter-spacing: -0.01em;
+  }
+  .haemi-clinic-tz-card-description {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    line-height: 1.4;
+  }
+  .haemi-clinic-tz-card-current {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .haemi-clinic-tz-card-iana {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--foreground);
+    padding-inline: 0.5rem;
+    padding-block: 0.1875rem;
+    border-radius: var(--card-radius);
+    background-color: color-mix(in srgb, var(--sidebar-active) 10%, var(--muted));
+    border: 0.0625rem solid color-mix(in srgb, var(--sidebar-active) 24%, var(--border));
+  }
+  .haemi-clinic-tz-card-meta {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .haemi-clinic-tz-card-action {
+    display: flex;
+    align-items: flex-start;
+    flex-shrink: 0;
+  }
+  @media (min-width: 40rem) {
+    .haemi-clinic-tz-card-action {
+      align-items: center;
+    }
+  }
+  .haemi-clinic-tz-card-button {
+    width: 100%;
+  }
+  @media (min-width: 40rem) {
+    .haemi-clinic-tz-card-button {
+      width: auto;
+    }
+  }
+  .haemi-clinic-tz-card-button-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-right: 0.5rem;
+  }
+
+  /* Selector dialog list — gives the picker more vertical real-estate
+     than the default `CommandList` (300px) since users scroll through
+     ~600 zones. `dvh` keeps the list within the visible viewport on
+     mobile keyboards without resorting to pixel values. */
+  .haemi-clinic-tz-list {
+    max-height: 28rem;
+  }
+  @media (max-height: 50rem) {
+    .haemi-clinic-tz-list {
+      max-height: 60dvh;
+    }
+  }
+  .haemi-clinic-tz-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-block: 0.625rem;
+  }
+  .haemi-clinic-tz-item-marker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    color: var(--muted-foreground);
+  }
+  .haemi-clinic-tz-item[data-selected="true"] .haemi-clinic-tz-item-marker,
+  .haemi-clinic-tz-item:hover .haemi-clinic-tz-item-marker {
+    color: var(--sidebar-active);
+  }
+  .haemi-clinic-tz-item-check {
+    width: 1rem;
+    height: 1rem;
+    color: var(--sidebar-active);
+  }
+  .haemi-clinic-tz-item-globe {
+    width: 1rem;
+    height: 1rem;
+  }
+  .haemi-clinic-tz-item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .haemi-clinic-tz-item-city {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--foreground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .haemi-clinic-tz-item-iana {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .haemi-clinic-tz-item-preview {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+    text-align: right;
+  }
+
   /* 🩺 HAEMI DATE SCROLLER (Premium Appointment Carousel)
      Tokens: every color, radius, and elevation drawn from the existing
      brand palette (`--sidebar-active`, `--card`, `--border`, `--card-radius`,
