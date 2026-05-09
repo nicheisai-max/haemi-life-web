@@ -25,6 +25,7 @@ import { logger, auditLogger } from './utils/logger';
 
 // Layouts & Guards
 import { TelemedicineGuard } from './components/guards/telemedicine-guard';
+import { FirstVisitGuard } from './components/guards/first-visit-guard';
 import { RoleRoute } from './components/auth/role-route';
 import { ScrollToTop } from './components/utils/scroll-to-top';
 
@@ -140,8 +141,19 @@ const AppRoutes = React.memo(() => {
       <AnimatePresence mode="wait" initial={false}>
         <Routes location={location}>
           {/* Public Routes */}
-          <Route path={PATHS.LOGIN} element={<Login />} />
-          <Route path={PATHS.SIGNUP} element={<Signup />} />
+          {/*
+            First-time-only onboarding gate. The carousel renders for any
+            visitor whose `localStorage[haemi_onboarding_completed_v1]`
+            flag is unset; once set (Skip / Continue / Get Started), the
+            guard becomes transparent for every future visit — exactly
+            the Android / iOS app intro pattern. Forgot-password is left
+            ungated because new visitors don't arrive via that route
+            (they need an existing account to use it).
+          */}
+          <Route element={<FirstVisitGuard><Outlet /></FirstVisitGuard>}>
+            <Route path={PATHS.LOGIN} element={<Login />} />
+            <Route path={PATHS.SIGNUP} element={<Signup />} />
+          </Route>
           <Route path={PATHS.FORGOT_PASSWORD} element={<ForgotPassword />} />
           <Route path={PATHS.STYLE_GUIDE} element={<StyleGuide />} />
           <Route path={PATHS.PRIVACY} element={<PrivacyPolicy />} />
