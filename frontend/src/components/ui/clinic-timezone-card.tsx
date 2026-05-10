@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card } from './card';
 import { Button } from './button';
 import { Globe, Pencil } from 'lucide-react';
 import { TimezoneSelector } from './timezone-selector';
 import { PremiumLoader } from './premium-loader';
-import { usePageLoader } from '@/hooks/use-page-loader';
 
 /**
  * 🌍 HAEMI LIFE — CLINIC TIMEZONE CARD (Phase 3 — Timezone Sovereignty)
@@ -63,29 +62,13 @@ const buildPreview = (zone: string, instant: Date): { time: string; offset: stri
     }
 };
 
-/**
- * Duration the full-page medical loader stays visible after the user
- * clicks "Change timezone" — masks the dialog's enter animation and
- * the picker's mount-time work behind a single intentional loader.
- * 300ms is the institutional minimum (felt intentional, not a flicker).
- */
-const PICKER_OPEN_LOADER_MS = 300;
-
 export const ClinicTimezoneCard: React.FC<ClinicTimezoneCardProps> = ({
     value,
     onChange,
     isUpdating,
 }) => {
     const [pickerOpen, setPickerOpen] = useState<boolean>(false);
-    const [isLoadingPicker, setIsLoadingPicker] = useState<boolean>(false);
     const [now, setNow] = useState<Date>(() => new Date());
-
-    // Drive the global persistent loader while the picker is being
-    // brought online. The loader is the only visible surface for
-    // ~300ms while Radix Dialog mounts + the (already-cached) zone
-    // list paints — same institutional pattern used elsewhere in the
-    // app for surface transitions.
-    usePageLoader(isLoadingPicker, 'Loading timezones...');
 
     // Tick the displayed current time at half-minute cadence so the
     // user sees a live preview without sub-minute DOM churn.
@@ -95,22 +78,6 @@ export const ClinicTimezoneCard: React.FC<ClinicTimezoneCardProps> = ({
     }, []);
 
     const preview = buildPreview(value, now);
-
-    const handleOpenPicker = useCallback((): void => {
-        setIsLoadingPicker(true);
-        setPickerOpen(true);
-        // Yield a single macrotask so the loader paints first; then
-        // hold it `PICKER_OPEN_LOADER_MS` to mask the dialog's enter
-        // animation and any first-paint cost of the cached list.
-        const timeout = window.setTimeout(
-            () => setIsLoadingPicker(false),
-            PICKER_OPEN_LOADER_MS
-        );
-        // Cleanup not strictly needed (the timeout is short and the
-        // setter is safe on unmounted components in React 18+), but
-        // documenting the intent for the next reader.
-        void timeout;
-    }, []);
 
     const handleSelect = (tz: string): void => {
         setPickerOpen(false);
@@ -142,8 +109,8 @@ export const ClinicTimezoneCard: React.FC<ClinicTimezoneCardProps> = ({
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={handleOpenPicker}
-                            disabled={isUpdating || isLoadingPicker}
+                            onClick={() => setPickerOpen(true)}
+                            disabled={isUpdating}
                             className="haemi-clinic-tz-card-button"
                             aria-label="Change clinic timezone"
                         >

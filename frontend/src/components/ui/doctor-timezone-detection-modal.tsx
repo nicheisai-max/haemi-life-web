@@ -11,7 +11,6 @@ import { TimezoneSelector } from './timezone-selector';
 import { PremiumLoader } from './premium-loader';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { usePageLoader } from '@/hooks/use-page-loader';
 import { logger } from '@/utils/logger';
 import { getDoctorProfile, updateClinicTimezone } from '@/services/doctor.service';
 import {
@@ -80,14 +79,6 @@ interface DetectionState {
 
 const TICK_INTERVAL_MS = 60_000;
 
-/**
- * Duration the full-page medical loader stays visible after the user
- * clicks "Choose a different timezone" — masks Radix Dialog's enter
- * animation and the picker's first-paint cost behind a single
- * intentional loader. 300ms is the institutional minimum.
- */
-const PICKER_OPEN_LOADER_MS = 300;
-
 /** Build the live preview line for the detected timezone. */
 const buildPreview = (zone: string, instant: Date): { time: string; offset: string } => {
     try {
@@ -120,13 +111,7 @@ export const DoctorTimezoneDetectionModal: React.FC = () => {
     const [open, setOpen] = useState<boolean>(false);
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [pickerOpen, setPickerOpen] = useState<boolean>(false);
-    const [isLoadingPicker, setIsLoadingPicker] = useState<boolean>(false);
     const [now, setNow] = useState<Date>(() => new Date());
-
-    // Drive the global persistent loader while the picker is being
-    // brought online. Loader masks Radix Dialog's enter animation and
-    // the (already-cached) zone list's first paint.
-    usePageLoader(isLoadingPicker, 'Loading timezones...');
 
     const isDoctor: boolean = user?.role === 'doctor';
 
@@ -271,15 +256,8 @@ export const DoctorTimezoneDetectionModal: React.FC = () => {
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => {
-                                setIsLoadingPicker(true);
-                                setPickerOpen(true);
-                                window.setTimeout(
-                                    () => setIsLoadingPicker(false),
-                                    PICKER_OPEN_LOADER_MS
-                                );
-                            }}
-                            disabled={isSaving || isLoadingPicker}
+                            onClick={() => setPickerOpen(true)}
+                            disabled={isSaving}
                             className="haemi-tz-detect-button"
                         >
                             Choose a different timezone
