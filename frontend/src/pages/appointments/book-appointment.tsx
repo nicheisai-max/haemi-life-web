@@ -30,6 +30,7 @@ import { PremiumLoader } from '@/components/ui/premium-loader';
 import { useToast } from '@/hooks/use-toast';
 import { DateScroller } from '@/components/ui/date-scroller';
 import { TimeGrid } from '@/components/ui/time-grid';
+import { DoctorTimezoneBanner } from '@/components/ui/doctor-timezone-banner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TransitionItem } from '@/components/layout/page-transition';
 import { PATHS } from '../../routes/paths';
@@ -302,6 +303,29 @@ export const BookAppointment: React.FC = () => {
                                             </FormItem>
                                         )}
                                     />
+
+                                    {/*
+                                      Phase 5 — Timezone Sovereignty: contextual banner
+                                      surfaces the doctor's authoritative clinic timezone
+                                      the moment a doctor is selected. The patient sees
+                                      slot times in the doctor's TZ throughout this flow
+                                      (locked-in vicinity-based booking model); the banner
+                                      adds a secondary line surfacing the patient's local
+                                      timezone when it differs — defensive UX for
+                                      cross-locality cases without forcing per-slot dual
+                                      time display.
+                                    */}
+                                    {(() => {
+                                        const selectedDoctor = doctors.find(d => d.id === watchedDoctorId);
+                                        const clinicTz: string | undefined = selectedDoctor?.clinicTimezone;
+                                        if (!selectedDoctor || !clinicTz || clinicTz.length === 0) return null;
+                                        return (
+                                            <DoctorTimezoneBanner
+                                                doctorTimezone={clinicTz}
+                                                doctorName={selectedDoctor.name}
+                                            />
+                                        );
+                                    })()}
 
                                     <FormField
                                         control={form.control}
