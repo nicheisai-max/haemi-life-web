@@ -3,6 +3,7 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { Badge } from '@/components/ui/badge';
 import { getPendingPrescriptions, updatePrescriptionStatus } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
@@ -84,7 +85,7 @@ export const PrescriptionQueue: React.FC = () => {
                 </div>
             </div>
 
-            {error && (
+            <AnimatedAlert visible={Boolean(error)}>
                 <Alert variant="destructive" className="mb-6 relative">
                     <div className="flex-shrink-0 flex items-center justify-center">
                         <AlertCircle className="h-4 w-4" />
@@ -99,7 +100,7 @@ export const PrescriptionQueue: React.FC = () => {
                         <X className="h-4 w-4" />
                     </Button>
                 </Alert>
-            )}
+            </AnimatedAlert>
 
             <div className="grid gap-4">
                 {prescriptions.length === 0 ? (

@@ -9,6 +9,7 @@ import {
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { getDoctors, getSpecializations } from '../../services/doctor.service';
@@ -90,14 +91,14 @@ export const FindDoctors: React.FC = () => {
                 <p className="page-subheading italic">Search for verified healthcare professionals and book appointments</p>
             </TransitionItem>
 
-            {error && (
+            <AnimatedAlert visible={Boolean(error)}>
                 <Alert variant="destructive" className="mb-6">
                     <div className="flex-shrink-0 flex items-center justify-center">
                         <AlertCircle className="h-4 w-4" />
                     </div>
                     <AlertDescription>{error}</AlertDescription>
                 </Alert>
-            )}
+            </AnimatedAlert>
 
             <TransitionItem>
                 {/* Search and Filters */}

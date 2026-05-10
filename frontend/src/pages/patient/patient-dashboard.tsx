@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { getMyAppointments } from '../../services/appointment.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import type { Appointment } from '../../services/appointment.service';
@@ -121,12 +122,12 @@ export const PatientDashboard: React.FC = () => {
                 </div>
             </TransitionItem>
 
-            {error && (
-                <TransitionItem className="rounded-[var(--card-radius)] border border-destructive/50 bg-destructive/10 p-3 text-destructive flex items-center gap-3" role="alert">
+            <AnimatedAlert visible={Boolean(error)}>
+                <div className="rounded-[var(--card-radius)] border border-destructive/50 bg-destructive/10 p-3 text-destructive flex items-center gap-3" role="alert">
                     <AlertCircle className="h-4 w-4" />
                     <p className="text-sm font-medium">{error}</p>
-                </TransitionItem>
-            )}
+                </div>
+            </AnimatedAlert>
 
             <TransitionItem className="flex flex-col lg:flex-row gap-6 items-stretch">
                 {/* LEFT COLUMN (8/12) */}

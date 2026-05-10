@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { Badge } from '@/components/ui/badge';
 import { MedicalLoader } from '@/components/ui/medical-loader';
 import { usePageLoader } from '@/hooks/use-page-loader';
@@ -155,12 +156,12 @@ export const PharmacistDashboard = () => {
                 </div>
             </TransitionItem>
 
-            {error && (
-                <TransitionItem className="rounded-card border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3" role="alert">
+            <AnimatedAlert visible={Boolean(error)}>
+                <div className="rounded-card border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3" role="alert">
                     <AlertOctagon className="h-5 w-5" aria-hidden="true" />
                     <p className="text-sm font-medium">{error}</p>
-                </TransitionItem>
-            )}
+                </div>
+            </AnimatedAlert>
 
             {/* Stats Grid */}
             <section className="grid grid-cols-2 md:grid-cols-4 gap-6" aria-label="Key Metrics">

@@ -15,6 +15,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { getMyRecords } from '../../services/record.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { AlertCircle } from 'lucide-react';
 import type { MedicalRecord } from '../../services/record.service';
 import { ClinicalRecordType } from '../../../../shared/clinical-types';
@@ -230,16 +231,14 @@ export const MedicalRecords: React.FC = () => {
                 </div>
             </TransitionItem>
 
-            {error && (
-                <TransitionItem>
-                    <Alert variant="destructive" className="mb-6">
-                        <div className="flex-shrink-0 flex items-center justify-center">
-                            <AlertCircle className="h-4 w-4" />
-                        </div>
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                </TransitionItem>
-            )}
+            <AnimatedAlert visible={Boolean(error)}>
+                <Alert variant="destructive" className="mb-6">
+                    <div className="flex-shrink-0 flex items-center justify-center">
+                        <AlertCircle className="h-4 w-4" />
+                    </div>
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            </AnimatedAlert>
 
             <TransitionItem>
                 <Card className="p-4 bg-background/50 backdrop-blur-sm shadow-sm">

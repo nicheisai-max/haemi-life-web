@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { CheckCircle2, AlertCircle, ArrowLeft, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthLayout } from '../../components/layout/auth-layout';
@@ -158,14 +159,14 @@ export const ForgotPassword: React.FC = () => {
                     </div>
                 )}
 
-                {error && (
-                    <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+                <AnimatedAlert visible={Boolean(error)}>
+                    <Alert variant="destructive">
                         <div className="flex-shrink-0 flex items-center justify-center">
                             <AlertCircle className="h-4 w-4" />
                         </div>
                         <AlertDescription>{error}</AlertDescription>
                     </Alert>
-                )}
+                </AnimatedAlert>
 
                 {step === 'request' && (
                     <Form {...requestForm}>

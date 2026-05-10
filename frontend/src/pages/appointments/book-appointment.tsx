@@ -31,6 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { DateScroller } from '@/components/ui/date-scroller';
 import { TimeGrid } from '@/components/ui/time-grid';
 import { DoctorTimezoneBanner } from '@/components/ui/doctor-timezone-banner';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TransitionItem } from '@/components/layout/page-transition';
 import { PATHS } from '../../routes/paths';
@@ -252,14 +253,12 @@ export const BookAppointment: React.FC = () => {
                 </div>
             </TransitionItem>
 
-            {generalError && (
-                <TransitionItem>
-                    <div className="bg-destructive/15 border border-destructive text-destructive p-4 rounded-[var(--card-radius)] flex items-center gap-3">
-                        <AlertTriangle className="h-5 w-5" />
-                        {generalError}
-                    </div>
-                </TransitionItem>
-            )}
+            <AnimatedAlert visible={Boolean(generalError)}>
+                <div className="bg-destructive/15 border border-destructive text-destructive p-4 rounded-[var(--card-radius)] flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5" />
+                    {generalError}
+                </div>
+            </AnimatedAlert>
 
             <TransitionItem>
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 min-w-0">
