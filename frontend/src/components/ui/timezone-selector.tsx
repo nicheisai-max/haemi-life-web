@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Check, Globe } from 'lucide-react';
 import {
     CommandDialog,
@@ -16,6 +16,20 @@ import {
  * by the doctor's Schedule Management page to set
  * `doctor_profiles.clinic_timezone`, the canonical authority for that
  * doctor's entire scheduling surface.
+ *
+ * Performance posture (perf-hardening pass — 2026-05-10):
+ *   ~600 IANA zones × per-tick `Intl.DateTimeFormat` calls in the prior
+ *   revision drove ~1200 constructor calls per render and a noticeable
+ *   open-time stutter on lower-end devices. This revision drops the
+ *   per-row LIVE current time entirely (the picker is for selection,
+ *   not exploration — the `<ClinicTimezoneCard />` parent already shows
+ *   the live current-time for the SELECTED zone) and pre-computes each
+ *   zone's static GMT offset once at mount, then never again. The
+ *   minute-tick state and effect are removed wholesale. Net effect:
+ *     - 600 Intl calls (offset only) at first mount, never again
+ *     - zero re-render churn while the dialog is open
+ *     - mount-time work is masked by the parent's medical loader
+ *       (button click → loader → modal-with-cached-list ready)
  *
  * Design constraints (project mandate):
  *   - Strict TS: zero `any`, zero `as unknown as`, zero `@ts-ignore`.
@@ -37,9 +51,6 @@ import {
  *     environments missing the API, a curated fallback covers the
  *     populated cities Haemi Life serves today (Botswana, South
  *     Africa, India, US/UK rim — investor-relevant).
- *   - Live current-time per zone is computed via `Intl.DateTimeFormat`
- *     and ticks once per minute (the picker UI only ever displays
- *     minute precision; second-precision ticking would just churn DOM).
  *   - Grouping by region (the substring before the first `/`) is a
  *     pure UX affordance — the underlying value remains the full
  *     IANA string. Selected zone is checkmarked AND auto-scrolled to
@@ -92,13 +103,10 @@ const FALLBACK_ZONES: readonly string[] = [
     'UTC',
 ];
 
-/** Refresh interval for the live current-time column (60 seconds — minute precision). */
-const TICK_INTERVAL_MS = 60_000;
-
 /**
- * Loads the IANA timezone catalog once per component lifetime. Memoised
- * because the catalog is stable for the duration of the page session
- * and the underlying API call (~600 strings) is non-trivial.
+ * Loads the IANA timezone catalog once per component lifetime. The
+ * underlying API call (~600 strings) is non-trivial enough that
+ * memoising at the component level is appropriate.
  */
 const loadIanaTimezones = (): readonly string[] => {
     if (typeof Intl !== 'undefined' && typeof Intl.supportedValuesOf === 'function') {
@@ -129,29 +137,34 @@ const splitZone = (zone: string): { region: string; city: string } => {
 };
 
 /**
- * Returns the localised current time + offset for a zone. Falls back
- * to a typed sentinel if the runtime rejects the timezone (which
- * should not happen for IANA strings sourced from `supportedValuesOf`,
- * but defensive narrowing keeps the column from crashing the picker).
+ * Computes the static GMT offset string (e.g. `GMT+05:30`) for a zone.
+ * Computed once per zone at mount and cached on the row entry — no
+ * per-tick re-render churn. The offset is stable for ~6 months at a
+ * time across DST cycles, which is acceptable for a selector whose
+ * purpose is identification, not live observation.
  */
-const formatZonePreview = (zone: string, instant: Date): string => {
+const computeZoneOffset = (zone: string): string => {
     try {
-        const time = new Intl.DateTimeFormat('en-GB', {
-            timeZone: zone,
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-        }).format(instant);
-        const offsetParts = new Intl.DateTimeFormat('en-GB', {
+        const parts = new Intl.DateTimeFormat('en-GB', {
             timeZone: zone,
             timeZoneName: 'shortOffset',
-        }).formatToParts(instant);
-        const offset = offsetParts.find(p => p.type === 'timeZoneName')?.value ?? '';
-        return offset.length > 0 ? `${time} · ${offset}` : time;
+        }).formatToParts(new Date());
+        return parts.find(p => p.type === 'timeZoneName')?.value ?? '';
     } catch {
-        return '—';
+        return '';
     }
 };
+
+interface ZoneEntry {
+    readonly zone: string;
+    readonly city: string;
+    readonly offset: string;
+}
+
+interface RegionGroup {
+    readonly region: string;
+    readonly entries: ReadonlyArray<ZoneEntry>;
+}
 
 export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
     value,
@@ -159,40 +172,27 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
     onOpenChange,
     onSelect,
 }) => {
-    const zones: readonly string[] = useMemo(() => loadIanaTimezones(), []);
-
-    // Tick once per minute so the displayed current time stays fresh
-    // without churning the DOM at second precision. The tick stops
-    // mounting work to do when the dialog is closed (mounted children
-    // are still cheap, but cycles avoided is cycles earned).
-    const [now, setNow] = useState<Date>(() => new Date());
-    useEffect(() => {
-        if (!open) return;
-        const interval = window.setInterval(() => setNow(new Date()), TICK_INTERVAL_MS);
-        return () => window.clearInterval(interval);
-    }, [open]);
-
-    // Group zones by region. The regional split is purely for the UI —
-    // the value bound to the upstream `onSelect` is always the full IANA
-    // string. Sorting is alphabetical inside each region for predictable
-    // scanning; regions themselves are sorted alphabetically so the same
-    // doctor lands on the same row position across visits.
-    const grouped: ReadonlyArray<{ region: string; entries: ReadonlyArray<{ zone: string; city: string }> }> = useMemo(() => {
-        const buckets = new Map<string, Array<{ zone: string; city: string }>>();
+    // Single, mount-once computation. Pre-builds the regional grouping
+    // AND each row's static offset string so the render path is pure
+    // string interpolation — no Intl calls, no Date math, nothing for
+    // the render loop to recompute on subsequent renders.
+    const grouped: ReadonlyArray<RegionGroup> = useMemo(() => {
+        const zones = loadIanaTimezones();
+        const buckets = new Map<string, Array<ZoneEntry>>();
         for (const zone of zones) {
             const { region, city } = splitZone(zone);
             const list = buckets.get(region) ?? [];
-            list.push({ zone, city });
+            list.push({ zone, city, offset: computeZoneOffset(zone) });
             buckets.set(region, list);
         }
-        const result: Array<{ region: string; entries: Array<{ zone: string; city: string }> }> = [];
+        const result: Array<{ region: string; entries: Array<ZoneEntry> }> = [];
         for (const [region, entries] of buckets) {
             entries.sort((a, b) => a.city.localeCompare(b.city));
             result.push({ region, entries });
         }
         result.sort((a, b) => a.region.localeCompare(b.region));
         return result;
-    }, [zones]);
+    }, []);
 
     return (
         <CommandDialog open={open} onOpenChange={onOpenChange}>
@@ -203,7 +203,7 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
                 </CommandEmpty>
                 {grouped.map(({ region, entries }) => (
                     <CommandGroup key={region} heading={region}>
-                        {entries.map(({ zone, city }) => {
+                        {entries.map(({ zone, city, offset }) => {
                             const isSelected: boolean = zone === value;
                             return (
                                 <CommandItem
@@ -223,7 +223,7 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
                                         <span className="haemi-clinic-tz-item-city">{city}</span>
                                         <span className="haemi-clinic-tz-item-iana">{zone}</span>
                                     </span>
-                                    <span className="haemi-clinic-tz-item-preview">{formatZonePreview(zone, now)}</span>
+                                    <span className="haemi-clinic-tz-item-preview">{offset}</span>
                                 </CommandItem>
                             );
                         })}
