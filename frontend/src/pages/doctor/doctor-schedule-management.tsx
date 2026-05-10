@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
     getDoctorSchedule,
@@ -207,23 +208,23 @@ export const DoctorScheduleManagement: React.FC = () => {
                     </Button>
                 </div>
 
-                {error && (
+                <AnimatedAlert visible={error !== null}>
                     <Alert variant="destructive">
                         <div className="flex-shrink-0 flex items-center justify-center">
                             <AlertCircle className="h-4 w-4" />
                         </div>
                         <AlertDescription>{error}</AlertDescription>
                     </Alert>
-                )}
+                </AnimatedAlert>
 
-                {success && (
+                <AnimatedAlert visible={success !== null}>
                     <Alert className="border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300">
                         <div className="flex-shrink-0 flex items-center justify-center">
                             <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
                         </div>
                         <AlertDescription>{success}</AlertDescription>
                     </Alert>
-                )}
+                </AnimatedAlert>
 
                 <ClinicTimezoneCard
                     value={clinicTimezone}
