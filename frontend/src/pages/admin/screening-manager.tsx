@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -408,63 +409,65 @@ export const ScreeningManager: React.FC = () => {
                     </Button>
                 </div>
 
-                {generalError && (
+                <AnimatedAlert visible={generalError !== null}>
                     <Alert variant="destructive" className="rounded-[var(--card-radius)] border-rose-500/50 bg-rose-500/10 text-rose-500">
                         <div className="flex items-center gap-3">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription className="font-medium">{generalError}</AlertDescription>
                         </div>
                     </Alert>
-                )}
+                </AnimatedAlert>
 
-                {success && (
+                <AnimatedAlert visible={success !== null}>
                     <Alert className="border-green-500/50 text-green-500 bg-green-500/10 rounded-[var(--card-radius)]">
                         <div className="flex items-center gap-3">
                             <CheckCircle2 className="h-4 w-4" />
                             <AlertDescription className="font-medium">{success}</AlertDescription>
                         </div>
                     </Alert>
-                )}
+                </AnimatedAlert>
 
-                {reorderUndo && (
-                    <Alert className="border-primary/50 bg-primary/5 text-foreground rounded-[var(--card-radius)]">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-                            <div className="flex items-start gap-3">
-                                <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                                <AlertDescription className="font-medium">
-                                    <span className="font-semibold">Order saved.</span>{' '}
-                                    <span className="text-muted-foreground">
-                                        &ldquo;{reorderUndo.movedQuestionText}&rdquo; moved from position{' '}
-                                        <span className="font-semibold text-foreground">{reorderUndo.fromPosition}</span>
-                                        {' → '}
-                                        <span className="font-semibold text-foreground">{reorderUndo.toPosition}</span>
-                                        .
-                                    </span>
-                                </AlertDescription>
+                <AnimatedAlert visible={reorderUndo !== null}>
+                    {reorderUndo !== null ? (
+                        <Alert className="border-primary/50 bg-primary/5 text-foreground rounded-[var(--card-radius)]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                                <div className="flex items-start gap-3">
+                                    <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                                    <AlertDescription className="font-medium">
+                                        <span className="font-semibold">Order saved.</span>{' '}
+                                        <span className="text-muted-foreground">
+                                            &ldquo;{reorderUndo.movedQuestionText}&rdquo; moved from position{' '}
+                                            <span className="font-semibold text-foreground">{reorderUndo.fromPosition}</span>
+                                            {' → '}
+                                            <span className="font-semibold text-foreground">{reorderUndo.toPosition}</span>
+                                            .
+                                        </span>
+                                    </AlertDescription>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => { void handleUndoReorder(); }}
+                                        disabled={saving}
+                                        className="h-8 px-3 text-xs font-bold uppercase tracking-wider border-primary/40 text-primary hover:bg-primary/10 rounded-[var(--card-radius)] flex items-center gap-1.5"
+                                    >
+                                        <Undo2 className="h-3.5 w-3.5" />
+                                        Undo
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={handleDismissUndo}
+                                        className="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground rounded-[var(--card-radius)]"
+                                    >
+                                        Dismiss
+                                    </Button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => { void handleUndoReorder(); }}
-                                    disabled={saving}
-                                    className="h-8 px-3 text-xs font-bold uppercase tracking-wider border-primary/40 text-primary hover:bg-primary/10 rounded-[var(--card-radius)] flex items-center gap-1.5"
-                                >
-                                    <Undo2 className="h-3.5 w-3.5" />
-                                    Undo
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={handleDismissUndo}
-                                    className="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground rounded-[var(--card-radius)]"
-                                >
-                                    Dismiss
-                                </Button>
-                            </div>
-                        </div>
-                    </Alert>
-                )}
+                        </Alert>
+                    ) : null}
+                </AnimatedAlert>
 
                 {/*
                   Platform-wide risk-calculation mode toggle. Determines
