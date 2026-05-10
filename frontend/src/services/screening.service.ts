@@ -95,10 +95,54 @@ export const reorderQuestions = async (updates: { id: string; sort_order: number
     return normalizeResponse(response);
 };
 
+// ─── ADMIN: Risk Calculation Mode (AI vs deterministic weights) ──────────────
+
+/**
+ * Platform-wide risk calculation mode. `'ai'` routes patient triage
+ * scoring through Gemini (server-side + client preview); `'manual'`
+ * uses the admin-configured `risk_weight` per question. The AI failure
+ * path always falls back to manual gracefully — patient flow is never
+ * halted by an unavailable Gemini API.
+ */
+export type RiskCalculationMode = 'ai' | 'manual';
+
+export interface RiskCalculationModeResponse {
+    mode: RiskCalculationMode;
+}
+
+/** Read-only fetch — used by both admin (current value display) and
+ *  patient client (decide whether to attempt the AI preview call). */
+export const getRiskCalculationMode = async (): Promise<RiskCalculationMode> => {
+    const response = await api.get<ApiResponse<RiskCalculationModeResponse>>('/screening/risk-mode');
+    const data = normalizeResponse(response);
+    return data.mode;
+};
+
+/** Admin-only update. Server validates the mode value strictly; on
+ *  success returns the persisted mode (echoed for UI consistency). */
+export const updateRiskCalculationMode = async (mode: RiskCalculationMode): Promise<RiskCalculationMode> => {
+    const response = await api.put<ApiResponse<RiskCalculationModeResponse>>(
+        '/admin/settings/risk-calculation-mode',
+        { mode }
+    );
+    const data = normalizeResponse(response);
+    return data.mode;
+};
+
 /**
  * 🩺 INSTITUTIONAL AI-TRIAGE ENGINE (v15.0 Platinum)
  * Logic: Hybrid Intelligence — Combines Quantitative Risk Weighting with Qualitative AI Analysis.
  * Standard: Deterministic Fallback Guard | Zero Data-Drift Prompting | Strict Type Narrowing.
+ *
+ * Mode gating (admin-controlled, runtime-resolved):
+ *   The platform-wide `risk_calculation_mode` setting is fetched from
+ *   `GET /screening/risk-mode` at the start of this call. When the
+ *   admin has flipped the mode to `'manual'`, the AI round-trip is
+ *   skipped entirely — saves the API cost and keeps the patient
+ *   experience deterministic. When `'ai'`, the existing prompt + AI
+ *   call + fallback chain runs as before. Mode-fetch failure itself
+ *   collapses to deterministic (defensive) — patient flow is never
+ *   blocked by a settings-read hiccup.
  */
 export const analyzeWithAI = async (responses: ScreeningResponse[], questions: ScreeningQuestion[]): Promise<RiskReport> => {
     // 1. QUANTITATIVE CALCULATION: Summing clinical weights for deterministic fallback
@@ -113,6 +157,23 @@ export const analyzeWithAI = async (responses: ScreeningResponse[], questions: S
         if (score >= 4) return { score, level: 'Medium', message: 'Moderate risk identified. Clinical monitoring advised.' };
         return { score, level: 'Low', message: 'No immediate clinical danger detected via primary triage signals.' };
     };
+
+    // 3. ADMIN-CONTROLLED MODE GATE: skip the AI round-trip entirely
+    //    when the platform is configured for deterministic-only scoring.
+    //    A settings-read failure also collapses to deterministic so the
+    //    patient never pays for a network hiccup at the boundary.
+    let resolvedMode: RiskCalculationMode = 'manual';
+    try {
+        resolvedMode = await getRiskCalculationMode();
+    } catch (err: unknown) {
+        auditLogger.log('AI_TRIAGE_MODE_FETCH_FAILED', {
+            reason: err instanceof Error ? err.message : 'UNKNOWN',
+        });
+    }
+
+    if (resolvedMode === 'manual') {
+        return getDeterministicRisk(totalScore);
+    }
 
     try {
         const clinicalSignals = responses.map(r => {
@@ -200,5 +261,7 @@ export default {
     deleteQuestion,
     reorderQuestions,
     analyzeWithAI,
+    getRiskCalculationMode,
+    updateRiskCalculationMode,
     screeningService
 };

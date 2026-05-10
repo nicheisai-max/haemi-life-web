@@ -33,6 +33,7 @@ export type AuditEventType =
     | 'SYSTEM_RECOVERY'
     | 'AI_TRIAGE_SUCCESS'
     | 'AI_TRIAGE_FALLBACK'
+    | 'AI_TRIAGE_MODE_FETCH_FAILED'
     | 'ERROR';
 
 export interface AuditEventPayload {

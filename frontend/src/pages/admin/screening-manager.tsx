@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical, Undo2 } from 'lucide-react';
+import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical, Undo2, Sparkles } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -12,7 +12,7 @@ import {
     DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { logger } from '@/utils/logger';
-import screeningService, { ScreeningQuestion } from '@/services/screening.service';
+import screeningService, { ScreeningQuestion, type RiskCalculationMode } from '@/services/screening.service';
 import { TransitionItem } from '@/components/layout/page-transition';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -68,6 +68,13 @@ export const ScreeningManager: React.FC = () => {
     const [reorderUndo, setReorderUndo] = useState<ReorderUndoState | null>(null);
     const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // Platform-wide risk-calculation mode (admin-controlled). `null` =
+    // not yet hydrated; the toggle stays disabled until the initial GET
+    // resolves so the admin can never accidentally flip an unknown
+    // state into the wrong direction.
+    const [riskMode, setRiskMode] = useState<RiskCalculationMode | null>(null);
+    const [riskModeUpdating, setRiskModeUpdating] = useState<boolean>(false);
+
     // Cleanup the Undo timer on unmount so a stale closure cannot fire
     // setState after teardown — strict-mode-safe.
     useEffect(() => {
@@ -86,12 +93,67 @@ export const ScreeningManager: React.FC = () => {
     const loadQuestions = async () => {
         try {
             setLoading(true);
-            const data = await screeningService.getAllQuestions();
+            // Hydrate questions + risk-calculation mode in parallel so the
+            // page lands fully ready in a single network round-trip pair.
+            // Mode-fetch failure is non-fatal — we keep the toggle
+            // disabled-with-fallback-default until the admin retries.
+            const modePromise = screeningService.getRiskCalculationMode().catch((err: unknown) => {
+                logger.warn('[ScreeningManager] Failed to hydrate risk-calculation mode', {
+                    error: err instanceof Error ? err.message : String(err),
+                });
+                return null;
+            });
+            const [data, mode] = await Promise.all([
+                screeningService.getAllQuestions(),
+                modePromise,
+            ]);
             setQuestions(data);
+            if (mode !== null) setRiskMode(mode);
         } catch (error) {
             logger.error('[ScreeningManager] Load failure', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    /**
+     * Persist a flip of the platform-wide risk-calculation mode.
+     * Optimistic UI: update local state first, then PUT; on failure roll
+     * back and surface the error in the existing inline alert. Confirmation
+     * uses the page's existing `setSuccess` banner — single canonical
+     * feedback surface, mirrored across every other admin action on this
+     * page.
+     */
+    const handleToggleRiskMode = async (nextEnabled: boolean): Promise<void> => {
+        if (riskMode === null || riskModeUpdating) return;
+        const previous: RiskCalculationMode = riskMode;
+        const next: RiskCalculationMode = nextEnabled ? 'ai' : 'manual';
+        if (next === previous) return;
+
+        setRiskModeUpdating(true);
+        setRiskMode(next);
+        setGeneralError(null);
+        setSuccess(null);
+        try {
+            const echoed = await screeningService.updateRiskCalculationMode(next);
+            // Trust the server's echoed value (covers any normalisation).
+            setRiskMode(echoed);
+            const message: string = echoed === 'ai'
+                ? 'Risk scoring switched to AI. Future patient screenings will be scored by Gemini, with graceful fallback to your configured weights if the AI service is unavailable.'
+                : 'Risk scoring switched to configured weights. Future patient screenings will be scored using the per-question values below.';
+            setSuccess(message);
+            setTimeout(() => setSuccess(null), 5000);
+        } catch (err: unknown) {
+            setRiskMode(previous);
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            const errorMessage: string = apiErr.response?.data?.message ?? 'Failed to update risk scoring mode';
+            setGeneralError(errorMessage);
+            logger.error('[ScreeningManager] Risk mode toggle failed', {
+                attempted: next,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            setRiskModeUpdating(false);
         }
     };
 
@@ -403,6 +465,52 @@ export const ScreeningManager: React.FC = () => {
                         </div>
                     </Alert>
                 )}
+
+                {/*
+                  Platform-wide risk-calculation mode toggle. Determines
+                  whether patient triage responses are scored by Gemini
+                  AI ('ai') or by the admin-configured per-question
+                  risk weights below ('manual'). The AI path always
+                  falls back to the deterministic weighted sum if
+                  Gemini is unreachable — patient flow is never
+                  blocked. Hydration is delayed via riskMode === null
+                  so the toggle does not flicker into the wrong
+                  position before the GET resolves.
+                */}
+                <Card className="p-6 border-primary/20 bg-primary/5 rounded-[var(--card-radius)]">
+                    <div className="flex flex-col sm:flex-row items-start gap-4">
+                        <div className="flex items-center justify-center w-11 h-11 rounded-full bg-primary/15 text-primary flex-shrink-0">
+                            <Sparkles className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0 w-full">
+                            <h2 className="text-base font-bold text-foreground mb-1">Risk Scoring Mode</h2>
+                            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                                Choose how patient triage responses are converted into risk scores for clinical routing.
+                            </p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <Switch
+                                    checked={riskMode === 'ai'}
+                                    onCheckedChange={(checked: boolean) => { void handleToggleRiskMode(checked); }}
+                                    disabled={riskMode === null || riskModeUpdating}
+                                    aria-label="Use AI for clinical risk calculation"
+                                />
+                                <span className="text-sm font-semibold text-foreground">
+                                    {riskMode === 'ai' ? 'AI-powered (Gemini)' : 'Configured weights'}
+                                </span>
+                                {riskModeUpdating && (
+                                    <span className="text-xs text-muted-foreground italic">Saving...</span>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                                {riskMode === 'ai' ? (
+                                    'Patient triage responses are scored by Gemini AI based on clinical context, symptom co-occurrence, and disease patterns. The risk weights below remain advisory; the AI may upweight critical signals beyond their assigned values. If the AI service is unavailable, the system gracefully falls back to your configured weights.'
+                                ) : (
+                                    'Patient triage responses are scored using the risk weights configured for each question below. No external AI service is consulted, so no API costs are incurred.'
+                                )}
+                            </p>
+                        </div>
+                    </div>
+                </Card>
 
                 <DragDropContext onDragEnd={handleDragEnd}>
                     <Droppable droppableId="screening-questions">
