@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { AlertCircle, CheckCircle2, Pencil, Save, Shield, Calendar, BadgeCheck, Settings as SettingsIcon, Lock, User, Camera } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { getProfile, updateProfile, uploadProfileImage } from '../../services/user.service';
 import type { UserProfile } from '../../services/user.service';
@@ -121,23 +122,23 @@ export const Profile: React.FC = () => {
                 <p className="page-subheading italic">Manage your personal information and account settings</p>
             </div>
 
-            {generalError && (
+            <AnimatedAlert visible={Boolean(generalError)}>
                 <Alert variant="destructive">
                     <div className="flex-shrink-0 flex items-center justify-center">
                         <AlertCircle className="h-4 w-4" />
                     </div>
                     <AlertDescription>{generalError}</AlertDescription>
                 </Alert>
-            )}
+            </AnimatedAlert>
 
-            {success && (
+            <AnimatedAlert visible={Boolean(success)}>
                 <Alert className="border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400">
                     <div className="flex-shrink-0 flex items-center justify-center">
                         <CheckCircle2 className="h-4 w-4" />
                     </div>
                     <AlertDescription>{success}</AlertDescription>
                 </Alert>
-            )}
+            </AnimatedAlert>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left: Profile Info */}

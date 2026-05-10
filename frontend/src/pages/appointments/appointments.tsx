@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import {
     getMyAppointments,
     cancelAppointment,
@@ -332,12 +333,12 @@ export const Appointments: React.FC = () => {
                 )}
             </TransitionItem>
 
-            {error && (
+            <AnimatedAlert visible={Boolean(error)}>
                 <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{error}</AlertDescription>
                 </Alert>
-            )}
+            </AnimatedAlert>
 
             {/* Filters */}
             <TransitionItem className="flex flex-wrap gap-3 p-2 bg-muted/50 rounded-[var(--card-radius)] border">

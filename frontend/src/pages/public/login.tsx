@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { AlertCircle, Mail, Lock } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthLayout } from '../../components/layout/auth-layout';
@@ -64,14 +65,14 @@ export const Login: React.FC = () => {
             image={loginBg}
         >
             <Form {...form}>
-                {generalError && (
-                    <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+                <AnimatedAlert visible={Boolean(generalError)}>
+                    <Alert variant="destructive">
                         <div className="flex-shrink-0 flex items-center justify-center">
                             <AlertCircle className="h-4 w-4" />
                         </div>
                         <AlertDescription>{generalError}</AlertDescription>
                     </Alert>
-                )}
+                </AnimatedAlert>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                     <FormField
                         control={form.control}

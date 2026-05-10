@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { DashboardCard } from '@/components/ui/dashboard-card';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
 import { BarChart3, TrendingUp, Users, Calendar, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -132,12 +133,12 @@ export const DoctorReports: React.FC = () => {
                 </div>
             </TransitionItem>
 
-            {error && (
-                <TransitionItem className="bg-destructive/10 border border-destructive/50 p-4 rounded-[var(--card-radius)] text-destructive flex items-center gap-3">
+            <AnimatedAlert visible={Boolean(error)}>
+                <div className="bg-destructive/10 border border-destructive/50 p-4 rounded-[var(--card-radius)] text-destructive flex items-center gap-3">
                     <BarChart3 className="h-5 w-5" />
                     <p className="font-medium text-sm">{error}</p>
-                </TransitionItem>
-            )}
+                </div>
+            </AnimatedAlert>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { Badge } from '@/components/ui/badge';
 import { getMyPrescriptions, getPrescriptionById, type Prescription } from '../../services/prescription.service';
 import { getMyRecords, type MedicalRecord } from '../../services/record.service';
@@ -179,16 +180,14 @@ export const Prescriptions: React.FC = () => {
                 </div>
             </TransitionItem>
 
-            {error && (
-                <TransitionItem>
-                    <Alert variant="destructive" className="mb-6">
-                        <div className="flex-shrink-0 flex items-center justify-center">
-                            <AlertCircle className="h-4 w-4" />
-                        </div>
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                </TransitionItem>
-            )}
+            <AnimatedAlert visible={Boolean(error)}>
+                <Alert variant="destructive" className="mb-6">
+                    <div className="flex-shrink-0 flex items-center justify-center">
+                        <AlertCircle className="h-4 w-4" />
+                    </div>
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            </AnimatedAlert>
 
             <div className={`grid grid-cols-1 ${selectedPrescription ? 'lg:grid-cols-[1fr_24rem]' : ''} gap-8 transition-all duration-300`}>
                 <div className="space-y-10">

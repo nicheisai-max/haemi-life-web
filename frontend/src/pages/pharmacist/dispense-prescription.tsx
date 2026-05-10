@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { DashboardCard } from '@/components/ui/dashboard-card';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { QrCode, Search, Pill, User, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,16 +119,14 @@ export const DispensePrescription: React.FC = () => {
                         </DashboardCard>
                     </TransitionItem>
 
-                    {error && (
-                        <TransitionItem>
-                            <DashboardCard className="p-4 bg-destructive/5 border-destructive/20">
-                                <div className="flex gap-3 text-destructive">
-                                    <AlertCircle className="h-5 w-5 shrink-0" />
-                                    <div className="text-xs font-medium">{error}</div>
-                                </div>
-                            </DashboardCard>
-                        </TransitionItem>
-                    )}
+                    <AnimatedAlert visible={Boolean(error)}>
+                        <DashboardCard className="p-4 bg-destructive/5 border-destructive/20">
+                            <div className="flex gap-3 text-destructive">
+                                <AlertCircle className="h-5 w-5 shrink-0" />
+                                <div className="text-xs font-medium">{error}</div>
+                            </div>
+                        </DashboardCard>
+                    </AnimatedAlert>
 
                     <TransitionItem>
                         <DashboardCard className="p-4 bg-amber-500/5 border-amber-500/20">

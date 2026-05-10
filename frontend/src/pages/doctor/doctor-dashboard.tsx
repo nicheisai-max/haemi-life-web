@@ -21,6 +21,7 @@ import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
 import { DoctorTimezoneDetectionModal } from '@/components/ui/doctor-timezone-detection-modal';
+import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { usePageLoader } from '@/hooks/use-page-loader';
 
 const CLINICAL_VOLUME_DATA = [
@@ -183,12 +184,12 @@ export const DoctorDashboard = () => {
             </TransitionItem>
 
             {/* Error Message */}
-            {error && (
-                <TransitionItem className="rounded-[var(--card-radius)] border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3" role="alert">
+            <AnimatedAlert visible={Boolean(error)}>
+                <div className="rounded-[var(--card-radius)] border border-destructive/50 bg-destructive/10 p-4 text-destructive flex items-center gap-3" role="alert">
                     <AlertCircle className="h-5 w-5" aria-hidden="true" />
                     <p className="text-sm font-medium">{error}</p>
-                </TransitionItem>
-            )}
+                </div>
+            </AnimatedAlert>
 
             {/* Stats Grid */}
             <section className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-label="Key Metrics">
