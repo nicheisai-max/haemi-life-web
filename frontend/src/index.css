@@ -1199,6 +1199,127 @@
     text-align: right;
   }
 
+  /* 🌍 HAEMI TIMEZONE DETECTION MODAL (Phase 4 — Timezone Sovereignty)
+     Windows / macOS post-install style first-time prompt for the
+     doctor's authoritative `clinic_timezone`. Renders inside the shared
+     `Dialog` primitive (already brand-token-aware via `bg-background`,
+     `bg-popover`, `border`); these classes carry the inner layout —
+     icon column, callout box, action row — and resolve every value
+     through the `--card`, `--border`, `--foreground`,
+     `--muted-foreground`, `--sidebar-active`, `--card-radius`,
+     `--muted` tokens so light + dark themes auto-resolve. Stacks the
+     button row vertically below `40rem` for thumb-friendly mobile;
+     side-by-side at `sm:` and above.
+  */
+  .haemi-tz-detect-content {
+    padding: 1.5rem;
+    gap: 1rem;
+  }
+  .haemi-tz-detect-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .haemi-tz-detect-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 100rem;
+    background-color: color-mix(in srgb, var(--sidebar-active) 12%, transparent);
+    color: var(--sidebar-active);
+    flex-shrink: 0;
+  }
+  .haemi-tz-detect-icon-svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .haemi-tz-detect-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+  .haemi-tz-detect-title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--foreground);
+    letter-spacing: -0.01em;
+  }
+  .haemi-tz-detect-description {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    line-height: 1.45;
+  }
+  .haemi-tz-detect-callout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 1rem;
+    border-radius: var(--card-radius);
+    background-color: color-mix(in srgb, var(--sidebar-active) 8%, var(--muted));
+    border: 0.0625rem solid color-mix(in srgb, var(--sidebar-active) 24%, var(--border));
+  }
+  .haemi-tz-detect-callout-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+  }
+  .haemi-tz-detect-callout-iana {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--foreground);
+    word-break: break-all;
+  }
+  .haemi-tz-detect-callout-meta {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .haemi-tz-detect-current {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    margin: 0;
+  }
+  .haemi-tz-detect-current-iana {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .haemi-tz-detect-actions {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.625rem;
+    margin-top: 0.5rem;
+  }
+  @media (min-width: 40rem) {
+    .haemi-tz-detect-actions {
+      flex-direction: row;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+  }
+  .haemi-tz-detect-button {
+    width: 100%;
+  }
+  @media (min-width: 40rem) {
+    .haemi-tz-detect-button {
+      width: auto;
+    }
+  }
+  .haemi-tz-detect-button-primary {
+    background-color: var(--sidebar-active);
+    color: var(--primary-foreground);
+    border-color: transparent;
+  }
+  .haemi-tz-detect-button-primary:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--sidebar-active) 88%, black);
+  }
+
   /* 🩺 HAEMI DATE SCROLLER (Premium Appointment Carousel)
      Tokens: every color, radius, and elevation drawn from the existing
      brand palette (`--sidebar-active`, `--card`, `--border`, `--card-radius`,

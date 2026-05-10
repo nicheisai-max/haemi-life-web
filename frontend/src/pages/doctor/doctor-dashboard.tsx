@@ -20,6 +20,7 @@ import { AnimatedEmptyState } from '@/components/ui/animated-empty-state';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
+import { DoctorTimezoneDetectionModal } from '@/components/ui/doctor-timezone-detection-modal';
 import { usePageLoader } from '@/hooks/use-page-loader';
 
 const CLINICAL_VOLUME_DATA = [
@@ -126,6 +127,15 @@ export const DoctorDashboard = () => {
 
     return (
         <div className="space-y-8">
+            {/*
+              Phase 4 — Timezone Sovereignty: first-time TZ detection
+              modal mounts here so it fires on the doctor's first
+              authenticated landing. The component self-gates on role,
+              acknowledgment flag, and stored-vs-detected mismatch —
+              if any of those preconditions fail it renders nothing,
+              so this mount is safe to keep unconditional.
+            */}
+            <DoctorTimezoneDetectionModal />
 
 
             {/* Hero Section - Standardized Premium Style */}
