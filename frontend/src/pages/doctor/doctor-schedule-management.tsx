@@ -18,7 +18,6 @@ import { usePageLoader } from '@/hooks/use-page-loader';
 import { PremiumTimePicker } from '@/components/ui/premium-time-picker';
 import { ClinicTimezoneCard } from '@/components/ui/clinic-timezone-card';
 import { useAuth } from '@/hooks/use-auth';
-import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/utils/logger';
 import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
 
@@ -35,7 +34,6 @@ const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
 
 export const DoctorScheduleManagement: React.FC = () => {
     const { user } = useAuth();
-    const toast = useToast();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -131,22 +129,31 @@ export const DoctorScheduleManagement: React.FC = () => {
      * server rejects it. The server is the authority for IANA
      * validation (Phase 2 controller); on a 4xx the server message is
      * surfaced verbatim so the doctor sees what failed.
+     *
+     * Feedback channel: the same inline `<Alert />` banners that the
+     * schedule-save flow uses. Avoids the dual-feedback inconsistency
+     * (toast + inline alert) the page previously had, and keeps the
+     * doctor's eyes on a single canonical surface for "did my change
+     * stick?" — exactly per QA review (2026-05-10).
      */
     const handleTimezoneChange = useCallback(async (next: string): Promise<void> => {
         const previous: string = clinicTimezone;
         setTzUpdating(true);
         setClinicTimezone(next);
+        setError(null);
+        setSuccess(null);
         try {
             const result = await updateClinicTimezone(next);
             // Trust the server's echoed value — covers any normalisation
             // it might apply (e.g. canonical IANA aliasing).
             setClinicTimezone(result.clinicTimezone);
-            toast.success(`Clinic timezone updated to ${result.clinicTimezone}`);
+            setSuccess(`Clinic timezone updated to ${result.clinicTimezone}`);
+            window.setTimeout(() => setSuccess(null), 3000);
         } catch (err: unknown) {
             setClinicTimezone(previous); // Roll back on failure.
             const apiErr = err as { response?: { data?: { message?: string } } };
             const message: string = apiErr.response?.data?.message ?? 'Failed to update clinic timezone';
-            toast.error(message);
+            setError(message);
             logger.error('[Schedule] Clinic timezone update failed', {
                 attempted: next,
                 error: err instanceof Error ? err.message : String(err),
@@ -154,7 +161,7 @@ export const DoctorScheduleManagement: React.FC = () => {
         } finally {
             setTzUpdating(false);
         }
-    }, [clinicTimezone, toast]);
+    }, [clinicTimezone]);
 
     const onSubmit = async (data: FullDoctorScheduleFormData) => {
         try {
