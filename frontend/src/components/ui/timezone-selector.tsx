@@ -127,10 +127,19 @@ const TIMEZONE_CITY_ALIASES: Readonly<Record<string, readonly string[]>> = {
     'America/Lima': ['Arequipa', 'Peru'],
     'America/Santiago': ['Valparaiso', 'Chile'],
     'America/Argentina/Buenos_Aires': ['Cordoba', 'Argentina'],
+    // Legacy IANA alias still surfaced by some browsers.
+    'America/Buenos_Aires': ['Cordoba', 'Argentina'],
     'America/Caracas': ['Maracaibo', 'Venezuela'],
 
     // ─── Asia ─────────────────────────────────────────────────────────
     'Asia/Kolkata': ['Mumbai', 'Delhi', 'New Delhi', 'Bengaluru', 'Bangalore', 'Chennai', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kanpur', 'Surat', 'Indore', 'Nagpur', 'India', 'IST'],
+    // `Asia/Calcutta` is the legacy IANA alias for `Asia/Kolkata` (renamed
+    // in 1993). Some Chromium/V8 builds — including downstream forks like
+    // certain Brave versions — still return the legacy name from
+    // `Intl.supportedValuesOf('timeZone')`. Mirroring the alias list onto
+    // the legacy key guarantees Mumbai / Delhi / Bengaluru searches
+    // resolve regardless of which name the browser surfaces.
+    'Asia/Calcutta': ['Mumbai', 'Delhi', 'New Delhi', 'Bengaluru', 'Bangalore', 'Chennai', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kanpur', 'Surat', 'Indore', 'Nagpur', 'India', 'IST'],
     'Asia/Karachi': ['Lahore', 'Islamabad', 'Faisalabad', 'Rawalpindi', 'Pakistan'],
     'Asia/Dhaka': ['Chittagong', 'Bangladesh'],
     'Asia/Colombo': ['Sri Lanka', 'Sri Jayawardenepura'],
@@ -145,6 +154,9 @@ const TIMEZONE_CITY_ALIASES: Readonly<Record<string, readonly string[]>> = {
     'Asia/Manila': ['Quezon City', 'Cebu', 'Davao', 'Philippines'],
     'Asia/Kuala_Lumpur': ['Penang', 'Johor Bahru', 'Malaysia'],
     'Asia/Ho_Chi_Minh': ['Saigon', 'Hanoi', 'Da Nang', 'Vietnam'],
+    // Legacy IANA alias for `Asia/Ho_Chi_Minh` — same Brave/V8 quirk as
+    // Calcutta above; defensively mirrored.
+    'Asia/Saigon': ['Ho Chi Minh', 'Hanoi', 'Da Nang', 'Vietnam'],
     'Asia/Taipei': ['Kaohsiung', 'Taiwan'],
     'Asia/Dubai': ['Abu Dhabi', 'Sharjah', 'UAE', 'United Arab Emirates'],
     'Asia/Riyadh': ['Jeddah', 'Mecca', 'Medina', 'Dammam', 'Saudi Arabia', 'Saudi'],
@@ -186,6 +198,9 @@ const TIMEZONE_CITY_ALIASES: Readonly<Record<string, readonly string[]>> = {
     'Europe/Moscow': ['Saint Petersburg', 'St Petersburg', 'Novosibirsk', 'Yekaterinburg', 'Russia'],
     'Europe/Istanbul': ['Ankara', 'Izmir', 'Bursa', 'Turkey'],
     'Europe/Kiev': ['Kyiv', 'Kharkiv', 'Odessa', 'Dnipro', 'Ukraine'],
+    // `Europe/Kyiv` is the modern canonical name (renamed in IANA 2022b
+    // tzdata release). Mirrored so searches resolve under either form.
+    'Europe/Kyiv': ['Kiev', 'Kharkiv', 'Odessa', 'Dnipro', 'Ukraine'],
 
     // ─── Oceania ──────────────────────────────────────────────────────
     'Australia/Sydney': ['Newcastle', 'Wollongong', 'NSW', 'New South Wales'],
