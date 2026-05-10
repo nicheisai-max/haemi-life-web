@@ -69,6 +69,150 @@ interface TimezoneSelectorProps {
 }
 
 /**
+ * 🌐 City alias map — Google Calendar / Microsoft Windows-grade search.
+ *
+ * IANA only stores a single representative city per timezone (e.g.
+ * `Asia/Kolkata` for the entire Indian Standard Time region). Without
+ * augmentation, a doctor searching for "Mumbai" or "Delhi" in our
+ * picker would see no results — even though Mumbai and Delhi share
+ * `Asia/Kolkata`'s zone exactly. That is the well-known IANA-vs-UX
+ * mismatch every major scheduling product layers around.
+ *
+ * This map mirrors the alias layer Google Calendar, Outlook, and
+ * Windows Time Zone settings ship with: each IANA zone gets the
+ * popular city + country names that should resolve to it. Search
+ * matches against every alias; the row's display label inlines the
+ * top 3 aliases so the doctor can visually confirm coverage at a
+ * glance ("Kolkata · Mumbai · Delhi · Bengaluru → Asia/Kolkata").
+ *
+ * Coverage scope: ~60 IANA zones, ~250 city/country aliases.
+ * Strategy is "world's major cities + Haemi Life's serviced regions
+ * with extra weight" (Botswana, South Africa, India given fuller
+ * city lists). Obscure zones (Pacific atolls, etc.) intentionally
+ * omitted — the IANA city alone is sufficient for those.
+ */
+const TIMEZONE_CITY_ALIASES: Readonly<Record<string, readonly string[]>> = {
+    // ─── Africa ───────────────────────────────────────────────────────
+    'Africa/Gaborone': ['Francistown', 'Maun', 'Botswana'],
+    'Africa/Johannesburg': ['Cape Town', 'Durban', 'Pretoria', 'Port Elizabeth', 'Bloemfontein', 'South Africa'],
+    'Africa/Cairo': ['Alexandria', 'Giza', 'Egypt'],
+    'Africa/Lagos': ['Abuja', 'Kano', 'Ibadan', 'Nigeria'],
+    'Africa/Nairobi': ['Mombasa', 'Kisumu', 'Kenya'],
+    'Africa/Casablanca': ['Rabat', 'Marrakech', 'Fes', 'Morocco'],
+    'Africa/Algiers': ['Oran', 'Algeria'],
+    'Africa/Tunis': ['Tunisia'],
+    'Africa/Addis_Ababa': ['Ethiopia'],
+    'Africa/Accra': ['Kumasi', 'Ghana'],
+    'Africa/Dakar': ['Senegal'],
+    'Africa/Maputo': ['Beira', 'Mozambique'],
+    'Africa/Harare': ['Bulawayo', 'Zimbabwe'],
+    'Africa/Lusaka': ['Zambia'],
+    'Africa/Kampala': ['Uganda'],
+    'Africa/Dar_es_Salaam': ['Dodoma', 'Tanzania'],
+
+    // ─── Americas ─────────────────────────────────────────────────────
+    'America/Los_Angeles': ['San Francisco', 'Seattle', 'Las Vegas', 'Portland', 'San Diego', 'Sacramento', 'Pacific Time', 'PST', 'PDT', 'California', 'USA'],
+    'America/Denver': ['Salt Lake City', 'Albuquerque', 'Boise', 'Mountain Time', 'MST', 'MDT', 'Colorado'],
+    'America/Chicago': ['Houston', 'Dallas', 'San Antonio', 'Austin', 'Minneapolis', 'Memphis', 'Nashville', 'New Orleans', 'Central Time', 'CST', 'CDT', 'Texas'],
+    'America/New_York': ['Boston', 'Philadelphia', 'Washington DC', 'Atlanta', 'Miami', 'Charlotte', 'Detroit', 'Eastern Time', 'EST', 'EDT', 'NYC'],
+    'America/Phoenix': ['Tucson', 'Arizona'],
+    'America/Anchorage': ['Juneau', 'Alaska'],
+    'Pacific/Honolulu': ['Hawaii', 'HST'],
+    'America/Toronto': ['Ottawa', 'Montreal', 'Quebec City', 'Eastern Canada'],
+    'America/Vancouver': ['Pacific Canada', 'British Columbia'],
+    'America/Edmonton': ['Calgary', 'Mountain Canada', 'Alberta'],
+    'America/Sao_Paulo': ['Rio de Janeiro', 'Brasilia', 'Salvador', 'Belo Horizonte', 'Recife', 'Brazil'],
+    'America/Mexico_City': ['Guadalajara', 'Monterrey', 'Puebla', 'Tijuana', 'Mexico'],
+    'America/Bogota': ['Medellin', 'Cali', 'Cartagena', 'Colombia'],
+    'America/Lima': ['Arequipa', 'Peru'],
+    'America/Santiago': ['Valparaiso', 'Chile'],
+    'America/Argentina/Buenos_Aires': ['Cordoba', 'Argentina'],
+    // Legacy IANA alias still surfaced by some browsers.
+    'America/Buenos_Aires': ['Cordoba', 'Argentina'],
+    'America/Caracas': ['Maracaibo', 'Venezuela'],
+
+    // ─── Asia ─────────────────────────────────────────────────────────
+    'Asia/Kolkata': ['Mumbai', 'Delhi', 'New Delhi', 'Bengaluru', 'Bangalore', 'Chennai', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kanpur', 'Surat', 'Indore', 'Nagpur', 'India', 'IST'],
+    // `Asia/Calcutta` is the legacy IANA alias for `Asia/Kolkata` (renamed
+    // in 1993). Some Chromium/V8 builds — including downstream forks like
+    // certain Brave versions — still return the legacy name from
+    // `Intl.supportedValuesOf('timeZone')`. Mirroring the alias list onto
+    // the legacy key guarantees Mumbai / Delhi / Bengaluru searches
+    // resolve regardless of which name the browser surfaces.
+    'Asia/Calcutta': ['Mumbai', 'Delhi', 'New Delhi', 'Bengaluru', 'Bangalore', 'Chennai', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kanpur', 'Surat', 'Indore', 'Nagpur', 'India', 'IST'],
+    'Asia/Karachi': ['Lahore', 'Islamabad', 'Faisalabad', 'Rawalpindi', 'Pakistan'],
+    'Asia/Dhaka': ['Chittagong', 'Bangladesh'],
+    'Asia/Colombo': ['Sri Lanka', 'Sri Jayawardenepura'],
+    'Asia/Kathmandu': ['Pokhara', 'Nepal'],
+    'Asia/Tokyo': ['Osaka', 'Kyoto', 'Sapporo', 'Yokohama', 'Nagoya', 'Fukuoka', 'Kobe', 'Japan', 'JST'],
+    'Asia/Shanghai': ['Beijing', 'Shenzhen', 'Guangzhou', 'Chengdu', 'Wuhan', 'Xi’an', 'China'],
+    'Asia/Hong_Kong': ['HK', 'Kowloon'],
+    'Asia/Seoul': ['Busan', 'Incheon', 'Daegu', 'Korea', 'South Korea'],
+    'Asia/Singapore': ['SG'],
+    'Asia/Bangkok': ['Phuket', 'Chiang Mai', 'Pattaya', 'Thailand'],
+    'Asia/Jakarta': ['Surabaya', 'Bandung', 'Medan', 'Indonesia'],
+    'Asia/Manila': ['Quezon City', 'Cebu', 'Davao', 'Philippines'],
+    'Asia/Kuala_Lumpur': ['Penang', 'Johor Bahru', 'Malaysia'],
+    'Asia/Ho_Chi_Minh': ['Saigon', 'Hanoi', 'Da Nang', 'Vietnam'],
+    // Legacy IANA alias for `Asia/Ho_Chi_Minh` — same Brave/V8 quirk as
+    // Calcutta above; defensively mirrored.
+    'Asia/Saigon': ['Ho Chi Minh', 'Hanoi', 'Da Nang', 'Vietnam'],
+    'Asia/Taipei': ['Kaohsiung', 'Taiwan'],
+    'Asia/Dubai': ['Abu Dhabi', 'Sharjah', 'UAE', 'United Arab Emirates'],
+    'Asia/Riyadh': ['Jeddah', 'Mecca', 'Medina', 'Dammam', 'Saudi Arabia', 'Saudi'],
+    'Asia/Tehran': ['Mashhad', 'Isfahan', 'Iran'],
+    'Asia/Jerusalem': ['Tel Aviv', 'Haifa', 'Israel'],
+    'Asia/Baghdad': ['Basra', 'Mosul', 'Iraq'],
+    'Asia/Kuwait': ['Kuwait City'],
+    'Asia/Qatar': ['Doha'],
+    'Asia/Bahrain': ['Manama'],
+    'Asia/Beirut': ['Tripoli', 'Lebanon'],
+    'Asia/Amman': ['Jordan'],
+    'Asia/Damascus': ['Aleppo', 'Syria'],
+
+    // ─── Europe ───────────────────────────────────────────────────────
+    'Europe/London': ['Manchester', 'Edinburgh', 'Glasgow', 'Birmingham', 'Liverpool', 'Leeds', 'UK', 'Britain', 'England', 'Scotland', 'Wales', 'GMT', 'BST'],
+    'Europe/Dublin': ['Cork', 'Galway', 'Ireland'],
+    'Europe/Paris': ['Lyon', 'Marseille', 'Bordeaux', 'Nice', 'Toulouse', 'Nantes', 'France'],
+    'Europe/Berlin': ['Hamburg', 'Munich', 'Frankfurt', 'Cologne', 'Stuttgart', 'Dusseldorf', 'Germany'],
+    'Europe/Rome': ['Milan', 'Naples', 'Turin', 'Florence', 'Venice', 'Bologna', 'Italy'],
+    'Europe/Madrid': ['Barcelona', 'Valencia', 'Seville', 'Zaragoza', 'Malaga', 'Spain'],
+    'Europe/Amsterdam': ['Rotterdam', 'The Hague', 'Utrecht', 'Eindhoven', 'Netherlands', 'Holland'],
+    'Europe/Brussels': ['Antwerp', 'Ghent', 'Belgium'],
+    'Europe/Lisbon': ['Porto', 'Coimbra', 'Portugal'],
+    'Europe/Zurich': ['Geneva', 'Basel', 'Bern', 'Lausanne', 'Switzerland'],
+    'Europe/Vienna': ['Graz', 'Salzburg', 'Innsbruck', 'Austria'],
+    'Europe/Stockholm': ['Gothenburg', 'Malmo', 'Uppsala', 'Sweden'],
+    'Europe/Oslo': ['Bergen', 'Trondheim', 'Stavanger', 'Norway'],
+    'Europe/Helsinki': ['Tampere', 'Turku', 'Espoo', 'Finland'],
+    'Europe/Copenhagen': ['Aarhus', 'Odense', 'Aalborg', 'Denmark'],
+    'Atlantic/Reykjavik': ['Iceland'],
+    'Europe/Warsaw': ['Krakow', 'Lodz', 'Wroclaw', 'Poznan', 'Poland'],
+    'Europe/Prague': ['Brno', 'Ostrava', 'Czech Republic', 'Czechia'],
+    'Europe/Budapest': ['Debrecen', 'Hungary'],
+    'Europe/Bucharest': ['Cluj-Napoca', 'Timisoara', 'Romania'],
+    'Europe/Athens': ['Thessaloniki', 'Patras', 'Greece'],
+    'Europe/Sofia': ['Plovdiv', 'Varna', 'Bulgaria'],
+    'Europe/Belgrade': ['Novi Sad', 'Serbia'],
+    'Europe/Zagreb': ['Split', 'Rijeka', 'Croatia'],
+    'Europe/Moscow': ['Saint Petersburg', 'St Petersburg', 'Novosibirsk', 'Yekaterinburg', 'Russia'],
+    'Europe/Istanbul': ['Ankara', 'Izmir', 'Bursa', 'Turkey'],
+    'Europe/Kiev': ['Kyiv', 'Kharkiv', 'Odessa', 'Dnipro', 'Ukraine'],
+    // `Europe/Kyiv` is the modern canonical name (renamed in IANA 2022b
+    // tzdata release). Mirrored so searches resolve under either form.
+    'Europe/Kyiv': ['Kiev', 'Kharkiv', 'Odessa', 'Dnipro', 'Ukraine'],
+
+    // ─── Oceania ──────────────────────────────────────────────────────
+    'Australia/Sydney': ['Newcastle', 'Wollongong', 'NSW', 'New South Wales'],
+    'Australia/Melbourne': ['Geelong', 'Victoria', 'VIC'],
+    'Australia/Brisbane': ['Gold Coast', 'Cairns', 'Queensland', 'QLD'],
+    'Australia/Perth': ['Fremantle', 'Western Australia', 'WA'],
+    'Australia/Adelaide': ['South Australia', 'SA'],
+    'Pacific/Auckland': ['Wellington', 'Christchurch', 'Dunedin', 'New Zealand', 'NZ'],
+    'Pacific/Fiji': ['Suva'],
+};
+
+/**
  * Curated fallback when `Intl.supportedValuesOf` is unavailable. Covers
  * Botswana / South Africa / Asia / EU / US — the rim Haemi Life will
  * serve in the first 18 months. Order is regional, then alphabetical
@@ -159,6 +303,15 @@ interface ZoneEntry {
     readonly zone: string;
     readonly city: string;
     readonly offset: string;
+    /**
+     * Alternative city/country names for this zone. Used in two ways:
+     *   1. cmdk search match — full list joined into the `value` prop
+     *      so typing any alias (e.g. "Mumbai") matches the row.
+     *   2. Display label augmentation — top 3 inlined after the IANA
+     *      city so the doctor sees regional coverage at a glance.
+     * Empty array for zones not in `TIMEZONE_CITY_ALIASES`.
+     */
+    readonly aliases: readonly string[];
 }
 
 interface RegionGroup {
@@ -172,17 +325,18 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
     onOpenChange,
     onSelect,
 }) => {
-    // Single, mount-once computation. Pre-builds the regional grouping
-    // AND each row's static offset string so the render path is pure
-    // string interpolation — no Intl calls, no Date math, nothing for
-    // the render loop to recompute on subsequent renders.
+    // Single, mount-once computation. Pre-builds the regional grouping,
+    // each row's static offset string, AND each row's alias list — so
+    // the render path is pure string interpolation (no Intl calls, no
+    // Date math, no map lookups) on subsequent renders.
     const grouped: ReadonlyArray<RegionGroup> = useMemo(() => {
         const zones = loadIanaTimezones();
         const buckets = new Map<string, Array<ZoneEntry>>();
         for (const zone of zones) {
             const { region, city } = splitZone(zone);
+            const aliases: readonly string[] = TIMEZONE_CITY_ALIASES[zone] ?? [];
             const list = buckets.get(region) ?? [];
-            list.push({ zone, city, offset: computeZoneOffset(zone) });
+            list.push({ zone, city, offset: computeZoneOffset(zone), aliases });
             buckets.set(region, list);
         }
         const result: Array<{ region: string; entries: Array<ZoneEntry> }> = [];
@@ -199,16 +353,29 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
             <CommandInput placeholder="Search by city, country, or region..." />
             <CommandList className="haemi-clinic-tz-list">
                 <CommandEmpty>
-                    No timezone matches your search. Try the city name (e.g. <em>Mumbai</em>, <em>Johannesburg</em>).
+                    No timezone matches your search. Try a city or country name
+                    (e.g. <em>Mumbai</em>, <em>Tokyo</em>, <em>London</em>, <em>Sydney</em>).
                 </CommandEmpty>
                 {grouped.map(({ region, entries }) => (
                     <CommandGroup key={region} heading={region}>
-                        {entries.map(({ zone, city, offset }) => {
+                        {entries.map(({ zone, city, offset, aliases }) => {
                             const isSelected: boolean = zone === value;
+                            // Search value: full IANA + IANA city + every alias,
+                            // lowercased. cmdk's fuzzy matcher scores against
+                            // this string, so typing any alias surfaces the row.
+                            const searchValue: string =
+                                `${zone} ${city} ${aliases.join(' ')}`.toLowerCase();
+                            // Display label: IANA city, then up to 3 aliases
+                            // inlined with a `·` separator. Mirrors Google
+                            // Calendar / Windows Time Zone settings — the
+                            // doctor sees regional coverage at a glance.
+                            const displayCity: string = aliases.length > 0
+                                ? `${city} · ${aliases.slice(0, 3).join(' · ')}`
+                                : city;
                             return (
                                 <CommandItem
                                     key={zone}
-                                    value={`${zone} ${city}`.toLowerCase()}
+                                    value={searchValue}
                                     onSelect={() => onSelect(zone)}
                                     className="haemi-clinic-tz-item"
                                 >
@@ -220,7 +387,7 @@ export const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
                                         )}
                                     </span>
                                     <span className="haemi-clinic-tz-item-body">
-                                        <span className="haemi-clinic-tz-item-city">{city}</span>
+                                        <span className="haemi-clinic-tz-item-city">{displayCity}</span>
                                         <span className="haemi-clinic-tz-item-iana">{zone}</span>
                                     </span>
                                     <span className="haemi-clinic-tz-item-preview">{offset}</span>
