@@ -1320,6 +1320,79 @@
     background-color: color-mix(in srgb, var(--sidebar-active) 88%, black);
   }
 
+  /* 🌍 HAEMI TIMEZONE BANNER (Phase 5 — Patient-side contextual display)
+     Patient-facing banner near the booking slot grid: communicates that
+     slot times are interpreted in the doctor's clinic timezone (the
+     locked-in authority model from Phases 1–4). Resolves entirely
+     through brand tokens (`--card`, `--border`, `--foreground`,
+     `--muted-foreground`, `--sidebar-active`, `--card-radius`,
+     `--muted`); light + dark themes auto-resolve. Layout is
+     icon-left + text-block on every viewport (the text block's
+     internal lines wrap naturally inside flex on narrow widths —
+     no separate mobile breakpoint needed for the outer layout).
+  */
+  .haemi-tz-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.875rem;
+    padding: 0.875rem 1rem;
+    border-radius: var(--card-radius);
+    background-color: color-mix(in srgb, var(--sidebar-active) 6%, var(--muted));
+    border: 0.0625rem solid color-mix(in srgb, var(--sidebar-active) 18%, var(--border));
+  }
+  .haemi-tz-banner-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 100rem;
+    background-color: color-mix(in srgb, var(--sidebar-active) 14%, transparent);
+    color: var(--sidebar-active);
+    flex-shrink: 0;
+    margin-top: 0.0625rem;
+  }
+  .haemi-tz-banner-icon-svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  .haemi-tz-banner-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .haemi-tz-banner-primary {
+    font-size: 0.8125rem;
+    color: var(--foreground);
+    line-height: 1.4;
+    margin: 0;
+  }
+  .haemi-tz-banner-secondary {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    line-height: 1.4;
+    margin: 0;
+  }
+  .haemi-tz-banner-iana {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+    color: var(--foreground);
+    word-break: break-all;
+  }
+  .haemi-tz-banner-iana-secondary {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 600;
+    color: var(--foreground);
+    word-break: break-all;
+  }
+  .haemi-tz-banner-meta {
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
   /* 🩺 HAEMI DATE SCROLLER (Premium Appointment Carousel)
      Tokens: every color, radius, and elevation drawn from the existing
      brand palette (`--sidebar-active`, `--card`, `--border`, `--card-radius`,
