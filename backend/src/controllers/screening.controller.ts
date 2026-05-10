@@ -1,6 +1,14 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
-import { preScreeningRepository, PreScreeningDefinition } from '../repositories/pre-screening.repository';
+import {
+    preScreeningRepository,
+    PreScreeningDefinition,
+    RISK_CALCULATION_MODE_KEY,
+    DEFAULT_RISK_CALCULATION_MODE,
+    isRiskCalculationMode,
+    type RiskCalculationMode,
+} from '../repositories/pre-screening.repository';
+import { systemSettingsRepository } from '../repositories/system-settings.repository';
 import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
@@ -20,6 +28,29 @@ import {
  */
 
 // ─── ADMIN: Dynamic Triage Definition Management ─────────────────────────────
+
+/**
+ * Returns the platform-wide pre-screening risk calculation mode for the
+ * authenticated caller (any role). Read-only — used by the patient
+ * client to decide whether the booking-form preview should attempt a
+ * Gemini call (`'ai'`) or render the deterministic weighted result
+ * directly (`'manual'`). Defaults to `'manual'` when no row exists or
+ * the persisted value is corrupt.
+ */
+export const getPublicRiskMode = async (_req: Request, res: Response): Promise<void> => {
+    try {
+        const raw = await systemSettingsRepository.getSetting(RISK_CALCULATION_MODE_KEY);
+        const mode: RiskCalculationMode = isRiskCalculationMode(raw)
+            ? raw
+            : DEFAULT_RISK_CALCULATION_MODE;
+        sendResponse(res, 200, true, 'Risk calculation mode fetched', { mode });
+    } catch (error: unknown) {
+        logger.error('[ScreeningController] Failed to fetch risk-mode', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        sendError(res, 500, 'Failed to fetch risk calculation mode.');
+    }
+};
 
 // Fetch all active screening questions for triage (Public/Patient)
 export const getActiveQuestions = async (_req: Request, res: Response): Promise<void> => {

@@ -2,6 +2,32 @@ import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
+import { systemSettingsRepository } from './system-settings.repository';
+import {
+    scoreTriageWithAi,
+    TriageAiScorerError,
+    type TriageAiQuestionInput,
+    type TriageAiResponseInput,
+} from '../services/triage-ai-scorer.service';
+
+/**
+ * Storage key for the platform-wide risk-calculation-mode setting.
+ * Held alongside other `system_settings` rows; default is `'manual'`
+ * (existing behaviour) when no row exists yet.
+ */
+export const RISK_CALCULATION_MODE_KEY: string = 'pre_screening_risk_calculation_mode';
+
+export type RiskCalculationMode = 'ai' | 'manual';
+
+export const DEFAULT_RISK_CALCULATION_MODE: RiskCalculationMode = 'manual';
+
+/** Type guard for the persisted-value shape. Anything outside the
+ *  union (corruption, manual SQL edit, future enum addition) collapses
+ *  to the institutional default — patient flow never sees a half-typed
+ *  branch. */
+export const isRiskCalculationMode = (value: string | null): value is RiskCalculationMode => {
+    return value === 'ai' || value === 'manual';
+};
 
 export interface PreScreeningDefinition {
     id: string;
@@ -106,6 +132,23 @@ export class PreScreeningRepository {
             throw new Error(`Invalid appointment_id: expected positive integer, received ${String(appointment_id)}`);
         }
 
+        // Resolve the platform-wide risk-calculation mode BEFORE the
+        // transaction opens. The mode is a simple key-value read; no
+        // need to hold a write lock while we wait on it. Failure here
+        // (DB hiccup) collapses to the institutional default — patient
+        // flow continues with deterministic scoring.
+        let configuredMode: RiskCalculationMode = DEFAULT_RISK_CALCULATION_MODE;
+        try {
+            const raw = await systemSettingsRepository.getSetting(RISK_CALCULATION_MODE_KEY);
+            if (isRiskCalculationMode(raw)) {
+                configuredMode = raw;
+            }
+        } catch (modeErr: unknown) {
+            logger.warn('[PreScreening] Could not resolve risk-calculation mode; defaulting to manual', {
+                error: modeErr instanceof Error ? modeErr.message : String(modeErr),
+            });
+        }
+
         const client: PoolClient = await this.db.connect();
         try {
             await client.query('BEGIN');
@@ -113,18 +156,28 @@ export class PreScreeningRepository {
             // 1. Clear existing responses (if any) for this appointment
             await client.query('DELETE FROM appointment_pre_screenings WHERE appointment_id = $1', [appointment_id]);
 
-            // 2. Batch insert new responses
+            // 2. Hydrate per-question metadata + persist responses with
+            //    weighted scores. The `weighted` accumulator path doubles
+            //    as the deterministic-mode result AND the AI fallback.
+            const aiQuestionInputs: TriageAiQuestionInput[] = [];
+            const aiResponseInputs: TriageAiResponseInput[] = [];
             let totalRiskScore = 0;
             let maxPossibleRisk = 0;
 
             for (const resp of responses) {
-                // Fetch the weight for this specific question to ensure logic integrity.
-                // pg returns NUMERIC as string; Number() converts safely (NaN if malformed).
-                const qResult = await client.query<{ risk_weight: string | number | null }>(
-                    'SELECT risk_weight FROM pre_screening_definitions WHERE id = $1',
+                // Fetch the weight + text for this specific question.
+                // pg returns NUMERIC as string; Number() converts safely
+                // (NaN if malformed → safe-default to 1).
+                const qResult = await client.query<{
+                    question_text: string;
+                    disease_tag: string | null;
+                    risk_weight: string | number | null;
+                }>(
+                    'SELECT question_text, disease_tag, risk_weight FROM pre_screening_definitions WHERE id = $1',
                     [resp.question_id]
                 );
-                const rawWeight = qResult.rows[0]?.risk_weight;
+                const row = qResult.rows[0];
+                const rawWeight = row?.risk_weight;
                 const parsedWeight = rawWeight === null || rawWeight === undefined ? 1 : Number(rawWeight);
                 const weight = Number.isFinite(parsedWeight) ? parsedWeight : 1;
 
@@ -133,27 +186,77 @@ export class PreScreeningRepository {
                     totalRiskScore += weight;
                 }
 
+                if (row !== undefined) {
+                    aiQuestionInputs.push({
+                        id: resp.question_id,
+                        text: row.question_text,
+                        weight,
+                        diseaseTag: row.disease_tag ?? undefined,
+                    });
+                    aiResponseInputs.push({
+                        questionId: resp.question_id,
+                        answer: resp.response_value,
+                    });
+                }
+
                 await client.query(`
                     INSERT INTO appointment_pre_screenings (appointment_id, question_id, response_value, additional_notes, risk_score)
                     VALUES ($1, $2, $3, $4, $5)
                 `, [appointment_id, resp.question_id, resp.response_value, resp.additional_notes || null, weight]);
             }
 
-            // 3. Update appointment status based on weighted score (Google-grade Triage)
-            const normalizedRisk = maxPossibleRisk > 0 ? totalRiskScore / maxPossibleRisk : 0;
-            const status = normalizedRisk >= 0.7 ? 'high-risk' : 'completed';
+            // 3. Compute the normalised risk score per the resolved mode.
+            //    AI mode tries Gemini and gracefully degrades to the
+            //    deterministic weighted normalisation if the AI scorer
+            //    throws for any reason. The actual mode used is recorded
+            //    in audit metadata so degraded paths are observable.
+            const deterministicRisk: number = maxPossibleRisk > 0 ? totalRiskScore / maxPossibleRisk : 0;
+            let normalizedRisk: number = deterministicRisk;
+            let resolvedMode: RiskCalculationMode = configuredMode;
+            let aiDegradationReason: string | null = null;
 
+            if (configuredMode === 'ai') {
+                try {
+                    const aiResult = await scoreTriageWithAi(aiQuestionInputs, aiResponseInputs);
+                    normalizedRisk = aiResult.normalisedRisk;
+                } catch (aiErr: unknown) {
+                    // Graceful fallback. Patient flow MUST continue; the
+                    // deterministic value is already computed above.
+                    resolvedMode = 'manual';
+                    aiDegradationReason = aiErr instanceof TriageAiScorerError
+                        ? aiErr.message
+                        : aiErr instanceof Error ? aiErr.message : String(aiErr);
+                    logger.warn('[PreScreening] AI scorer failed; falling back to deterministic', {
+                        appointment_id,
+                        reason: aiDegradationReason,
+                    });
+                }
+            }
+
+            const status = normalizedRisk >= 0.7 ? 'high-risk' : 'completed';
             await client.query('UPDATE appointments SET pre_screening_status = $1 WHERE id = $2', [status, appointment_id]);
 
             await client.query('COMMIT');
 
-            // Institutional Logging
+            // Institutional Logging — capture configured mode, resolved
+            // mode (different when AI degraded), AND degradation reason
+            // so audit consumers can distinguish three states:
+            //   configured=manual + resolved=manual         → normal manual
+            //   configured=ai     + resolved=ai             → normal AI
+            //   configured=ai     + resolved=manual + reason → AI DEGRADED
             await auditService.log({
                 userId: userId || SYSTEM_ANONYMOUS_ID,
-                action: 'HEALTH_SCREENING_SUBMITTED',
+                action: aiDegradationReason !== null ? 'HEALTH_SCREENING_AI_DEGRADED' : 'HEALTH_SCREENING_SUBMITTED',
                 entityId: String(appointment_id),
                 entityType: 'APPOINTMENT',
-                metadata: { normalizedRisk, responseCount: responses.length }
+                metadata: {
+                    normalizedRisk,
+                    deterministicRisk,
+                    responseCount: responses.length,
+                    configuredMode,
+                    resolvedMode,
+                    aiDegradationReason: aiDegradationReason ?? undefined,
+                }
             });
 
             return { healthScore: normalizedRisk };

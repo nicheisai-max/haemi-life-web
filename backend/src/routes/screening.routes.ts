@@ -15,6 +15,11 @@ router.use(authenticateToken);
 
 // ─── PATIENT / PUBLIC: Structured Clinical Flow ───────────────────────────────
 
+// Read the platform-wide risk-calculation mode ('ai' | 'manual'). Patient
+// clients gate their AI-preview call on this so a 'manual' platform never
+// pays a Gemini round-trip during the booking form.
+router.get('/risk-mode', screeningController.getPublicRiskMode);
+
 // Fetch all active screening questions (display_order sorted — for patient UI)
 router.get('/questions', screeningController.screeningController.getQuestions);
 

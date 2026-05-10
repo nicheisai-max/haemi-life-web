@@ -9,6 +9,8 @@ import {
     getAuditLogs,
     getSessionTimeout,
     updateSessionTimeout,
+    getRiskCalculationMode,
+    updateRiskCalculationMode,
     getSecurityEvents,
     getActiveSessions,
     revokeSession,
@@ -30,6 +32,8 @@ router.get('/system-stats', getSystemStats);
 router.get('/audit-logs', getAuditLogs);
 router.get('/settings/session-timeout', getSessionTimeout);
 router.put('/settings/session-timeout', updateSessionTimeout);
+router.get('/settings/risk-calculation-mode', getRiskCalculationMode);
+router.put('/settings/risk-calculation-mode', updateRiskCalculationMode);
 
 // Security and Observability
 router.get('/security-events', getSecurityEvents);

@@ -11,6 +11,13 @@ import { mapDoctorToResponse } from '../utils/doctor.mapper';
 import { UserEntity, JoinedDoctorRow } from '../types/db.types';
 import { decrypt } from '../utils/security';
 import { emitToAdmins } from '../services/admin-broadcast.service';
+import { auditService } from '../services/audit.service';
+import {
+    RISK_CALCULATION_MODE_KEY,
+    DEFAULT_RISK_CALCULATION_MODE,
+    isRiskCalculationMode,
+    type RiskCalculationMode,
+} from '../repositories/pre-screening.repository';
 
 // Get pending doctor verifications (Admin only)
 export const getPendingVerifications = async (req: Request, res: Response) => {
@@ -521,6 +528,66 @@ export const updateSessionTimeout = async (req: Request, res: Response) => {
             error: error instanceof Error ? error.message : String(error)
         });
         return sendError(res, 500, 'Error updating session timeout');
+    }
+};
+
+/**
+ * Returns the current platform-wide pre-screening risk-calculation mode
+ * (`'ai'` or `'manual'`). Defaults to `'manual'` when no row exists.
+ * Admin-only. Mirrors the session-timeout pattern above.
+ */
+export const getRiskCalculationMode = async (_req: Request, res: Response) => {
+    try {
+        const raw = await systemSettingsRepository.getSetting(RISK_CALCULATION_MODE_KEY);
+        const mode: RiskCalculationMode = isRiskCalculationMode(raw)
+            ? raw
+            : DEFAULT_RISK_CALCULATION_MODE;
+        return sendResponse(res, 200, true, 'Risk calculation mode fetched', { mode });
+    } catch (error: unknown) {
+        logger.error('Error fetching risk calculation mode', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Error fetching risk calculation mode');
+    }
+};
+
+/**
+ * Updates the platform-wide pre-screening risk-calculation mode. Admin
+ * only. Validates the supplied mode against the typed union; rejects
+ * anything else as 400. Emits a `RISK_CALCULATION_MODE_CHANGED` audit
+ * event with prior + new state so the change is fully auditable.
+ */
+export const updateRiskCalculationMode = async (req: Request, res: Response) => {
+    try {
+        const adminId = req.user?.id;
+        if (!adminId) return sendError(res, 401, 'Unauthorized');
+
+        const { mode } = req.body as { mode?: unknown };
+        if (typeof mode !== 'string' || !isRiskCalculationMode(mode)) {
+            return sendError(res, 400, 'Invalid mode. Expected "ai" or "manual".');
+        }
+
+        const priorRaw = await systemSettingsRepository.getSetting(RISK_CALCULATION_MODE_KEY);
+        const priorMode: RiskCalculationMode = isRiskCalculationMode(priorRaw)
+            ? priorRaw
+            : DEFAULT_RISK_CALCULATION_MODE;
+
+        await systemSettingsRepository.updateSetting(RISK_CALCULATION_MODE_KEY, mode);
+
+        await auditService.log({
+            userId: adminId,
+            action: 'RISK_CALCULATION_MODE_CHANGED',
+            entityType: 'SYSTEM_SETTINGS',
+            entityId: RISK_CALCULATION_MODE_KEY,
+            metadata: { priorMode, newMode: mode },
+        });
+
+        return sendResponse(res, 200, true, 'Risk calculation mode updated', { mode });
+    } catch (error: unknown) {
+        logger.error('Error updating risk calculation mode', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Error updating risk calculation mode');
     }
 };
 
