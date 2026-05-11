@@ -64,6 +64,7 @@ const NotFound = lazy(() => import('./pages/public/not-found').then(m => ({ defa
 const DoctorReports = lazy(() => import('./pages/doctor/reports').then(m => ({ default: m.DoctorReports })));
 const DispensePrescription = lazy(() => import('./pages/pharmacist/dispense-prescription').then(m => ({ default: m.DispensePrescription })));
 const DoctorPatientList = lazy(() => import('./pages/doctor/doctor-patient-list').then(m => ({ default: m.DoctorPatientList })));
+const DoctorPatientProfile = lazy(() => import('./pages/doctor/doctor-patient-profile').then(m => ({ default: m.DoctorPatientProfile })));
 const ScreeningManager = lazy(() => import('./pages/admin/screening-manager').then(m => ({ default: m.ScreeningManager })));
 
 // Stable Suspense-fallback elements. These render `null` and drive the
@@ -173,6 +174,7 @@ const AppRoutes = React.memo(() => {
 
             <Route path={PATHS.DOCTOR.SCHEDULE} element={<RoleRoute allowedRoles={['doctor']}><DoctorScheduleManagement /></RoleRoute>} />
             <Route path={PATHS.DOCTOR.PATIENTS} element={<RoleRoute allowedRoles={['doctor']}><DoctorPatientList /></RoleRoute>} />
+            <Route path={PATHS.DOCTOR.PATIENT_PROFILE} element={<RoleRoute allowedRoles={['doctor']}><DoctorPatientProfile /></RoleRoute>} />
             <Route path={PATHS.DOCTOR.REPORTS} element={<RoleRoute allowedRoles={['doctor']}><DoctorReports /></RoleRoute>} />
 
             <Route path={PATHS.PHARMACIST.QUEUE} element={<RoleRoute allowedRoles={['pharmacist']}><PrescriptionQueue /></RoleRoute>} />

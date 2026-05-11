@@ -167,6 +167,115 @@ export const getDoctorPatients = async (
     return normalizeResponse(response);
 };
 
+// ─── DOCTOR: Patient Profile Deep-Dive (PR #2) ───────────────────────────────
+
+/**
+ * Per-tab row shapes returned by the patient profile aggregator
+ * endpoint. Optional fields on the patient summary are present when
+ * the underlying clinical record exists; null otherwise. Keep these
+ * shapes strict — they bind directly to the typed UI consumers.
+ */
+export interface PatientProfileSummary {
+    id: string;
+    name: string;
+    email: string | null;
+    phoneNumber: string | null;
+    nationalId: string | null;
+    profileImage: string | null;
+    profileImageMime: string | null;
+    initials: string | null;
+    dateOfBirth: string | null;
+    age: number | null;
+    gender: string | null;
+    bloodGroup: string | null;
+    medicalConditions: string | null;
+    allergies: string | null;
+    emergencyContactName: string | null;
+    emergencyContactPhone: string | null;
+    lifecycleStage: PatientLifecycleStage;
+    acuityLevel: PatientAcuityLevel;
+    latestRiskScore: number | null;
+    completedWithDoctor: number;
+    firstSeenWithDoctor: string | null;
+    lastVisit: string | null;
+}
+
+export interface PatientProfileAppointment {
+    id: number;
+    appointmentDate: string;
+    appointmentTime: string;
+    durationMinutes: number;
+    status: string;
+    consultationType: string | null;
+    reason: string | null;
+    notes: string | null;
+    createdAt: string;
+}
+
+export interface PatientProfilePrescription {
+    id: number;
+    doctorId: string;
+    doctorName: string | null;
+    specialization: string | null;
+    appointmentId: number | null;
+    prescriptionDate: string;
+    status: string;
+    notes: string | null;
+    itemCount: number;
+    issuedByMe: boolean;
+    createdAt: string;
+}
+
+export interface PatientProfileRecord {
+    id: string;
+    name: string;
+    recordType: string;
+    status: string;
+    notes: string | null;
+    uploadedAt: string;
+    doctorName: string | null;
+    facilityName: string | null;
+    dateOfService: string | null;
+    fileMime: string | null;
+}
+
+export interface PatientProfileScreeningResponse {
+    questionText: string | null;
+    diseaseTag: string | null;
+    responseValue: boolean;
+    additionalNotes: string | null;
+    riskScore: number;
+}
+
+export interface PatientProfileScreeningGroup {
+    appointmentId: number;
+    appointmentDate: string;
+    averageRiskScore: number;
+    responses: PatientProfileScreeningResponse[];
+}
+
+export interface PatientProfilePayload {
+    patient: PatientProfileSummary;
+    appointments: PatientProfileAppointment[];
+    prescriptions: PatientProfilePrescription[];
+    records: PatientProfileRecord[];
+    screenings: PatientProfileScreeningGroup[];
+}
+
+/**
+ * Fetch the full patient dossier for the registry deep-dive page.
+ * The server enforces a clinical-relationship gate (must have ≥1
+ * completed appointment with this patient) — a 403 here is an
+ * authorization signal, not an error to retry. Surface the message
+ * inline at the call site.
+ */
+export const getDoctorPatientProfile = async (patientId: string): Promise<PatientProfilePayload> => {
+    const response = await api.get<ApiResponse<PatientProfilePayload>>(
+        `/doctor/me/patients/${encodeURIComponent(patientId)}`
+    );
+    return normalizeResponse(response);
+};
+
 // Phase 3 — Timezone Sovereignty.
 // Updates the doctor's authoritative clinic timezone. Wraps the
 // PATCH /api/doctor/me/clinic-timezone endpoint added in Phase 2.
