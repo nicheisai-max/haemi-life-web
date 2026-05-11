@@ -70,6 +70,12 @@ export interface Patient {
     lifecycleStage?: PatientLifecycleStage;
     acuityLevel?: PatientAcuityLevel;
     isBirthdayThisMonth?: boolean;
+    /**
+     * Patient age in completed years, derived server-side from DOB at
+     * query time. Optional because older fixtures predating the advanced
+     * filter rollout do not emit it.
+     */
+    ageYears?: number | null;
 }
 
 /** Filter keys accepted by the registry endpoint. Mirror of the backend
@@ -98,7 +104,33 @@ export interface PatientRegistryResponse {
     counts: PatientRegistryCounts;
 }
 
-export interface PatientRegistryParams {
+/** Sort dimension accepted by the registry endpoint. Default `last-visit`. */
+export type PatientRegistrySortKey = 'name' | 'last-visit' | 'total-visits' | 'age';
+/** Sort direction. Default `desc`. */
+export type PatientRegistrySortOrder = 'asc' | 'desc';
+
+/**
+ * Shape consumed by the AdvancedFilterDrawer. Every field is optional —
+ * the drawer collects whichever dimensions the doctor has actually set
+ * and threads them through `PatientRegistryParams` below. The wire layer
+ * preserves the same optionality so a bare `getDoctorPatients()` call
+ * still returns the full registry.
+ */
+export interface PatientRegistryAdvancedFilters {
+    ageMin?: number;
+    ageMax?: number;
+    gender?: 'male' | 'female' | 'other';
+    bloodGroup?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
+    minVisits?: number;
+    /** ISO date string (YYYY-MM-DD). Inclusive lower bound on `lastVisit`. */
+    lastVisitFrom?: string;
+    /** ISO date string (YYYY-MM-DD). Inclusive upper bound on `lastVisit`. */
+    lastVisitTo?: string;
+    sort?: PatientRegistrySortKey;
+    order?: PatientRegistrySortOrder;
+}
+
+export interface PatientRegistryParams extends PatientRegistryAdvancedFilters {
     /** Free-text search across name, email, phone, national ID, conditions. */
     search?: string;
     /** Active filter chip (single-select). Omit for "no filter". */
@@ -160,9 +192,122 @@ export const getDoctorPatients = async (
     const query: Record<string, string> = {};
     if (params?.search !== undefined && params.search.length > 0) query.search = params.search;
     if (params?.filter !== undefined) query.filter = params.filter;
+    // Advanced filters — only emit each key when the doctor has actually
+    // set it, so the registry URL stays tidy and the backend skip-logic
+    // (missing → no filter on this dimension) holds.
+    if (params?.ageMin !== undefined) query.ageMin = String(params.ageMin);
+    if (params?.ageMax !== undefined) query.ageMax = String(params.ageMax);
+    if (params?.gender !== undefined) query.gender = params.gender;
+    if (params?.bloodGroup !== undefined) query.bloodGroup = params.bloodGroup;
+    if (params?.minVisits !== undefined) query.minVisits = String(params.minVisits);
+    if (params?.lastVisitFrom !== undefined && params.lastVisitFrom.length > 0) {
+        query.lastVisitFrom = params.lastVisitFrom;
+    }
+    if (params?.lastVisitTo !== undefined && params.lastVisitTo.length > 0) {
+        query.lastVisitTo = params.lastVisitTo;
+    }
+    if (params?.sort !== undefined) query.sort = params.sort;
+    if (params?.order !== undefined) query.order = params.order;
     const response = await api.get<ApiResponse<PatientRegistryResponse>>(
         '/doctor/me/patients',
         { params: query }
+    );
+    return normalizeResponse(response);
+};
+
+// ─── DOCTOR → PATIENT INVITE FLOW (PR #3) ────────────────────────────────────
+
+/** Lifecycle status returned by the invite endpoints. Mirror of the
+ *  backend `InviteStatus` union. `expired` is computed live — the row
+ *  still says `pending` in the DB, but the wire layer surfaces the live
+ *  status so the UI never has to recompute. */
+export type DoctorPatientInviteStatus = 'pending' | 'claimed' | 'expired' | 'revoked';
+
+export interface DoctorPatientInvite {
+    id: string;
+    token: string;
+    /**
+     * Fully-resolved invite link the doctor copies. Composed server-side
+     * from the deploy URL + the token, so the doctor never has to
+     * concatenate manually and a future domain change cannot leave stale
+     * links behind.
+     */
+    shareUrl: string;
+    inviteeName: string | null;
+    inviteePhone: string | null;
+    inviteeEmail: string | null;
+    note: string | null;
+    status: DoctorPatientInviteStatus;
+    claimedByUserId: string | null;
+    claimedAt: string | null;
+    expiresAt: string;
+    createdAt: string;
+}
+
+export interface DoctorPatientInviteCounts {
+    pending: number;
+    claimed: number;
+    expired: number;
+    revoked: number;
+}
+
+export interface ListInvitesResponse {
+    invites: DoctorPatientInvite[];
+    counts: DoctorPatientInviteCounts;
+}
+
+export interface CreateInviteInput {
+    inviteeName?: string;
+    inviteePhone?: string;
+    inviteeEmail?: string;
+    note?: string;
+    /** Days until expiry. Clamped server-side to [1, 365]. Defaults to 30. */
+    expiresInDays?: number;
+}
+
+export const createPatientInvite = async (
+    input: CreateInviteInput
+): Promise<DoctorPatientInvite> => {
+    const response = await api.post<ApiResponse<DoctorPatientInvite>>(
+        '/doctor/me/invites',
+        input
+    );
+    return normalizeResponse(response);
+};
+
+export const listPatientInvites = async (): Promise<ListInvitesResponse> => {
+    const response = await api.get<ApiResponse<ListInvitesResponse>>(
+        '/doctor/me/invites'
+    );
+    return normalizeResponse(response);
+};
+
+export const revokePatientInvite = async (inviteId: string): Promise<void> => {
+    await api.delete<ApiResponse<void>>(
+        `/doctor/me/invites/${encodeURIComponent(inviteId)}`
+    );
+};
+
+/**
+ * Public response from the unauthenticated `/api/invites/:token`
+ * endpoint. Used by the signup page to render the "Invited by Dr. X"
+ * banner before the patient creates their account. `valid: false`
+ * carries a stable machine-readable `reason` so the signup form can
+ * surface the right copy without parsing free-text messages.
+ */
+export interface InviteTokenVerification {
+    valid: boolean;
+    reason: 'not-found' | 'expired' | 'revoked' | 'claimed' | null;
+    doctorName: string | null;
+    doctorSpecialization: string | null;
+    inviteeName: string | null;
+    inviteePhone: string | null;
+    inviteeEmail: string | null;
+}
+
+export const verifyInviteToken = async (token: string): Promise<InviteTokenVerification> => {
+    const response = await api.get<ApiResponse<InviteTokenVerification>>(
+        `/invites/${encodeURIComponent(token)}`
     );
     return normalizeResponse(response);
 };

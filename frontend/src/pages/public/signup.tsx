@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/hooks/use-auth';
@@ -8,21 +8,25 @@ import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AnimatedAlert } from '@/components/ui/animated-alert';
-import { User, Stethoscope, Building2, AlertCircle, ArrowLeft, Mail, Lock, ShieldCheck } from 'lucide-react';
+import { User, Stethoscope, Building2, AlertCircle, ArrowLeft, Mail, Lock, ShieldCheck, Sparkles } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthLayout } from '../../components/layout/auth-layout';
 import { signupSchema, type SignupFormData } from '../../lib/validation/auth.schema';
 import { getErrorMessage } from '../../lib/error';
 import loginBg from '../../assets/images/login_bg_premium.png';
 import type { UserRole } from '../../types/auth.types';
+import { verifyInviteToken, type InviteTokenVerification } from '../../services/doctor.service';
 
 export const Signup: React.FC = () => {
     const navigate = useNavigate();
     const { signup } = useAuth();
+    const [searchParams] = useSearchParams();
+    const inviteToken: string = searchParams.get('invite') ?? '';
 
     const [step, setStep] = useState<'role' | 'form'>('role');
     const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
     const [generalError, setGeneralError] = useState<string>('');
+    const [inviteState, setInviteState] = useState<InviteTokenVerification | null>(null);
     const { isAuthenticated, user } = useAuth();
 
     // PRODUCTION UX: Redirect to the role-specific dashboard URL once authenticated.
@@ -48,6 +52,46 @@ export const Signup: React.FC = () => {
         },
     });
 
+    // Resolve the invite token (if any) once per mount. A valid invite
+    // bypasses the role picker (patient-only by design) and pre-fills
+    // whichever invitee hints the doctor captured at invite-creation
+    // time. An invalid token degrades silently to a normal signup flow —
+    // we never block the patient on a bad link they cannot remediate.
+    useEffect(() => {
+        if (inviteToken.length === 0) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const result = await verifyInviteToken(inviteToken);
+                if (cancelled) return;
+                setInviteState(result);
+                if (result.valid) {
+                    setSelectedRole('patient');
+                    setStep('form');
+                    form.setValue('role', 'patient');
+                    if (result.inviteeName !== null && result.inviteeName.length > 0) {
+                        form.setValue('name', result.inviteeName);
+                    }
+                    if (result.inviteeEmail !== null && result.inviteeEmail.length > 0) {
+                        form.setValue('email', result.inviteeEmail);
+                    }
+                    if (result.inviteePhone !== null && result.inviteePhone.length > 0) {
+                        // Strip leading +267 if present so the form's
+                        // pre-pended country code stays canonical.
+                        const local: string = result.inviteePhone.replace(/^\+?267/, '').replace(/\D/g, '').slice(0, 8);
+                        form.setValue('phoneNumber', local);
+                    }
+                }
+            } catch {
+                // Network/server failure verifying the token — fall back
+                // to a normal signup. The patient can still create the
+                // account; they just won't be auto-linked to the doctor.
+                if (!cancelled) setInviteState(null);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [inviteToken, form]);
+
     const handleRoleSelect = (role: UserRole) => {
         setSelectedRole(role);
         form.setValue('role', role as 'patient' | 'doctor' | 'pharmacist');
@@ -65,6 +109,13 @@ export const Signup: React.FC = () => {
                 password: data.password,
                 role: data.role,
                 idNumber: data.idNumber || undefined,
+                // Only forward the token when the verify step succeeded.
+                // Forwarding a known-bad token would just be ignored
+                // server-side, but pruning it here keeps the request
+                // body honest and trims wire bytes.
+                inviteToken: (inviteState !== null && inviteState.valid && data.role === 'patient')
+                    ? inviteToken
+                    : undefined,
             });
 
             // Navigation is now handled by the AuthContext state change effect
@@ -135,6 +186,37 @@ export const Signup: React.FC = () => {
                             <AlertCircle className="h-4 w-4" />
                         </div>
                         <AlertDescription>{generalError}</AlertDescription>
+                    </Alert>
+                </AnimatedAlert>
+
+                <AnimatedAlert visible={inviteState !== null && inviteState.valid && selectedRole === 'patient'}>
+                    <Alert className="border-primary/20 bg-primary/5">
+                        <div className="flex-shrink-0 flex items-center justify-center text-primary">
+                            <Sparkles className="h-4 w-4" />
+                        </div>
+                        <AlertDescription className="text-foreground/90">
+                            You were invited by <span className="font-semibold text-primary">
+                                Dr. {inviteState?.doctorName ?? 'your doctor'}
+                            </span>
+                            {inviteState?.doctorSpecialization !== null && inviteState?.doctorSpecialization !== undefined
+                                ? ` (${inviteState.doctorSpecialization})`
+                                : ''}
+                            . Complete your account to connect with their practice.
+                        </AlertDescription>
+                    </Alert>
+                </AnimatedAlert>
+
+                <AnimatedAlert visible={inviteState !== null && !inviteState.valid && inviteToken.length > 0}>
+                    <Alert>
+                        <div className="flex-shrink-0 flex items-center justify-center text-muted-foreground">
+                            <AlertCircle className="h-4 w-4" />
+                        </div>
+                        <AlertDescription className="text-muted-foreground">
+                            {inviteState?.reason === 'expired' && 'This invite link has expired. You can still create your account — please ask your doctor for a new link to connect.'}
+                            {inviteState?.reason === 'revoked' && 'This invite link has been revoked. You can still create an account; please contact your doctor for a fresh link.'}
+                            {inviteState?.reason === 'claimed' && 'This invite link has already been used. You can still create a new account independently.'}
+                            {inviteState?.reason === 'not-found' && 'We could not verify the invite link. You can still create an account.'}
+                        </AlertDescription>
                     </Alert>
                 </AnimatedAlert>
                 <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4">

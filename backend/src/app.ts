@@ -52,6 +52,7 @@ import profileRoutes from './routes/profile.routes';
 import aiRoutes from './routes/ai.routes';
 import pharmacistRoutes from './routes/pharmacist.routes';
 import screeningRoutes from './routes/screening.routes';
+import inviteRoutes from './routes/invite.routes';
 
 const app = express();
 
@@ -132,6 +133,7 @@ app.get('/api/health/ready', async (_req, res) => {
 // Institutional API Routes (Strict Mounting Order)
 app.use('/api/auth', authRoutes);
 app.use('/api/screening', screeningRoutes);
+app.use('/api/invites', inviteRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
