@@ -229,7 +229,17 @@ export const InvitePatientModal: React.FC<InvitePatientModalProps> = ({ open, on
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent
+                /*
+                 * Viewport breathing space — `w-[calc(100vw-2rem)]` reserves
+                 * 1rem on each horizontal edge on mobile so the modal never
+                 * touches the screen; `sm:w-full` releases that constraint
+                 * once `max-w-2xl` (42rem) kicks in. `max-h-[calc(100dvh-4rem)]`
+                 * guarantees 2rem above and below the modal on every device
+                 * (using `dvh` so mobile browser chrome doesn't squeeze it).
+                 * Strict-TS posture: relative units only, no px literals.
+                 */
+                className="w-[calc(100vw-2rem)] sm:w-full max-w-2xl max-h-[calc(100dvh-4rem)] overflow-hidden flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -392,7 +402,7 @@ export const InvitePatientModal: React.FC<InvitePatientModalProps> = ({ open, on
                                                 <FileText className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                                 <Textarea
                                                     placeholder="Why you're inviting this patient — only you can see this."
-                                                    className="pl-10 min-h-[5rem]"
+                                                    className="pl-10 min-h-[5rem] rounded-[var(--card-radius)]"
                                                     {...field}
                                                 />
                                             </div>
