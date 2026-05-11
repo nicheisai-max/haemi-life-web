@@ -350,6 +350,57 @@ export const updateDoctorClinicTimezone = async (req: Request, res: Response) =>
     }
 };
 
+/**
+ * Lifecycle stage derived from the days since a patient's last completed
+ * visit. Single source of truth for the "Active / Lapsed / Due-FU /
+ * At-risk" filter taxonomy — frontend chips match these enum values.
+ */
+type PatientLifecycleStage = 'active' | 'lapsed' | 'due-for-follow-up' | 'at-risk';
+type PatientAcuityLevel = 'low' | 'medium' | 'high';
+
+const computeLifecycleStage = (lastVisitMs: number, nowMs: number): PatientLifecycleStage => {
+    const days: number = Math.floor((nowMs - lastVisitMs) / (1000 * 60 * 60 * 24));
+    if (days <= 90) return 'active';
+    if (days <= 180) return 'lapsed';
+    if (days <= 365) return 'due-for-follow-up';
+    return 'at-risk';
+};
+
+const computeAcuityLevel = (latestRiskScore: number | null): PatientAcuityLevel => {
+    if (latestRiskScore === null || latestRiskScore < 0.4) return 'low';
+    if (latestRiskScore < 0.7) return 'medium';
+    return 'high';
+};
+
+/**
+ * Whitelisted filter keys for the Patient Registry chip row. Anything
+ * outside this union is rejected by the controller — defensive
+ * narrowing at the wire boundary keeps invalid SQL paths unreachable.
+ */
+type PatientRegistryFilter =
+    | 'active'
+    | 'lapsed'
+    | 'due-for-follow-up'
+    | 'at-risk'
+    | 'high-acuity'
+    | 'birthday-this-month';
+
+const isPatientRegistryFilter = (value: string | undefined): value is PatientRegistryFilter => {
+    return value === 'active' || value === 'lapsed' || value === 'due-for-follow-up'
+        || value === 'at-risk' || value === 'high-acuity' || value === 'birthday-this-month';
+};
+
+type PatientRegistryRow = UserEntity & {
+    total_appointments: string;
+    last_visit: Date;
+    date_of_birth: Date | null;
+    gender: string | null;
+    blood_group: string | null;
+    medical_conditions: string | null;
+    allergies: string | null;
+    latest_risk_score: string | null;
+};
+
 // Get doctor's patient list
 export const getDoctorPatients = async (req: Request, res: Response) => {
     const doctorId = req.user?.id;
@@ -357,25 +408,140 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
     try {
         if (!doctorId) return sendError(res, 401, 'Unauthorized');
 
-        const result = await pool.query<UserEntity & { total_appointments: string, last_visit: Date }>(`
-            SELECT DISTINCT
-                u.id, u.name, u.phone_number, u.email, u.profile_image, u.profile_image_mime,
-                u.role, u.status, u.initials,
-                COUNT(a.id) as total_appointments,
-                MAX(a.appointment_date) as last_visit
+        // Whitelist + narrow the query params at the wire boundary.
+        const rawSearch: unknown = req.query.search;
+        const rawFilter: unknown = req.query.filter;
+        const search: string = typeof rawSearch === 'string' ? rawSearch.trim().toLowerCase() : '';
+        const filter: PatientRegistryFilter | null = typeof rawFilter === 'string' && isPatientRegistryFilter(rawFilter)
+            ? rawFilter
+            : null;
+
+        // Single query that hydrates the full registry surface:
+        //   - completed-appointment count + last visit anchor (existing semantic)
+        //   - patient_profiles join for DOB / gender / blood group /
+        //     conditions / allergies (powers the row badges + birthday filter)
+        //   - LEFT-LATERAL subquery for the most recent screening risk
+        //     score (powers the "high-acuity" filter + acuity badge)
+        // Decryption + lifecycle-stage computation happens in JS below
+        // because (a) the PII columns are encrypted at rest so SQL
+        // ILIKE cannot search them, and (b) bucketing by date is faster
+        // in JS for a doctor's bounded patient set (~10-200 rows) than
+        // CASE expressions in SQL.
+        const result = await pool.query<PatientRegistryRow>(`
+            SELECT
+                u.id, u.name, u.phone_number, u.id_number, u.email,
+                u.profile_image, u.profile_image_mime, u.role, u.status, u.initials,
+                COUNT(a.id) AS total_appointments,
+                MAX(a.appointment_date) AS last_visit,
+                pp.date_of_birth, pp.gender, pp.blood_group,
+                pp.medical_conditions, pp.allergies,
+                (
+                    SELECT aps.risk_score::text
+                    FROM appointment_pre_screenings aps
+                    JOIN appointments a2 ON a2.id = aps.appointment_id
+                    WHERE a2.patient_id = u.id AND a2.doctor_id = $1
+                    ORDER BY aps.created_at DESC
+                    LIMIT 1
+                ) AS latest_risk_score
             FROM users u
             JOIN appointments a ON u.id = a.patient_id
+            LEFT JOIN patient_profiles pp ON pp.user_id = u.id
             WHERE a.doctor_id = $1 AND a.status = 'completed'
-            GROUP BY u.id, u.name, u.phone_number, u.email
+            GROUP BY u.id, u.name, u.phone_number, u.id_number, u.email,
+                     u.profile_image, u.profile_image_mime, u.role, u.status, u.initials,
+                     pp.date_of_birth, pp.gender, pp.blood_group,
+                     pp.medical_conditions, pp.allergies
             ORDER BY MAX(a.appointment_date) DESC
         `, [doctorId]);
 
-        // P0 PII GUARD: decrypt phone/id before the mapper projects them.
-        return sendResponse(res, 200, true, 'Patients fetched', result.rows.map(row => ({
-            ...mapUserToResponse(decryptUserPii(row)),
-            totalAppointments: Number(row.total_appointments),
-            lastVisit: row.last_visit
-        })));
+        const now = new Date();
+        const nowMs: number = now.getTime();
+        const currentMonth: number = now.getMonth(); // 0-indexed
+
+        // Stage 1: decrypt + enrich every row with derived fields.
+        const enriched = result.rows.map(row => {
+            const decrypted = decryptUserPii(row);
+            const lastVisitMs: number = row.last_visit.getTime();
+            const latestRiskScoreNum: number | null =
+                row.latest_risk_score === null ? null : Number(row.latest_risk_score);
+            const lifecycleStage: PatientLifecycleStage = computeLifecycleStage(lastVisitMs, nowMs);
+            const acuityLevel: PatientAcuityLevel = computeAcuityLevel(
+                Number.isFinite(latestRiskScoreNum) ? latestRiskScoreNum : null
+            );
+            const dobMonth: number | null = row.date_of_birth === null ? null : new Date(row.date_of_birth).getMonth();
+            const isBirthdayThisMonth: boolean = dobMonth !== null && dobMonth === currentMonth;
+
+            return {
+                ...mapUserToResponse(decrypted),
+                totalAppointments: Number(row.total_appointments),
+                lastVisit: row.last_visit,
+                dateOfBirth: row.date_of_birth,
+                gender: row.gender ?? null,
+                bloodGroup: row.blood_group ?? null,
+                medicalConditions: row.medical_conditions ?? null,
+                allergies: row.allergies ?? null,
+                latestRiskScore: Number.isFinite(latestRiskScoreNum) ? latestRiskScoreNum : null,
+                lifecycleStage,
+                acuityLevel,
+                isBirthdayThisMonth,
+                // Carry decrypted PII through the haystack-search layer
+                // below WITHOUT emitting them in the response. The mapper
+                // already stripped phone+id from `mapUserToResponse`; we
+                // re-attach the decrypted versions for the search predicate
+                // and project the final response without them.
+                _searchHaystack: [
+                    decrypted.name ?? '',
+                    decrypted.email ?? '',
+                    decrypted.phone_number ?? '',
+                    decrypted.id_number ?? '',
+                    row.medical_conditions ?? '',
+                ].join(' ').toLowerCase(),
+            };
+        });
+
+        // Stage 2: compute counts across the FULL enriched set BEFORE
+        // applying the active filter so the chip badges remain stable
+        // as the user toggles between filters.
+        const counts = {
+            all: enriched.length,
+            active: enriched.filter(p => p.lifecycleStage === 'active').length,
+            lapsed: enriched.filter(p => p.lifecycleStage === 'lapsed').length,
+            dueForFollowUp: enriched.filter(p => p.lifecycleStage === 'due-for-follow-up').length,
+            atRisk: enriched.filter(p => p.lifecycleStage === 'at-risk').length,
+            highAcuity: enriched.filter(p => p.acuityLevel === 'high').length,
+            birthdayThisMonth: enriched.filter(p => p.isBirthdayThisMonth).length,
+        };
+
+        // Stage 3: apply search + filter to derive the rendered list.
+        let visible = enriched;
+        if (search.length > 0) {
+            visible = visible.filter(p => p._searchHaystack.includes(search));
+        }
+        if (filter !== null) {
+            switch (filter) {
+                case 'active':
+                case 'lapsed':
+                case 'due-for-follow-up':
+                case 'at-risk':
+                    visible = visible.filter(p => p.lifecycleStage === filter);
+                    break;
+                case 'high-acuity':
+                    visible = visible.filter(p => p.acuityLevel === 'high');
+                    break;
+                case 'birthday-this-month':
+                    visible = visible.filter(p => p.isBirthdayThisMonth);
+                    break;
+            }
+        }
+
+        // Project the response — strip the search haystack so PII does
+        // not leak to the wire.
+        const patients = visible.map(({ _searchHaystack, ...rest }) => {
+            void _searchHaystack;
+            return rest;
+        });
+
+        return sendResponse(res, 200, true, 'Patients fetched', { patients, counts });
 
     } catch (error: unknown) {
         logger.error('Error fetching patients:', {

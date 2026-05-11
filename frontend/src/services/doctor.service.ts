@@ -36,6 +36,18 @@ export interface DoctorSchedule {
     isAvailable: boolean;
 }
 
+/**
+ * Lifecycle stage derived server-side from days-since-last-completed-visit.
+ *   active            : ≤  90 days
+ *   lapsed            : 91–180 days
+ *   due-for-follow-up : 181–365 days
+ *   at-risk           : > 365 days
+ */
+export type PatientLifecycleStage = 'active' | 'lapsed' | 'due-for-follow-up' | 'at-risk';
+
+/** Acuity bucket derived from the patient's most recent screening risk score. */
+export type PatientAcuityLevel = 'low' | 'medium' | 'high';
+
 export interface Patient {
     id: string; // Institutional Realignment: uuid (matches users.id)
     name: string;
@@ -44,6 +56,53 @@ export interface Patient {
     totalAppointments: number;
     lastVisit: string;
     profileImage?: string | null;
+    /**
+     * Enriched clinical context fields surfaced by the registry endpoint.
+     * Optional on the type so older fixtures / mocks predating PR #N still
+     * satisfy the shape — the patient profile page (PR #2) consumes them.
+     */
+    dateOfBirth?: string | null;
+    gender?: string | null;
+    bloodGroup?: string | null;
+    medicalConditions?: string | null;
+    allergies?: string | null;
+    latestRiskScore?: number | null;
+    lifecycleStage?: PatientLifecycleStage;
+    acuityLevel?: PatientAcuityLevel;
+    isBirthdayThisMonth?: boolean;
+}
+
+/** Filter keys accepted by the registry endpoint. Mirror of the backend
+ *  whitelist — frontend chips bind one-to-one to these values. */
+export type PatientRegistryFilter =
+    | 'active'
+    | 'lapsed'
+    | 'due-for-follow-up'
+    | 'at-risk'
+    | 'high-acuity'
+    | 'birthday-this-month';
+
+/** Counts returned alongside the patient list — drive the chip badges. */
+export interface PatientRegistryCounts {
+    all: number;
+    active: number;
+    lapsed: number;
+    dueForFollowUp: number;
+    atRisk: number;
+    highAcuity: number;
+    birthdayThisMonth: number;
+}
+
+export interface PatientRegistryResponse {
+    patients: Patient[];
+    counts: PatientRegistryCounts;
+}
+
+export interface PatientRegistryParams {
+    /** Free-text search across name, email, phone, national ID, conditions. */
+    search?: string;
+    /** Active filter chip (single-select). Omit for "no filter". */
+    filter?: PatientRegistryFilter;
 }
 
 // List all verified doctors
@@ -92,9 +151,19 @@ export const updateDoctorSchedule = async (schedule: Array<{
     return normalizeResponse(response);
 };
 
-// Get doctor's patients
-export const getDoctorPatients = async () => {
-    const response = await api.get<ApiResponse<Patient[]>>('/doctor/me/patients');
+// Get doctor's patients (registry endpoint with search + filter + counts).
+// `params` is fully optional — calling without args returns the full,
+// unfiltered set with counts attached.
+export const getDoctorPatients = async (
+    params?: PatientRegistryParams
+): Promise<PatientRegistryResponse> => {
+    const query: Record<string, string> = {};
+    if (params?.search !== undefined && params.search.length > 0) query.search = params.search;
+    if (params?.filter !== undefined) query.filter = params.filter;
+    const response = await api.get<ApiResponse<PatientRegistryResponse>>(
+        '/doctor/me/patients',
+        { params: query }
+    );
     return normalizeResponse(response);
 };
 
