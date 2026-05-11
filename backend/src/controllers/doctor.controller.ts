@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/db';
+import { env } from '../config/env';
 import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import { mapDoctorToResponse } from '../utils/doctor.mapper';
@@ -8,6 +9,11 @@ import { JoinedDoctorRow, UserEntity } from '../types/db.types';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 import { decrypt } from '../utils/security';
 import { isValidIanaTimezone, INSTITUTIONAL_DEFAULT_TIMEZONE } from '../utils/timezone.utils';
+import {
+    doctorPatientInviteRepository,
+    type DoctorPatientInviteRow,
+    type InviteStatus,
+} from '../repositories/doctor-patient-invite.repository';
 
 /**
  * Decrypts the encrypted PII columns on a row joined from `users`. Mirror
@@ -740,6 +746,296 @@ export const getDoctorPatientProfile = async (req: Request, res: Response) => {
     }
 };
 
+// ─── Doctor → Patient Invite Flow (Patient Registry — PR 3/3) ───────────────
+
+/** Default invite TTL. 30 days strikes the institutional balance —
+ *  long enough for word-of-mouth conversion, short enough that stale
+ *  links cannot be exfiltrated indefinitely. */
+const INVITE_DEFAULT_EXPIRY_DAYS: number = 30;
+const INVITE_MIN_EXPIRY_DAYS: number = 1;
+const INVITE_MAX_EXPIRY_DAYS: number = 365;
+
+interface CreateInviteRequest {
+    inviteeName?: string;
+    inviteePhone?: string;
+    inviteeEmail?: string;
+    note?: string;
+    expiresInDays?: number;
+}
+
+/**
+ * Compose the canonical signup link a doctor copies and shares. Built
+ * from the configured `frontendUrl` so a domain change updates every
+ * outstanding invite simultaneously — doctors never have to reshare.
+ */
+const buildInviteShareUrl = (token: string): string => {
+    const base = env.frontendUrl.replace(/\/$/, '');
+    return `${base}/signup?invite=${encodeURIComponent(token)}`;
+};
+
+const mapInviteRowToResponse = (row: DoctorPatientInviteRow) => ({
+    id: row.id,
+    doctorId: row.doctor_id,
+    token: row.token,
+    shareUrl: buildInviteShareUrl(row.token),
+    inviteeName: row.invitee_name,
+    inviteePhone: row.invitee_phone,
+    inviteeEmail: row.invitee_email,
+    note: row.note,
+    status: row.status,
+    claimedByUserId: row.claimed_by_user_id,
+    claimedAt: row.claimed_at,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+});
+
+/** Compute the lifecycle-aware status of an invite. Even if the
+ *  database row says `pending`, we treat it as expired in the
+ *  response when the expiry timestamp is in the past. Keeps the wire
+ *  honest without requiring a background sweeper. */
+const liveInviteStatus = (row: DoctorPatientInviteRow): InviteStatus => {
+    if (row.status === 'pending' && row.expires_at.getTime() < Date.now()) return 'expired';
+    return row.status;
+};
+
+/**
+ * POST /api/doctor/me/invites — Create a new patient invite.
+ *
+ * Doctor-only. Returns the freshly-created invite + the canonical
+ * signup URL the doctor should share. No SMS/email dispatch — the
+ * doctor shares the URL through any channel they prefer (zero
+ * platform cost).
+ */
+export const createPatientInvite = async (req: Request, res: Response) => {
+    const doctorId = req.user?.id;
+
+    try {
+        if (!doctorId) return sendError(res, 401, 'Unauthorized');
+
+        const body: CreateInviteRequest = (typeof req.body === 'object' && req.body !== null)
+            ? req.body as CreateInviteRequest
+            : {};
+
+        // Sanitise + clamp the expiry hint. Anything outside the safe
+        // band collapses to the default — no surprises for the doctor.
+        const requestedDays: number = typeof body.expiresInDays === 'number'
+            ? body.expiresInDays
+            : INVITE_DEFAULT_EXPIRY_DAYS;
+        const expiresInDays: number = Number.isFinite(requestedDays)
+            ? Math.max(INVITE_MIN_EXPIRY_DAYS, Math.min(INVITE_MAX_EXPIRY_DAYS, Math.floor(requestedDays)))
+            : INVITE_DEFAULT_EXPIRY_DAYS;
+
+        const trimOrNull = (value: string | undefined): string | null => {
+            if (typeof value !== 'string') return null;
+            const trimmed = value.trim();
+            return trimmed.length > 0 ? trimmed : null;
+        };
+
+        const invite = await doctorPatientInviteRepository.create({
+            doctorId,
+            inviteeName: trimOrNull(body.inviteeName),
+            inviteePhone: trimOrNull(body.inviteePhone),
+            inviteeEmail: trimOrNull(body.inviteeEmail),
+            note: trimOrNull(body.note),
+            expiresInDays,
+        });
+
+        return sendResponse(res, 201, true, 'Invite created', mapInviteRowToResponse(invite));
+    } catch (error: unknown) {
+        logger.error('Error creating patient invite', {
+            error: error instanceof Error ? error.message : String(error),
+            doctorId,
+        });
+        return sendError(res, 500, 'Failed to create patient invite');
+    }
+};
+
+/**
+ * GET /api/doctor/me/invites — List the doctor's invites.
+ * Returns the live-status-corrected payload so the UI doesn't need
+ * client-side expiry math.
+ */
+export const listPatientInvites = async (req: Request, res: Response) => {
+    const doctorId = req.user?.id;
+    try {
+        if (!doctorId) return sendError(res, 401, 'Unauthorized');
+
+        const rows = await doctorPatientInviteRepository.listForDoctor(doctorId);
+        const invites = rows.map(row => ({
+            ...mapInviteRowToResponse(row),
+            status: liveInviteStatus(row),
+        }));
+
+        // Surface aggregate counts for the registry "X pending / Y claimed"
+        // analytics tile.
+        const counts = {
+            total: invites.length,
+            pending: invites.filter(i => i.status === 'pending').length,
+            claimed: invites.filter(i => i.status === 'claimed').length,
+            expired: invites.filter(i => i.status === 'expired').length,
+            revoked: invites.filter(i => i.status === 'revoked').length,
+        };
+
+        return sendResponse(res, 200, true, 'Invites fetched', { invites, counts });
+    } catch (error: unknown) {
+        logger.error('Error listing patient invites', {
+            error: error instanceof Error ? error.message : String(error),
+            doctorId,
+        });
+        return sendError(res, 500, 'Failed to list patient invites');
+    }
+};
+
+/**
+ * DELETE /api/doctor/me/invites/:id — Soft-revoke an invite.
+ * Idempotent. Restricted to the owning doctor (enforced in the
+ * repository UPDATE WHERE clause).
+ */
+export const revokePatientInvite = async (req: Request, res: Response) => {
+    const doctorId = req.user?.id;
+    const rawInviteId: unknown = req.params.id;
+    const inviteId: string = typeof rawInviteId === 'string' ? rawInviteId : '';
+    try {
+        if (!doctorId) return sendError(res, 401, 'Unauthorized');
+        if (inviteId.length === 0) return sendError(res, 400, 'Invite ID required');
+
+        const ok = await doctorPatientInviteRepository.revoke(inviteId, doctorId);
+        if (!ok) return sendError(res, 404, 'Invite not found or already revoked');
+
+        return sendResponse(res, 200, true, 'Invite revoked');
+    } catch (error: unknown) {
+        logger.error('Error revoking patient invite', {
+            error: error instanceof Error ? error.message : String(error),
+            doctorId, inviteId,
+        });
+        return sendError(res, 500, 'Failed to revoke invite');
+    }
+};
+
+/**
+ * GET /api/invites/:token — PUBLIC endpoint for the signup page to
+ * verify an invite token and pre-fill the signup form. Returns
+ * minimal metadata only — never the doctor's contact or any sensitive
+ * payload. Distinguishes between "not found / revoked", "expired",
+ * "already claimed", and "valid" so the signup page can render an
+ * appropriate state.
+ */
+export const verifyPatientInviteToken = async (req: Request, res: Response) => {
+    const token = req.params.token;
+    try {
+        if (typeof token !== 'string' || token.length === 0) {
+            return sendError(res, 400, 'Invite token required');
+        }
+
+        /** Flat verification payload — every dimension nullable so the
+         *  signup page can render its banner from a single object without
+         *  branching on a discriminated `valid: true|false` union. */
+        const emptyResponse = {
+            valid: false,
+            reason: null as 'not-found' | 'expired' | 'revoked' | 'claimed' | null,
+            doctorName: null as string | null,
+            doctorSpecialization: null as string | null,
+            inviteeName: null as string | null,
+            inviteePhone: null as string | null,
+            inviteeEmail: null as string | null,
+        };
+
+        const invite = await doctorPatientInviteRepository.findActiveByToken(token);
+        if (invite === null) {
+            return sendResponse(res, 200, true, 'Invite verified', {
+                ...emptyResponse,
+                reason: 'not-found',
+            });
+        }
+
+        const live = liveInviteStatus(invite);
+        if (live === 'expired' || live === 'revoked' || live === 'claimed') {
+            return sendResponse(res, 200, true, 'Invite verified', {
+                ...emptyResponse,
+                reason: live,
+            });
+        }
+
+        // Fetch the inviting doctor's display name (NO contact details).
+        const doctorResult = await pool.query<{ name: string | null; specialization: string | null }>(`
+            SELECT u.name, dp.specialization
+            FROM users u
+            LEFT JOIN doctor_profiles dp ON dp.user_id = u.id
+            WHERE u.id = $1 AND u.role = 'doctor'
+        `, [invite.doctor_id]);
+        const doctorName: string | null = doctorResult.rows[0]?.name ?? null;
+        const doctorSpecialization: string | null = doctorResult.rows[0]?.specialization ?? null;
+
+        return sendResponse(res, 200, true, 'Invite verified', {
+            valid: true,
+            reason: null,
+            doctorName,
+            doctorSpecialization,
+            inviteeName: invite.invitee_name,
+            inviteePhone: invite.invitee_phone,
+            inviteeEmail: invite.invitee_email,
+        });
+    } catch (error: unknown) {
+        logger.error('Error verifying invite token', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Failed to verify invite');
+    }
+};
+
+/**
+ * Whitelist of advanced sort keys accepted on the registry endpoint.
+ * Anything outside this set degrades to the default
+ * (`last-visit` desc) — we never trust raw query strings against an
+ * ORDER BY column.
+ */
+type PatientRegistrySortKey = 'name' | 'last-visit' | 'total-visits' | 'age';
+type PatientRegistrySortOrder = 'asc' | 'desc';
+
+const PATIENT_REGISTRY_SORT_KEYS: ReadonlyArray<PatientRegistrySortKey> = [
+    'name', 'last-visit', 'total-visits', 'age',
+];
+const PATIENT_REGISTRY_SORT_ORDERS: ReadonlyArray<PatientRegistrySortOrder> = ['asc', 'desc'];
+
+const isSortKey = (v: string): v is PatientRegistrySortKey =>
+    (PATIENT_REGISTRY_SORT_KEYS as ReadonlyArray<string>).includes(v);
+const isSortOrder = (v: string): v is PatientRegistrySortOrder =>
+    (PATIENT_REGISTRY_SORT_ORDERS as ReadonlyArray<string>).includes(v);
+
+/** Parse a numeric query param. Returns null when missing, non-numeric,
+ *  or out of the [min, max] sanity window. */
+const parseNumericParam = (raw: unknown, min: number, max: number): number | null => {
+    if (typeof raw !== 'string' || raw.trim().length === 0) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    if (n < min || n > max) return null;
+    return n;
+};
+
+/** Parse an ISO date param. Returns null when missing or unparseable.
+ *  The browser-side filter drawer emits `YYYY-MM-DD` strings — we accept
+ *  any value `new Date()` can parse and treat the rest as "no filter". */
+const parseDateParam = (raw: unknown): Date | null => {
+    if (typeof raw !== 'string' || raw.trim().length === 0) return null;
+    const d = new Date(raw);
+    return Number.isFinite(d.getTime()) ? d : null;
+};
+
+/** Compute the patient's age in completed years from a DOB. Used by the
+ *  age-range advanced filter and the `age` sort key. Returns null when
+ *  the DOB column is null (patient_profiles never filled in). */
+const computeAgeYears = (dob: Date | null): number | null => {
+    if (dob === null) return null;
+    const now = new Date();
+    let age = now.getFullYear() - dob.getFullYear();
+    const monthDiff = now.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+        age -= 1;
+    }
+    return age;
+};
+
 // Get doctor's patient list
 export const getDoctorPatients = async (req: Request, res: Response) => {
     const doctorId = req.user?.id;
@@ -754,6 +1050,33 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
         const filter: PatientRegistryFilter | null = typeof rawFilter === 'string' && isPatientRegistryFilter(rawFilter)
             ? rawFilter
             : null;
+
+        // Advanced filter params — all optional, all individually narrowed.
+        // Bounds chosen so a single out-of-range or malformed value
+        // degrades silently to "no filter on this dimension" rather than
+        // erroring the entire registry call.
+        const ageMin: number | null = parseNumericParam(req.query.ageMin, 0, 150);
+        const ageMax: number | null = parseNumericParam(req.query.ageMax, 0, 150);
+        const minVisits: number | null = parseNumericParam(req.query.minVisits, 1, 10_000);
+        const rawGender: unknown = req.query.gender;
+        const gender: string | null =
+            typeof rawGender === 'string' && rawGender.trim().length > 0
+                ? rawGender.trim().toLowerCase()
+                : null;
+        const rawBloodGroup: unknown = req.query.bloodGroup;
+        const bloodGroup: string | null =
+            typeof rawBloodGroup === 'string' && rawBloodGroup.trim().length > 0
+                ? rawBloodGroup.trim().toUpperCase()
+                : null;
+        const lastVisitFrom: Date | null = parseDateParam(req.query.lastVisitFrom);
+        const lastVisitTo: Date | null = parseDateParam(req.query.lastVisitTo);
+
+        const rawSort: unknown = req.query.sort;
+        const rawOrder: unknown = req.query.order;
+        const sortKey: PatientRegistrySortKey =
+            typeof rawSort === 'string' && isSortKey(rawSort) ? rawSort : 'last-visit';
+        const sortOrder: PatientRegistrySortOrder =
+            typeof rawOrder === 'string' && isSortOrder(rawOrder) ? rawOrder : 'desc';
 
         // Single query that hydrates the full registry surface:
         //   - completed-appointment count + last visit anchor (existing semantic)
@@ -809,6 +1132,9 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
             );
             const dobMonth: number | null = row.date_of_birth === null ? null : new Date(row.date_of_birth).getMonth();
             const isBirthdayThisMonth: boolean = dobMonth !== null && dobMonth === currentMonth;
+            const ageYears: number | null = computeAgeYears(
+                row.date_of_birth === null ? null : new Date(row.date_of_birth)
+            );
 
             return {
                 ...mapUserToResponse(decrypted),
@@ -823,6 +1149,7 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
                 lifecycleStage,
                 acuityLevel,
                 isBirthdayThisMonth,
+                ageYears,
                 // Carry decrypted PII through the haystack-search layer
                 // below WITHOUT emitting them in the response. The mapper
                 // already stripped phone+id from `mapUserToResponse`; we
@@ -872,6 +1199,60 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
                     break;
             }
         }
+
+        // Stage 4: apply advanced filters from the AdvancedFilterDrawer.
+        // Each dimension is independent — a row must pass every dimension
+        // that has a value set. Missing values short-circuit the dimension.
+        if (ageMin !== null) {
+            visible = visible.filter(p => p.ageYears !== null && p.ageYears >= ageMin);
+        }
+        if (ageMax !== null) {
+            visible = visible.filter(p => p.ageYears !== null && p.ageYears <= ageMax);
+        }
+        if (gender !== null) {
+            visible = visible.filter(p => (p.gender ?? '').toLowerCase() === gender);
+        }
+        if (bloodGroup !== null) {
+            visible = visible.filter(p => (p.bloodGroup ?? '').toUpperCase() === bloodGroup);
+        }
+        if (minVisits !== null) {
+            visible = visible.filter(p => p.totalAppointments >= minVisits);
+        }
+        if (lastVisitFrom !== null) {
+            const fromMs = lastVisitFrom.getTime();
+            visible = visible.filter(p => p.lastVisit.getTime() >= fromMs);
+        }
+        if (lastVisitTo !== null) {
+            // Treat lastVisitTo as "end of day inclusive" so a single-day
+            // selection (from == to) matches visits made that day.
+            const toMs = lastVisitTo.getTime() + (24 * 60 * 60 * 1000 - 1);
+            visible = visible.filter(p => p.lastVisit.getTime() <= toMs);
+        }
+
+        // Stage 5: sort the visible set. The default
+        // (`last-visit` desc) matches the SQL ORDER BY upstream, so
+        // omitting `sort`/`order` produces an identical ordering to the
+        // pre-advanced-filter implementation.
+        const orderMult: number = sortOrder === 'asc' ? 1 : -1;
+        visible = [...visible].sort((a, b) => {
+            switch (sortKey) {
+                case 'name':
+                    return orderMult * (a.name ?? '').localeCompare(b.name ?? '');
+                case 'total-visits':
+                    return orderMult * (a.totalAppointments - b.totalAppointments);
+                case 'age': {
+                    // Null ages sort to the end regardless of direction so
+                    // unprofiled patients never dominate the first page.
+                    if (a.ageYears === null && b.ageYears === null) return 0;
+                    if (a.ageYears === null) return 1;
+                    if (b.ageYears === null) return -1;
+                    return orderMult * (a.ageYears - b.ageYears);
+                }
+                case 'last-visit':
+                default:
+                    return orderMult * (a.lastVisit.getTime() - b.lastVisit.getTime());
+            }
+        });
 
         // Project the response — strip the search haystack so PII does
         // not leak to the wire.

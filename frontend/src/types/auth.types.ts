@@ -44,6 +44,13 @@ export interface SignupCredentials {
     name: string;
     role: UserRole;
     idNumber?: string;
+    /**
+     * Doctor-issued invite token from `/signup?invite=<token>`. When
+     * present the backend links the new patient account to the inviting
+     * doctor via the `doctor_patient_invites` ledger. Optional — a
+     * normal unaffiliated signup omits it.
+     */
+    inviteToken?: string;
     [key: string]: unknown;
 }
 

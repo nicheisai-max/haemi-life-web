@@ -26,5 +26,14 @@ export const signupSchema = z.object({
         // SECURITY: 'admin' is intentionally excluded from self-registration
         role: z.enum(['patient', 'doctor', 'pharmacist']).default('patient'),
         idNumber: z.string().optional(),
+        /**
+         * Optional doctor-issued invite token. When present and valid, the
+         * resulting patient account is linked to the inviting doctor via
+         * the `doctor_patient_invites` ledger (status → `claimed`) inside
+         * the same signup transaction. Invalid/expired tokens are ignored
+         * silently so that a bad link never blocks a legitimate signup —
+         * the patient simply becomes an unaffiliated user.
+         */
+        inviteToken: z.string().min(1).optional(),
     }),
 });

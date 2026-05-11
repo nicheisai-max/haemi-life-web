@@ -231,6 +231,36 @@ CREATE TABLE IF NOT EXISTS doctor_schedules (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Doctor → Patient Invites (Patient Registry — PR 3/3 of the rollout).
+-- Doctor generates a random URL-safe token; shares the resulting signup
+-- link via any channel (WhatsApp / in-person / etc). Patient signs up
+-- via that link → invite is marked `claimed`. Optional invitee fields
+-- pre-fill the signup form. See migration
+-- 20260511120000_doctor_patient_invites.sql for the canonical rationale.
+CREATE TABLE IF NOT EXISTS doctor_patient_invites (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(64) UNIQUE NOT NULL,
+    invitee_name VARCHAR(255),
+    invitee_phone VARCHAR(50),
+    invitee_email VARCHAR(255),
+    note TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'claimed', 'expired', 'revoked')),
+    claimed_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    claimed_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_invites_doctor
+    ON doctor_patient_invites(doctor_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_invites_token_active
+    ON doctor_patient_invites(token) WHERE deleted_at IS NULL AND status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_invites_status
+    ON doctor_patient_invites(status) WHERE deleted_at IS NULL;
+
 -- Medications (Master List)
 CREATE TABLE IF NOT EXISTS medicines (
     id SERIAL PRIMARY KEY,

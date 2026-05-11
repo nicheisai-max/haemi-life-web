@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
     Search,
     Calendar,
@@ -14,6 +15,8 @@ import {
     Cake,
     UserCheck,
     Users,
+    UserPlus,
+    SlidersHorizontal,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -24,6 +27,7 @@ import {
     getDoctorPatients,
     type Patient,
     type PatientLifecycleStage,
+    type PatientRegistryAdvancedFilters,
     type PatientRegistryCounts,
     type PatientRegistryFilter,
 } from '@/services/doctor.service';
@@ -32,6 +36,9 @@ import { logger } from '@/utils/logger';
 import { PATHS } from '@/routes/paths';
 import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { InvitePatientModal } from '@/components/doctor/invite-patient-modal';
+import { AdvancedFilterDrawer } from '@/components/doctor/advanced-filter-drawer';
+import { countActiveAdvancedFilters } from '@/components/doctor/advanced-filter-utils';
 
 /**
  * Resolves the authenticated-tunnel src for a patient's profile image.
@@ -133,8 +140,48 @@ const buildEmptyStateCopy = (ctx: EmptyStateContext): { title: string; body: str
     };
 };
 
+/** Parse advanced filter values out of a URLSearchParams instance.
+ *  Lives outside the component so the initial-state hydration and the
+ *  state-sync effect read the same canonical shape. Unknown / malformed
+ *  values fall through as `undefined`. */
+const parseAdvancedFiltersFromUrl = (params: URLSearchParams): PatientRegistryAdvancedFilters => {
+    const next: PatientRegistryAdvancedFilters = {};
+    const ageMinStr = params.get('ageMin');
+    const ageMaxStr = params.get('ageMax');
+    const minVisitsStr = params.get('minVisits');
+    if (ageMinStr !== null && ageMinStr.length > 0 && Number.isFinite(Number(ageMinStr))) {
+        next.ageMin = Number(ageMinStr);
+    }
+    if (ageMaxStr !== null && ageMaxStr.length > 0 && Number.isFinite(Number(ageMaxStr))) {
+        next.ageMax = Number(ageMaxStr);
+    }
+    if (minVisitsStr !== null && minVisitsStr.length > 0 && Number.isFinite(Number(minVisitsStr))) {
+        next.minVisits = Number(minVisitsStr);
+    }
+    const genderStr = params.get('gender');
+    if (genderStr === 'male' || genderStr === 'female' || genderStr === 'other') {
+        next.gender = genderStr;
+    }
+    const bloodGroupStr = params.get('bloodGroup');
+    if (bloodGroupStr !== null && /^(A|B|AB|O)[+-]$/.test(bloodGroupStr)) {
+        next.bloodGroup = bloodGroupStr as PatientRegistryAdvancedFilters['bloodGroup'];
+    }
+    const lastVisitFromStr = params.get('lastVisitFrom');
+    const lastVisitToStr = params.get('lastVisitTo');
+    if (lastVisitFromStr !== null && lastVisitFromStr.length > 0) next.lastVisitFrom = lastVisitFromStr;
+    if (lastVisitToStr !== null && lastVisitToStr.length > 0) next.lastVisitTo = lastVisitToStr;
+    const sortStr = params.get('sort');
+    if (sortStr === 'name' || sortStr === 'last-visit' || sortStr === 'total-visits' || sortStr === 'age') {
+        next.sort = sortStr;
+    }
+    const orderStr = params.get('order');
+    if (orderStr === 'asc' || orderStr === 'desc') next.order = orderStr;
+    return next;
+};
+
 export const DoctorPatientList: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     const [patients, setPatients] = useState<Patient[]>([]);
     const [counts, setCounts] = useState<PatientRegistryCounts>({
@@ -151,6 +198,49 @@ export const DoctorPatientList: React.FC = () => {
     const [searchInput, setSearchInput] = useState<string>('');
     const [debouncedSearch, setDebouncedSearch] = useState<string>('');
     const [activeFilter, setActiveFilter] = useState<PatientRegistryFilter | null>(null);
+
+    // Advanced filter state — hydrated once from the URL so a shared link
+    // restores the same filtered registry. All mutations route through
+    // `applyAdvancedFilters` below which also patches the URL.
+    const [advancedFilters, setAdvancedFilters] = useState<PatientRegistryAdvancedFilters>(
+        () => parseAdvancedFiltersFromUrl(searchParams)
+    );
+
+    const [inviteModalOpen, setInviteModalOpen] = useState<boolean>(false);
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState<boolean>(false);
+
+    const activeAdvancedCount: number = useMemo(
+        () => countActiveAdvancedFilters(advancedFilters),
+        [advancedFilters]
+    );
+
+    /** Apply a new set of advanced filters AND patch the URL in a single
+     *  pass, so a refresh restores the same view and a tab share carries
+     *  the full filter state. */
+    const applyAdvancedFilters = useCallback((next: PatientRegistryAdvancedFilters): void => {
+        setAdvancedFilters(next);
+        const params = new URLSearchParams(searchParams);
+        // Strip every advanced-filter key first so removing a dimension
+        // doesn't leave stale URL state behind.
+        for (const key of ['ageMin', 'ageMax', 'gender', 'bloodGroup', 'minVisits', 'lastVisitFrom', 'lastVisitTo', 'sort', 'order']) {
+            params.delete(key);
+        }
+        if (next.ageMin !== undefined) params.set('ageMin', String(next.ageMin));
+        if (next.ageMax !== undefined) params.set('ageMax', String(next.ageMax));
+        if (next.gender !== undefined) params.set('gender', next.gender);
+        if (next.bloodGroup !== undefined) params.set('bloodGroup', next.bloodGroup);
+        if (next.minVisits !== undefined) params.set('minVisits', String(next.minVisits));
+        if (next.lastVisitFrom !== undefined && next.lastVisitFrom.length > 0) params.set('lastVisitFrom', next.lastVisitFrom);
+        if (next.lastVisitTo !== undefined && next.lastVisitTo.length > 0) params.set('lastVisitTo', next.lastVisitTo);
+        // Only persist sort/order when non-default — keeps the URL tidy.
+        if (next.sort !== undefined && next.sort !== 'last-visit') params.set('sort', next.sort);
+        if (next.order !== undefined && next.order !== 'desc') params.set('order', next.order);
+        setSearchParams(params, { replace: true });
+    }, [searchParams, setSearchParams]);
+
+    const resetAdvancedFilters = useCallback((): void => {
+        applyAdvancedFilters({});
+    }, [applyAdvancedFilters]);
 
     // Debounce the search input so we don't fire a network request per
     // keystroke. The trailing-edge timer is the institutional pattern
@@ -173,6 +263,7 @@ export const DoctorPatientList: React.FC = () => {
             const response = await getDoctorPatients({
                 search: debouncedSearch.length > 0 ? debouncedSearch : undefined,
                 filter: activeFilter ?? undefined,
+                ...advancedFilters,
             });
             setPatients(response.patients);
             setCounts(response.counts);
@@ -185,7 +276,7 @@ export const DoctorPatientList: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [debouncedSearch, activeFilter]);
+    }, [debouncedSearch, activeFilter, advancedFilters]);
 
     useEffect(() => {
         void fetchRegistry();
@@ -232,15 +323,30 @@ export const DoctorPatientList: React.FC = () => {
                         Patients you have treated appear here automatically after their first completed consultation.
                     </p>
                 </div>
-                {/*
-                  "Invite Patient" affordance is intentionally absent in this PR.
-                  PR #3 of the registry rollout introduces the full doctor→patient
-                  invite flow (zero-cost copy-to-share link, signup-time claim,
-                  audit-logged), and the button will be re-mounted here at that
-                  point. Surfacing a dead "Add Patient" button — which the prior
-                  revision had — was identified as a credibility risk during the
-                  Senior UX audit; institutional honesty over fake UX.
-                */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setFilterDrawerOpen(true)}
+                        aria-label="Open advanced filters"
+                    >
+                        <SlidersHorizontal className="h-4 w-4 mr-2" aria-hidden="true" />
+                        Filters
+                        {activeAdvancedCount > 0 ? (
+                            <Badge variant="secondary" className="ml-2">
+                                {activeAdvancedCount}
+                            </Badge>
+                        ) : null}
+                    </Button>
+                    <Button
+                        type="button"
+                        onClick={() => setInviteModalOpen(true)}
+                        aria-label="Invite a new patient"
+                    >
+                        <UserPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                        Invite patient
+                    </Button>
+                </div>
             </div>
 
             <AnimatedAlert visible={error !== null}>
@@ -418,6 +524,19 @@ export const DoctorPatientList: React.FC = () => {
                     ) : null
                 )}
             </div>
+
+            <InvitePatientModal
+                open={inviteModalOpen}
+                onOpenChange={setInviteModalOpen}
+            />
+
+            <AdvancedFilterDrawer
+                open={filterDrawerOpen}
+                onOpenChange={setFilterDrawerOpen}
+                initialFilters={advancedFilters}
+                onApply={applyAdvancedFilters}
+                onReset={resetAdvancedFilters}
+            />
         </div>
     );
 };

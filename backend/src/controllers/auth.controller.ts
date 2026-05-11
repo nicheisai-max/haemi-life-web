@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { userRepository } from '../repositories/user.repository';
+import { doctorPatientInviteRepository } from '../repositories/doctor-patient-invite.repository';
 import { logger } from '../utils/logger';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 import { emitToAdmins } from '../services/admin-broadcast.service';
@@ -48,6 +49,15 @@ interface SignupRequest {
     name: string;
     phoneNumber: string;
     idNumber?: string;
+    /**
+     * Doctor-issued invite token from `/signup?invite=...`. Only honoured
+     * when `role === 'patient'` — the invite ledger exists exclusively to
+     * link new patients to the doctor who invited them. Missing, malformed,
+     * expired, or already-claimed tokens degrade silently to a normal
+     * unaffiliated signup; we never surface invite errors to the public
+     * signup form because the patient cannot remediate them.
+     */
+    inviteToken?: string;
 }
 
 interface LoginRequest {
@@ -117,7 +127,7 @@ const checkRefreshRateLimit = (sessionId: string): boolean => {
 };
 
 export const signup = async (req: Request, res: Response) => {
-    const { email, password, role, name, phoneNumber, idNumber } = req.body as SignupRequest;
+    const { email, password, role, name, phoneNumber, idNumber, inviteToken } = req.body as SignupRequest;
 
 
     // Institutional Hardening: Input Validation
@@ -148,6 +158,40 @@ export const signup = async (req: Request, res: Response) => {
                 role,
                 idNumber: idNumber || null
             }, client);
+
+            // Doctor-Patient invite claim — runs inside the same TX so a
+            // failed claim rolls back user creation. Only attempted when
+            // a token is present AND the new account is a patient; the
+            // invite ledger is patient-only by design. We treat
+            // "claim returned null" (token expired / already used /
+            // revoked) as a soft failure: the user still gets created.
+            // Strict invariants (token gibberish, DB error) bubble up.
+            if (typeof inviteToken === 'string' && inviteToken.length > 0 && role === 'patient') {
+                try {
+                    const claimed = await doctorPatientInviteRepository.markClaimed(
+                        inviteToken,
+                        newUser.id,
+                        client,
+                    );
+                    if (claimed === null) {
+                        logger.info('[Auth.Signup] Invite token present but not claimable (expired/revoked/used)', {
+                            userId: newUser.id,
+                        });
+                    } else {
+                        logger.info('[Auth.Signup] Invite token successfully claimed', {
+                            userId: newUser.id,
+                            inviteId: claimed.id,
+                            doctorId: claimed.doctor_id,
+                        });
+                    }
+                } catch (inviteError: unknown) {
+                    logger.error('[Auth.Signup] Invite claim raised — rolling back signup', {
+                        error: inviteError instanceof Error ? inviteError.message : String(inviteError),
+                        userId: newUser.id,
+                    });
+                    throw inviteError;
+                }
+            }
 
             await client.query('COMMIT');
 
