@@ -13,8 +13,31 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { AuthenticatedImage } from '@/components/ui/authenticated-image';
 import { getInitials } from '@/utils/avatar.resolver';
 import { getDoctorPatients, Patient } from '@/services/doctor.service';
+
+/**
+ * Resolves the authenticated-tunnel src for a patient's profile image.
+ *
+ * Mirrors the navbar's `getUserImage()` resolver for consistency: any
+ * absolute `http(s)` value is returned as-is (covers cases where the
+ * backend pre-signs an external URL); otherwise the canonical
+ * `/api/files/profile/:id` endpoint is constructed from the patient's
+ * UUID — the backend's profile-image controller reads the BYTEA blob
+ * + MIME by user id, not by the stored filename.
+ *
+ * Returns '' when the patient has no image. Callers MUST gate the
+ * AuthenticatedImage render on a truthy src — passing '' would leave
+ * AuthenticatedImage in its loading-skeleton state forever (its fetch
+ * bails on empty src without flipping `loading` to false).
+ */
+const resolvePatientImageSrc = (patient: Patient): string => {
+    const stored: string | null | undefined = patient.profileImage;
+    if (stored === null || stored === undefined || stored.length === 0) return '';
+    if (stored.startsWith('http')) return stored;
+    return `/api/files/profile/${patient.id}`;
+};
 import { toast } from 'sonner';
 import { usePageLoader } from '@/hooks/use-page-loader';
 
@@ -85,10 +108,23 @@ export const DoctorPatientList: React.FC = () => {
                         <Card key={patient.id} className="p-4 hover:shadow-md transition-all group border-border/40 overflow-hidden relative">
                             <div className="flex items-center justify-between gap-4 relative z-10">
                                 <div className="flex items-center gap-4">
-                                    <Avatar className="h-12 w-12 rounded-2xl shrink-0 border-0">
-                                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg rounded-2xl border-0">
-                                            {getInitials(patient.name)}
-                                        </AvatarFallback>
+                                    <Avatar className="h-12 w-12 rounded-2xl shrink-0 border-0 overflow-hidden">
+                                        {patient.profileImage !== null && patient.profileImage !== undefined && patient.profileImage.length > 0 ? (
+                                            <AuthenticatedImage
+                                                src={resolvePatientImageSrc(patient)}
+                                                alt={patient.name}
+                                                className="object-cover w-full h-full rounded-2xl"
+                                                errorFallback={
+                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg rounded-2xl border-0">
+                                                        {getInitials(patient.name)}
+                                                    </AvatarFallback>
+                                                }
+                                            />
+                                        ) : (
+                                            <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg rounded-2xl border-0">
+                                                {getInitials(patient.name)}
+                                            </AvatarFallback>
+                                        )}
                                     </Avatar>
                                     <div className="min-w-0">
                                         <h3 className="font-bold text-lg truncate group-hover:text-primary transition-colors">
