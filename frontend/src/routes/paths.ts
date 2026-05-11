@@ -38,6 +38,15 @@ export const PATHS = {
         DASHBOARD: '/dashboard',
         SCHEDULE: '/doctor/schedule',
         PATIENTS: '/doctor/patients',
+        /**
+         * Per-patient deep-dive page (full clinical dossier, 5+ tabs).
+         * Builder must substitute `:id` with the patient's UUID.
+         * Route handler is added in PR #2 of the Patient Registry rollout —
+         * the path is reserved here so the registry row actions and any
+         * other deep-link source can settle on the canonical URL ahead of
+         * the page landing.
+         */
+        PATIENT_PROFILE: '/doctor/patients/:id',
         REPORTS: '/doctor/reports',
         // Legacy redirects
         DASHBOARD_LEGACY: '/doctor/dashboard',
