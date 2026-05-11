@@ -401,6 +401,345 @@ type PatientRegistryRow = UserEntity & {
     latest_risk_score: string | null;
 };
 
+/** Compute integer age in years from a date-of-birth value. Returns
+ *  null when DOB is absent. Defensive narrowing — anything non-Date /
+ *  non-string returns null. */
+const computeAge = (dob: Date | string | null): number | null => {
+    if (dob === null) return null;
+    const dobDate: Date = dob instanceof Date ? dob : new Date(dob);
+    if (Number.isNaN(dobDate.getTime())) return null;
+    const now = new Date();
+    let age: number = now.getFullYear() - dobDate.getFullYear();
+    const m: number = now.getMonth() - dobDate.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < dobDate.getDate())) age--;
+    return age;
+};
+
+interface PatientProfileSummaryRow {
+    id: string;
+    name: string;
+    phone_number: string | null;
+    id_number: string | null;
+    email: string | null;
+    profile_image: string | null;
+    profile_image_mime: string | null;
+    initials: string | null;
+    date_of_birth: Date | null;
+    gender: string | null;
+    blood_group: string | null;
+    medical_conditions: string | null;
+    allergies: string | null;
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+    completed_with_doctor: string;
+    first_seen_with_doctor: Date | null;
+    last_visit: Date | null;
+    latest_risk_score: string | null;
+}
+
+interface PatientProfileAppointmentRow {
+    id: number;
+    appointment_date: string;
+    appointment_time: string;
+    duration_minutes: number;
+    status: string;
+    consultation_type: string | null;
+    reason: string | null;
+    notes: string | null;
+    created_at: Date;
+}
+
+interface PatientProfilePrescriptionRow {
+    id: number;
+    doctor_id: string;
+    doctor_name: string | null;
+    specialization: string | null;
+    appointment_id: number | null;
+    prescription_date: Date;
+    status: string;
+    notes: string | null;
+    item_count: string;
+    issued_by_me: boolean;
+    created_at: Date;
+}
+
+interface PatientProfileRecordRow {
+    id: string;
+    name: string;
+    record_type: string;
+    status: string;
+    notes: string | null;
+    uploaded_at: Date;
+    doctor_name: string | null;
+    facility_name: string | null;
+    date_of_service: string | null;
+    file_mime: string | null;
+}
+
+interface PatientProfileScreeningRow {
+    appointment_id: number;
+    appointment_date: string;
+    question_text: string | null;
+    disease_tag: string | null;
+    response_value: boolean;
+    additional_notes: string | null;
+    risk_score: string;
+    created_at: Date;
+}
+
+/**
+ * GET /api/doctor/me/patients/:id — Patient deep-dive aggregator.
+ *
+ * Returns the full clinical dossier the doctor needs to make a 30-second
+ * decision on a patient: demographics + clinical context + appointment
+ * history + prescriptions (all doctors, flagged for "issued by me") +
+ * uploaded records + screening trail.
+ *
+ * Authorization is baked into the patient SELECT — the
+ * `completed_with_doctor` subquery returns 0 when there's no completed
+ * appointment between the requesting doctor and the patient, which
+ * collapses to 403. POPIA-compliant clinical-relationship gate.
+ *
+ * Five queries run in parallel via `Promise.all`. The bounded data
+ * scope (per-doctor-per-patient) keeps latency comfortable — typical
+ * payload is <50 rows across all tabs.
+ */
+export const getDoctorPatientProfile = async (req: Request, res: Response) => {
+    const doctorId = req.user?.id;
+    const patientId = req.params.id;
+
+    try {
+        if (!doctorId) return sendError(res, 401, 'Unauthorized');
+        if (!patientId) return sendError(res, 400, 'Patient ID is required');
+
+        // Parallel fetch — patient row carries the authorization signal
+        // via `completed_with_doctor` count; the other four queries
+        // safely operate even on an unauthorized request because the
+        // controller short-circuits below before exposing any data.
+        const [patientResult, appointmentsResult, prescriptionsResult, recordsResult, screeningsResult] = await Promise.all([
+            pool.query<PatientProfileSummaryRow>(`
+                SELECT
+                    u.id, u.name, u.phone_number, u.id_number, u.email,
+                    u.profile_image, u.profile_image_mime, u.initials,
+                    pp.date_of_birth, pp.gender, pp.blood_group,
+                    pp.medical_conditions, pp.allergies,
+                    pp.emergency_contact_name, pp.emergency_contact_phone,
+                    (
+                        SELECT COUNT(*) FROM appointments a
+                        WHERE a.doctor_id = $1 AND a.patient_id = u.id
+                          AND a.status = 'completed' AND a.deleted_at IS NULL
+                    ) AS completed_with_doctor,
+                    (
+                        SELECT MIN(a.appointment_date) FROM appointments a
+                        WHERE a.doctor_id = $1 AND a.patient_id = u.id
+                          AND a.deleted_at IS NULL
+                    ) AS first_seen_with_doctor,
+                    (
+                        SELECT MAX(a.appointment_date) FROM appointments a
+                        WHERE a.doctor_id = $1 AND a.patient_id = u.id
+                          AND a.status = 'completed' AND a.deleted_at IS NULL
+                    ) AS last_visit,
+                    (
+                        SELECT aps.risk_score::text FROM appointment_pre_screenings aps
+                        JOIN appointments a2 ON a2.id = aps.appointment_id
+                        WHERE a2.patient_id = u.id AND a2.doctor_id = $1
+                        ORDER BY aps.created_at DESC LIMIT 1
+                    ) AS latest_risk_score
+                FROM users u
+                LEFT JOIN patient_profiles pp ON pp.user_id = u.id
+                WHERE u.id = $2 AND u.role = 'patient'
+                LIMIT 1
+            `, [doctorId, patientId]),
+            pool.query<PatientProfileAppointmentRow>(`
+                SELECT
+                    a.id, a.appointment_date::text, a.appointment_time::text,
+                    a.duration_minutes, a.status, a.consultation_type,
+                    a.reason, a.notes, a.created_at
+                FROM appointments a
+                WHERE a.doctor_id = $1 AND a.patient_id = $2 AND a.deleted_at IS NULL
+                ORDER BY a.appointment_date DESC, a.appointment_time DESC
+            `, [doctorId, patientId]),
+            pool.query<PatientProfilePrescriptionRow>(`
+                SELECT
+                    p.id, p.doctor_id, p.appointment_id, p.notes,
+                    p.prescription_date, p.status, p.created_at,
+                    u.name AS doctor_name,
+                    dp.specialization,
+                    (p.doctor_id = $1) AS issued_by_me,
+                    (
+                        SELECT COUNT(*) FROM prescription_items pi
+                        WHERE pi.prescription_id = p.id
+                    ) AS item_count
+                FROM prescriptions p
+                LEFT JOIN users u ON u.id = p.doctor_id
+                LEFT JOIN doctor_profiles dp ON dp.user_id = p.doctor_id
+                WHERE p.patient_id = $2 AND p.deleted_at IS NULL
+                ORDER BY p.prescription_date DESC
+            `, [doctorId, patientId]),
+            pool.query<PatientProfileRecordRow>(`
+                SELECT
+                    id::text, name,
+                    record_type::text, status::text,
+                    notes, uploaded_at,
+                    doctor_name, facility_name, date_of_service::text,
+                    file_mime
+                FROM medical_records
+                WHERE patient_id = $1 AND deleted_at IS NULL
+                ORDER BY uploaded_at DESC
+            `, [patientId]),
+            pool.query<PatientProfileScreeningRow>(`
+                SELECT
+                    aps.appointment_id,
+                    a.appointment_date::text,
+                    psd.question_text,
+                    psd.disease_tag,
+                    aps.response_value,
+                    aps.additional_notes,
+                    aps.risk_score::text,
+                    aps.created_at
+                FROM appointment_pre_screenings aps
+                JOIN appointments a ON a.id = aps.appointment_id
+                LEFT JOIN pre_screening_definitions psd ON psd.id = aps.question_id
+                WHERE a.doctor_id = $1 AND a.patient_id = $2 AND a.deleted_at IS NULL
+                ORDER BY aps.created_at DESC
+            `, [doctorId, patientId]),
+        ]);
+
+        if (patientResult.rows.length === 0) {
+            return sendError(res, 404, 'Patient not found');
+        }
+        const summaryRow = patientResult.rows[0];
+        const completedWithDoctor: number = Number(summaryRow.completed_with_doctor);
+        if (completedWithDoctor === 0) {
+            return sendError(res, 403, 'You do not have an active clinical relationship with this patient');
+        }
+
+        const decryptedSummary = decryptUserPii(summaryRow);
+        const now = new Date();
+        const nowMs: number = now.getTime();
+        const lastVisitMs: number = summaryRow.last_visit !== null ? summaryRow.last_visit.getTime() : nowMs;
+        const latestRiskScoreNum: number | null = summaryRow.latest_risk_score === null
+            ? null
+            : Number(summaryRow.latest_risk_score);
+
+        // Group screenings by appointment for the dossier tab. Average
+        // the per-question risk_score so the row shows a single number
+        // that's directly comparable across visits.
+        const screeningsByAppt = new Map<number, {
+            appointmentId: number;
+            appointmentDate: string;
+            responses: Array<{
+                questionText: string | null;
+                diseaseTag: string | null;
+                responseValue: boolean;
+                additionalNotes: string | null;
+                riskScore: number;
+            }>;
+        }>();
+        for (const row of screeningsResult.rows) {
+            const score: number = Number(row.risk_score);
+            const existing = screeningsByAppt.get(row.appointment_id);
+            const entry = {
+                questionText: row.question_text,
+                diseaseTag: row.disease_tag,
+                responseValue: row.response_value,
+                additionalNotes: row.additional_notes,
+                riskScore: Number.isFinite(score) ? score : 0,
+            };
+            if (existing === undefined) {
+                screeningsByAppt.set(row.appointment_id, {
+                    appointmentId: row.appointment_id,
+                    appointmentDate: row.appointment_date,
+                    responses: [entry],
+                });
+            } else {
+                existing.responses.push(entry);
+            }
+        }
+        const screenings = Array.from(screeningsByAppt.values()).map(group => {
+            const avgRisk: number = group.responses.length > 0
+                ? group.responses.reduce((acc, r) => acc + r.riskScore, 0) / group.responses.length
+                : 0;
+            return { ...group, averageRiskScore: avgRisk };
+        });
+
+        const response = {
+            patient: {
+                id: decryptedSummary.id,
+                name: decryptedSummary.name,
+                email: decryptedSummary.email,
+                phoneNumber: decryptedSummary.phone_number,
+                nationalId: decryptedSummary.id_number,
+                profileImage: decryptedSummary.profile_image,
+                profileImageMime: decryptedSummary.profile_image_mime,
+                initials: decryptedSummary.initials,
+                dateOfBirth: decryptedSummary.date_of_birth,
+                age: computeAge(decryptedSummary.date_of_birth),
+                gender: decryptedSummary.gender,
+                bloodGroup: decryptedSummary.blood_group,
+                medicalConditions: decryptedSummary.medical_conditions,
+                allergies: decryptedSummary.allergies,
+                emergencyContactName: decryptedSummary.emergency_contact_name,
+                emergencyContactPhone: decryptedSummary.emergency_contact_phone,
+                lifecycleStage: computeLifecycleStage(lastVisitMs, nowMs),
+                acuityLevel: computeAcuityLevel(
+                    Number.isFinite(latestRiskScoreNum) ? latestRiskScoreNum : null
+                ),
+                latestRiskScore: Number.isFinite(latestRiskScoreNum) ? latestRiskScoreNum : null,
+                completedWithDoctor,
+                firstSeenWithDoctor: decryptedSummary.first_seen_with_doctor,
+                lastVisit: decryptedSummary.last_visit,
+            },
+            appointments: appointmentsResult.rows.map(row => ({
+                id: row.id,
+                appointmentDate: row.appointment_date,
+                appointmentTime: row.appointment_time,
+                durationMinutes: row.duration_minutes,
+                status: row.status,
+                consultationType: row.consultation_type,
+                reason: row.reason,
+                notes: row.notes,
+                createdAt: row.created_at,
+            })),
+            prescriptions: prescriptionsResult.rows.map(row => ({
+                id: row.id,
+                doctorId: row.doctor_id,
+                doctorName: row.doctor_name,
+                specialization: row.specialization,
+                appointmentId: row.appointment_id,
+                prescriptionDate: row.prescription_date,
+                status: row.status,
+                notes: row.notes,
+                itemCount: Number(row.item_count),
+                issuedByMe: row.issued_by_me,
+                createdAt: row.created_at,
+            })),
+            records: recordsResult.rows.map(row => ({
+                id: row.id,
+                name: row.name,
+                recordType: row.record_type,
+                status: row.status,
+                notes: row.notes,
+                uploadedAt: row.uploaded_at,
+                doctorName: row.doctor_name,
+                facilityName: row.facility_name,
+                dateOfService: row.date_of_service,
+                fileMime: row.file_mime,
+            })),
+            screenings,
+        };
+
+        return sendResponse(res, 200, true, 'Patient profile fetched', response);
+    } catch (error: unknown) {
+        logger.error('Error fetching patient profile:', {
+            error: error instanceof Error ? error.message : String(error),
+            doctorId,
+            patientId,
+        });
+        return sendError(res, 500, 'Error fetching patient profile');
+    }
+};
+
 // Get doctor's patient list
 export const getDoctorPatients = async (req: Request, res: Response) => {
     const doctorId = req.user?.id;

@@ -8,7 +8,8 @@ import {
     getDoctorSchedule,
     updateDoctorSchedule,
     updateDoctorClinicTimezone,
-    getDoctorPatients
+    getDoctorPatients,
+    getDoctorPatientProfile
 } from '../controllers/doctor.controller';
 
 const router = Router();
@@ -23,6 +24,7 @@ router.get('/me/schedule', authenticateToken, requireRole('doctor'), getDoctorSc
 router.put('/me/schedule', authenticateToken, requireRole('doctor'), updateDoctorSchedule);
 router.patch('/me/clinic-timezone', authenticateToken, requireRole('doctor'), updateDoctorClinicTimezone);
 router.get('/me/patients', authenticateToken, requireRole('doctor'), getDoctorPatients);
+router.get('/me/patients/:id', authenticateToken, requireRole('doctor'), getDoctorPatientProfile);
 
 // Wildcard param LAST — must never precede named routes
 router.get('/:id', getDoctorProfile);
