@@ -178,38 +178,46 @@ const AdvancedFilterForm: React.FC<AdvancedFilterFormProps> = ({
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <Label>Gender</Label>
-                    <Select value={gender} onValueChange={setGender}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Any gender" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ANY}>Any gender</SelectItem>
-                            {GENDER_OPTIONS.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="space-y-2">
-                    <Label>Blood group</Label>
-                    <Select value={bloodGroup} onValueChange={setBloodGroup}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Any blood group" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ANY}>Any blood group</SelectItem>
-                            {BLOOD_GROUPS.map((bg) => (
-                                <SelectItem key={bg} value={bg}>
-                                    {bg}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                {/*
+                 * Gender + Blood group share a 2-col row at every breakpoint —
+                 * both fields carry short categorical values, so a side-by-side
+                 * layout keeps the drawer compact without sacrificing legibility.
+                 * Mirrors the age-min/age-max grid above so the whole drawer
+                 * reads as a single seamless 2-column form.
+                 */}
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                        <Label>Gender</Label>
+                        <Select value={gender} onValueChange={setGender}>
+                            <SelectTrigger className="rounded-[var(--card-radius)]">
+                                <SelectValue placeholder="Any gender" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={ANY}>Any gender</SelectItem>
+                                {GENDER_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Blood group</Label>
+                        <Select value={bloodGroup} onValueChange={setBloodGroup}>
+                            <SelectTrigger className="rounded-[var(--card-radius)]">
+                                <SelectValue placeholder="Any blood group" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={ANY}>Any blood group</SelectItem>
+                                {BLOOD_GROUPS.map((bg) => (
+                                    <SelectItem key={bg} value={bg}>
+                                        {bg}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <div className="space-y-2">
@@ -246,7 +254,7 @@ const AdvancedFilterForm: React.FC<AdvancedFilterFormProps> = ({
                     <div className="space-y-2">
                         <Label>Sort by</Label>
                         <Select value={sort} onValueChange={(v) => setSort(v as PatientRegistrySortKey)}>
-                            <SelectTrigger>
+                            <SelectTrigger className="rounded-[var(--card-radius)]">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -261,7 +269,7 @@ const AdvancedFilterForm: React.FC<AdvancedFilterFormProps> = ({
                     <div className="space-y-2">
                         <Label>Order</Label>
                         <Select value={order} onValueChange={(v) => setOrder(v as PatientRegistrySortOrder)}>
-                            <SelectTrigger>
+                            <SelectTrigger className="rounded-[var(--card-radius)]">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
