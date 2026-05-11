@@ -1,8 +1,11 @@
 import React, { type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { ToastContext } from './toast-context-def';
 import type { ToastType, Toast } from './toast-context-def';
+import { isPublicAuthRoute } from '../routes/paths';
+import { useAuth } from '../hooks/use-auth';
 import { logger } from '../utils/logger';
 
 interface ToastProviderProps {
@@ -11,6 +14,54 @@ interface ToastProviderProps {
 
 export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     const [toasts, setToasts] = React.useState<Toast[]>([]);
+    const { pathname } = useLocation();
+    const { isAuthenticated } = useAuth();
+
+    /**
+     * 🔒 AUTH-SURFACE TOAST SUPPRESSION
+     *
+     * No toast (success, error, warning, info) may render while the user
+     * is on a public/auth route (login, signup, forgot-password,
+     * onboarding, root identity-gate) OR while the session is in an
+     * unauthenticated state. This prevents the prior-session-leak bug
+     * where an in-flight async handler from a just-logged-out role
+     * fires a `system:error` / `useToast().error(…)` after the route
+     * has already transitioned to `/login`, surfacing a doctor-role
+     * (or any role-specific) message to the next user who is about to
+     * sign in. The gate is enforced HERE rather than at every call
+     * site so individual components remain dumb — `useToast()` and
+     * `system:*` CustomEvents continue to be the only public API.
+     *
+     * Single source of truth for the route list lives in
+     * `routes/paths.ts` via `isPublicAuthRoute(pathname)` — no
+     * hardcoded path strings here.
+     */
+    const shouldSuppress: boolean = !isAuthenticated || isPublicAuthRoute(pathname);
+
+    /**
+     * Mirror `shouldSuppress` into a ref so `showToast`'s `useCallback`
+     * closure can read the latest value without listing it in the dep
+     * array. Without this, every consumer that lists `showToast` in its
+     * own deps would re-run on every navigation — the function would
+     * change identity each time the suppress flag flipped. The ref
+     * pattern keeps `showToast` referentially stable while still
+     * honoring the live suppression state.
+     */
+    const shouldSuppressRef = React.useRef<boolean>(shouldSuppress);
+    React.useEffect(() => {
+        shouldSuppressRef.current = shouldSuppress;
+    }, [shouldSuppress]);
+
+    /**
+     * When the user enters a suppressed state, drain any toasts that
+     * were already on screen. Covers the timing window where a toast
+     * was queued just before the route flipped to `/login` — the
+     * setState completed but the render hadn't, so without this
+     * cleanup the user would still see one frame of leftover content.
+     */
+    React.useEffect(() => {
+        if (shouldSuppress) setToasts([]);
+    }, [shouldSuppress]);
 
     const removeToast = React.useCallback((id: string) => {
         setToasts(prev => prev.filter(toast => toast.id !== id));
@@ -20,6 +71,15 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     const MIN_TOAST_DURATION = 5000;
 
     const showToast = React.useCallback((message: string, type: ToastType = 'info', duration?: number) => {
+        if (shouldSuppressRef.current) {
+            // Caller fired a toast on a public/auth surface or while
+            // unauthenticated. Drop silently — `logger.debug` keeps the
+            // signal available for forensics without surfacing anything
+            // to the user.
+            logger.debug('[ToastProvider] Suppressed toast on auth surface', { message, type });
+            return;
+        }
+
         const finalDuration =
             typeof duration === 'number' && duration > MIN_TOAST_DURATION
                 ? duration

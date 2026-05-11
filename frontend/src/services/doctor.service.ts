@@ -69,7 +69,6 @@ export interface Patient {
     latestRiskScore?: number | null;
     lifecycleStage?: PatientLifecycleStage;
     acuityLevel?: PatientAcuityLevel;
-    isBirthdayThisMonth?: boolean;
     /**
      * Patient age in completed years, derived server-side from DOB at
      * query time. Optional because older fixtures predating the advanced
@@ -85,8 +84,7 @@ export type PatientRegistryFilter =
     | 'lapsed'
     | 'due-for-follow-up'
     | 'at-risk'
-    | 'high-acuity'
-    | 'birthday-this-month';
+    | 'high-acuity';
 
 /** Counts returned alongside the patient list — drive the chip badges. */
 export interface PatientRegistryCounts {
@@ -96,7 +94,6 @@ export interface PatientRegistryCounts {
     dueForFollowUp: number;
     atRisk: number;
     highAcuity: number;
-    birthdayThisMonth: number;
 }
 
 export interface PatientRegistryResponse {

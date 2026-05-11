@@ -388,12 +388,11 @@ type PatientRegistryFilter =
     | 'lapsed'
     | 'due-for-follow-up'
     | 'at-risk'
-    | 'high-acuity'
-    | 'birthday-this-month';
+    | 'high-acuity';
 
 const isPatientRegistryFilter = (value: string | undefined): value is PatientRegistryFilter => {
     return value === 'active' || value === 'lapsed' || value === 'due-for-follow-up'
-        || value === 'at-risk' || value === 'high-acuity' || value === 'birthday-this-month';
+        || value === 'at-risk' || value === 'high-acuity';
 };
 
 type PatientRegistryRow = UserEntity & {
@@ -1081,7 +1080,7 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
         // Single query that hydrates the full registry surface:
         //   - completed-appointment count + last visit anchor (existing semantic)
         //   - patient_profiles join for DOB / gender / blood group /
-        //     conditions / allergies (powers the row badges + birthday filter)
+        //     conditions / allergies (powers the row badges + age range)
         //   - LEFT-LATERAL subquery for the most recent screening risk
         //     score (powers the "high-acuity" filter + acuity badge)
         // Decryption + lifecycle-stage computation happens in JS below
@@ -1118,7 +1117,6 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
 
         const now = new Date();
         const nowMs: number = now.getTime();
-        const currentMonth: number = now.getMonth(); // 0-indexed
 
         // Stage 1: decrypt + enrich every row with derived fields.
         const enriched = result.rows.map(row => {
@@ -1130,8 +1128,6 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
             const acuityLevel: PatientAcuityLevel = computeAcuityLevel(
                 Number.isFinite(latestRiskScoreNum) ? latestRiskScoreNum : null
             );
-            const dobMonth: number | null = row.date_of_birth === null ? null : new Date(row.date_of_birth).getMonth();
-            const isBirthdayThisMonth: boolean = dobMonth !== null && dobMonth === currentMonth;
             const ageYears: number | null = computeAgeYears(
                 row.date_of_birth === null ? null : new Date(row.date_of_birth)
             );
@@ -1148,7 +1144,6 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
                 latestRiskScore: Number.isFinite(latestRiskScoreNum) ? latestRiskScoreNum : null,
                 lifecycleStage,
                 acuityLevel,
-                isBirthdayThisMonth,
                 ageYears,
                 // Carry decrypted PII through the haystack-search layer
                 // below WITHOUT emitting them in the response. The mapper
@@ -1175,7 +1170,6 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
             dueForFollowUp: enriched.filter(p => p.lifecycleStage === 'due-for-follow-up').length,
             atRisk: enriched.filter(p => p.lifecycleStage === 'at-risk').length,
             highAcuity: enriched.filter(p => p.acuityLevel === 'high').length,
-            birthdayThisMonth: enriched.filter(p => p.isBirthdayThisMonth).length,
         };
 
         // Stage 3: apply search + filter to derive the rendered list.
@@ -1193,9 +1187,6 @@ export const getDoctorPatients = async (req: Request, res: Response) => {
                     break;
                 case 'high-acuity':
                     visible = visible.filter(p => p.acuityLevel === 'high');
-                    break;
-                case 'birthday-this-month':
-                    visible = visible.filter(p => p.isBirthdayThisMonth);
                     break;
             }
         }

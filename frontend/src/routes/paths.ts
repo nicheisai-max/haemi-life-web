@@ -79,3 +79,34 @@ export const PATHS = {
     SETTINGS: '/settings',
     CONSULTATION: (id: string) => `/consultation/${id}`,
 };
+
+/**
+ * Canonical set of routes on which NO toast notifications may render —
+ * login, signup, password recovery, the onboarding carousel, and the
+ * transient identity-gate root. Sourced from the `PATHS` constants
+ * above (not duplicated strings) so adding a new auth-surface route
+ * only requires touching this list once.
+ *
+ * Used by `ToastProvider` to suppress any toast — whether dispatched
+ * via `useToast()` directly or via the `system:error|success|warning`
+ * CustomEvent channel — while the user is on an authentication
+ * surface. This prevents the prior-session-leak class of bug where an
+ * in-flight async handler from a logged-out role flashes a toast on
+ * the login page of the next user.
+ */
+const PUBLIC_AUTH_ROUTES: ReadonlyArray<string> = [
+    PATHS.ROOT,
+    PATHS.LOGIN,
+    PATHS.SIGNUP,
+    PATHS.FORGOT_PASSWORD,
+    PATHS.ONBOARDING,
+];
+
+/**
+ * Return `true` when `pathname` is one of the auth/onboarding surfaces
+ * on which toasts must never render. Exact-match — these are leaf
+ * routes with no nested children, so no prefix logic required.
+ */
+export const isPublicAuthRoute = (pathname: string): boolean => {
+    return PUBLIC_AUTH_ROUTES.includes(pathname);
+};
