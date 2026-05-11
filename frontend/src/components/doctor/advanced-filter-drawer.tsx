@@ -192,7 +192,7 @@ const AdvancedFilterForm: React.FC<AdvancedFilterFormProps> = ({
                             <SelectTrigger className="rounded-[var(--card-radius)]">
                                 <SelectValue placeholder="Any gender" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="rounded-[var(--card-radius)]">
                                 <SelectItem value={ANY}>Any gender</SelectItem>
                                 {GENDER_OPTIONS.map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>
@@ -208,7 +208,7 @@ const AdvancedFilterForm: React.FC<AdvancedFilterFormProps> = ({
                             <SelectTrigger className="rounded-[var(--card-radius)]">
                                 <SelectValue placeholder="Any blood group" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="rounded-[var(--card-radius)]">
                                 <SelectItem value={ANY}>Any blood group</SelectItem>
                                 {BLOOD_GROUPS.map((bg) => (
                                     <SelectItem key={bg} value={bg}>
@@ -257,7 +257,7 @@ const AdvancedFilterForm: React.FC<AdvancedFilterFormProps> = ({
                             <SelectTrigger className="rounded-[var(--card-radius)]">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="rounded-[var(--card-radius)]">
                                 {SORT_OPTIONS.map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>
                                         {opt.label}
@@ -272,7 +272,7 @@ const AdvancedFilterForm: React.FC<AdvancedFilterFormProps> = ({
                             <SelectTrigger className="rounded-[var(--card-radius)]">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="rounded-[var(--card-radius)]">
                                 {ORDER_OPTIONS.map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>
                                         {opt.label}

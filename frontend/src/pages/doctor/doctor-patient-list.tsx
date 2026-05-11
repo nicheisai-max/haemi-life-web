@@ -7,12 +7,10 @@ import {
     Search,
     Calendar,
     ChevronRight,
-    Loader2,
     AlertTriangle,
     Activity,
     Sparkles,
     CalendarClock,
-    Cake,
     UserCheck,
     Users,
     UserPlus,
@@ -21,7 +19,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
-import { Tooltip } from '@/components/ui/tooltip';
 import { getInitials } from '@/utils/avatar.resolver';
 import {
     getDoctorPatients,
@@ -75,7 +72,6 @@ const FILTER_CHIPS: ReadonlyArray<FilterChipDefinition> = [
     { key: 'due-for-follow-up', label: 'Due for follow-up', icon: Activity, countKey: 'dueForFollowUp' },
     { key: 'at-risk', label: 'At-risk', icon: AlertTriangle, countKey: 'atRisk' },
     { key: 'high-acuity', label: 'High acuity', icon: Sparkles, countKey: 'highAcuity' },
-    { key: 'birthday-this-month', label: 'Birthday this month', icon: Cake, countKey: 'birthdayThisMonth' },
 ];
 
 /** Search debounce — keeps the controller off the keystroke hot path. */
@@ -191,7 +187,6 @@ export const DoctorPatientList: React.FC = () => {
         dueForFollowUp: 0,
         atRisk: 0,
         highAcuity: 0,
-        birthdayThisMonth: 0,
     });
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -311,8 +306,20 @@ export const DoctorPatientList: React.FC = () => {
         [counts.all, debouncedSearch, activeFilter, activeFilterLabel]
     );
 
-    usePageLoader(loading && patients.length === 0, 'Synchronizing with regional patient registry...');
-    if (loading && patients.length === 0) return null;
+    // Single, uniform loader for every fetch — initial mount, search
+    // debounce, chip toggle, advanced-filter apply, all route through the
+    // same global MedicalLoader. Predicating on `patients.length` (the
+    // prior implementation) caused two regressions the user explicitly
+    // flagged: (1) inconsistent UX — the MedicalLoader fired only when
+    // the previous filter returned zero patients, otherwise an inline
+    // spinner appeared; (2) right-panel "shake" — the inline spinner
+    // occupied `py-6` inside the patient grid, pushing cards down and
+    // then snapping them up when data arrived. Removing the predicate
+    // (and the inline spinner block below) eliminates both: the page
+    // subtree stays unmounted during every fetch, and the only loader
+    // ever visible is the global MedicalLoader.
+    usePageLoader(loading, 'Synchronizing with regional patient registry...');
+    if (loading) return null;
 
     return (
         <div className="space-y-6">
@@ -400,13 +407,6 @@ export const DoctorPatientList: React.FC = () => {
             </div>
 
             <div className="grid gap-4">
-                {loading && patients.length > 0 ? (
-                    <div className="flex items-center justify-center py-6 text-muted-foreground" role="status" aria-live="polite">
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
-                        <span className="text-sm font-medium">Updating registry…</span>
-                    </div>
-                ) : null}
-
                 {patients.length > 0 ? (
                     patients.map((patient) => {
                         const lifecycleMeta = patient.lifecycleStage !== undefined
@@ -468,12 +468,6 @@ export const DoctorPatientList: React.FC = () => {
                                                         High acuity
                                                     </span>
                                                 ) : null}
-                                                {patient.isBirthdayThisMonth === true ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-900">
-                                                        <Cake className="h-3 w-3" aria-hidden="true" />
-                                                        Birthday this month
-                                                    </span>
-                                                ) : null}
                                             </div>
                                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
                                                 <span className="truncate">{patient.email || 'No email'}</span>
@@ -501,11 +495,19 @@ export const DoctorPatientList: React.FC = () => {
                                         >
                                             {patient.totalAppointments} Appts
                                         </Badge>
-                                        <Tooltip content="View full patient profile" side="left">
-                                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--card-radius)] border border-border text-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all">
-                                                <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                                            </span>
-                                        </Tooltip>
+                                        {/*
+                                          Bare chevron — no tooltip wrapper. The parent
+                                          Card uses `overflow-hidden` for the soft-radial
+                                          glow effect, which clips any non-portalled
+                                          tooltip on the right edge. The card itself
+                                          carries an accessible name via `aria-label`
+                                          ("Open {name}'s profile"), so the tooltip
+                                          was redundant — the chevron's hover state
+                                          provides the visual affordance.
+                                        */}
+                                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--card-radius)] border border-border text-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all">
+                                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                                        </span>
                                     </div>
                                 </div>
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-primary/10 transition-colors" aria-hidden="true" />
@@ -513,15 +515,17 @@ export const DoctorPatientList: React.FC = () => {
                         );
                     })
                 ) : (
-                    !loading ? (
-                        <div className="text-center py-20 border-2 border-dashed rounded-[var(--card-radius)] bg-muted/30">
-                            <div className="h-16 w-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                <Users className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                            </div>
-                            <h3 className="font-bold text-lg text-foreground">{emptyCopy.title}</h3>
-                            <p className="text-muted-foreground mt-1 max-w-md mx-auto px-4">{emptyCopy.body}</p>
+                    // `loading` is guarded by `if (loading) return null` at
+                    // the top of the render path, so reaching this branch
+                    // implies a settled, non-loading empty result — no
+                    // `!loading` predicate needed.
+                    <div className="text-center py-20 border-2 border-dashed rounded-[var(--card-radius)] bg-muted/30">
+                        <div className="h-16 w-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <Users className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
                         </div>
-                    ) : null
+                        <h3 className="font-bold text-lg text-foreground">{emptyCopy.title}</h3>
+                        <p className="text-muted-foreground mt-1 max-w-md mx-auto px-4">{emptyCopy.body}</p>
+                    </div>
                 )}
             </div>
 
