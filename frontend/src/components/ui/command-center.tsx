@@ -30,7 +30,8 @@ import {
     BookOpen,
     HelpCircle,
     UserCog,
-    LogIn
+    LogIn,
+    Globe2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { PATHS } from '../../routes/paths';
@@ -119,6 +120,7 @@ const COMMAND_REGISTRY: readonly CommandEntry[] = [
     { id: 'admin-logs', label: 'Audit Logs', description: 'System activity forensics', icon: BookOpen, path: PATHS.ADMIN.SYSTEM_LOGS, roles: ['admin'], keywords: ['forensics', 'audit', 'events'], section: 'admin' },
     { id: 'admin-security', label: 'Security Observability', description: 'Real-time threat surface', icon: Lock, path: PATHS.ADMIN.SECURITY, roles: ['admin'], keywords: ['threats', 'monitoring', 'observability'], section: 'admin' },
     { id: 'admin-sessions', label: 'Live Sessions', description: 'Active institutional access tokens', icon: LogIn, path: PATHS.ADMIN.SESSIONS, roles: ['admin'], keywords: ['tokens', 'sessions', 'active'], section: 'admin' },
+    { id: 'admin-platform-timezone', label: 'Platform Timezone', description: 'Govern the platform-wide IANA timezone', icon: Globe2, path: PATHS.ADMIN.PLATFORM_TIMEZONE, roles: ['admin'], keywords: ['time', 'timezone', 'tz', 'iana', 'clock', 'platform', 'zone', 'utc', 'offset'], section: 'admin' },
 ] as const;
 
 const isCommandRole = (value: string | undefined): value is CommandRole =>
