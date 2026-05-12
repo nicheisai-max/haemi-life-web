@@ -32,6 +32,7 @@ import { DateScroller } from '@/components/ui/date-scroller';
 import { TimeGrid } from '@/components/ui/time-grid';
 import { DoctorTimezoneBanner } from '@/components/ui/doctor-timezone-banner';
 import { AnimatedAlert } from '@/components/ui/animated-alert';
+import { formatWallClockDate, formatTimeInTz } from '@/utils/clinic-timezone-format';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TransitionItem } from '@/components/layout/page-transition';
 import { PATHS } from '../../routes/paths';
@@ -548,23 +549,35 @@ export const BookAppointment: React.FC = () => {
                                 {watchedDate && (
                                     <div className="mb-6 pb-6 border-b last:border-0 last:pb-0 last:mb-0">
                                         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Date & Time</h3>
+                                        {/*
+                                          `watchedDate` is the date the patient
+                                          picked in the clinic-local calendar
+                                          (the slot grid only offers dates
+                                          valid for the doctor). Render it as
+                                          a wall-clock literal so a patient
+                                          west of UTC doesn't see an
+                                          off-by-one day; the
+                                          `<DoctorTimezoneBanner />` above
+                                          tells them the clinic vs their own
+                                          TZ for the time display.
+                                        */}
                                         <div className="flex items-center gap-3 text-sm text-foreground mb-2">
                                             <Calendar className="h-5 w-5 text-muted-foreground" />
-                                            <span>{new Date(watchedDate).toLocaleDateString('en-US', {
-                                                weekday: 'short',
-                                                month: 'short',
-                                                day: 'numeric',
-                                                year: 'numeric'
-                                            })}</span>
+                                            <span>{formatWallClockDate(
+                                                watchedDate,
+                                                { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' },
+                                                'en-US',
+                                            )}</span>
                                         </div>
                                         {form.watch('appointmentTime') && (
                                             <div className="flex items-center gap-3 text-sm text-foreground">
                                                 <Clock className="h-5 w-5 text-muted-foreground" />
-                                                <span>{new Date(`2000-01-01T${form.watch('appointmentTime')}`).toLocaleTimeString('en-US', {
-                                                    hour: 'numeric',
-                                                    minute: '2-digit',
-                                                    hour12: true
-                                                })}</span>
+                                                <span>{formatTimeInTz(
+                                                    form.watch('appointmentTime'),
+                                                    'UTC',
+                                                    { hour: 'numeric', minute: '2-digit', hour12: true },
+                                                    'en-US',
+                                                )}</span>
                                             </div>
                                         )}
                                     </div>

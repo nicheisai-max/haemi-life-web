@@ -20,9 +20,10 @@ import { AnimatedEmptyState } from '@/components/ui/animated-empty-state';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
-import { DoctorTimezoneDetectionModal } from '@/components/ui/doctor-timezone-detection-modal';
 import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { usePageLoader } from '@/hooks/use-page-loader';
+import { useClinicTimezoneFormat } from '@/hooks/use-clinic-timezone';
+import { formatTimeInTz } from '@/utils/clinic-timezone-format';
 
 const CLINICAL_VOLUME_DATA = [
     { name: '08:00', patients: 3 },
@@ -71,6 +72,11 @@ export const DoctorDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const copilotTriggerRef = useRef<HTMLButtonElement | null>(null);
+    // "Today" is the doctor's clinic-local today, not the doctor's
+    // browser-local today — critical for doctors who travel across
+    // the date boundary. See `todayWallClockDate` for the projection
+    // mechanics.
+    const { todayWallClockDate } = useClinicTimezoneFormat();
 
 
 
@@ -101,25 +107,29 @@ export const DoctorDashboard = () => {
         }
     };
 
-    const formatTime = (timeStr: string) => {
-        return new Date(`2000-01-01T${timeStr}`).toLocaleTimeString('en-GB', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
-    };
+    // `timeStr` is the clinic-local wall-clock `HH:mm` value persisted
+    // by the backend (Phase 2 contract). Routing it through the pure
+    // formatter rather than `Date.toLocaleTimeString` eliminates the
+    // browser-TZ projection risk and matches the rendering used by
+    // the appointments page so the doctor sees the same digits in
+    // both places.
+    const formatTime = (timeStr: string): string => formatTimeInTz(
+        timeStr,
+        'UTC',
+        { hour: 'numeric', minute: '2-digit', hour12: true },
+        'en-GB',
+    );
 
-    const todayCount = appointments.filter(a => {
-        const apptDate = new Date(a.appointmentDate);
-        const today = new Date();
-        return apptDate.toDateString() === today.toDateString();
-    }).length;
+    // Compare wall-clock `YYYY-MM-DD` strings — both
+    // `a.appointmentDate` and `todayKey` are in clinic-local terms,
+    // so the comparison is free of browser-TZ drift.
+    const todayKey: string = todayWallClockDate();
 
-    const todayAppointments = appointments.filter(a => {
-        const apptDate = new Date(a.appointmentDate);
-        const today = new Date();
-        return apptDate.toDateString() === today.toDateString() && a.status === 'scheduled';
-    }).slice(0, 3);
+    const todayCount = appointments.filter(a => a.appointmentDate.slice(0, 10) === todayKey).length;
+
+    const todayAppointments = appointments
+        .filter(a => a.appointmentDate.slice(0, 10) === todayKey && a.status === 'scheduled')
+        .slice(0, 3);
 
     const pendingReviews = appointments.filter(a => a.status === 'completed').length;
 
@@ -129,15 +139,14 @@ export const DoctorDashboard = () => {
     return (
         <div className="space-y-8">
             {/*
-              Phase 4 — Timezone Sovereignty: first-time TZ detection
-              modal mounts here so it fires on the doctor's first
-              authenticated landing. The component self-gates on role,
-              acknowledgment flag, and stored-vs-detected mismatch —
-              if any of those preconditions fail it renders nothing,
-              so this mount is safe to keep unconditional.
+              Phase 4 — Timezone Sovereignty: TZ detection modal lives
+              on MainClinicalLayout now (Phase 4b), so it fires
+              regardless of which clinical surface the doctor lands on
+              first — `/doctor/dashboard`, `/doctor/schedule`,
+              `/doctor/patients`, etc. The component self-gates on role
+              + session-scoped mismatch ack, so a single mount at
+              layout level is sufficient.
             */}
-            <DoctorTimezoneDetectionModal />
-
 
             {/* Hero Section - Standardized Premium Style */}
             <TransitionItem className="relative overflow-hidden rounded-[var(--card-radius)] border bg-gradient-to-br from-teal-800 to-teal-950 text-white shadow-xl">
@@ -325,7 +334,7 @@ export const DoctorDashboard = () => {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
-                                        <p className="text-3xl font-bold text-white tracking-tight">{appointments.filter(a => new Date(a.appointmentDate).toDateString() === new Date().toDateString()).length}</p>
+                                        <p className="text-3xl font-bold text-white tracking-tight">{todayCount}</p>
                                         <p className="text-xs font-semibold uppercase tracking-wider text-teal-100/70">Check-ins</p>
                                     </div>
                                     <div className="space-y-1 border-l border-teal-500/30 pl-4">

@@ -10,7 +10,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import {
     getDoctorSchedule,
     updateDoctorSchedule,
-    getDoctorProfile,
     updateClinicTimezone,
 } from '../../services/doctor.service';
 import { Save, AlertCircle, CheckCircle2, Info } from 'lucide-react';
@@ -18,34 +17,27 @@ import { PremiumLoader } from '@/components/ui/premium-loader';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { PremiumTimePicker } from '@/components/ui/premium-time-picker';
 import { ClinicTimezoneCard } from '@/components/ui/clinic-timezone-card';
-import { useAuth } from '@/hooks/use-auth';
+import { useClinicTimezone } from '@/hooks/use-clinic-timezone';
 import { logger } from '@/utils/logger';
 import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
-
-/**
- * Institutional default — mirrors `INSTITUTIONAL_DEFAULT_TIMEZONE` in
- * `backend/src/utils/timezone.utils.ts`. Used as the optimistic display
- * value while the doctor profile load is in flight (or if the profile
- * fetch fails entirely — the picker remains usable so the doctor can
- * recover by selecting any zone).
- */
-const DEFAULT_CLINIC_TIMEZONE: string = 'Africa/Gaborone';
+import { dispatchClinicTimezoneUpdated } from '@/utils/clinic-timezone-events';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const DoctorScheduleManagement: React.FC = () => {
-    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
-    // Phase 3 — Timezone Sovereignty. The doctor's authoritative clinic
-    // timezone is loaded alongside the schedule and surfaced via
-    // <ClinicTimezoneCard /> at the top of the page. Changes persist
-    // through the PATCH endpoint added in Phase 2; existing appointments
-    // are NOT silently shifted (UTC-anchored), only NEW slot
-    // computations follow the updated value.
-    const [clinicTimezone, setClinicTimezone] = useState<string>(DEFAULT_CLINIC_TIMEZONE);
+    // Phase 4c — Timezone Sovereignty. The doctor's authoritative
+    // clinic timezone now lives in `<ClinicTimezoneProvider>` at the
+    // clinical-layout boundary, so this page is a CONSUMER (reads
+    // `clinicTimezone`) and a PRODUCER (dispatches updates via
+    // `dispatchClinicTimezoneUpdated()` — the provider hears them and
+    // updates context for every other surface). The Phase 2 backend
+    // contract is unchanged: existing appointments are UTC-anchored,
+    // only NEW slot computations follow the updated value.
+    const { clinicTimezone } = useClinicTimezone();
     const [tzUpdating, setTzUpdating] = useState<boolean>(false);
 
     const form = useForm<FullDoctorScheduleFormData>({
@@ -72,27 +64,11 @@ export const DoctorScheduleManagement: React.FC = () => {
     const fetchSchedule = useCallback(async () => {
         try {
             setLoading(true);
-            // Phase 3: load schedule + doctor profile in parallel so the
-            // timezone card hydrates from the same network round-trip
-            // that powers the schedule grid. Profile fetch is awaited
-            // alongside the schedule fetch — if it fails, we keep the
-            // institutional-default optimistic value rather than
-            // blocking the whole page (the doctor can still set/edit
-            // schedule rows; the TZ card stays interactive).
-            const profilePromise = user?.id
-                ? getDoctorProfile(user.id).catch((profileErr: unknown) => {
-                    logger.warn('[Schedule] Failed to hydrate clinic timezone from profile', {
-                        error: profileErr instanceof Error ? profileErr.message : String(profileErr),
-                    });
-                    return null;
-                })
-                : Promise.resolve(null);
-
-            const [data, profile] = await Promise.all([getDoctorSchedule(), profilePromise]);
-
-            if (profile && typeof profile.clinicTimezone === 'string' && profile.clinicTimezone.length > 0) {
-                setClinicTimezone(profile.clinicTimezone);
-            }
+            // Phase 4c: the clinic timezone is hydrated centrally by
+            // <ClinicTimezoneProvider>, so this fetch only loads the
+            // schedule rows — one fewer profile round-trip per page
+            // load.
+            const data = await getDoctorSchedule();
 
             // Map data to ensure all days are present
             const fullSchedule = DAYS_OF_WEEK.map((_, index) => {
@@ -117,7 +93,7 @@ export const DoctorScheduleManagement: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [form, user?.id]);
+    }, [form]);
 
     useEffect(() => {
         fetchSchedule();
@@ -137,21 +113,55 @@ export const DoctorScheduleManagement: React.FC = () => {
      * doctor's eyes on a single canonical surface for "did my change
      * stick?" — exactly per QA review (2026-05-10).
      */
+    /**
+     * Persist a new clinic timezone — the producer side of the
+     * Phase 4c sync architecture.
+     *
+     * Flow (optimistic, dispatch-driven):
+     *   1. Snapshot `previous` from context so we can roll back.
+     *   2. Optimistic broadcast `dispatchClinicTimezoneUpdated(next)`
+     *      → `<ClinicTimezoneProvider>` hears it instantly, updates
+     *      context, every consumer (this card included) re-renders
+     *      with `next`. Doctor sees an immediate UI change.
+     *   3. Network round-trip to `updateClinicTimezone(next)`.
+     *   4. On success: rebroadcast with `result.clinicTimezone` (the
+     *      server's canonical echo) — covers any IANA aliasing the
+     *      backend applies (e.g. `Asia/Calcutta` → `Asia/Kolkata`).
+     *   5. On failure: rebroadcast with `previous` → context rolls
+     *      back, every consumer re-renders with the old value.
+     *
+     * The same broadcast that updates this page's `<ClinicTimezoneCard>`
+     * also propagates to the patient-list card hover, the dashboard
+     * widgets, and to OTHER browser tabs via `BroadcastChannel` (see
+     * `clinic-timezone-events.ts`). No duplicate local state, no
+     * stale-tab problem.
+     */
     const handleTimezoneChange = useCallback(async (next: string): Promise<void> => {
         const previous: string = clinicTimezone;
         setTzUpdating(true);
-        setClinicTimezone(next);
         setError(null);
         setSuccess(null);
+
+        // Optimistic UI — the provider's broadcast listener flips
+        // every consumer to `next` immediately, before the network
+        // call resolves.
+        dispatchClinicTimezoneUpdated(next);
+
         try {
             const result = await updateClinicTimezone(next);
-            // Trust the server's echoed value — covers any normalisation
-            // it might apply (e.g. canonical IANA aliasing).
-            setClinicTimezone(result.clinicTimezone);
+            // Server's canonical echo — covers IANA aliasing
+            // (`Asia/Calcutta` → `Asia/Kolkata`). Re-dispatch only if
+            // it differs from our optimistic value, otherwise the
+            // listeners no-op anyway.
+            if (result.clinicTimezone !== next) {
+                dispatchClinicTimezoneUpdated(result.clinicTimezone);
+            }
             setSuccess(`Clinic timezone updated to ${result.clinicTimezone}`);
             window.setTimeout(() => setSuccess(null), 3000);
         } catch (err: unknown) {
-            setClinicTimezone(previous); // Roll back on failure.
+            // Roll back every consumer (this page included) to the
+            // pre-mutation value via the same broadcast channel.
+            dispatchClinicTimezoneUpdated(previous);
             const apiErr = err as { response?: { data?: { message?: string } } };
             const message: string = apiErr.response?.data?.message ?? 'Failed to update clinic timezone';
             setError(message);

@@ -36,6 +36,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { InvitePatientModal } from '@/components/doctor/invite-patient-modal';
 import { AdvancedFilterDrawer } from '@/components/doctor/advanced-filter-drawer';
 import { countActiveAdvancedFilters } from '@/components/doctor/advanced-filter-utils';
+import { useClinicTimezoneFormat } from '@/hooks/use-clinic-timezone';
 
 /**
  * Resolves the authenticated-tunnel src for a patient's profile image.
@@ -178,6 +179,13 @@ const parseAdvancedFiltersFromUrl = (params: URLSearchParams): PatientRegistryAd
 export const DoctorPatientList: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
+    // Every clinical date on this page is rendered in the doctor's
+    // clinic timezone (the visit happened in the clinic, not in the
+    // doctor's current physical location). Reading from context means
+    // every row updates instantly when the doctor changes their
+    // clinic TZ from any surface in any tab — see
+    // `<ClinicTimezoneProvider>` for the broadcast mechanics.
+    const { formatDate: formatClinicDate } = useClinicTimezoneFormat();
 
     const [patients, setPatients] = useState<Patient[]>([]);
     const [counts, setCounts] = useState<PatientRegistryCounts>({
@@ -485,7 +493,7 @@ export const DoctorPatientList: React.FC = () => {
                                             <div className="text-sm font-bold flex items-center gap-2 justify-end">
                                                 <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                                                 {patient.lastVisit
-                                                    ? new Date(patient.lastVisit).toLocaleDateString('en-GB')
+                                                    ? formatClinicDate(patient.lastVisit)
                                                     : 'N/A'}
                                             </div>
                                         </div>
