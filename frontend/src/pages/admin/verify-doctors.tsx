@@ -9,6 +9,7 @@ import { LiveStatusPill } from '@/components/ui/live-status-pill';
 import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
 import { logger } from '@/utils/logger';
 import { socketService } from '@/services/socket.service';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 
 /**
  * 🛡️ HAEMI LIFE — Verify Doctors (Phase 3)
@@ -190,6 +191,8 @@ const formatConsultationFee = (fee: number | null | undefined): string => {
 
 const DoctorCard: React.FC<DoctorCardProps> = ({ verification, isProcessing, onApprove, onReject }) => {
     const hasBio = typeof verification.bio === 'string' && verification.bio.trim().length > 0;
+    // Phase 5 — verification date renders in the platform timezone.
+    const { formatDate: formatPlatformDate } = usePlatformTimezoneFormat();
 
     return (
         <Card className="flex flex-col overflow-hidden hover:shadow-md transition-shadow">
@@ -266,11 +269,11 @@ const DoctorCard: React.FC<DoctorCardProps> = ({ verification, isProcessing, onA
                         Registered
                     </span>
                     <span className="font-medium text-right">
-                        {new Date(verification.createdAt).toLocaleDateString('en-US', {
+                        {formatPlatformDate(verification.createdAt, {
                             month: 'short',
                             day: 'numeric',
                             year: 'numeric'
-                        })}
+                        }, 'en-US')}
                     </span>
                 </div>
                 {hasBio && (

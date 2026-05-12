@@ -36,7 +36,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { InvitePatientModal } from '@/components/doctor/invite-patient-modal';
 import { AdvancedFilterDrawer } from '@/components/doctor/advanced-filter-drawer';
 import { countActiveAdvancedFilters } from '@/components/doctor/advanced-filter-utils';
-import { useClinicTimezoneFormat } from '@/hooks/use-clinic-timezone';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 
 /**
  * Resolves the authenticated-tunnel src for a patient's profile image.
@@ -184,8 +184,8 @@ export const DoctorPatientList: React.FC = () => {
     // doctor's current physical location). Reading from context means
     // every row updates instantly when the doctor changes their
     // clinic TZ from any surface in any tab — see
-    // `<ClinicTimezoneProvider>` for the broadcast mechanics.
-    const { formatDate: formatClinicDate } = useClinicTimezoneFormat();
+    // `<PlatformTimezoneProvider>` for the broadcast mechanics.
+    const { formatDate: formatClinicDate } = usePlatformTimezoneFormat();
 
     const [patients, setPatients] = useState<Patient[]>([]);
     const [counts, setCounts] = useState<PatientRegistryCounts>({

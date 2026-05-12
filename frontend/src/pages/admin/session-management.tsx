@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getInitials } from '@/utils/avatar.resolver';
 import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
 import { useRelativeTime } from '@/hooks/use-relative-time';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 import { socketService } from '@/services/socket.service';
 import { logger } from '@/utils/logger';
 
@@ -332,6 +333,8 @@ const SessionRow: React.FC<SessionRowProps> = ({ session, isRevoking, onRevoke }
         granularity: 'second',
         fallback: 'Never',
     });
+    // Phase 5 — session login date renders in the platform timezone.
+    const { formatDate: formatPlatformDate } = usePlatformTimezoneFormat();
 
     return (
         <tr className="group">
@@ -375,7 +378,7 @@ const SessionRow: React.FC<SessionRowProps> = ({ session, isRevoking, onRevoke }
                 <div className="flex flex-col text-[10px]">
                     <span className="font-bold text-foreground">{lastSeenLabel}</span>
                     <span className="text-muted-foreground opacity-70">
-                        Logged: {new Date(session.createdAt).toLocaleDateString()}
+                        Logged: {formatPlatformDate(session.createdAt)}
                     </span>
                 </div>
             </td>

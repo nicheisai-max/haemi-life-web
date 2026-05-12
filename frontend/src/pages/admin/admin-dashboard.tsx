@@ -29,6 +29,7 @@ import { PATHS } from '../../routes/paths';
 import { useSystemHealth } from '@/hooks/use-system-health';
 import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
 import { useRelativeTime } from '@/hooks/use-relative-time';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 import { socketService } from '@/services/socket.service';
 import { logger } from '@/utils/logger';
 import {
@@ -642,6 +643,8 @@ const RecentActivityRow: React.FC<RecentActivityRowProps> = ({ entry }) => {
         granularity: 'minute',
         fallback: 'Just now',
     });
+    // Phase 5 — audit log entry tooltips render in the platform timezone.
+    const { formatDateTime: formatPlatformDateTime } = usePlatformTimezoneFormat();
     return (
         <li className="flex items-center justify-between gap-3 py-2 border-b border-border/40 last:border-b-0 text-sm">
             <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -653,7 +656,7 @@ const RecentActivityRow: React.FC<RecentActivityRowProps> = ({ entry }) => {
                     <span className="text-xs text-muted-foreground truncate hidden sm:inline">{entry.userEmail}</span>
                 )}
             </div>
-            <span className="text-xs text-muted-foreground whitespace-nowrap" title={new Date(entry.createdAt).toLocaleString()}>
+            <span className="text-xs text-muted-foreground whitespace-nowrap" title={formatPlatformDateTime(entry.createdAt)}>
                 {relativeTime}
             </span>
         </li>

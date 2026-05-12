@@ -12,6 +12,7 @@ import {
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { MedicalLoader } from '../../components/ui/medical-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 import { getMyRecords } from '../../services/record.service';
 import { getMyPrescriptions } from '../../services/prescription.service';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -30,6 +31,8 @@ import { useToast } from '../../hooks/use-toast';
 
 export const MedicalRecords: React.FC = () => {
     const { error: toastError, warning: toastWarning } = useToast();
+    // Phase 5 — every clinical date renders in the platform timezone.
+    const { formatDate: formatPlatformDate } = usePlatformTimezoneFormat();
     const [records, setRecords] = useState<MedicalRecord[]>([]);
     const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -339,7 +342,7 @@ export const MedicalRecords: React.FC = () => {
                                                     )}
                                                     <div className="flex items-center gap-1.5">
                                                         <Calendar className="h-3.5 w-3.5" />
-                                                        <span>{new Date(record.dateOfService || record.uploadedAt).toLocaleDateString()}</span>
+                                                        <span>{formatPlatformDate(record.dateOfService || record.uploadedAt)}</span>
                                                     </div>
                                                 </div>
                                                 {record.notes && (

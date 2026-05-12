@@ -19,8 +19,8 @@ import { ErrorBoundary } from './components/ui/error-boundary';
 import { SuspenseLoaderTrigger } from './context/global-loader-context';
 import { usePageLoader } from './hooks/use-page-loader';
 import { PageTransition } from './components/layout/page-transition';
-import { DoctorTimezoneDetectionModal } from './components/ui/doctor-timezone-detection-modal';
-import { ClinicTimezoneProvider } from './context/clinic-timezone-context';
+import { AdminTimezoneDetectionModal } from './components/ui/admin-timezone-detection-modal';
+import { PlatformTimezoneProvider } from './context/platform-timezone-context';
 import { PATHS } from './routes/paths';
 import { useAuth } from './hooks/use-auth';
 import { logger, auditLogger } from './utils/logger';
@@ -68,6 +68,7 @@ const DispensePrescription = lazy(() => import('./pages/pharmacist/dispense-pres
 const DoctorPatientList = lazy(() => import('./pages/doctor/doctor-patient-list').then(m => ({ default: m.DoctorPatientList })));
 const DoctorPatientProfile = lazy(() => import('./pages/doctor/doctor-patient-profile').then(m => ({ default: m.DoctorPatientProfile })));
 const ScreeningManager = lazy(() => import('./pages/admin/screening-manager').then(m => ({ default: m.ScreeningManager })));
+const AdminPlatformTimezone = lazy(() => import('./pages/admin/platform-timezone').then(m => ({ default: m.AdminPlatformTimezone })));
 
 // Stable Suspense-fallback elements. These render `null` and drive the
 // single persistent loader via `usePageLoader` inside SuspenseLoaderTrigger
@@ -111,26 +112,27 @@ const MainClinicalLayout = React.memo(() => (
         subscription noise) so the dashboard layout is genuinely
         shared across roles.
       */}
-      <ClinicTimezoneProvider>
+      <PlatformTimezoneProvider>
         <Suspense fallback={DashboardLoaderFallback}>
           <LazyDashboardLayout>
             {/*
-              Phase 4 — Timezone Sovereignty: doctor TZ detection
-              prompt lives at the layout level (not the dashboard
-              page) so it evaluates on EVERY authenticated clinical
-              landing — `/doctor/dashboard`, `/doctor/schedule`,
-              `/doctor/patients`, etc. The component self-gates on
-              `user?.role === 'doctor'` + session-scoped mismatch
-              ack, so mounting it unconditionally here is safe for
-              patient / pharmacist / admin sessions (it renders null).
+              Phase 5 — Timezone Sovereignty (Platform-Wide):
+              admin-only TZ detection prompt at the clinical-layout
+              boundary. Evaluates on every authenticated landing for
+              admin users (`/admin/*` AND any other layout-anchored
+              path the admin visits). Self-gates on
+              `user?.role === 'admin'` + session-scoped per-mismatch
+              ack — non-admin sessions mount the component as a
+              cheap no-op render. Two-click confirmation flow inside
+              prevents accidental platform-wide TZ changes.
             */}
-            <DoctorTimezoneDetectionModal />
+            <AdminTimezoneDetectionModal />
             <PageTransition>
               <Outlet />
             </PageTransition>
           </LazyDashboardLayout>
         </Suspense>
-      </ClinicTimezoneProvider>
+      </PlatformTimezoneProvider>
     </AuthGatedNotifications>
   </ProtectedRoute>
 ));
@@ -217,6 +219,7 @@ const AppRoutes = React.memo(() => {
             <Route path={PATHS.ADMIN.SECURITY} element={<RoleRoute allowedRoles={['admin']}><SecurityMonitoring /></RoleRoute>} />
             <Route path={PATHS.ADMIN.SESSIONS} element={<RoleRoute allowedRoles={['admin']}><SessionManagement /></RoleRoute>} />
             <Route path={PATHS.ADMIN.SCREENING} element={<RoleRoute allowedRoles={['admin']}><ScreeningManager /></RoleRoute>} />
+            <Route path={PATHS.ADMIN.PLATFORM_TIMEZONE} element={<RoleRoute allowedRoles={['admin']}><AdminPlatformTimezone /></RoleRoute>} />
 
             <Route path={PATHS.CONSENT} element={<TelemedicineGuard><TelemedicineConsent /></TelemedicineGuard>} />
             <Route path={PATHS.TELEMEDICINE} element={<TelemedicineGuard><TelemedicineDashboard /></TelemedicineGuard>} />

@@ -186,7 +186,7 @@ const SCHEMA_MANIFEST = {
         active_connections: ['id', 'user_id', 'socket_id', 'connected_at', 'last_activity', 'last_ping'],
         analytics_daily_visits: ['id', 'date', 'visits', 'new_users', 'created_at'],
         appointment_pre_screenings: ['id', 'appointment_id', 'question_id', 'response_value', 'additional_notes', 'risk_score', 'created_at'],
-        appointments: ['id', 'patient_id', 'doctor_id', 'appointment_date', 'appointment_time', 'duration_minutes', 'status', 'consultation_type', 'reason', 'notes', 'created_at', 'updated_at', 'deleted_at', 'pre_screening_status', 'referral_recommendation', 'doctor_archived', 'overdue_notified_at', 'appointment_start_utc'],
+        appointments: ['id', 'patient_id', 'doctor_id', 'appointment_date', 'appointment_time', 'duration_minutes', 'status', 'consultation_type', 'reason', 'notes', 'created_at', 'updated_at', 'deleted_at', 'pre_screening_status', 'referral_recommendation', 'doctor_archived', 'overdue_notified_at', 'appointment_start_utc', 'scheduled_tz'],
         audit_logs: ['id', 'user_id', 'actor_role', 'action', 'entity_type', 'entity_id', 'details', 'previous_state', 'new_state', 'ip_address', 'user_agent', 'request_id', 'trace_id', 'api_endpoint', 'http_method', 'status', 'created_at'],
         conversation_participants: ['conversation_id', 'user_id', 'created_at', 'role'],
         conversations: ['id', 'created_at', 'updated_at', 'last_message_at', 'participant_one_id', 'participant_two_id', 'sequence_counter', 'participants_hash', 'name', 'is_redundant', 'last_message_id', 'preview_text'],

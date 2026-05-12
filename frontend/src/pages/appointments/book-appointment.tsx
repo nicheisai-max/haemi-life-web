@@ -30,9 +30,9 @@ import { PremiumLoader } from '@/components/ui/premium-loader';
 import { useToast } from '@/hooks/use-toast';
 import { DateScroller } from '@/components/ui/date-scroller';
 import { TimeGrid } from '@/components/ui/time-grid';
-import { DoctorTimezoneBanner } from '@/components/ui/doctor-timezone-banner';
+import { PlatformTimezoneBanner } from '@/components/ui/platform-timezone-banner';
 import { AnimatedAlert } from '@/components/ui/animated-alert';
-import { formatWallClockDate, formatTimeInTz } from '@/utils/clinic-timezone-format';
+import { formatWallClockDate, formatTimeInTz } from '@/utils/platform-timezone-format';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TransitionItem } from '@/components/layout/page-transition';
 import { PATHS } from '../../routes/paths';
@@ -305,27 +305,18 @@ export const BookAppointment: React.FC = () => {
                                     />
 
                                     {/*
-                                      Phase 5 — Timezone Sovereignty: contextual banner
-                                      surfaces the doctor's authoritative clinic timezone
-                                      the moment a doctor is selected. The patient sees
-                                      slot times in the doctor's TZ throughout this flow
-                                      (locked-in vicinity-based booking model); the banner
-                                      adds a secondary line surfacing the patient's local
-                                      timezone when it differs — defensive UX for
-                                      cross-locality cases without forcing per-slot dual
-                                      time display.
+                                      Phase 5 — Timezone Sovereignty (Platform-Wide):
+                                      the banner now surfaces the platform-wide timezone
+                                      (admin-governed, applies to every role). Reads
+                                      directly from `<PlatformTimezoneProvider>` —
+                                      always renders for any patient on the booking
+                                      flow regardless of which doctor is selected,
+                                      because the TZ is global. The secondary line
+                                      (patient's browser TZ) only appears when it
+                                      differs from the platform TZ — defensive UX for
+                                      cross-locality patients.
                                     */}
-                                    {(() => {
-                                        const selectedDoctor = doctors.find(d => d.id === watchedDoctorId);
-                                        const clinicTz: string | undefined = selectedDoctor?.clinicTimezone;
-                                        if (!selectedDoctor || !clinicTz || clinicTz.length === 0) return null;
-                                        return (
-                                            <DoctorTimezoneBanner
-                                                doctorTimezone={clinicTz}
-                                                doctorName={selectedDoctor.name}
-                                            />
-                                        );
-                                    })()}
+                                    <PlatformTimezoneBanner />
 
                                     <FormField
                                         control={form.control}

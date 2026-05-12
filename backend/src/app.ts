@@ -53,6 +53,7 @@ import aiRoutes from './routes/ai.routes';
 import pharmacistRoutes from './routes/pharmacist.routes';
 import screeningRoutes from './routes/screening.routes';
 import inviteRoutes from './routes/invite.routes';
+import platformRoutes, { adminPlatformRouter } from './routes/platform.routes';
 
 const app = express();
 
@@ -141,6 +142,13 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/records', recordRoutes);
 app.use('/api/admin', adminRoutes);
+// Phase 5 — Timezone Sovereignty (Platform-Wide):
+//   GET  /api/platform/timezone        — any authenticated role
+//   PATCH /api/admin/platform/timezone — admin-only (mounted on the
+//                                        sub-router which enforces
+//                                        admin role via middleware)
+app.use('/api/platform', platformRoutes);
+app.use('/api/admin/platform', adminPlatformRouter);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
 app.use('/api/clinical-copilot', clinicalCopilotRoutes);

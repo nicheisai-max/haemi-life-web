@@ -10,17 +10,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import {
     getDoctorSchedule,
     updateDoctorSchedule,
-    updateClinicTimezone,
 } from '../../services/doctor.service';
 import { Save, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { PremiumTimePicker } from '@/components/ui/premium-time-picker';
-import { ClinicTimezoneCard } from '@/components/ui/clinic-timezone-card';
-import { useClinicTimezone } from '@/hooks/use-clinic-timezone';
-import { logger } from '@/utils/logger';
+import { PlatformTimezoneCard } from '@/components/ui/platform-timezone-card';
+import { usePlatformTimezone } from '@/hooks/use-platform-timezone';
 import { doctorScheduleSchema, type FullDoctorScheduleFormData } from '../../lib/validation/schedule.schema';
-import { dispatchClinicTimezoneUpdated } from '@/utils/clinic-timezone-events';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -30,15 +27,14 @@ export const DoctorScheduleManagement: React.FC = () => {
     const [success, setSuccess] = useState<string | null>(null);
 
     // Phase 4c — Timezone Sovereignty. The doctor's authoritative
-    // clinic timezone now lives in `<ClinicTimezoneProvider>` at the
+    // clinic timezone now lives in `<PlatformTimezoneProvider>` at the
     // clinical-layout boundary, so this page is a CONSUMER (reads
-    // `clinicTimezone`) and a PRODUCER (dispatches updates via
-    // `dispatchClinicTimezoneUpdated()` — the provider hears them and
+    // `platformTimezone`) and a PRODUCER (dispatches updates via
+    // `dispatchPlatformTimezoneUpdated()` — the provider hears them and
     // updates context for every other surface). The Phase 2 backend
     // contract is unchanged: existing appointments are UTC-anchored,
     // only NEW slot computations follow the updated value.
-    const { clinicTimezone } = useClinicTimezone();
-    const [tzUpdating, setTzUpdating] = useState<boolean>(false);
+    const { platformTimezone } = usePlatformTimezone();
 
     const form = useForm<FullDoctorScheduleFormData>({
         resolver: zodResolver(doctorScheduleSchema),
@@ -65,7 +61,7 @@ export const DoctorScheduleManagement: React.FC = () => {
         try {
             setLoading(true);
             // Phase 4c: the clinic timezone is hydrated centrally by
-            // <ClinicTimezoneProvider>, so this fetch only loads the
+            // <PlatformTimezoneProvider>, so this fetch only loads the
             // schedule rows — one fewer profile round-trip per page
             // load.
             const data = await getDoctorSchedule();
@@ -100,79 +96,18 @@ export const DoctorScheduleManagement: React.FC = () => {
     }, [fetchSchedule]);
 
     /**
-     * Persist a new clinic timezone. Optimistic UI: we set the local
-     * value before the network round-trip so the card reflects the
-     * pick instantly, and roll back to the previous value if the
-     * server rejects it. The server is the authority for IANA
-     * validation (Phase 2 controller); on a 4xx the server message is
-     * surfaced verbatim so the doctor sees what failed.
+     * Phase 5 — Timezone Sovereignty (Platform-Wide).
      *
-     * Feedback channel: the same inline `<Alert />` banners that the
-     * schedule-save flow uses. Avoids the dual-feedback inconsistency
-     * (toast + inline alert) the page previously had, and keeps the
-     * doctor's eyes on a single canonical surface for "did my change
-     * stick?" — exactly per QA review (2026-05-10).
+     * The doctor no longer owns the platform timezone. It is governed
+     * exclusively by the admin role via `/admin/platform-timezone`
+     * and propagates here via `<PlatformTimezoneProvider>` (same-tab
+     * + cross-tab + cross-CLIENT socket broadcast). This page now
+     * renders `<PlatformTimezoneCard>` in read-only mode — the
+     * doctor sees the current value with a "Managed by admin" badge
+     * but has no edit affordance. A future PR can add a small
+     * "request a change" CTA that opens an admin-contact dialog if
+     * doctors ever need to escalate; for now the simplest UX wins.
      */
-    /**
-     * Persist a new clinic timezone — the producer side of the
-     * Phase 4c sync architecture.
-     *
-     * Flow (optimistic, dispatch-driven):
-     *   1. Snapshot `previous` from context so we can roll back.
-     *   2. Optimistic broadcast `dispatchClinicTimezoneUpdated(next)`
-     *      → `<ClinicTimezoneProvider>` hears it instantly, updates
-     *      context, every consumer (this card included) re-renders
-     *      with `next`. Doctor sees an immediate UI change.
-     *   3. Network round-trip to `updateClinicTimezone(next)`.
-     *   4. On success: rebroadcast with `result.clinicTimezone` (the
-     *      server's canonical echo) — covers any IANA aliasing the
-     *      backend applies (e.g. `Asia/Calcutta` → `Asia/Kolkata`).
-     *   5. On failure: rebroadcast with `previous` → context rolls
-     *      back, every consumer re-renders with the old value.
-     *
-     * The same broadcast that updates this page's `<ClinicTimezoneCard>`
-     * also propagates to the patient-list card hover, the dashboard
-     * widgets, and to OTHER browser tabs via `BroadcastChannel` (see
-     * `clinic-timezone-events.ts`). No duplicate local state, no
-     * stale-tab problem.
-     */
-    const handleTimezoneChange = useCallback(async (next: string): Promise<void> => {
-        const previous: string = clinicTimezone;
-        setTzUpdating(true);
-        setError(null);
-        setSuccess(null);
-
-        // Optimistic UI — the provider's broadcast listener flips
-        // every consumer to `next` immediately, before the network
-        // call resolves.
-        dispatchClinicTimezoneUpdated(next);
-
-        try {
-            const result = await updateClinicTimezone(next);
-            // Server's canonical echo — covers IANA aliasing
-            // (`Asia/Calcutta` → `Asia/Kolkata`). Re-dispatch only if
-            // it differs from our optimistic value, otherwise the
-            // listeners no-op anyway.
-            if (result.clinicTimezone !== next) {
-                dispatchClinicTimezoneUpdated(result.clinicTimezone);
-            }
-            setSuccess(`Clinic timezone updated to ${result.clinicTimezone}`);
-            window.setTimeout(() => setSuccess(null), 3000);
-        } catch (err: unknown) {
-            // Roll back every consumer (this page included) to the
-            // pre-mutation value via the same broadcast channel.
-            dispatchClinicTimezoneUpdated(previous);
-            const apiErr = err as { response?: { data?: { message?: string } } };
-            const message: string = apiErr.response?.data?.message ?? 'Failed to update clinic timezone';
-            setError(message);
-            logger.error('[Schedule] Clinic timezone update failed', {
-                attempted: next,
-                error: err instanceof Error ? err.message : String(err),
-            });
-        } finally {
-            setTzUpdating(false);
-        }
-    }, [clinicTimezone]);
 
     const onSubmit = async (data: FullDoctorScheduleFormData) => {
         try {
@@ -236,11 +171,15 @@ export const DoctorScheduleManagement: React.FC = () => {
                     </Alert>
                 </AnimatedAlert>
 
-                <ClinicTimezoneCard
-                    value={clinicTimezone}
-                    onChange={handleTimezoneChange}
-                    isUpdating={tzUpdating}
-                />
+                {/*
+                  Phase 5 — Read-only platform-TZ surface for the
+                  doctor. The card itself self-renders a
+                  "Managed by admin" badge when `editable={false}`,
+                  so doctors immediately understand why the change
+                  affordance is absent. Edits flow exclusively
+                  through `/admin/platform-timezone`.
+                */}
+                <PlatformTimezoneCard value={platformTimezone} editable={false} />
 
                 <Card className="p-6">
                     <div className="space-y-4">

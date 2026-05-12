@@ -70,6 +70,9 @@ export const PATHS = {
         SECURITY: '/admin/security',
         SESSIONS: '/admin/sessions',
         SCREENING: '/admin/screening',
+        // Phase 5 — Timezone Sovereignty (Platform-Wide): admin-only
+        // page that owns the platform timezone for the whole product.
+        PLATFORM_TIMEZONE: '/admin/platform-timezone',
         // Legacy redirects
         DASHBOARD_LEGACY: '/admin/dashboard',
     },

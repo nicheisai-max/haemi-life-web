@@ -16,6 +16,7 @@ import { getInitials, getProfileImageUrl } from '../../utils/avatar.resolver';
 import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
 import { logger } from '@/utils/logger';
 import { socketService } from '@/services/socket.service';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 
 /**
  * 🛡️ HAEMI LIFE — System Audit Logs (Phase 2: live + server-side filters)
@@ -290,6 +291,8 @@ interface AuditLogRowProps {
 }
 
 const AuditLogRow: React.FC<AuditLogRowProps> = ({ log, isExpanded, onToggle }) => {
+    // Phase 5 — audit log timestamps render in the platform timezone.
+    const { formatDate: formatPlatformDate, formatTime: formatPlatformTime } = usePlatformTimezoneFormat();
     return (
         <>
             <TableRow className="hover:bg-muted/50 cursor-pointer" onClick={onToggle}>
@@ -339,10 +342,10 @@ const AuditLogRow: React.FC<AuditLogRowProps> = ({ log, isExpanded, onToggle }) 
                 <TableCell className="text-left whitespace-nowrap">
                     <div className="flex flex-col items-start">
                         <span className="text-sm font-medium text-foreground">
-                            {new Date(log.createdAt).toLocaleDateString()}
+                            {formatPlatformDate(log.createdAt)}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                            {new Date(log.createdAt).toLocaleTimeString()}
+                            {formatPlatformTime(log.createdAt)}
                         </span>
                     </div>
                 </TableCell>

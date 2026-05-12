@@ -18,9 +18,12 @@ import { ClinicalRecordType } from '../../../../shared/clinical-types';
 import { useFileActionHandler } from '@/hooks/use-file-action-handler';
 import { logger } from '@/utils/logger';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 
 export const Prescriptions: React.FC = () => {
     const { error: toastError, warning: toastWarning } = useToast();
+    // Phase 5 — every prescription / record date renders in the platform timezone.
+    const { formatDate: formatPlatformDate } = usePlatformTimezoneFormat();
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [uploadedRecords, setUploadedRecords] = useState<MedicalRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -235,7 +238,7 @@ export const Prescriptions: React.FC = () => {
                                                         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                                                             <div className="flex items-center gap-1.5">
                                                                 <Calendar className="h-3.5 w-3.5 text-primary/60" />
-                                                                <span>{new Date(prescription.createdAt).toLocaleDateString()}</span>
+                                                                <span>{formatPlatformDate(prescription.createdAt)}</span>
                                                             </div>
                                                             <div className="flex items-center gap-1.5 font-medium text-foreground/80">
                                                                 <Stethoscope className="h-3.5 w-3.5 text-primary/60" />
@@ -309,7 +312,7 @@ export const Prescriptions: React.FC = () => {
                                                         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-1">
                                                             <div className="flex items-center gap-1.5">
                                                                 <Calendar className="h-4 w-4 text-primary/60" />
-                                                                <span>{new Date(record.uploadedAt).toLocaleDateString()}</span>
+                                                                <span>{formatPlatformDate(record.uploadedAt)}</span>
                                                             </div>
                                                             <div className="flex items-center gap-1.5">
                                                                 <FolderOpen className="h-4 w-4 text-primary/60" />

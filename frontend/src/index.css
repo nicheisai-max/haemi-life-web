@@ -1128,6 +1128,27 @@
     margin-right: 0.5rem;
   }
 
+  /* Phase 5 — Timezone Sovereignty (Platform-Wide).
+     "Managed by admin" badge shown on the platform timezone card
+     when the viewer is NOT in the admin role. Visually replaces the
+     "Change timezone" button so the surface communicates "this is
+     read-only by design" rather than "the button doesn't work right
+     now." Uses brand tokens for both light and dark themes. */
+  .haemi-clinic-tz-card-managed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--card-radius);
+    background-color: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    border: 1px solid hsl(var(--border));
+  }
+
   /* Selector dialog list — gives the picker more vertical real-estate
      than the default `CommandList` (300px) since users scroll through
      ~600 zones. `dvh` keeps the list within the visible viewport on

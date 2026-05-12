@@ -231,6 +231,25 @@ export interface ServerToClientEvents {
     'user:registered': (payload: UserRegisteredEvent) => void;
     'user:status_changed': (payload: UserStatusChangedEvent) => void;
     'appointment:overdue': (payload: AppointmentOverdueEvent) => void;
+
+    // ─── Platform-wide events (Phase 5 — Timezone Sovereignty) ──────────────
+    //     Broadcast to EVERY connected socket regardless of role — patient,
+    //     doctor, pharmacist, admin all need the new platform TZ to refresh
+    //     their UI in real time. Emitted via `socketIO.emit(...)` (no `.to()`
+    //     room scoping) from the platform.controller after a successful
+    //     admin PATCH.
+    'platform-timezone:updated': (payload: PlatformTimezoneUpdatedEvent) => void;
+}
+
+/**
+ * Wire shape for the `platform-timezone:updated` broadcast. Mirrors the
+ * frontend's `ClinicTimezoneUpdatedDetail` (soon-to-be
+ * `PlatformTimezoneUpdatedDetail`) so the SAME typed payload travels
+ * across all three transports (window CustomEvent, BroadcastChannel,
+ * Socket.IO) — one shape end-to-end.
+ */
+export interface PlatformTimezoneUpdatedEvent {
+    readonly platformTimezone: string;
 }
 
 export interface ClientToServerEvents {

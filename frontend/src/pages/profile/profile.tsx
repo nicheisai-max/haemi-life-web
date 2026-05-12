@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePageLoader } from '@/hooks/use-page-loader';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 import { AlertCircle, CheckCircle2, Pencil, Save, Shield, Calendar, BadgeCheck, Settings as SettingsIcon, Lock, User, Camera } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AnimatedAlert } from '@/components/ui/animated-alert';
@@ -23,6 +24,8 @@ import { logger } from '@/utils/logger';
 export const Profile: React.FC = () => {
     const navigate = useNavigate();
     const { refreshUser } = useAuth();
+    // Phase 5 — member-since date renders in the platform timezone.
+    const { formatDate: formatPlatformDate } = usePlatformTimezoneFormat();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -305,11 +308,11 @@ export const Profile: React.FC = () => {
                             <div>
                                 <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Member Since</div>
                                 <div className="font-medium">
-                                    {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('en-US', {
+                                    {profile?.createdAt ? formatPlatformDate(profile.createdAt, {
                                         year: 'numeric',
                                         month: 'long',
                                         day: 'numeric'
-                                    }) : 'N/A'}
+                                    }, 'en-US') : 'N/A'}
                                 </div>
                             </div>
                         </div>

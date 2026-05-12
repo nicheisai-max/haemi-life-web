@@ -8,7 +8,6 @@ import { mapUserToResponse } from '../utils/user.mapper';
 import { JoinedDoctorRow, UserEntity } from '../types/db.types';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
 import { decrypt } from '../utils/security';
-import { isValidIanaTimezone, INSTITUTIONAL_DEFAULT_TIMEZONE } from '../utils/timezone.utils';
 import {
     doctorPatientInviteRepository,
     type DoctorPatientInviteRow,
@@ -308,52 +307,32 @@ export const updateDoctorSchedule = async (req: Request, res: Response) => {
  * forensic reconstruction. This is high-impact state — investors,
  * compliance officers, and oncall need to see who changed it and when.
  */
+/**
+ * Phase 5 — Timezone Sovereignty (Platform-Wide) DEPRECATION GATE.
+ *
+ * The per-doctor clinic-timezone endpoint is retired. The platform
+ * now operates under a single admin-governed timezone (see
+ * `controllers/platform.controller.ts` for the replacement
+ * endpoints). This handler returns HTTP 410 Gone with a structured
+ * error code so any stale client (a tab held open across the
+ * deploy, an external integration) gets an unambiguous signal to
+ * stop calling it. The route entry is left mounted only so the
+ * 410 fires — a future migration deletes the route and this
+ * handler entirely.
+ *
+ * Why 410 and not 404: 410 is the standards-correct status for
+ * "this endpoint existed and was intentionally removed", per
+ * RFC 7231 §6.5.9. Clients (and search engines) MUST NOT continue
+ * to expect the endpoint to come back.
+ */
 export const updateDoctorClinicTimezone = async (req: Request, res: Response) => {
-    const doctorId = req.user?.id;
-    const rawTz: unknown = (req.body as { timezone?: unknown }).timezone;
-
-    try {
-        if (!doctorId) return sendError(res, 401, 'Unauthorized');
-
-        if (typeof rawTz !== 'string' || rawTz.length === 0) {
-            return sendError(res, 400, 'Timezone must be a non-empty string');
-        }
-        if (!isValidIanaTimezone(rawTz)) {
-            return sendError(res, 400, `Not a valid IANA timezone: ${rawTz}. Examples: ${INSTITUTIONAL_DEFAULT_TIMEZONE}, Asia/Kolkata, America/New_York.`);
-        }
-
-        // Read previous value first so the audit log records the diff.
-        const prior = await pool.query<{ clinic_timezone: string | null }>(
-            'SELECT clinic_timezone FROM doctor_profiles WHERE user_id = $1',
-            [doctorId]
-        );
-        if (prior.rows.length === 0) {
-            return sendError(res, 404, 'Doctor profile not found');
-        }
-        const previousTz: string = prior.rows[0].clinic_timezone ?? INSTITUTIONAL_DEFAULT_TIMEZONE;
-
-        await pool.query(
-            `UPDATE doctor_profiles
-                SET clinic_timezone = $1,
-                    updated_at = CURRENT_TIMESTAMP
-              WHERE user_id = $2`,
-            [rawTz, doctorId]
-        );
-
-        await auditService.log({
-            userId: doctorId,
-            action: 'DOCTOR_CLINIC_TIMEZONE_UPDATED',
-            entityId: doctorId,
-            entityType: 'DOCTOR_PROFILE',
-            metadata: { previousClinicTimezone: previousTz, newClinicTimezone: rawTz }
-        });
-
-        return sendResponse(res, 200, true, 'Clinic timezone updated', { clinicTimezone: rawTz });
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error('Error updating clinic timezone:', { error: message, doctorId });
-        return sendError(res, 500, 'Error updating clinic timezone');
-    }
+    void req;
+    return sendError(
+        res,
+        410,
+        'Per-doctor clinic timezone is deprecated. The platform timezone is now managed by admin. See PATCH /api/admin/platform/timezone.',
+        'CLINIC_TIMEZONE_ENDPOINT_DEPRECATED',
+    );
 };
 
 /**
