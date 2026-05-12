@@ -16,6 +16,7 @@ import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
 import { isSuspiciousSecurityEvent } from '../../../../shared/schemas/admin-events.schema';
 import { logger } from '@/utils/logger';
 import { socketService } from '@/services/socket.service';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 
 /**
  * 🛡️ HAEMI LIFE — Security Observability (Phase 2: live + dynamic threat level)
@@ -101,6 +102,8 @@ const getThreatLevelIcon = (level: ThreatLevel): React.ElementType => {
 };
 
 export const SecurityMonitoring: React.FC = () => {
+    // Phase 5 — security event timestamps render in the platform timezone.
+    const { formatDate: formatPlatformDate, formatTime: formatPlatformTime } = usePlatformTimezoneFormat();
     const [page, setPage] = useState<number>(1);
 
     // Stable fetcher: no filters yet on this page (Phase 2 ships live + threat
@@ -278,8 +281,8 @@ export const SecurityMonitoring: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 text-right whitespace-nowrap">
                                                 <div className="flex flex-col text-[11px]">
-                                                    <span className="font-bold text-foreground">{new Date(event.createdAt).toLocaleDateString()}</span>
-                                                    <span className="text-muted-foreground text-[10px]">{new Date(event.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    <span className="font-bold text-foreground">{formatPlatformDate(event.createdAt)}</span>
+                                                    <span className="text-muted-foreground text-[10px]">{formatPlatformTime(event.createdAt, { hour: '2-digit', minute: '2-digit' })}</span>
                                                 </div>
                                             </td>
                                         </tr>

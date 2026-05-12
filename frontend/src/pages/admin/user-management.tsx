@@ -16,6 +16,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAdminLiveTable } from '@/hooks/use-admin-live-table';
 import { useRelativeTime } from '@/hooks/use-relative-time';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 import { socketService } from '@/services/socket.service';
 import { logger } from '../../utils/logger';
 
@@ -479,6 +480,8 @@ const UserRow: React.FC<UserRowProps> = ({ user, isProcessing, isHighlighted, on
         granularity: 'minute',
         fallback: 'Never',
     });
+    // Phase 5 — user.createdAt renders in the platform timezone.
+    const { formatDate: formatPlatformDate } = usePlatformTimezoneFormat();
 
     return (
         <TableRow
@@ -511,7 +514,7 @@ const UserRow: React.FC<UserRowProps> = ({ user, isProcessing, isHighlighted, on
                 {user.phoneNumber || '—'}
             </TableCell>
             <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                {new Date(user.createdAt).toLocaleDateString()}
+                {formatPlatformDate(user.createdAt)}
             </TableCell>
             <TableCell className="hidden lg:table-cell text-muted-foreground text-sm" title={user.lastActivity ?? 'Never seen'}>
                 {lastSeenLabel}

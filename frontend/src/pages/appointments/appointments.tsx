@@ -31,7 +31,7 @@ import {
     formatWallClockDate,
     formatWallClockDay,
     formatTimeInTz,
-} from '@/utils/clinic-timezone-format';
+} from '@/utils/platform-timezone-format';
 
 import { TransitionItem } from '../../components/layout/page-transition';
 import { getErrorMessage } from '../../lib/error';

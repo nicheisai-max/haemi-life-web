@@ -22,7 +22,7 @@ import {
  *   revision drove ~1200 constructor calls per render and a noticeable
  *   open-time stutter on lower-end devices. This revision drops the
  *   per-row LIVE current time entirely (the picker is for selection,
- *   not exploration — the `<ClinicTimezoneCard />` parent already shows
+ *   not exploration — the `<PlatformTimezoneCard />` parent already shows
  *   the live current-time for the SELECTED zone) and pre-computes each
  *   zone's static GMT offset once at mount, then never again. The
  *   minute-tick state and effect are removed wholesale. Net effect:

@@ -20,6 +20,16 @@ export interface Appointment {
     // because legacy rows pre-migration 20260508120000 may briefly carry
     // NULL during the apply window; production rows are always populated.
     appointment_start_utc: Date | null;
+    // Phase 5 — Timezone Sovereignty (Platform-Wide). Snapshot of the
+    // platform timezone at the moment this row was created. Old rows
+    // pin to their original interpretation via this column, so a
+    // future admin TZ change does NOT silently re-interpret existing
+    // wall-clock `appointment_date` + `appointment_time` values
+    // (which would cause no-shows — patients already notified at the
+    // original wall-clock). Nullable for backward compatibility with
+    // rows created pre-Phase-5; readers fall back to the live
+    // platform TZ when null.
+    scheduled_tz: string | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -139,10 +149,23 @@ export class AppointmentRepository {
             }
 
             const result = await client.query<Appointment>(`
-                INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status, appointment_start_utc)
-                VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7)
+                INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, consultation_type, reason, status, appointment_start_utc, scheduled_tz)
+                VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8)
                 RETURNING *
-            `, [data.patient_id, data.doctor_id, data.appointment_date, data.appointment_time, data.consultation_type, data.reason, data.appointment_start_utc]);
+            `, [
+                data.patient_id,
+                data.doctor_id,
+                data.appointment_date,
+                data.appointment_time,
+                data.consultation_type,
+                data.reason,
+                data.appointment_start_utc,
+                // Phase 5 — Timezone Sovereignty (Platform-Wide):
+                // snapshot of the platform TZ used to compute the UTC
+                // anchor above. Nullable (caller may pass undefined for
+                // legacy paths during the transition window).
+                data.scheduled_tz ?? null,
+            ]);
 
             await client.query('COMMIT');
             return result.rows[0];

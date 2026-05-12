@@ -18,13 +18,11 @@ export interface DoctorProfile {
     isVerified: boolean;
     profileImage?: string | null;
     canVideoConsult: boolean;
-    // Phase 2 — Timezone Sovereignty. Always populated by the backend
-    // (mapDoctorToResponse falls back to the institutional default when
-    // the row is read pre-Phase-1). Optional here so older fixtures /
-    // mocks that predate the rollout still satisfy the type. Phase 3
-    // surfaces this as the doctor-side selector + patient-side
-    // contextual banner.
-    clinicTimezone?: string;
+    // Phase 5 — Timezone Sovereignty (Platform-Wide): per-doctor TZ
+    // is retired. The platform timezone is global and admin-governed;
+    // every consumer reads it from `<PlatformTimezoneProvider>`
+    // (hydrated via `GET /api/platform/timezone`). Field removed
+    // from the DoctorProfile shape entirely.
 }
 
 export interface DoctorSchedule {
@@ -418,23 +416,12 @@ export const getDoctorPatientProfile = async (patientId: string): Promise<Patien
     return normalizeResponse(response);
 };
 
-// Phase 3 — Timezone Sovereignty.
-// Updates the doctor's authoritative clinic timezone. Wraps the
-// PATCH /api/doctor/me/clinic-timezone endpoint added in Phase 2.
-// The server validates IANA + emits a DOCTOR_CLINIC_TIMEZONE_UPDATED
-// audit event, so the client just supplies a string and surfaces the
-// outcome via toast.
-export interface UpdateClinicTimezoneResponse {
-    clinicTimezone: string;
-}
-
-export const updateClinicTimezone = async (timezone: string): Promise<UpdateClinicTimezoneResponse> => {
-    const response = await api.patch<ApiResponse<UpdateClinicTimezoneResponse>>(
-        '/doctor/me/clinic-timezone',
-        { timezone }
-    );
-    return normalizeResponse(response);
-};
+// Phase 5 — Timezone Sovereignty (Platform-Wide):
+// The per-doctor clinic-timezone PATCH endpoint is retired. Platform
+// timezone updates now flow exclusively through the admin endpoint
+// `PATCH /api/admin/platform/timezone` (see `services/platform.service.ts`).
+// The frontend wrapper that used to live here is removed; the doctor
+// schedule page no longer offers a TZ-edit affordance.
 
 // Alias for listDoctors (used by some components)
 export const getDoctors = listDoctors;
@@ -447,6 +434,5 @@ export default {
     updateDoctorProfile,
     getDoctorSchedule,
     updateDoctorSchedule,
-    updateClinicTimezone,
     getDoctorPatients
 };

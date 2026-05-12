@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PATHS } from '../../routes/paths';
 import { GradientMesh } from '@/components/ui/gradient-mesh';
+import { formatWallClockDate, formatWallClockDay, formatTimeInTz } from '@/utils/platform-timezone-format';
 import { PremiumAreaChart } from '@/components/charts/premium-area-chart';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PremiumLoader } from '@/components/ui/premium-loader';
@@ -65,21 +66,22 @@ export const PatientDashboard: React.FC = () => {
         }
     };
 
+    // Phase 5 — `appointmentDate` is stored as `YYYY-MM-DD` wall-clock
+    // in the platform timezone. Using wall-clock formatters avoids the
+    // `.getDate()` off-by-one bug for patients west of UTC.
     const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
         return {
-            day: date.getDate().toString(),
-            month: date.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase() // Botswana uses DD/MM/YYYY usually, keeping standard format
+            day: formatWallClockDay(dateStr),
+            month: formatWallClockDate(dateStr, { month: 'short' }, 'en-GB').toUpperCase()
         };
     };
 
-    const formatTime = (timeStr: string) => {
-        return new Date(`2000-01-01T${timeStr}`).toLocaleTimeString('en-GB', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
-    };
+    const formatTime = (timeStr: string): string => formatTimeInTz(
+        timeStr,
+        'UTC',
+        { hour: 'numeric', minute: '2-digit', hour12: true },
+        'en-GB',
+    );
 
 
 

@@ -1,31 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { Globe } from 'lucide-react';
 import { detectBrowserTimezone } from '@/utils/timezone-detection-storage';
+import { usePlatformTimezone } from '@/hooks/use-platform-timezone';
 
 /**
- * 🌍 HAEMI LIFE — DOCTOR TIMEZONE BANNER (Phase 5 — Timezone Sovereignty)
+ * 🌍 HAEMI LIFE — PLATFORM TIMEZONE BANNER (Phase 5 — Timezone Sovereignty)
  *
  * Patient-side contextual banner rendered near the slot grid on the
- * booking surface. Communicates a single critical fact: the times
- * the patient is about to commit to are in the DOCTOR'S clinic
- * timezone, not the patient's own. Locality-based booking (the
- * dominant case for Haemi Life) means doctor and patient share TZ
- * almost always, so the banner is informational reassurance — not
- * a conversion barrier.
+ * booking surface and any other patient-facing flow that displays
+ * platform-anchored times. Replaces the per-doctor
+ * `<DoctorTimezoneBanner>` with the new architecture: the platform
+ * timezone is the SINGLE source of truth across every role, governed
+ * exclusively by admin.
  *
- * When the patient's browser timezone differs from the doctor's
- * clinic timezone (cross-locality booking, traveling patients), a
- * second muted line surfaces the patient's local time alongside —
- * defensive UX that prevents "I booked 10 AM thinking it was MY 10
- * AM" mistakes without forcing a dual-time-per-slot redesign.
+ * The banner communicates the same critical fact as before: the
+ * times the patient is about to commit to are in the platform's
+ * timezone, not the patient's own. When the patient's browser
+ * timezone differs from the platform's, a second muted line
+ * surfaces the patient's local time alongside — defensive UX that
+ * prevents "I booked 10 AM thinking it was MY 10 AM" mistakes
+ * without forcing a dual-time-per-slot redesign.
+ *
+ * The component reads the platform TZ from context (no prop), so
+ * any admin-side change propagates here in real time via the
+ * provider's socket subscription — no banner-level refetch needed.
  *
  * Strict-TS posture (project mandate):
- *   - Zero `any`, zero `as unknown as`, zero `@ts-ignore`
- *   - All boolean state explicitly typed
- *   - Failure-resilient: an invalid IANA string from upstream
- *     (theoretically impossible after Phase 2's server-side
- *     validation, but defensively narrowed) renders the empty
- *     fallback rather than crashing the booking page.
+ *   - Zero `any`, zero `as unknown as`, zero `@ts-ignore`.
+ *   - All boolean state explicitly typed.
+ *   - Failure-resilient: an invalid IANA string (theoretically
+ *     impossible after server-side validation, but defensively
+ *     narrowed) renders the empty fallback rather than crashing
+ *     the booking page.
  *
  * Visual posture (project mandate):
  *   - No inline CSS, no `px` literals — every visual binds to a
@@ -35,18 +41,9 @@ import { detectBrowserTimezone } from '@/utils/timezone-detection-storage';
  *     `--foreground`, `--muted-foreground`, `--sidebar-active`,
  *     `--card-radius`, `--muted`.
  *   - Mobile-to-desktop responsive: icon + text stacks vertically
- *     below `30rem` (the sub-lines wrap naturally inside flex), lays
- *     out icon-left + text-block at all wider widths.
+ *     below `30rem` (the sub-lines wrap naturally inside flex),
+ *     lays out icon-left + text-block at all wider widths.
  */
-
-interface DoctorTimezoneBannerProps {
-    /** IANA timezone string for the doctor's clinic (canonical authority). */
-    readonly doctorTimezone: string;
-    /** Optional doctor name for personalized copy. Falls back to a
-     *  generic phrasing so the banner stays consistent before the
-     *  doctor profile resolves. */
-    readonly doctorName?: string;
-}
 
 const TICK_INTERVAL_MS = 60_000;
 
@@ -74,10 +71,8 @@ const buildPreview = (zone: string, instant: Date): TimezonePreview => {
     }
 };
 
-export const DoctorTimezoneBanner: React.FC<DoctorTimezoneBannerProps> = ({
-    doctorTimezone,
-    doctorName,
-}) => {
+export const PlatformTimezoneBanner: React.FC = () => {
+    const { platformTimezone } = usePlatformTimezone();
     const [now, setNow] = useState<Date>(() => new Date());
     const [browserTimezone] = useState<string>(() => detectBrowserTimezone());
 
@@ -90,17 +85,13 @@ export const DoctorTimezoneBanner: React.FC<DoctorTimezoneBannerProps> = ({
         return () => window.clearInterval(interval);
     }, []);
 
-    if (doctorTimezone.length === 0) return null;
+    if (platformTimezone.length === 0) return null;
 
-    const doctorPreview: TimezonePreview = buildPreview(doctorTimezone, now);
-    const showPatientLine: boolean = browserTimezone.length > 0 && browserTimezone !== doctorTimezone;
+    const platformPreview: TimezonePreview = buildPreview(platformTimezone, now);
+    const showPatientLine: boolean = browserTimezone.length > 0 && browserTimezone !== platformTimezone;
     const patientPreview: TimezonePreview | null = showPatientLine
         ? buildPreview(browserTimezone, now)
         : null;
-
-    const ownerLabel: string = doctorName && doctorName.length > 0
-        ? `${doctorName}'s clinic timezone`
-        : "the doctor's clinic timezone";
 
     return (
         <div className="haemi-tz-banner" role="note" aria-label="Timezone context">
@@ -109,10 +100,10 @@ export const DoctorTimezoneBanner: React.FC<DoctorTimezoneBannerProps> = ({
             </span>
             <div className="haemi-tz-banner-body">
                 <p className="haemi-tz-banner-primary">
-                    All times shown in {ownerLabel}:{' '}
-                    <span className="haemi-tz-banner-iana">{doctorTimezone}</span>{' '}
+                    All times shown in the platform timezone:{' '}
+                    <span className="haemi-tz-banner-iana">{platformTimezone}</span>{' '}
                     <span className="haemi-tz-banner-meta">
-                        ({doctorPreview.offset.length > 0 ? `${doctorPreview.offset} · ` : ''}Currently {doctorPreview.time})
+                        ({platformPreview.offset.length > 0 ? `${platformPreview.offset} · ` : ''}Currently {platformPreview.time})
                     </span>
                 </p>
                 {patientPreview !== null ? (

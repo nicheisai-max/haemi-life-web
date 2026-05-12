@@ -13,8 +13,10 @@ import { PremiumLoader } from '@/components/ui/premium-loader';
 import { useToast } from '@/hooks/use-toast';
 import { PATHS } from '../../routes/paths';
 import { getErrorMessage } from '../../lib/error';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 
 export const DispensePrescription: React.FC = () => {
+    const { formatDate: formatPlatformDate } = usePlatformTimezoneFormat();
     const [rxId, setRxId] = useState('');
     const [prescription, setPrescription] = useState<Prescription | null>(null);
     const [loading, setLoading] = useState(false);
@@ -155,7 +157,7 @@ export const DispensePrescription: React.FC = () => {
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xs font-bold uppercase text-muted-foreground">RX DATE</div>
-                                        <div className="text-sm font-mono">{new Date(prescription.prescriptionDate).toLocaleDateString()}</div>
+                                        <div className="text-sm font-mono">{formatPlatformDate(prescription.prescriptionDate)}</div>
                                     </div>
                                 </div>
 

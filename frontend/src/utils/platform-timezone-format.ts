@@ -1,13 +1,13 @@
 /**
- * clinic-timezone-format.ts
+ * platform-timezone-format.ts
  *
- * 🌍 HAEMI LIFE — CLINIC-TZ-AWARE DATE/TIME FORMATTERS
+ * 🌍 HAEMI LIFE — PLATFORM-TZ-AWARE DATE/TIME FORMATTERS
  *
  * Pure, side-effect-free formatters that interpret incoming timestamps
  * (ISO strings, Date instances, or `HH:mm`-style time-only strings) in
  * an explicit IANA timezone and render localized display text. Single
- * source of truth for "render this clinical value in the doctor's
- * clinic timezone" — every surface (registry, profile, appointments,
+ * source of truth for "render this clinical value in the
+ * platform timezone" — every surface (registry, profile, appointments,
  * dashboard, etc.) routes through these helpers instead of calling
  * the browser-TZ-defaulting `Date.toLocaleString` family.
  *
@@ -23,8 +23,8 @@
  *
  * WHY EVERYTHING IS PURE
  *
- *   These helpers are consumed by `useClinicTimezoneFormat()`, which
- *   binds them to the live clinic-TZ context. Keeping the underlying
+ *   These helpers are consumed by `usePlatformTimezoneFormat()`, which
+ *   binds them to the live platform-TZ context. Keeping the underlying
  *   functions pure means they're trivially testable, memoizable, and
  *   reusable in non-React contexts (audit log exporters, server-side
  *   render pre-formatting, etc.).
@@ -46,7 +46,7 @@
  * can use the same constant for its optimistic-display path before the
  * doctor profile resolves.
  */
-export const INSTITUTIONAL_DEFAULT_CLINIC_TIMEZONE: string = 'Africa/Gaborone';
+export const INSTITUTIONAL_DEFAULT_PLATFORM_TIMEZONE: string = 'Africa/Gaborone';
 
 /**
  * Accepted input shapes. Most backend payloads send ISO strings,
@@ -122,10 +122,10 @@ export const formatDateInTz = (
  *   1. ISO-string / Date / epoch ms → interpreted in `timezone` and
  *      rendered (full TZ semantics, DST-correct).
  *   2. `HH:mm` time-only string → interpreted AS IF it were already
- *      a clinic-local wall-clock time. We render the digits as-is
+ *      a platform-local wall-clock time. We render the digits as-is
  *      using `en-GB` and the requested `hour12`. This matches the
  *      backend contract where `appointment.appointmentTime` is the
- *      doctor's clinic-local wall-clock value, NOT a UTC moment.
+ *      doctor's platform-local wall-clock value, NOT a UTC moment.
  */
 export const formatTimeInTz = (
     value: DateLike,
@@ -133,7 +133,7 @@ export const formatTimeInTz = (
     options: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' },
     locale: string = 'en-GB',
 ): string => {
-    // Branch 1 — wall-clock time-only string. The clinic-local digits
+    // Branch 1 — wall-clock time-only string. The platform-local digits
     // are the canonical truth; rendering them via Intl with a tz
     // option would mis-project them as UTC.
     if (typeof value === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(value)) {
@@ -202,8 +202,8 @@ export const formatMonthShortInTz = (value: DateLike, timezone: string): string 
 
 /**
  * Live "Currently HH:mm" for a clock-style preview. Companion to
- * `<ClinicTimezoneCard>` and any future surfaces that render a live
- * clinic-local clock. Pure — the consuming component owns the tick
+ * `<PlatformTimezoneCard>` and any future surfaces that render a live
+ * platform-local clock. Pure — the consuming component owns the tick
  * cadence.
  */
 export const formatNowInTz = (timezone: string, instant: Date = new Date()): string => {
@@ -212,7 +212,7 @@ export const formatNowInTz = (timezone: string, instant: Date = new Date()): str
 
 /**
  * Format a wall-clock date string (`YYYY-MM-DD`) WITHOUT timezone
- * projection. Critical for any backend field stored as a clinic-local
+ * projection. Critical for any backend field stored as a platform-local
  * calendar date (e.g. `appointment.appointmentDate`) — projecting
  * such a value through `new Date()` interprets it as UTC midnight,
  * and `.getDate()` / `toLocaleDateString()` then return the

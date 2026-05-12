@@ -37,7 +37,7 @@ import {
     type PatientLifecycleStage,
 } from '@/services/doctor.service';
 import { usePageLoader } from '@/hooks/use-page-loader';
-import { useClinicTimezoneFormat } from '@/hooks/use-clinic-timezone';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 import { logger } from '@/utils/logger';
 import { PATHS } from '@/routes/paths';
 
@@ -111,11 +111,11 @@ const lifecycleStageMeta: Readonly<Record<PatientLifecycleStage, { label: string
  * record.
  *
  * Defensive: returns `'N/A'` for null/empty/malformed input. Bound
- * to the live `<ClinicTimezoneProvider>` value so a TZ change from
+ * to the live `<PlatformTimezoneProvider>` value so a TZ change from
  * any surface flips every row instantly.
  */
 const useClinicalDateFormat = (): ((value: string | null) => string) => {
-    const { formatDate } = useClinicTimezoneFormat();
+    const { formatDate } = usePlatformTimezoneFormat();
     return useCallback((value: string | null): string => {
         if (value === null || value.length === 0) return 'N/A';
         const formatted = formatDate(

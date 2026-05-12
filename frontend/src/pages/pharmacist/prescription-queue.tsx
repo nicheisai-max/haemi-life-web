@@ -11,9 +11,12 @@ import { AlertCircle, X, CheckCircle2, AlertTriangle, Clock, Calendar, Pill, Che
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { getErrorMessage } from '../../lib/error';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 
 export const PrescriptionQueue: React.FC = () => {
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+    // Phase 5 — every prescription date / time renders in the platform timezone.
+    const { formatDate: formatPlatformDate, formatTime: formatPlatformTime } = usePlatformTimezoneFormat();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [processing, setProcessing] = useState<string | null>(null);
@@ -130,11 +133,11 @@ export const PrescriptionQueue: React.FC = () => {
                                                     <h3 className="text-lg font-semibold text-foreground">Patient: {prescription.patientName || 'Unknown'}</h3>
                                                     <Badge variant="secondary" className="flex items-center gap-1.5 font-normal ml-auto md:ml-0">
                                                         <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                                        {new Date(prescription.createdAt).toLocaleTimeString('en-US', {
+                                                        {formatPlatformTime(prescription.createdAt, {
                                                             hour: 'numeric',
                                                             minute: '2-digit',
                                                             hour12: true
-                                                        })}
+                                                        }, 'en-US')}
                                                     </Badge>
                                                 </div>
 
@@ -143,11 +146,11 @@ export const PrescriptionQueue: React.FC = () => {
                                                 <div className="flex flex-wrap gap-4 pt-1">
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
                                                         <Calendar className="h-4 w-4 text-primary" />
-                                                        <span>{new Date(prescription.createdAt).toLocaleDateString('en-US', {
+                                                        <span>{formatPlatformDate(prescription.createdAt, {
                                                             month: 'short',
                                                             day: 'numeric',
                                                             year: 'numeric'
-                                                        })}</span>
+                                                        }, 'en-US')}</span>
                                                     </div>
                                                     <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md">
                                                         <Pill className="h-4 w-4 text-primary" />

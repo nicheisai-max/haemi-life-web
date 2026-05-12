@@ -14,6 +14,7 @@ import { decrypt } from '@/utils/security';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOverlay } from '@/hooks/use-overlay';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 import { logger } from '@/utils/logger';
 
 /* ──────────────────────────────────────────────
@@ -55,7 +56,18 @@ const DecryptedDescription: React.FC<{ text: string }> = ({ text }) => {
 /* ──────────────────────────────────────────────
    Time Ago
 ────────────────────────────────────────────── */
-const getTimeAgo = (dateString: string) => {
+/**
+ * Relative-time helper for notifications. The >30-day fallback
+ * renders the absolute date; Phase 5 routes that through the
+ * platform-TZ formatter so old notifications display in the
+ * platform timezone, not the browser's. The `formatDate` arg is
+ * supplied by the consuming component via
+ * `usePlatformTimezoneFormat()`.
+ */
+const getTimeAgo = (
+    dateString: string,
+    formatDate: (value: string) => string,
+): string => {
     try {
         const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
         if (seconds < 60) return 'Just now';
@@ -65,7 +77,7 @@ const getTimeAgo = (dateString: string) => {
         if (hours < 24) return `${hours}h ago`;
         const days = Math.floor(hours / 24);
         if (days < 30) return `${days}d ago`;
-        return new Date(dateString).toLocaleDateString();
+        return formatDate(dateString);
     } catch {
         return 'Recently';
     }
@@ -123,6 +135,8 @@ interface NotificationItemProps {
 const NotificationItem: React.FC<NotificationItemProps> = ({ notif, onRead }) => {
     const [isAcknowledging, setIsAcknowledging] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Phase 5 — old notifications' fallback absolute date renders in the platform timezone.
+    const { formatDate: formatPlatformDate } = usePlatformTimezoneFormat();
 
     const handleClick = () => {
         if (notif.isRead || isAcknowledging) return;
@@ -187,7 +201,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notif, onRead }) =>
                         <DecryptedDescription text={notif.description} />
                     </p>
                     <span className="mt-2 block text-[10px] text-slate-400 font-semibold tracking-wide uppercase">
-                        {getTimeAgo(notif.createdAt)}
+                        {getTimeAgo(notif.createdAt, formatPlatformDate)}
                     </span>
                 </div>
             </DropdownMenuItem>

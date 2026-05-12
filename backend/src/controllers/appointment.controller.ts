@@ -8,11 +8,11 @@ import { notificationService } from '../services/notification.service';
 import { mapAppointmentToResponse } from '../utils/clinical.mapper';
 import {
     toUtcInstant,
-    resolveClinicTimezone,
     getTodayInTimezone,
     getNowMinutesInTimezone,
     InvalidTimezoneError
 } from '../utils/timezone.utils';
+import { getPlatformTimezone } from '../utils/config.util';
 
 interface BookAppointmentRequest {
     doctorId: string;
@@ -60,19 +60,20 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        // Phase 2 — Timezone Sovereignty. Resolve the doctor's clinic
-        // timezone, interpret the (date, time) wall-clock pair through it,
-        // and obtain the absolute UTC instant. All downstream comparisons
-        // (lead-time guard, UTC anchor for the row) flow from this single
-        // anchor — no server-local-clock leak.
-        const doctorTimezoneRaw: string | null = await appointmentRepository.getDoctorTimezone(doctorId);
-        const doctorTimezone: string = resolveClinicTimezone(doctorTimezoneRaw);
+        // Phase 5 — Timezone Sovereignty (Platform-Wide). The platform
+        // timezone is now the SINGLE source of truth, governed
+        // exclusively by admin. Both the (date, time) wall-clock pair
+        // the patient submitted from the booking UI AND the resulting
+        // UTC anchor are interpreted under the platform TZ. We also
+        // snapshot it onto the row (`scheduled_tz`) so a future admin
+        // TZ change does NOT silently re-interpret existing rows.
+        const platformTimezone: string = await getPlatformTimezone();
         let appointmentStartUtc: Date;
         try {
-            appointmentStartUtc = toUtcInstant(appointmentDate, appointmentTime, doctorTimezone);
+            appointmentStartUtc = toUtcInstant(appointmentDate, appointmentTime, platformTimezone);
         } catch (e: unknown) {
             const reason: string = e instanceof InvalidTimezoneError
-                ? `Doctor's clinic timezone is invalid: ${e.timezone}`
+                ? `Platform timezone is invalid: ${e.timezone}`
                 : (e instanceof Error ? e.message : 'Unparseable appointment datetime');
             sendError(res, 400, reason);
             return;
@@ -117,7 +118,10 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
             consultation_type: consultationType,
             reason,
             // Phase 2 contract: repository refuses to insert without anchor.
-            appointment_start_utc: appointmentStartUtc
+            appointment_start_utc: appointmentStartUtc,
+            // Phase 5 contract: snapshot the platform TZ this booking
+            // was interpreted under. Survives future admin TZ changes.
+            scheduled_tz: platformTimezone
         });
         
         // --- Clinical Screening Linkage ---
@@ -467,14 +471,14 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        // Phase 2 — Timezone Sovereignty. "Today", "now", and the
-        // day-of-week index for the requested date must be resolved in
-        // the DOCTOR'S clinic timezone, not the server's local zone.
-        // Otherwise a Botswana doctor's "Tuesday 9 AM" slots could be
-        // wrongly listed as past/missing when the server runs UTC and
-        // the request arrives near midnight Africa/Gaborone.
-        const doctorTimezoneRaw: string | null = await appointmentRepository.getDoctorTimezone(doctorId);
-        const doctorTimezone: string = resolveClinicTimezone(doctorTimezoneRaw);
+        // Phase 5 — Timezone Sovereignty (Platform-Wide). "Today",
+        // "now", and the day-of-week index for the requested date are
+        // resolved in the PLATFORM timezone (admin-governed) — the
+        // single source of truth across every role. A doctor's
+        // "Tuesday 9 AM" slot is interpreted under the platform TZ;
+        // a patient booking sees those same slots projected through
+        // the same TZ.
+        const platformTimezone: string = await getPlatformTimezone();
 
         const dayOfWeekMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
         if (!dayOfWeekMatch) {
@@ -484,12 +488,12 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
         const [, yStr, moStr, dStr] = dayOfWeekMatch;
         const dayOfWeek: number = new Date(Date.UTC(Number(yStr), Number(moStr) - 1, Number(dStr))).getUTCDay();
 
-        const todayInDoctorTz: string = getTodayInTimezone(doctorTimezone);
-        // Reject queries for dates strictly before today in the doctor's
-        // wall clock. (Same-day with no remaining slots returns an empty
-        // list, not 400 — the frontend renders a clean
-        // "All slots have passed" state.)
-        if (date < todayInDoctorTz) {
+        const todayInPlatformTz: string = getTodayInTimezone(platformTimezone);
+        // Reject queries for dates strictly before today in the
+        // platform wall clock. (Same-day with no remaining slots
+        // returns an empty list, not 400 — the frontend renders a
+        // clean "All slots have passed" state.)
+        if (date < todayInPlatformTz) {
             sendResponse(res, 200, true, 'Date is in the past', { date, slots: [] });
             return;
         }
@@ -503,13 +507,13 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
 
         const bookedTimes = await appointmentRepository.getBookedTimes(doctorId, date);
 
-        const isToday: boolean = date === todayInDoctorTz;
+        const isToday: boolean = date === todayInPlatformTz;
         // For same-day requests, suppress slots that start before
-        // (now + lead time) in the doctor's clinic timezone. Comparison
-        // is done in minutes-since-midnight so the slot iterator's
+        // (now + lead time) in the platform timezone. Comparison is
+        // done in minutes-since-midnight so the slot iterator's
         // epoch-anchored times can be matched directly.
         const earliestMinutes: number = isToday
-            ? getNowMinutesInTimezone(doctorTimezone) + BOOKING_LEAD_TIME_MINUTES
+            ? getNowMinutesInTimezone(platformTimezone) + BOOKING_LEAD_TIME_MINUTES
             : -1;
 
         const slots: string[] = [];

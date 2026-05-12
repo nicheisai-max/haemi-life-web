@@ -11,7 +11,8 @@ import {
     Activity,
     Search,
     Video,
-    BarChart3
+    BarChart3,
+    Globe2,
 } from 'lucide-react';
 import { useAuth } from './use-auth';
 import { PATHS } from '../routes/paths';
@@ -57,6 +58,10 @@ export const useNavigation = () => {
             { icon: Users, label: 'User Management', path: PATHS.ADMIN.USERS },
             { icon: ShieldCheck, label: 'Verify Doctors', path: PATHS.ADMIN.VERIFY_DOCTORS },
             { icon: ClipboardCheck, label: 'Manage Screening', path: PATHS.ADMIN.SCREENING },
+            // Phase 5 — Timezone Sovereignty (Platform-Wide). Admin owns the
+            // platform timezone for every role; this entry is the single
+            // navigation surface that controls it.
+            { icon: Globe2, label: 'Platform Timezone', path: PATHS.ADMIN.PLATFORM_TIMEZONE },
             { icon: Activity, label: 'System Logs', path: PATHS.ADMIN.SYSTEM_LOGS },
             { icon: Settings, label: 'Settings', path: PATHS.SETTINGS },
         ],

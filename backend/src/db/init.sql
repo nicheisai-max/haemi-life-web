@@ -325,6 +325,15 @@ CREATE TABLE IF NOT EXISTS appointments (
     -- under the assumption of Africa/Gaborone (matching the prior
     -- application-wide implicit timezone).
     appointment_start_utc TIMESTAMPTZ NULL,
+    -- Phase 5 — Timezone Sovereignty (Platform-Wide):
+    -- Snapshot of the platform timezone at the moment this appointment
+    -- was created. Old rows pin to their creation-time TZ via this
+    -- column, so a future admin TZ change does NOT silently re-
+    -- interpret existing wall-clock `appointment_date` + `appointment_time`
+    -- rows. Nullable for backward compatibility with rows created
+    -- pre-Phase-5; application layer falls back to the live platform
+    -- TZ when null.
+    scheduled_tz TEXT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ
@@ -1060,11 +1069,18 @@ CREATE TABLE IF NOT EXISTS system_settings (
 );
 
 -- Seed default session timeout (1440 minutes = 24 hours)
-INSERT INTO system_settings (key, value) 
-VALUES 
+-- Phase 5 — Timezone Sovereignty (Platform-Wide): seeds
+-- `PLATFORM_TIMEZONE` with the institutional default. The admin
+-- portal's "Platform Timezone" page can update it at runtime; the
+-- application layer reads it via `getPlatformTimezone()` in
+-- `config.util.ts` (cached, 5-minute TTL — matches the existing
+-- session-timeout / JWT-expiry pattern).
+INSERT INTO system_settings (key, value)
+VALUES
     ('SESSION_TIMEOUT_MINUTES', '1440'),
     ('JWT_ACCESS_EXPIRY_MINUTES', '15'),
-    ('JWT_REFRESH_EXPIRY_DAYS', '7')
+    ('JWT_REFRESH_EXPIRY_DAYS', '7'),
+    ('PLATFORM_TIMEZONE', 'Africa/Gaborone')
 ON CONFLICT (key) DO NOTHING;
 
 -- Seeding is now managed by setup-db.ts to ensure dynamic hashing of DEMO_PASSWORD

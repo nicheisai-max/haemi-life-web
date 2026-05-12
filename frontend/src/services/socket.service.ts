@@ -93,6 +93,12 @@ export interface ServerToClientEvents {
     'user:registered': (payload: UserRegisteredEvent) => void;
     'user:status_changed': (payload: UserStatusChangedEvent) => void;
     'appointment:overdue': (payload: AppointmentOverdueEvent) => void;
+    // ─── Platform-wide events (Phase 5 — Timezone Sovereignty) ────────────
+    //     Broadcast to EVERY connected socket regardless of role —
+    //     patient, doctor, pharmacist, admin all need the new platform TZ
+    //     to refresh their UI in real time. Emitted from the admin
+    //     `/api/admin/platform/timezone` PATCH endpoint.
+    'platform-timezone:updated': (payload: { readonly platformTimezone: string }) => void;
 }
 
 export interface ClientToServerEvents {

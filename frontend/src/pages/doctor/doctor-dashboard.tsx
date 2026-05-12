@@ -22,8 +22,8 @@ import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
 import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { usePageLoader } from '@/hooks/use-page-loader';
-import { useClinicTimezoneFormat } from '@/hooks/use-clinic-timezone';
-import { formatTimeInTz } from '@/utils/clinic-timezone-format';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
+import { formatTimeInTz } from '@/utils/platform-timezone-format';
 
 const CLINICAL_VOLUME_DATA = [
     { name: '08:00', patients: 3 },
@@ -76,7 +76,7 @@ export const DoctorDashboard = () => {
     // browser-local today — critical for doctors who travel across
     // the date boundary. See `todayWallClockDate` for the projection
     // mechanics.
-    const { todayWallClockDate } = useClinicTimezoneFormat();
+    const { todayWallClockDate } = usePlatformTimezoneFormat();
 
 
 
