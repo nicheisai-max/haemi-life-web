@@ -37,6 +37,7 @@ import {
     type PatientLifecycleStage,
 } from '@/services/doctor.service';
 import { usePageLoader } from '@/hooks/use-page-loader';
+import { useClinicTimezoneFormat } from '@/hooks/use-clinic-timezone';
 import { logger } from '@/utils/logger';
 import { PATHS } from '@/routes/paths';
 
@@ -100,12 +101,29 @@ const lifecycleStageMeta: Readonly<Record<PatientLifecycleStage, { label: string
     },
 };
 
-/** Defensive ISO → human-readable date. Returns 'N/A' on malformed input. */
-const formatDate = (value: string | null): string => {
-    if (value === null || value.length === 0) return 'N/A';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return 'N/A';
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+/**
+ * Clinical-date formatter for the patient profile page. Every date
+ * displayed here (last visit, first seen, appointment date, DOB,
+ * record service / upload dates) is anchored in the doctor's clinic
+ * timezone — the visits, prescriptions, and screenings happened in
+ * the clinic, not in the doctor's current physical location, so
+ * rendering them in browser TZ would silently corrupt the audit
+ * record.
+ *
+ * Defensive: returns `'N/A'` for null/empty/malformed input. Bound
+ * to the live `<ClinicTimezoneProvider>` value so a TZ change from
+ * any surface flips every row instantly.
+ */
+const useClinicalDateFormat = (): ((value: string | null) => string) => {
+    const { formatDate } = useClinicTimezoneFormat();
+    return useCallback((value: string | null): string => {
+        if (value === null || value.length === 0) return 'N/A';
+        const formatted = formatDate(
+            value,
+            { day: '2-digit', month: 'short', year: 'numeric' },
+        );
+        return formatted.length > 0 ? formatted : 'N/A';
+    }, [formatDate]);
 };
 
 /** Compact list parser — patient_profiles.medical_conditions / allergies
@@ -252,6 +270,7 @@ interface ProfileQuickActionsProps {
 }
 
 const ProfileQuickActions: React.FC<ProfileQuickActionsProps> = ({ summary }) => {
+    const formatDate = useClinicalDateFormat();
     return (
         <Card className="p-5 space-y-4">
             <div>
@@ -290,6 +309,7 @@ interface TabAppointmentsProps {
 }
 
 const TabAppointments: React.FC<TabAppointmentsProps> = ({ items }) => {
+    const formatDate = useClinicalDateFormat();
     if (items.length === 0) {
         return (
             <Card className="p-8 text-center text-muted-foreground">
@@ -337,6 +357,7 @@ interface TabPrescriptionsProps {
 }
 
 const TabPrescriptions: React.FC<TabPrescriptionsProps> = ({ items }) => {
+    const formatDate = useClinicalDateFormat();
     if (items.length === 0) {
         return (
             <Card className="p-8 text-center text-muted-foreground">
@@ -381,6 +402,7 @@ interface TabRecordsProps {
 }
 
 const TabRecords: React.FC<TabRecordsProps> = ({ items }) => {
+    const formatDate = useClinicalDateFormat();
     if (items.length === 0) {
         return (
             <Card className="p-8 text-center text-muted-foreground">
@@ -421,6 +443,7 @@ interface TabScreeningsProps {
 }
 
 const TabScreenings: React.FC<TabScreeningsProps> = ({ items }) => {
+    const formatDate = useClinicalDateFormat();
     if (items.length === 0) {
         return (
             <Card className="p-8 text-center text-muted-foreground">
@@ -482,6 +505,7 @@ interface TabOverviewProps {
 }
 
 const TabOverview: React.FC<TabOverviewProps> = ({ summary, appointments, prescriptions, screenings }) => {
+    const formatDate = useClinicalDateFormat();
     const recentAppts = appointments.slice(0, 3);
     const activePrescriptions = prescriptions.filter(p => p.status === 'pending' || p.status === 'filled' || p.status === 'active');
 

@@ -27,6 +27,11 @@ import {
 } from 'lucide-react';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
+import {
+    formatWallClockDate,
+    formatWallClockDay,
+    formatTimeInTz,
+} from '@/utils/clinic-timezone-format';
 
 import { TransitionItem } from '../../components/layout/page-transition';
 import { getErrorMessage } from '../../lib/error';
@@ -460,11 +465,22 @@ export const Appointments: React.FC = () => {
                             <div className="p-6 flex flex-col md:flex-row gap-6">
                                 {/* Date Badge */}
                                 <div className="flex-shrink-0 w-16 h-16 bg-primary/10 rounded-[var(--card-radius)] flex flex-col items-center justify-center text-primary border border-primary/20">
+                                    {/*
+                                      Wall-clock parsing: `appointmentDate` is
+                                      stored as `YYYY-MM-DD` in the doctor's
+                                      clinic-local calendar (Phase 2 backend
+                                      contract). Parsing it through
+                                      `new Date()` would treat it as UTC
+                                      midnight and `.getDate()` then returns
+                                      the BROWSER-local day — wrong for users
+                                      west of UTC. The wall-clock helpers
+                                      render the literal date digits directly.
+                                    */}
                                     <span className="text-2xl font-bold leading-none">
-                                        {new Date(appointment.appointmentDate).getDate()}
+                                        {formatWallClockDay(appointment.appointmentDate)}
                                     </span>
                                     <span className="text-xs font-semibold uppercase mt-1">
-                                        {new Date(appointment.appointmentDate).toLocaleDateString('en-US', { month: 'short' })}
+                                        {formatWallClockDate(appointment.appointmentDate, { month: 'short' }, 'en-US')}
                                     </span>
                                 </div>
 
@@ -583,20 +599,28 @@ export const Appointments: React.FC = () => {
                                     <div className="flex flex-wrap gap-6 text-sm text-muted-foreground pt-2 border-t border-border/50">
                                         <div className="flex items-center gap-2">
                                             <Clock className="h-4 w-4 text-primary/60" />
-                                            <span>{new Date(`2000-01-01T${appointment.appointmentTime}`).toLocaleTimeString('en-US', {
-                                                hour: 'numeric',
-                                                minute: '2-digit',
-                                                hour12: true
-                                            })}</span>
+                                            {/*
+                                              `appointmentTime` is a wall-clock
+                                              `HH:mm` in the doctor's clinic
+                                              TZ. The pure formatter renders
+                                              the digits via `Intl` (en-US,
+                                              12h) without any TZ projection —
+                                              same digits, every viewer.
+                                            */}
+                                            <span>{formatTimeInTz(
+                                                appointment.appointmentTime,
+                                                'UTC',
+                                                { hour: 'numeric', minute: '2-digit', hour12: true },
+                                                'en-US',
+                                            )}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Calendar className="h-4 w-4 text-primary/60" />
-                                            <span>{new Date(appointment.appointmentDate).toLocaleDateString('en-US', {
-                                                weekday: 'long',
-                                                month: 'long',
-                                                day: 'numeric',
-                                                year: 'numeric'
-                                            })}</span>
+                                            <span>{formatWallClockDate(
+                                                appointment.appointmentDate,
+                                                { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
+                                                'en-US',
+                                            )}</span>
                                         </div>
                                     </div>
                                 </div>
