@@ -12,6 +12,7 @@ import {
     isUser
 } from '../utils/type-guards';
 import { decodeJWT } from '../utils/jwt';
+import { clearAllTimezoneDetectionAcks } from '../utils/timezone-detection-storage';
 
 interface AuthState {
     user: User | null;
@@ -123,6 +124,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 logger.error('[Auth] Unknown error during logout', { error: String(error) });
             }
         }
+
+        // Drain any session-scoped clinician acknowledgements so the
+        // next login (even same user, same tab) re-evaluates the
+        // browser-vs-clinic timezone mismatch from scratch. Without
+        // this, sessionStorage would survive across the
+        // logout-then-login transition in the same tab and a doctor
+        // who travels mid-session would not see the detection prompt
+        // again. The helper is failure-tolerant (no-op in
+        // incognito-strict / quota-exceeded storage modes).
+        clearAllTimezoneDetectionAcks();
 
         commitAuthState(null, null, 'unauthenticated');
     }, [commitAuthState]);

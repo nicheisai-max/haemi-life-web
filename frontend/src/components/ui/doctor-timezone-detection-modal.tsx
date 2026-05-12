@@ -11,13 +11,15 @@ import { TimezoneSelector } from './timezone-selector';
 import { PremiumLoader } from './premium-loader';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { useClinicTimezone } from '@/hooks/use-clinic-timezone';
 import { logger } from '@/utils/logger';
-import { getDoctorProfile, updateClinicTimezone } from '@/services/doctor.service';
+import { updateClinicTimezone } from '@/services/doctor.service';
 import {
     acknowledgeTimezoneDetection,
     isTimezoneDetectionAcknowledged,
     detectBrowserTimezone,
 } from '@/utils/timezone-detection-storage';
+import { dispatchClinicTimezoneUpdated } from '@/utils/clinic-timezone-events';
 
 /**
  * 🌍 HAEMI LIFE — DOCTOR TIMEZONE DETECTION MODAL (Phase 4 — Timezone Sovereignty)
@@ -102,6 +104,7 @@ const buildPreview = (zone: string, instant: Date): { time: string; offset: stri
 export const DoctorTimezoneDetectionModal: React.FC = () => {
     const { user } = useAuth();
     const toast = useToast();
+    const { clinicTimezone, isHydrated: clinicTzHydrated } = useClinicTimezone();
 
     const [state, setState] = useState<DetectionState>({
         hydrated: false,
@@ -115,39 +118,33 @@ export const DoctorTimezoneDetectionModal: React.FC = () => {
 
     const isDoctor: boolean = user?.role === 'doctor';
 
-    // Mount-time detection check. Runs once per page load when the user
-    // is identified as a doctor. The order of guards is deliberate:
-    // cheap synchronous checks first (role, ack flag), then the
-    // network round-trip; if any cheap check exits early the profile
-    // fetch never happens.
+    /**
+     * Mismatch evaluation. Now reads the doctor's clinic timezone from
+     * the shared `ClinicTimezoneContext` (hydrated once per session by
+     * the provider) instead of issuing its own `getDoctorProfile`
+     * round-trip. Re-evaluates whenever the context's `clinicTimezone`
+     * changes — so a save from the schedule page (or a cross-tab
+     * broadcast) immediately updates this modal's view of "should I
+     * re-fire?" without coupling the two surfaces directly.
+     */
     useEffect(() => {
-        if (!isDoctor || !user?.id) return;
-        if (isTimezoneDetectionAcknowledged()) return;
-
-        let cancelled: boolean = false;
+        if (!isDoctor || !user?.id || !clinicTzHydrated) return;
+        const userId: string = user.id;
 
         const detected: string = detectBrowserTimezone();
-
-        getDoctorProfile(user.id)
-            .then(profile => {
-                if (cancelled) return;
-                const stored: string = profile.clinicTimezone ?? '';
-                const shouldPrompt: boolean = stored.length > 0 && stored !== detected;
-                setState({ hydrated: true, storedTimezone: stored, detectedTimezone: detected });
-                setOpen(shouldPrompt);
+        const stored: string = clinicTimezone;
+        const hasMismatch: boolean = stored.length > 0 && stored !== detected;
+        const alreadyAcked: boolean = hasMismatch
+            ? isTimezoneDetectionAcknowledged({
+                userId,
+                browserTz: detected,
+                clinicTz: stored,
             })
-            .catch((err: unknown) => {
-                if (cancelled) return;
-                logger.warn('[TZDetection] Profile fetch failed; suppressing modal this session', {
-                    error: err instanceof Error ? err.message : String(err),
-                });
-                setState(prev => ({ ...prev, hydrated: true }));
-            });
+            : false;
 
-        return () => {
-            cancelled = true;
-        };
-    }, [isDoctor, user?.id]);
+        setState({ hydrated: true, storedTimezone: stored, detectedTimezone: detected });
+        setOpen(hasMismatch && !alreadyAcked);
+    }, [isDoctor, user?.id, clinicTimezone, clinicTzHydrated]);
 
     // Tick the displayed current time at minute cadence so the doctor
     // sees a live preview while deciding.
@@ -157,10 +154,30 @@ export const DoctorTimezoneDetectionModal: React.FC = () => {
         return () => window.clearInterval(interval);
     }, [open]);
 
-    const finishAcknowledged = useCallback((): void => {
-        acknowledgeTimezoneDetection();
+    /**
+     * Persist the ack against the mismatch tuple the doctor's decision
+     * resolves to. `effectiveClinicTz` defaults to `state.storedTimezone`
+     * for the "dismiss without change" path, but the "Use Detected" /
+     * "Pick Different" paths pass the POST-update value — otherwise
+     * we'd ack the pre-update tuple, and the next session would see
+     * `(detected, NEW stored)` as a fresh mismatch and re-fire the
+     * modal needlessly. Acking the post-update tuple matches what the
+     * next session's profile fetch will return.
+     */
+    const finishAcknowledged = useCallback((effectiveClinicTz?: string): void => {
+        const userId: string | undefined = user?.id;
+        const clinicTz: string = effectiveClinicTz ?? state.storedTimezone;
+        if (typeof userId === 'string' && userId.length > 0
+            && state.detectedTimezone.length > 0
+            && clinicTz.length > 0) {
+            acknowledgeTimezoneDetection({
+                userId,
+                browserTz: state.detectedTimezone,
+                clinicTz,
+            });
+        }
         setOpen(false);
-    }, []);
+    }, [user?.id, state.detectedTimezone, state.storedTimezone]);
 
     const handleUseDetected = useCallback(async (): Promise<void> => {
         const target: string = state.detectedTimezone;
@@ -169,7 +186,17 @@ export const DoctorTimezoneDetectionModal: React.FC = () => {
         try {
             const result = await updateClinicTimezone(target);
             toast.success(`Clinic timezone set to ${result.clinicTimezone}`);
-            finishAcknowledged();
+            // Broadcast to every consumer of the clinic timezone in
+            // this tab (Schedule Management's <ClinicTimezoneCard>,
+            // future dashboard widgets, etc.) so they refresh their
+            // local state without waiting for a page reload. Routed
+            // through the typed event module — no hardcoded event
+            // name here.
+            dispatchClinicTimezoneUpdated(result.clinicTimezone);
+            // Ack the POST-update tuple — `result.clinicTimezone` is the
+            // server's canonical echo, which is what the next mount's
+            // profile fetch will return.
+            finishAcknowledged(result.clinicTimezone);
         } catch (err: unknown) {
             const apiErr = err as { response?: { data?: { message?: string } } };
             const message: string = apiErr.response?.data?.message ?? 'Failed to update clinic timezone';
@@ -188,7 +215,8 @@ export const DoctorTimezoneDetectionModal: React.FC = () => {
         if (chosen === state.storedTimezone) {
             // Doctor explicitly picked their existing TZ — no API write
             // needed, but they engaged with the prompt so we still
-            // suppress future fires.
+            // suppress future fires for this exact (browser, clinic)
+            // mismatch in this session.
             finishAcknowledged();
             return;
         }
@@ -196,7 +224,11 @@ export const DoctorTimezoneDetectionModal: React.FC = () => {
         try {
             const result = await updateClinicTimezone(chosen);
             toast.success(`Clinic timezone set to ${result.clinicTimezone}`);
-            finishAcknowledged();
+            // Broadcast to every consumer in this tab — see
+            // `handleUseDetected` for rationale.
+            dispatchClinicTimezoneUpdated(result.clinicTimezone);
+            // Ack the POST-update tuple — see `handleUseDetected` for rationale.
+            finishAcknowledged(result.clinicTimezone);
         } catch (err: unknown) {
             const apiErr = err as { response?: { data?: { message?: string } } };
             const message: string = apiErr.response?.data?.message ?? 'Failed to update clinic timezone';

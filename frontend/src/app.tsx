@@ -19,6 +19,8 @@ import { ErrorBoundary } from './components/ui/error-boundary';
 import { SuspenseLoaderTrigger } from './context/global-loader-context';
 import { usePageLoader } from './hooks/use-page-loader';
 import { PageTransition } from './components/layout/page-transition';
+import { DoctorTimezoneDetectionModal } from './components/ui/doctor-timezone-detection-modal';
+import { ClinicTimezoneProvider } from './context/clinic-timezone-context';
 import { PATHS } from './routes/paths';
 import { useAuth } from './hooks/use-auth';
 import { logger, auditLogger } from './utils/logger';
@@ -95,13 +97,40 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 const MainClinicalLayout = React.memo(() => (
   <ProtectedRoute>
     <AuthGatedNotifications>
-      <Suspense fallback={DashboardLoaderFallback}>
-        <LazyDashboardLayout>
-          <PageTransition>
-            <Outlet />
-          </PageTransition>
-        </LazyDashboardLayout>
-      </Suspense>
+      {/*
+        Phase 4c — Timezone Sovereignty: the clinic-TZ context lives
+        at the clinical-layout boundary so every authenticated surface
+        (registry, profile, schedule, dashboard, appointments) shares
+        ONE hydrated value. The provider:
+          - hydrates once per doctor session via `getDoctorProfile`
+          - subscribes to same-tab CustomEvent + cross-tab
+            BroadcastChannel updates from `clinic-timezone-events.ts`
+          - re-renders dependent surfaces on save without per-page
+            refetch
+        Non-doctor sessions mount the provider cheaply (no fetch, no
+        subscription noise) so the dashboard layout is genuinely
+        shared across roles.
+      */}
+      <ClinicTimezoneProvider>
+        <Suspense fallback={DashboardLoaderFallback}>
+          <LazyDashboardLayout>
+            {/*
+              Phase 4 — Timezone Sovereignty: doctor TZ detection
+              prompt lives at the layout level (not the dashboard
+              page) so it evaluates on EVERY authenticated clinical
+              landing — `/doctor/dashboard`, `/doctor/schedule`,
+              `/doctor/patients`, etc. The component self-gates on
+              `user?.role === 'doctor'` + session-scoped mismatch
+              ack, so mounting it unconditionally here is safe for
+              patient / pharmacist / admin sessions (it renders null).
+            */}
+            <DoctorTimezoneDetectionModal />
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
+          </LazyDashboardLayout>
+        </Suspense>
+      </ClinicTimezoneProvider>
     </AuthGatedNotifications>
   </ProtectedRoute>
 ));
