@@ -117,6 +117,22 @@ export const ScreeningManager: React.FC = () => {
         setExpandedPanel((current) => (current === panel ? null : panel));
     };
 
+    // Refs + previous-toast-state tracking that drive the smooth-scroll
+    // UX behaviours below. `questionsContainerRef` is attached (via a
+    // callback ref that composes with `Droppable.innerRef`) to the
+    // questions list — used to scroll the first card into view when
+    // an admin adds a new question, so a tall expanded accordion above
+    // never hides the new row. `prevToastStateRef` tracks the prior
+    // null-ness of every toast surface so the scroll-to-top effect
+    // can detect a null → non-null transition (i.e. a toast that JUST
+    // appeared) without firing on unrelated re-renders.
+    const questionsContainerRef = useRef<HTMLDivElement | null>(null);
+    const prevToastStateRef = useRef<{
+        success: string | null;
+        generalError: string | null;
+        reorderUndo: ReorderUndoState | null;
+    }>({ success: null, generalError: null, reorderUndo: null });
+
     // Cleanup the Undo timer on unmount so a stale closure cannot fire
     // setState after teardown — strict-mode-safe.
     useEffect(() => {
@@ -131,6 +147,36 @@ export const ScreeningManager: React.FC = () => {
     useEffect(() => {
         loadQuestions();
     }, []);
+
+    // Toast-driven scroll-to-top. Any of the three feedback surfaces
+    // (success banner, generalError alert, reorderUndo confirmation)
+    // transitioning from null → non-null means a fresh notification
+    // just appeared — smooth-scroll the page to the top so the admin
+    // can SEE it without hunting for it. The effect compares the
+    // previous toast state (held in a ref so it doesn't trigger an
+    // extra render) to the current values; only a fresh appearance
+    // triggers a scroll, so a toast that lingers across re-renders
+    // does not re-scroll.
+    //
+    // We use `window.scrollTo({ behavior: 'smooth' })` rather than a
+    // `scrollIntoView` on a sentinel because the toasts render at
+    // page-top inside the layout's flex stack — page-top is the
+    // canonical anchor and the browser's native smooth-scroll honours
+    // OS-level `prefers-reduced-motion` automatically (zero CSS
+    // needed for that compliance).
+    useEffect(() => {
+        const prev = prevToastStateRef.current;
+        const becameVisible: boolean =
+            (success !== null && prev.success === null)
+            || (generalError !== null && prev.generalError === null)
+            || (reorderUndo !== null && prev.reorderUndo === null);
+
+        if (becameVisible && typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        prevToastStateRef.current = { success, generalError, reorderUndo };
+    }, [success, generalError, reorderUndo]);
 
     const loadQuestions = async () => {
         try {
@@ -484,6 +530,27 @@ export const ScreeningManager: React.FC = () => {
             sort_order: questions.length + 1
         };
         setQuestions([newQ, ...questions]);
+
+        // Smooth-scroll the freshly-added question into view. The new
+        // question is prepended at index 0, so the first child of the
+        // questions container is the new card. Double-`requestAnimationFrame`
+        // is the canonical trick to wait until *after* React has committed
+        // the state update AND the browser has painted the new DOM node
+        // — without this, `scrollIntoView` would target the old first card
+        // (which is now at index 1) and the new card would still be just
+        // out of view if any accordion above is expanded. Browser-native
+        // `behavior: 'smooth'` honours OS-level `prefers-reduced-motion`
+        // automatically, so no CSS dance is needed for accessibility.
+        if (typeof window !== 'undefined') {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const firstCard = questionsContainerRef.current?.firstElementChild;
+                    if (firstCard instanceof HTMLElement) {
+                        firstCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            });
+        }
     };
 
     const handleDragEnd = async (result: DropResult) => {
@@ -959,10 +1026,17 @@ export const ScreeningManager: React.FC = () => {
                 <DragDropContext onDragEnd={handleDragEnd}>
                     <Droppable droppableId="screening-questions">
                         {(provided) => (
-                            <div 
+                            <div
                                 className="grid grid-cols-1 gap-6"
                                 {...provided.droppableProps}
-                                ref={provided.innerRef}
+                                ref={(node) => {
+                                    // Compose two refs: hand the node to react-beautiful-dnd
+                                    // (so drag-and-drop continues to function) AND retain
+                                    // it in our local ref so `addNewQuestion` can locate
+                                    // the first card to smooth-scroll into view.
+                                    provided.innerRef(node);
+                                    questionsContainerRef.current = node;
+                                }}
                             >
                                 {questions.length === 0 ? (
                                     <div className="text-center p-16 bg-slate-50/50 rounded-[var(--card-radius)] border-2 border-dashed border-slate-200">
