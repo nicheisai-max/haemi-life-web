@@ -11,6 +11,7 @@ import {
     updateSessionTimeout,
     getRiskCalculationMode,
     updateRiskCalculationMode,
+    updateClinicalCopilotEnabled,
     getSecurityEvents,
     getActiveSessions,
     revokeSession,
@@ -34,6 +35,11 @@ router.get('/settings/session-timeout', getSessionTimeout);
 router.put('/settings/session-timeout', updateSessionTimeout);
 router.get('/settings/risk-calculation-mode', getRiskCalculationMode);
 router.put('/settings/risk-calculation-mode', updateRiskCalculationMode);
+// Clinical Copilot kill switch — AI cost-control toggle.
+// Read endpoint lives on `/api/platform/clinical-copilot-enabled`
+// (open to every authenticated role; needed by doctor UI to render
+// the chat in disabled state). The PUT below is admin-only.
+router.put('/settings/clinical-copilot-enabled', updateClinicalCopilotEnabled);
 
 // Security and Observability
 router.get('/security-events', getSecurityEvents);

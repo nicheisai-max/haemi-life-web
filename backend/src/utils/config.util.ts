@@ -95,6 +95,59 @@ export async function getJwtRefreshExpiry(): Promise<number> {
 }
 
 /**
+ * 🛡️ HAEMI LIFE — CLINICAL COPILOT KILL SWITCH (AI cost-control)
+ *
+ * Returns whether the Clinical AI Copilot is currently enabled. Read
+ * by every endpoint under `/api/clinical-copilot/*` to gate the
+ * Gemini dispatch — when `false`, the backend refuses the request
+ * with HTTP 403 + structured code `COPILOT_DISABLED` and zero
+ * Gemini API calls are issued.
+ *
+ * Stored as the string `'true'` under
+ * `system_settings.clinical_copilot_enabled`. ANY other value
+ * (`'false'`, empty, malformed) coerces to `false` — defensive: a
+ * manual SQL update that wrote `'yes'` or `'enabled'` won't
+ * accidentally re-enable the API.
+ *
+ * Cached for 5 minutes (matches the established session-timeout /
+ * JWT-expiry pattern). The admin PATCH endpoint calls
+ * `invalidateStringConfigCache('clinical_copilot_enabled')` after a
+ * successful write so the change is observable on the very next
+ * request, not 5 minutes later.
+ *
+ * Failure-safe: a DB error returns `true` (the institutional
+ * default) — we'd rather degrade open than close a working
+ * production feature for a transient network blip. The admin can
+ * still flip it OFF the moment they notice.
+ */
+export async function getClinicalCopilotEnabled(): Promise<boolean> {
+    const key = 'clinical_copilot_enabled';
+    const now = Date.now();
+
+    if (stringConfigCache[key] && stringConfigCache[key].expires > now) {
+        return stringConfigCache[key].value === 'true';
+    }
+
+    try {
+        const result = await pool.query<{ value: string }>(
+            'SELECT value FROM system_settings WHERE key = $1 LIMIT 1',
+            [key]
+        );
+        const raw: string = typeof result.rows[0]?.value === 'string'
+            ? result.rows[0].value
+            : 'true';
+
+        stringConfigCache[key] = { value: raw, expires: now + CACHE_TTL };
+        return raw === 'true';
+    } catch {
+        // DB blip — degrade open. Cached value (if any) wins;
+        // otherwise institutional default `true`.
+        const fallback: string = stringConfigCache[key]?.value ?? 'true';
+        return fallback === 'true';
+    }
+}
+
+/**
  * Phase 5 — Timezone Sovereignty (Platform-Wide).
  *
  * Returns the platform-wide IANA timezone stored under

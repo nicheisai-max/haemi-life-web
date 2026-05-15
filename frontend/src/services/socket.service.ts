@@ -99,6 +99,11 @@ export interface ServerToClientEvents {
     //     to refresh their UI in real time. Emitted from the admin
     //     `/api/admin/platform/timezone` PATCH endpoint.
     'platform-timezone:updated': (payload: { readonly platformTimezone: string }) => void;
+    // Clinical Copilot kill switch — AI cost-control toggle. Broadcast
+    // when an admin flips the `system_settings.clinical_copilot_enabled`
+    // value. Doctors' open tabs disable the chat input and surface a
+    // "contact administrator" banner in real time.
+    'clinical-copilot:toggled': (payload: { readonly enabled: boolean }) => void;
 }
 
 export interface ClientToServerEvents {

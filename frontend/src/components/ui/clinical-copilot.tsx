@@ -5,6 +5,7 @@ import { Button } from './button';
 import { useLocation } from 'react-router-dom';
 import { useClickOutside } from '../../hooks/use-click-outside';
 import { useAuth } from '../../hooks/use-auth';
+import { useClinicalCopilot } from '../../hooks/use-clinical-copilot';
 import api from '../../services/api';
 import { logger } from '@/utils/logger';
 
@@ -146,6 +147,11 @@ const MessageList = React.memo(({ messages, isLoading, messagesEndRef }: {
 export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose, triggerRef }: ClinicalCopilotProps<T>) => {
     const ignoredRefs = useMemo(() => (triggerRef ? [triggerRef] : []), [triggerRef]);
     const { user } = useAuth();
+    // Clinical Copilot kill switch (admin-controlled). When `false`,
+    // every AI dispatch is suppressed at the UI layer (input disabled,
+    // banner shown) AND at the backend (controller returns 403). The
+    // double-gate is intentional — even a stale tab cannot bypass it.
+    const { enabled: copilotEnabled, isHydrated: copilotHydrated } = useClinicalCopilot();
     
     // 🧬 INTERACTION STABILIZATION: Ensuring ClickOutside doesn't conflict with Drag
     const containerRef = useClickOutside<HTMLDivElement>(
@@ -165,6 +171,12 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
     // 🧬 PROACTIVE CLINICAL MONITORING ENGINE
     const fetchProactiveAlerts = React.useCallback(async () => {
         if (user?.role !== 'doctor') return;
+        // Cost-control gate: skip the entire polling call when the
+        // admin has disabled the copilot. Hydration check prevents an
+        // initial fetch during the optimistic-default window where
+        // `enabled` is `true` but the canonical server value might
+        // actually be `false`.
+        if (!copilotHydrated || !copilotEnabled) return;
         try {
             // NOTE: In a full production sync, we would fetch current patients from the dashboard context
             // For now, we simulate the high-risk context to demonstrate the AI-Toast pipeline
@@ -201,7 +213,7 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
         } catch (err: unknown) {
             console.error('[PROACTIVE_MONITOR_ERROR]:', err);
         }
-    }, [user?.role, error, warning, success]);
+    }, [user?.role, copilotHydrated, copilotEnabled, error, warning, success]);
 
     useEffect(() => {
         // Initial fetch after dashboard load
@@ -240,6 +252,11 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputValue.trim() || isLoading) return;
+        // Cost-control gate at the UI layer. The backend ALSO refuses
+        // (403 + COPILOT_DISABLED), so a stale tab cannot bypass this;
+        // this check is here for instant UX, not as the security
+        // boundary.
+        if (!copilotEnabled) return;
 
         const userMsg: Message = {
             id: Date.now().toString(),
@@ -335,21 +352,49 @@ export const ClinicalCopilot = React.memo(<T extends Element,>({ isOpen, onClose
                             />
                         </div>
 
-                        {/* Input Footer */}
+                        {/*
+                          Input Footer. When the admin has disabled
+                          the Clinical Copilot, we replace the input
+                          form with a "managed by administrator"
+                          banner so the doctor immediately understands
+                          why the affordance is missing — disabled
+                          inputs invite "why won't this work?" support
+                          tickets. The backend ALSO refuses (403 +
+                          COPILOT_DISABLED) so a stale tab cannot
+                          bypass this UX-layer guard.
+                        */}
                         <div className="p-4 bg-white dark:bg-[#0F1C1F] border-t border-slate-100 dark:border-white/10">
-                            <form onSubmit={handleSendMessage} className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={inputValue}
-                                    onChange={(e) => setInputValue(e.target.value)}
-                                    placeholder="Consult clinical copilot..."
-                                    className="flex-1 px-4 h-10 bg-slate-50 dark:bg-[#14262A] border border-slate-200 dark:border-teal-900/50 rounded-[var(--card-radius)] focus:ring-1 focus:ring-teal-500 outline-none text-sm transition-all shadow-sm font-medium text-slate-900 dark:text-white"
-                                    disabled={isLoading}
-                                />
-                                <Button type="submit" size="icon" disabled={!inputValue.trim() || isLoading} className={`h-10 w-10 rounded-[var(--card-radius)] transition-all shadow-sm ${inputValue.trim() ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
-                                    <Send className="h-4 w-4" />
-                                </Button>
-                            </form>
+                            {copilotEnabled ? (
+                                <form onSubmit={handleSendMessage} className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={inputValue}
+                                        onChange={(e) => setInputValue(e.target.value)}
+                                        placeholder="Consult clinical copilot..."
+                                        className="flex-1 px-4 h-10 bg-slate-50 dark:bg-[#14262A] border border-slate-200 dark:border-teal-900/50 rounded-[var(--card-radius)] focus:ring-1 focus:ring-teal-500 outline-none text-sm transition-all shadow-sm font-medium text-slate-900 dark:text-white"
+                                        disabled={isLoading}
+                                    />
+                                    <Button type="submit" size="icon" disabled={!inputValue.trim() || isLoading} className={`h-10 w-10 rounded-[var(--card-radius)] transition-all shadow-sm ${inputValue.trim() ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                                        <Send className="h-4 w-4" />
+                                    </Button>
+                                </form>
+                            ) : (
+                                <div
+                                    role="status"
+                                    aria-label="Clinical Copilot is disabled by administrator"
+                                    className="flex items-start gap-3 p-3 rounded-[var(--card-radius)] bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50"
+                                >
+                                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                            Clinical Copilot is currently unavailable
+                                        </p>
+                                        <p className="text-xs text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                                            Your administrator has disabled the AI copilot platform-wide. Please contact them if you need access restored.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 )}

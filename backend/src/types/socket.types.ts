@@ -239,6 +239,25 @@ export interface ServerToClientEvents {
     //     room scoping) from the platform.controller after a successful
     //     admin PATCH.
     'platform-timezone:updated': (payload: PlatformTimezoneUpdatedEvent) => void;
+
+    // Clinical Copilot kill switch — AI cost-control toggle.
+    //     Broadcast to EVERY connected socket when an admin flips the
+    //     `system_settings.clinical_copilot_enabled` value. Doctors'
+    //     open tabs flip in real time (chat input disables + banner
+    //     appears) without a refresh. Emitted via `socketIO.emit(...)`
+    //     (no `.to()` room scoping) from the admin controller's
+    //     `updateClinicalCopilotEnabled` handler.
+    'clinical-copilot:toggled': (payload: ClinicalCopilotToggledEvent) => void;
+}
+
+/**
+ * Wire shape for the `clinical-copilot:toggled` broadcast. Mirrors
+ * the frontend's `ClinicalCopilotToggledDetail` so the SAME typed
+ * payload travels across all three transports (window CustomEvent,
+ * BroadcastChannel, Socket.IO) — one shape end-to-end.
+ */
+export interface ClinicalCopilotToggledEvent {
+    readonly enabled: boolean;
 }
 
 /**

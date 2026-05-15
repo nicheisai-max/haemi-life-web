@@ -1080,7 +1080,14 @@ VALUES
     ('SESSION_TIMEOUT_MINUTES', '1440'),
     ('JWT_ACCESS_EXPIRY_MINUTES', '15'),
     ('JWT_REFRESH_EXPIRY_DAYS', '7'),
-    ('PLATFORM_TIMEZONE', 'Africa/Gaborone')
+    ('PLATFORM_TIMEZONE', 'Africa/Gaborone'),
+    -- Clinical Copilot kill switch (AI cost-control). When `'true'`,
+    -- doctor copilot chat, proactive insights, and patient risk
+    -- analysis endpoints route to Gemini. When anything else, the
+    -- backend returns 403 with structured code `COPILOT_DISABLED`
+    -- and zero Gemini API calls are dispatched. Default `'true'` for
+    -- backward compatibility with existing deployments.
+    ('clinical_copilot_enabled', 'true')
 ON CONFLICT (key) DO NOTHING;
 
 -- Seeding is now managed by setup-db.ts to ensure dynamic hashing of DEMO_PASSWORD
