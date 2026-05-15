@@ -165,3 +165,47 @@ export const updatePlatformTimezoneEndpoint = async (req: Request, res: Response
         return sendError(res, 500, 'Failed to update platform timezone');
     }
 };
+
+// ─── Clinical Copilot kill switch — read endpoint ─────────────────────────────
+//
+// The admin write endpoint lives in `admin.controller.ts`
+// (`updateClinicalCopilotEnabled` — admin-only, audit-logged, cache-
+// invalidates, socket-broadcasts). The READ endpoint lives HERE
+// because every authenticated role (doctor, patient, pharmacist,
+// admin) needs to know whether the copilot is enabled to render
+// correctly — a doctor's chat input is disabled when the toggle is
+// off, with a "managed by admin" banner. Mirrors the same public-
+// read / admin-write asymmetry the platform-timezone endpoints
+// already established.
+
+const CLINICAL_COPILOT_ENABLED_KEY = 'clinical_copilot_enabled' as const;
+
+/**
+ * GET /api/platform/clinical-copilot-enabled — Returns whether the
+ * Clinical AI Copilot is currently enabled. Open to ANY authenticated
+ * role because every role's UI needs to render against this flag.
+ *
+ * Defensive coercion: exactly the string `'true'` means enabled;
+ * anything else (including a row that doesn't exist yet on legacy
+ * deployments — `null` from the repo) means use the institutional
+ * default `true`. No accidental coercion of `'yes'` / `'enabled'`
+ * to true; that protects against manual SQL writes that drift from
+ * the contract.
+ */
+export const getClinicalCopilotEnabledEndpoint = async (req: Request, res: Response) => {
+    try {
+        const userId: string | undefined = req.user?.id;
+        if (typeof userId !== 'string' || userId.length === 0) {
+            return sendError(res, 401, 'Unauthorized');
+        }
+        const raw = await systemSettingsRepository.getSetting(CLINICAL_COPILOT_ENABLED_KEY);
+        // No row → institutional default `true` (backward compat).
+        const enabled: boolean = raw === null ? true : raw === 'true';
+        return sendResponse(res, 200, true, 'Clinical copilot enabled status fetched', { enabled });
+    } catch (error: unknown) {
+        logger.error('[Platform] Failed to fetch clinical-copilot toggle', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Failed to fetch clinical-copilot toggle');
+    }
+};

@@ -21,6 +21,7 @@ import { usePageLoader } from './hooks/use-page-loader';
 import { PageTransition } from './components/layout/page-transition';
 import { AdminTimezoneDetectionModal } from './components/ui/admin-timezone-detection-modal';
 import { PlatformTimezoneProvider } from './context/platform-timezone-context';
+import { ClinicalCopilotProvider } from './context/clinical-copilot-context';
 import { PATHS } from './routes/paths';
 import { useAuth } from './hooks/use-auth';
 import { logger, auditLogger } from './utils/logger';
@@ -113,25 +114,37 @@ const MainClinicalLayout = React.memo(() => (
         shared across roles.
       */}
       <PlatformTimezoneProvider>
-        <Suspense fallback={DashboardLoaderFallback}>
-          <LazyDashboardLayout>
-            {/*
-              Phase 5 — Timezone Sovereignty (Platform-Wide):
-              admin-only TZ detection prompt at the clinical-layout
-              boundary. Evaluates on every authenticated landing for
-              admin users (`/admin/*` AND any other layout-anchored
-              path the admin visits). Self-gates on
-              `user?.role === 'admin'` + session-scoped per-mismatch
-              ack — non-admin sessions mount the component as a
-              cheap no-op render. Two-click confirmation flow inside
-              prevents accidental platform-wide TZ changes.
-            */}
-            <AdminTimezoneDetectionModal />
-            <PageTransition>
-              <Outlet />
-            </PageTransition>
-          </LazyDashboardLayout>
-        </Suspense>
+        {/*
+          Clinical Copilot kill switch (AI cost-control). The provider
+          hydrates the admin-controlled `clinical_copilot_enabled`
+          flag once per authenticated session and subscribes to the
+          Socket.IO `'clinical-copilot:toggled'` broadcast so doctors'
+          chat widgets disable/re-enable in real time when admin
+          flips the toggle from any device. Nested inside
+          PlatformTimezoneProvider so both contexts share the same
+          auth-transition reset boundary.
+        */}
+        <ClinicalCopilotProvider>
+          <Suspense fallback={DashboardLoaderFallback}>
+            <LazyDashboardLayout>
+              {/*
+                Phase 5 — Timezone Sovereignty (Platform-Wide):
+                admin-only TZ detection prompt at the clinical-layout
+                boundary. Evaluates on every authenticated landing for
+                admin users (`/admin/*` AND any other layout-anchored
+                path the admin visits). Self-gates on
+                `user?.role === 'admin'` + session-scoped per-mismatch
+                ack — non-admin sessions mount the component as a
+                cheap no-op render. Two-click confirmation flow inside
+                prevents accidental platform-wide TZ changes.
+              */}
+              <AdminTimezoneDetectionModal />
+              <PageTransition>
+                <Outlet />
+              </PageTransition>
+            </LazyDashboardLayout>
+          </Suspense>
+        </ClinicalCopilotProvider>
       </PlatformTimezoneProvider>
     </AuthGatedNotifications>
   </ProtectedRoute>

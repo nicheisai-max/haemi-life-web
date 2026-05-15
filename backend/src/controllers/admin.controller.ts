@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import * as os from 'os';
 import { pool } from '../config/db';
 import { systemSettingsRepository } from '../repositories/system-settings.repository';
+import { invalidateStringConfigCache } from '../utils/config.util';
+import { socketIO } from '../app';
 import { securityRepository } from '../repositories/security.repository';
 import { analyticsRepository } from '../repositories/analytics.repository';
 import { sendResponse, sendError } from '../utils/response';
@@ -588,6 +590,111 @@ export const updateRiskCalculationMode = async (req: Request, res: Response) => 
             error: error instanceof Error ? error.message : String(error),
         });
         return sendError(res, 500, 'Error updating risk calculation mode');
+    }
+};
+
+// ─── Clinical Copilot Kill Switch (AI cost-control) ───────────────────────────
+//
+// The Clinical AI Copilot routes to Gemini 2.5 Pro on every doctor chat,
+// proactive-insights batch, and patient risk analysis — each one is a
+// billable event. This pair of admin-only endpoints exposes the kill
+// switch stored in `system_settings.clinical_copilot_enabled`:
+//
+//   GET    /api/admin/settings/clinical-copilot-enabled  → boolean
+//   PUT    /api/admin/settings/clinical-copilot-enabled  → { enabled }
+//
+// The PUT path:
+//   1. Validates the body is `{ enabled: boolean }`.
+//   2. Snapshots the prior value for forensic completeness.
+//   3. Persists via `systemSettingsRepository.updateSetting`.
+//   4. Invalidates the 5-minute config cache so the very next
+//      `getClinicalCopilotEnabled()` call reads the fresh value
+//      (not the stale cached one).
+//   5. Audit-logs `CLINICAL_COPILOT_TOGGLE_CHANGED` with prior + new.
+//   6. Emits `'clinical-copilot:toggled'` to every connected socket
+//      so doctors' open tabs flip in real time (input disables, banner
+//      appears) without a refresh.
+//
+// Strict-TS: zero `any`, structural narrowing of `req.body`.
+
+const CLINICAL_COPILOT_ENABLED_KEY = 'clinical_copilot_enabled' as const;
+
+/**
+ * Coerce the stored TEXT value to a boolean using the same defensive
+ * semantics as `getClinicalCopilotEnabled()` in `config.util.ts`:
+ * exactly `'true'` (lowercase) means enabled; anything else is
+ * disabled. The read endpoint lives in `platform.controller.ts`
+ * (public to every authenticated role); this helper is kept local
+ * to the admin controller because only the write path needs to
+ * compute the `priorEnabled` value for the audit log.
+ */
+const coerceCopilotEnabled = (raw: string | null): boolean => raw === 'true';
+
+export const updateClinicalCopilotEnabled = async (req: Request, res: Response) => {
+    try {
+        const adminId = req.user?.id;
+        if (!adminId) return sendError(res, 401, 'Unauthorized');
+
+        const body: unknown = req.body;
+        if (
+            typeof body !== 'object'
+            || body === null
+            || !('enabled' in body)
+            || typeof (body as { enabled: unknown }).enabled !== 'boolean'
+        ) {
+            return sendError(res, 400, 'Invalid body. Expected { enabled: boolean }.');
+        }
+        const next: boolean = (body as { enabled: boolean }).enabled;
+
+        const priorRaw = await systemSettingsRepository.getSetting(CLINICAL_COPILOT_ENABLED_KEY);
+        // No row → prior is `true` (institutional default), matching the
+        // GET semantics. This makes the audit trail honest: the first
+        // admin who flips OFF will see `priorEnabled: true`.
+        const priorEnabled: boolean = priorRaw === null ? true : coerceCopilotEnabled(priorRaw);
+
+        await systemSettingsRepository.updateSetting(
+            CLINICAL_COPILOT_ENABLED_KEY,
+            next ? 'true' : 'false',
+        );
+
+        // Drop the cached value so the next request's
+        // `getClinicalCopilotEnabled()` reads the freshly-written row
+        // instead of the stale 5-min cache.
+        invalidateStringConfigCache(CLINICAL_COPILOT_ENABLED_KEY);
+
+        await auditService.log({
+            userId: adminId,
+            actorRole: req.user?.role,
+            action: 'CLINICAL_COPILOT_TOGGLE_CHANGED',
+            entityType: 'SYSTEM_SETTINGS',
+            entityId: CLINICAL_COPILOT_ENABLED_KEY,
+            metadata: { priorEnabled, newEnabled: next },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        });
+
+        // Broadcast to every connected socket. Failure-tolerant — a
+        // missing `socketIO` (server bootstrap, sockets disabled in
+        // this runtime) logs at debug and continues; the DB write is
+        // the source of truth, the broadcast is a UX accelerator.
+        try {
+            if (socketIO !== undefined) {
+                socketIO.emit('clinical-copilot:toggled', { enabled: next });
+            } else {
+                logger.debug('[ClinicalCopilotToggle] socketIO not ready; skipping real-time broadcast');
+            }
+        } catch (broadcastError: unknown) {
+            logger.warn('[ClinicalCopilotToggle] Broadcast emit failed; DB write succeeded', {
+                error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+            });
+        }
+
+        return sendResponse(res, 200, true, 'Clinical copilot toggle updated', { enabled: next });
+    } catch (error: unknown) {
+        logger.error('Error updating clinical copilot toggle', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Error updating clinical copilot toggle');
     }
 };
 

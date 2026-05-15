@@ -3,6 +3,7 @@ import { authenticateToken, requireRole } from '../middleware/auth.middleware';
 import {
     getPlatformTimezoneEndpoint,
     updatePlatformTimezoneEndpoint,
+    getClinicalCopilotEnabledEndpoint,
 } from '../controllers/platform.controller';
 
 /**
@@ -23,8 +24,10 @@ import {
 
 const router = Router();
 
-// Read-only endpoint — every authenticated role uses this.
+// Read-only endpoints — every authenticated role uses these to render
+// platform-wide state correctly.
 router.get('/timezone', authenticateToken, getPlatformTimezoneEndpoint);
+router.get('/clinical-copilot-enabled', authenticateToken, getClinicalCopilotEnabledEndpoint);
 
 export default router;
 

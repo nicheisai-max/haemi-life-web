@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical, Undo2, Sparkles } from 'lucide-react';
+import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical, Undo2, Sparkles, Bot } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -14,6 +14,8 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { logger } from '@/utils/logger';
 import screeningService, { ScreeningQuestion, type RiskCalculationMode } from '@/services/screening.service';
+import { updateClinicalCopilotEnabled } from '@/services/clinical-copilot-admin.service';
+import { useClinicalCopilot } from '@/hooks/use-clinical-copilot';
 import { TransitionItem } from '@/components/layout/page-transition';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -75,6 +77,13 @@ export const ScreeningManager: React.FC = () => {
     // state into the wrong direction.
     const [riskMode, setRiskMode] = useState<RiskCalculationMode | null>(null);
     const [riskModeUpdating, setRiskModeUpdating] = useState<boolean>(false);
+
+    // Clinical Copilot kill switch (AI cost-control). Live state is
+    // sourced from `<ClinicalCopilotProvider>` so a flip from any
+    // device propagates here instantly via the socket broadcast.
+    // Local `updating` flag gates the spinner during the PUT round-trip.
+    const { enabled: copilotEnabled, isHydrated: copilotHydrated } = useClinicalCopilot();
+    const [copilotUpdating, setCopilotUpdating] = useState<boolean>(false);
 
     // Cleanup the Undo timer on unmount so a stale closure cannot fire
     // setState after teardown — strict-mode-safe.
@@ -155,6 +164,70 @@ export const ScreeningManager: React.FC = () => {
             });
         } finally {
             setRiskModeUpdating(false);
+        }
+    };
+
+    /**
+     * Persist a flip of the Clinical Copilot kill switch. This is a
+     * higher-impact toggle than the risk-mode one — disabling it
+     * blocks EVERY doctor across the deployment from using the AI
+     * chat / proactive insights / patient analysis. Enabling it
+     * resumes billable Gemini calls per doctor interaction. Both
+     * directions get an explicit confirmation dialog before the PUT.
+     *
+     * Note: optimistic UI is NOT done here because the live state
+     * comes from `<ClinicalCopilotProvider>` (socket-fed). The PUT
+     * succeeds → backend emits → provider receives → context
+     * updates → this component re-renders. So we just kick off the
+     * PUT and rely on the broadcast for the visual confirmation. On
+     * failure, the broadcast never fires, the context stays put,
+     * and we surface the error.
+     */
+    const handleToggleCopilot = async (nextEnabled: boolean): Promise<void> => {
+        if (!copilotHydrated || copilotUpdating) return;
+        if (nextEnabled === copilotEnabled) return;
+
+        const confirmed = await confirm(
+            nextEnabled
+                ? {
+                    title: 'Enable Clinical AI Copilot?',
+                    message:
+                        'Enabling this will resume Gemini API charges. Every doctor chat message, proactive-insight batch, and patient risk analysis will incur Gemini token costs. Continue?',
+                    confirmText: 'Yes, enable copilot',
+                    cancelText: 'Cancel',
+                    type: 'warning',
+                }
+                : {
+                    title: 'Disable Clinical AI Copilot?',
+                    message:
+                        'Disabling this will immediately block every doctor across the platform from using AI chat, proactive insights, and patient risk analysis. Existing chats will show a "managed by administrator" banner. No Gemini API charges will accrue while disabled. Continue?',
+                    confirmText: 'Yes, disable copilot',
+                    cancelText: 'Cancel',
+                    type: 'warning',
+                },
+        );
+        if (!confirmed) return;
+
+        setCopilotUpdating(true);
+        setGeneralError(null);
+        setSuccess(null);
+        try {
+            await updateClinicalCopilotEnabled(nextEnabled);
+            const message: string = nextEnabled
+                ? 'Clinical Copilot enabled. Doctors can now use AI chat, proactive insights, and patient risk analysis. Every interaction will incur Gemini API charges.'
+                : 'Clinical Copilot disabled. All doctor AI requests across the platform will be refused at the backend until you re-enable it. Zero Gemini API charges will accrue while disabled.';
+            setSuccess(message);
+            setTimeout(() => setSuccess(null), 6000);
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            const errorMessage: string = apiErr.response?.data?.message ?? 'Failed to update Clinical Copilot toggle';
+            setGeneralError(errorMessage);
+            logger.error('[ScreeningManager] Clinical Copilot toggle failed', {
+                attempted: nextEnabled,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            setCopilotUpdating(false);
         }
     };
 
@@ -468,6 +541,54 @@ export const ScreeningManager: React.FC = () => {
                         </Alert>
                     ) : null}
                 </AnimatedAlert>
+
+                {/*
+                  Clinical Copilot kill switch (AI cost-control).
+                  Highest-impact AI toggle on the platform: blocks
+                  every doctor's AI chat / proactive insights /
+                  patient risk analysis at the backend when OFF.
+                  Live state from `<ClinicalCopilotProvider>` — a
+                  flip from any device propagates here via the
+                  socket broadcast. Two-direction confirmation
+                  dialog before any PUT — both enabling (resumes
+                  Gemini billing) and disabling (blocks every
+                  doctor) get an explicit "Yes" click.
+                */}
+                <Card className="p-6 border-amber-400/40 bg-amber-50/40 dark:bg-amber-950/20 rounded-[var(--card-radius)]">
+                    <div className="flex flex-col sm:flex-row items-start gap-4">
+                        <div className="flex items-center justify-center w-11 h-11 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 flex-shrink-0">
+                            <Bot className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0 w-full">
+                            <h2 className="text-base font-bold text-foreground mb-1">Clinical AI Copilot</h2>
+                            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                                Master kill switch for the doctor-facing AI copilot. Affects chat, proactive
+                                insights, and per-patient risk analysis. When disabled, every doctor across the
+                                platform sees a "managed by administrator" banner — zero Gemini API charges
+                                accrue.
+                            </p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <Switch
+                                    checked={copilotEnabled}
+                                    onCheckedChange={(checked: boolean) => { void handleToggleCopilot(checked); }}
+                                    disabled={!copilotHydrated || copilotUpdating}
+                                    aria-label="Enable or disable the Clinical AI Copilot platform-wide"
+                                />
+                                <span className="text-sm font-semibold text-foreground">
+                                    {copilotEnabled ? 'Enabled — doctors can use AI features' : 'Disabled — all doctor AI requests are refused'}
+                                </span>
+                                {copilotUpdating && (
+                                    <span className="text-xs text-muted-foreground italic">Saving...</span>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                                {copilotEnabled
+                                    ? 'Each doctor interaction with the AI copilot incurs Gemini API charges (model: gemini-2.5-pro). Rate-limited to 20 requests per minute per IP at the backend. Every change to this toggle is audit-logged with your user ID, prior + new value, and request metadata.'
+                                    : 'All Clinical Copilot endpoints currently return HTTP 403 with code COPILOT_DISABLED. Doctors will see a banner explaining the feature is administratively disabled. Re-enabling resumes service instantly across every connected device.'}
+                            </p>
+                        </div>
+                    </div>
+                </Card>
 
                 {/*
                   Platform-wide risk-calculation mode toggle. Determines
