@@ -43,6 +43,47 @@ interface ReorderUndoState {
 
 const UNDO_WINDOW_MS = 10_000;
 
+/**
+ * Smooth-scroll a DOM element so its top edge lands JUST BELOW the
+ * app's fixed navbar. The default `scrollIntoView({ block: 'start' })`
+ * aligns to viewport y=0 — but the dashboard layout's `<header>` is
+ * `position: fixed` at that location, so y=0 is OCCLUDED. Without
+ * this adjustment the admin sees the *middle* of the freshly-added
+ * question card (the row with the textbox) instead of its top (the
+ * row with Category dropdown / Risk input / Status toggle).
+ *
+ * IMPLEMENTATION NOTES (senior-engineer posture, per request):
+ *   * Measures the navbar's CURRENT rendered height via
+ *     `getBoundingClientRect()` — never hardcodes 72px or 4.5rem.
+ *     A future change to `--layout-header-height` in `index.css`,
+ *     or a responsive override at narrower breakpoints, is
+ *     automatically reflected here with zero code changes.
+ *   * Queries the navbar by semantic tag (`<header>`). Audit
+ *     confirmed: ONLY one `<header>` element exists in the entire
+ *     `frontend/src` tree — it is the app shell navbar. No
+ *     brittle class-name selectors, no data-attribute coupling.
+ *   * Falls back to a 0-offset (default `scrollIntoView` semantics)
+ *     if the navbar is unmounted (e.g. fullscreen mode, future
+ *     borderless layouts) so the helper is never a hard dependency.
+ *   * Uses the browser's native `behavior: 'smooth'` — runs on the
+ *     compositor thread, jank-free, automatically honours OS-level
+ *     `prefers-reduced-motion`. Zero CSS or JS animation polyfills.
+ *   * No inline styles, no pixel constants — strictly compliant
+ *     with the project's design-token mandate.
+ */
+const smoothScrollIntoViewBelowHeader = (target: HTMLElement): void => {
+    if (typeof window === 'undefined') return;
+    const header: Element | null = document.querySelector('header');
+    const headerHeight: number = header instanceof HTMLElement
+        ? header.getBoundingClientRect().height
+        : 0;
+    const targetTop: number = target.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({
+        top: targetTop - headerHeight,
+        behavior: 'smooth',
+    });
+};
+
 
 /**
  * 🛡️ HAEMI LIFE: INSTITUTIONAL SCREENING MANAGER (v14.0 Platinum)
@@ -536,17 +577,26 @@ export const ScreeningManager: React.FC = () => {
         // questions container is the new card. Double-`requestAnimationFrame`
         // is the canonical trick to wait until *after* React has committed
         // the state update AND the browser has painted the new DOM node
-        // — without this, `scrollIntoView` would target the old first card
+        // — without this, the scroll would target the old first card
         // (which is now at index 1) and the new card would still be just
-        // out of view if any accordion above is expanded. Browser-native
-        // `behavior: 'smooth'` honours OS-level `prefers-reduced-motion`
-        // automatically, so no CSS dance is needed for accessibility.
+        // out of view if any accordion above is expanded.
+        //
+        // We delegate to `smoothScrollIntoViewBelowHeader` (top of file)
+        // rather than calling `Element.scrollIntoView` directly, because
+        // the dashboard's fixed `<header>` occludes the topmost ~4.5rem
+        // of the viewport. A raw `scrollIntoView({ block: 'start' })`
+        // lands the card top at viewport y=0 — hidden behind the navbar —
+        // so the admin sees the *middle* of the new card, not the top.
+        // The helper measures the navbar's CURRENT rendered height at
+        // runtime (no hardcoded value) and offsets accordingly so the
+        // card's first row (Category / Risk / Status) lands exactly
+        // below the navbar's bottom edge across every breakpoint.
         if (typeof window !== 'undefined') {
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     const firstCard = questionsContainerRef.current?.firstElementChild;
                     if (firstCard instanceof HTMLElement) {
-                        firstCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        smoothScrollIntoViewBelowHeader(firstCard);
                     }
                 });
             });
