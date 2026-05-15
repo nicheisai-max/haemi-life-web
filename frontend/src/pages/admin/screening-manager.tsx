@@ -13,6 +13,7 @@ import {
     DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { logger } from '@/utils/logger';
+import { cn } from '@/lib/utils';
 import screeningService, { ScreeningQuestion, type RiskCalculationMode } from '@/services/screening.service';
 import { updateClinicalCopilotEnabled } from '@/services/clinical-copilot-admin.service';
 import { useClinicalCopilot } from '@/hooks/use-clinical-copilot';
@@ -100,6 +101,21 @@ export const ScreeningManager: React.FC = () => {
     const [highRiskThreshold, setHighRiskThreshold] = useState<number | null>(null);
     const [thresholdDraft, setThresholdDraft] = useState<string>('');
     const [thresholdUpdating, setThresholdUpdating] = useState<boolean>(false);
+
+    // Mutually-exclusive accordion state for the three platform-settings
+    // panels (Clinical AI Copilot, Risk Scoring Mode, High-Risk Threshold).
+    // Policy: on page load NONE are expanded so the questions list lands
+    // above the fold; clicking any header opens that panel and closes any
+    // other currently-open one (single-open invariant). The chevron icon
+    // rotates 180° to indicate state. The collapsing animation uses the
+    // existing project pattern (`grid-rows-[0fr]/[1fr]` + `overflow-hidden`)
+    // — same approach as `pages/support/help.tsx` so the visual cadence
+    // matches across the app.
+    type SettingsPanel = 'copilot' | 'risk-mode' | 'threshold';
+    const [expandedPanel, setExpandedPanel] = useState<SettingsPanel | null>(null);
+    const togglePanel = (panel: SettingsPanel): void => {
+        setExpandedPanel((current) => (current === panel ? null : panel));
+    };
 
     // Cleanup the Undo timer on unmount so a stale closure cannot fire
     // setState after teardown — strict-mode-safe.
@@ -697,156 +713,248 @@ export const ScreeningManager: React.FC = () => {
                 </AnimatedAlert>
 
                 {/*
-                  Clinical Copilot kill switch (AI cost-control).
-                  Highest-impact AI toggle on the platform: blocks
-                  every doctor's AI chat / proactive insights /
-                  patient risk analysis at the backend when OFF.
-                  Live state from `<ClinicalCopilotProvider>` — a
-                  flip from any device propagates here via the
-                  socket broadcast. Two-direction confirmation
-                  dialog before any PUT — both enabling (resumes
-                  Gemini billing) and disabling (blocks every
-                  doctor) get an explicit "Yes" click.
+                  Platform-settings accordion (Clinical Copilot, Risk Scoring
+                  Mode, High-Risk Threshold). Mutually-exclusive: only one
+                  panel can be expanded at a time so the questions list
+                  below stays visible above the fold. All panels are
+                  collapsed on mount — admins click the header to expand.
+                  The status pill in each header surfaces the current value
+                  at a glance so opening is only required to *change* it.
                 */}
-                <Card className="p-6 border-amber-400/40 bg-amber-50/40 dark:bg-amber-950/20 rounded-[var(--card-radius)]">
-                    <div className="flex flex-col sm:flex-row items-start gap-4">
-                        <div className="flex items-center justify-center w-11 h-11 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 flex-shrink-0">
-                            <Bot className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0 w-full">
-                            <h2 className="text-base font-bold text-foreground mb-1">Clinical AI Copilot</h2>
-                            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                                Master kill switch for the doctor-facing AI copilot. Affects chat, proactive
-                                insights, and per-patient risk analysis. When disabled, every doctor across the
-                                platform sees a "managed by administrator" banner — zero Gemini API charges
-                                accrue.
-                            </p>
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <Switch
-                                    checked={copilotEnabled}
-                                    onCheckedChange={(checked: boolean) => { void handleToggleCopilot(checked); }}
-                                    disabled={!copilotHydrated || copilotUpdating}
-                                    aria-label="Enable or disable the Clinical AI Copilot platform-wide"
-                                />
-                                <span className="text-sm font-semibold text-foreground">
-                                    {copilotEnabled ? 'Enabled — doctors can use AI features' : 'Disabled — all doctor AI requests are refused'}
-                                </span>
-                                {copilotUpdating && (
-                                    <span className="text-xs text-muted-foreground italic">Saving...</span>
-                                )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                                {copilotEnabled
-                                    ? 'Each doctor interaction with the AI copilot incurs Gemini API charges (model: gemini-2.5-pro). Rate-limited to 20 requests per minute per IP at the backend. Every change to this toggle is audit-logged with your user ID, prior + new value, and request metadata.'
-                                    : 'All Clinical Copilot endpoints currently return HTTP 403 with code COPILOT_DISABLED. Doctors will see a banner explaining the feature is administratively disabled. Re-enabling resumes service instantly across every connected device.'}
-                            </p>
-                        </div>
-                    </div>
-                </Card>
+                <div className="space-y-3">
 
-                {/*
-                  Platform-wide risk-calculation mode toggle. Determines
-                  whether patient triage responses are scored by Gemini
-                  AI ('ai') or by the admin-configured per-question
-                  risk weights below ('manual'). The AI path always
-                  falls back to the deterministic weighted sum if
-                  Gemini is unreachable — patient flow is never
-                  blocked. Hydration is delayed via riskMode === null
-                  so the toggle does not flicker into the wrong
-                  position before the GET resolves.
-                */}
-                <Card className="p-6 border-primary/20 bg-primary/5 rounded-[var(--card-radius)]">
-                    <div className="flex flex-col sm:flex-row items-start gap-4">
-                        <div className="flex items-center justify-center w-11 h-11 rounded-full bg-primary/15 text-primary flex-shrink-0">
-                            <Sparkles className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0 w-full">
-                            <h2 className="text-base font-bold text-foreground mb-1">Risk Scoring Mode</h2>
-                            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                                Choose how patient triage responses are converted into risk scores for clinical routing.
-                            </p>
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <Switch
-                                    checked={riskMode === 'ai'}
-                                    onCheckedChange={(checked: boolean) => { void handleToggleRiskMode(checked); }}
-                                    disabled={riskMode === null || riskModeUpdating}
-                                    aria-label="Use AI for clinical risk calculation"
-                                />
-                                <span className="text-sm font-semibold text-foreground">
-                                    {riskMode === 'ai' ? 'AI-powered (Gemini)' : 'Configured weights'}
-                                </span>
-                                {riskModeUpdating && (
-                                    <span className="text-xs text-muted-foreground italic">Saving...</span>
-                                )}
+                    {/* Accordion: Clinical AI Copilot kill switch */}
+                    <Card className={cn(
+                        "rounded-[var(--card-radius)] overflow-hidden transition-colors border-amber-400/40",
+                        expandedPanel === 'copilot' && "bg-amber-50/40 dark:bg-amber-950/20"
+                    )}>
+                        <button
+                            type="button"
+                            onClick={() => togglePanel('copilot')}
+                            aria-expanded={expandedPanel === 'copilot'}
+                            aria-controls="settings-panel-copilot"
+                            className="w-full flex items-center gap-4 p-6 text-left hover:bg-secondary/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
+                        >
+                            <div className="flex items-center justify-center w-11 h-11 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 flex-shrink-0">
+                                <Bot className="w-5 h-5" />
                             </div>
-                            <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                                {riskMode === 'ai' ? (
-                                    'Patient triage responses are scored by Gemini AI based on clinical context, symptom co-occurrence, and disease patterns. The risk weights below remain advisory; the AI may upweight critical signals beyond their assigned values. If the AI service is unavailable, the system gracefully falls back to your configured weights.'
-                                ) : (
-                                    'Patient triage responses are scored using the risk weights configured for each question below. No external AI service is consulted, so no API costs are incurred.'
-                                )}
-                            </p>
-                        </div>
-                    </div>
-                </Card>
+                            <div className="flex-1 min-w-0">
+                                <h2 className="text-base font-bold text-foreground truncate">Clinical AI Copilot</h2>
+                            </div>
+                            <span className={cn(
+                                "text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border whitespace-nowrap",
+                                !copilotHydrated && "bg-secondary/50 text-muted-foreground border-border",
+                                copilotHydrated && copilotEnabled && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+                                copilotHydrated && !copilotEnabled && "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30",
+                            )}>
+                                {copilotHydrated ? (copilotEnabled ? 'Enabled' : 'Disabled') : '—'}
+                            </span>
+                            <ChevronDown className={cn(
+                                "w-5 h-5 text-muted-foreground transition-transform duration-200 flex-shrink-0",
+                                expandedPanel === 'copilot' && "rotate-180"
+                            )} />
+                        </button>
 
-                {/*
-                  High-risk classification threshold (Enterprise Hardening).
-                  Lifted from a previously-hardcoded 0.7 in the backend
-                  repository into an admin-controlled setting. Submissions
-                  whose normalised risk meets or exceeds this value are
-                  flagged HIGH-RISK; below, the appointment moves to
-                  COMPLETED. Live-syncs across admin tabs via the
-                  `screening:threshold-changed` socket event.
-                */}
-                <Card className="p-6 border-rose-400/30 bg-rose-50/30 dark:bg-rose-950/15 rounded-[var(--card-radius)]">
-                    <div className="flex flex-col sm:flex-row items-start gap-4">
-                        <div className="flex items-center justify-center w-11 h-11 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 flex-shrink-0">
-                            <ShieldAlert className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0 w-full">
-                            <h2 className="text-base font-bold text-foreground mb-1">High-Risk Threshold</h2>
-                            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                                Normalised risk score (0&ndash;1) at which a pre-screening submission is escalated to
-                                HIGH-RISK status. Existing appointments are not re-classified when this changes;
-                                only future submissions are affected.
-                            </p>
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="1"
-                                    step="0.01"
-                                    value={thresholdDraft}
-                                    onChange={(e) => setThresholdDraft(e.target.value)}
-                                    disabled={highRiskThreshold === null || thresholdUpdating}
-                                    className="w-28 h-9 text-center border border-border rounded-[var(--card-radius)] focus:border-primary/40 outline-none text-sm font-bold text-foreground bg-secondary/30 transition-all shadow-inner"
-                                    aria-label="High-risk threshold (between 0 and 1)"
-                                />
-                                <Button
-                                    onClick={() => { void handleSaveThreshold(); }}
-                                    disabled={highRiskThreshold === null || thresholdUpdating}
-                                    size="sm"
-                                    className="h-9"
-                                >
-                                    {thresholdUpdating ? 'Saving...' : 'Save threshold'}
-                                </Button>
-                                {highRiskThreshold !== null && (
-                                    <span className="text-xs text-muted-foreground">
-                                        Current: <span className="font-mono font-bold text-foreground">{highRiskThreshold.toFixed(2)}</span>
-                                    </span>
-                                )}
+                        <div
+                            id="settings-panel-copilot"
+                            className={cn(
+                                "grid transition-all duration-200 ease-in-out",
+                                expandedPanel === 'copilot' ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                            )}
+                            aria-hidden={expandedPanel !== 'copilot'}
+                            inert={expandedPanel !== 'copilot' ? true : undefined}
+                        >
+                            <div className="overflow-hidden">
+                                <div className="px-6 pb-6 pt-5 border-t border-border/50">
+                                    <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                                        Master kill switch for the doctor-facing AI copilot. Affects chat, proactive
+                                        insights, and per-patient risk analysis. When disabled, every doctor across the
+                                        platform sees a &ldquo;managed by administrator&rdquo; banner &mdash; zero Gemini API charges
+                                        accrue.
+                                    </p>
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <Switch
+                                            checked={copilotEnabled}
+                                            onCheckedChange={(checked: boolean) => { void handleToggleCopilot(checked); }}
+                                            disabled={!copilotHydrated || copilotUpdating}
+                                            aria-label="Enable or disable the Clinical AI Copilot platform-wide"
+                                        />
+                                        <span className="text-sm font-semibold text-foreground">
+                                            {copilotEnabled ? 'Enabled — doctors can use AI features' : 'Disabled — all doctor AI requests are refused'}
+                                        </span>
+                                        {copilotUpdating && (
+                                            <span className="text-xs text-muted-foreground italic">Saving...</span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                                        {copilotEnabled
+                                            ? 'Each doctor interaction with the AI copilot incurs Gemini API charges (model: gemini-2.5-pro). Rate-limited to 20 requests per minute per IP at the backend. Every change to this toggle is audit-logged with your user ID, prior + new value, and request metadata.'
+                                            : 'All Clinical Copilot endpoints currently return HTTP 403 with code COPILOT_DISABLED. Doctors will see a banner explaining the feature is administratively disabled. Re-enabling resumes service instantly across every connected device.'}
+                                    </p>
+                                </div>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                                Default is <span className="font-mono font-bold">0.70</span>. Lowering this value increases sensitivity (more
-                                submissions flagged HIGH-RISK); raising it increases specificity. Changes are audit-logged with
-                                your user ID, prior + new value, IP, and user agent. Re-classification of historic records is
-                                NOT performed &mdash; the change applies only to future submissions, by design (clinical
-                                immutability of prior decisions).
-                            </p>
                         </div>
-                    </div>
-                </Card>
+                    </Card>
+
+                    {/* Accordion: Risk Scoring Mode (manual vs AI) */}
+                    <Card className={cn(
+                        "rounded-[var(--card-radius)] overflow-hidden transition-colors border-primary/20",
+                        expandedPanel === 'risk-mode' && "bg-primary/5"
+                    )}>
+                        <button
+                            type="button"
+                            onClick={() => togglePanel('risk-mode')}
+                            aria-expanded={expandedPanel === 'risk-mode'}
+                            aria-controls="settings-panel-risk-mode"
+                            className="w-full flex items-center gap-4 p-6 text-left hover:bg-secondary/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
+                        >
+                            <div className="flex items-center justify-center w-11 h-11 rounded-full bg-primary/15 text-primary flex-shrink-0">
+                                <Sparkles className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h2 className="text-base font-bold text-foreground truncate">Risk Scoring Mode</h2>
+                            </div>
+                            <span className={cn(
+                                "text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border whitespace-nowrap",
+                                riskMode === null && "bg-secondary/50 text-muted-foreground border-border",
+                                riskMode === 'ai' && "bg-primary/10 text-primary border-primary/30",
+                                riskMode === 'manual' && "bg-secondary/60 text-foreground border-border",
+                            )}>
+                                {riskMode === null ? '—' : riskMode === 'ai' ? 'AI' : 'Manual'}
+                            </span>
+                            <ChevronDown className={cn(
+                                "w-5 h-5 text-muted-foreground transition-transform duration-200 flex-shrink-0",
+                                expandedPanel === 'risk-mode' && "rotate-180"
+                            )} />
+                        </button>
+
+                        <div
+                            id="settings-panel-risk-mode"
+                            className={cn(
+                                "grid transition-all duration-200 ease-in-out",
+                                expandedPanel === 'risk-mode' ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                            )}
+                            aria-hidden={expandedPanel !== 'risk-mode'}
+                            inert={expandedPanel !== 'risk-mode' ? true : undefined}
+                        >
+                            <div className="overflow-hidden">
+                                <div className="px-6 pb-6 pt-5 border-t border-border/50">
+                                    <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                                        Choose how patient triage responses are converted into risk scores for clinical routing.
+                                    </p>
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <Switch
+                                            checked={riskMode === 'ai'}
+                                            onCheckedChange={(checked: boolean) => { void handleToggleRiskMode(checked); }}
+                                            disabled={riskMode === null || riskModeUpdating}
+                                            aria-label="Use AI for clinical risk calculation"
+                                        />
+                                        <span className="text-sm font-semibold text-foreground">
+                                            {riskMode === 'ai' ? 'AI-powered (Gemini)' : 'Configured weights'}
+                                        </span>
+                                        {riskModeUpdating && (
+                                            <span className="text-xs text-muted-foreground italic">Saving...</span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                                        {riskMode === 'ai' ? (
+                                            'Patient triage responses are scored by Gemini AI based on clinical context, symptom co-occurrence, and disease patterns. The risk weights below remain advisory; the AI may upweight critical signals beyond their assigned values. If the AI service is unavailable, the system gracefully falls back to your configured weights.'
+                                        ) : (
+                                            'Patient triage responses are scored using the risk weights configured for each question below. No external AI service is consulted, so no API costs are incurred.'
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    {/* Accordion: High-Risk Threshold (admin-controlled cutoff) */}
+                    <Card className={cn(
+                        "rounded-[var(--card-radius)] overflow-hidden transition-colors border-rose-400/30",
+                        expandedPanel === 'threshold' && "bg-rose-50/30 dark:bg-rose-950/15"
+                    )}>
+                        <button
+                            type="button"
+                            onClick={() => togglePanel('threshold')}
+                            aria-expanded={expandedPanel === 'threshold'}
+                            aria-controls="settings-panel-threshold"
+                            className="w-full flex items-center gap-4 p-6 text-left hover:bg-secondary/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
+                        >
+                            <div className="flex items-center justify-center w-11 h-11 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 flex-shrink-0">
+                                <ShieldAlert className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h2 className="text-base font-bold text-foreground truncate">High-Risk Threshold</h2>
+                            </div>
+                            <span className={cn(
+                                "text-xs font-bold font-mono px-2.5 py-1 rounded-full border whitespace-nowrap",
+                                highRiskThreshold === null
+                                    ? "bg-secondary/50 text-muted-foreground border-border"
+                                    : "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30",
+                            )}>
+                                {highRiskThreshold === null ? '—' : highRiskThreshold.toFixed(2)}
+                            </span>
+                            <ChevronDown className={cn(
+                                "w-5 h-5 text-muted-foreground transition-transform duration-200 flex-shrink-0",
+                                expandedPanel === 'threshold' && "rotate-180"
+                            )} />
+                        </button>
+
+                        <div
+                            id="settings-panel-threshold"
+                            className={cn(
+                                "grid transition-all duration-200 ease-in-out",
+                                expandedPanel === 'threshold' ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                            )}
+                            aria-hidden={expandedPanel !== 'threshold'}
+                            inert={expandedPanel !== 'threshold' ? true : undefined}
+                        >
+                            <div className="overflow-hidden">
+                                <div className="px-6 pb-6 pt-5 border-t border-border/50">
+                                    <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                                        Normalised risk score (0&ndash;1) at which a pre-screening submission is escalated to
+                                        HIGH-RISK status. Existing appointments are not re-classified when this changes;
+                                        only future submissions are affected.
+                                    </p>
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="1"
+                                            step="0.01"
+                                            value={thresholdDraft}
+                                            onChange={(e) => setThresholdDraft(e.target.value)}
+                                            disabled={highRiskThreshold === null || thresholdUpdating}
+                                            className="w-28 h-9 text-center border border-border rounded-[var(--card-radius)] focus:border-primary/40 outline-none text-sm font-bold text-foreground bg-secondary/30 transition-all shadow-inner"
+                                            aria-label="High-risk threshold (between 0 and 1)"
+                                        />
+                                        <Button
+                                            onClick={() => { void handleSaveThreshold(); }}
+                                            disabled={highRiskThreshold === null || thresholdUpdating}
+                                            size="sm"
+                                            className="h-9"
+                                        >
+                                            {thresholdUpdating ? 'Saving...' : 'Save threshold'}
+                                        </Button>
+                                        {highRiskThreshold !== null && (
+                                            <span className="text-xs text-muted-foreground">
+                                                Current: <span className="font-mono font-bold text-foreground">{highRiskThreshold.toFixed(2)}</span>
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                                        Default is <span className="font-mono font-bold">0.70</span>. Lowering this value increases sensitivity (more
+                                        submissions flagged HIGH-RISK); raising it increases specificity. Changes are audit-logged with
+                                        your user ID, prior + new value, IP, and user agent. Re-classification of historic records is
+                                        NOT performed &mdash; the change applies only to future submissions, by design (clinical
+                                        immutability of prior decisions).
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                </div>
 
                 <DragDropContext onDragEnd={handleDragEnd}>
                     <Droppable droppableId="screening-questions">
