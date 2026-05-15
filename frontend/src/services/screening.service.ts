@@ -129,6 +129,33 @@ export const updateRiskCalculationMode = async (mode: RiskCalculationMode): Prom
     return data.mode;
 };
 
+// ─── ADMIN: Pre-screening High-Risk Threshold (Enterprise Hardening) ─────────
+
+/**
+ * Platform-wide threshold (0-1) for classifying a pre-screening
+ * submission as `'high-risk'`. Lifted from a previously-hardcoded
+ * `0.7` into `system_settings.pre_screening_high_risk_threshold`.
+ * Admin-only; the patient UI never surfaces this value.
+ */
+export interface HighRiskThresholdResponse {
+    threshold: number;
+}
+
+export const getHighRiskThreshold = async (): Promise<number> => {
+    const response = await api.get<ApiResponse<HighRiskThresholdResponse>>(
+        '/admin/settings/high-risk-threshold'
+    );
+    return normalizeResponse(response).threshold;
+};
+
+export const updateHighRiskThreshold = async (threshold: number): Promise<number> => {
+    const response = await api.put<ApiResponse<HighRiskThresholdResponse>>(
+        '/admin/settings/high-risk-threshold',
+        { threshold }
+    );
+    return normalizeResponse(response).threshold;
+};
+
 /**
  * 🩺 INSTITUTIONAL AI-TRIAGE ENGINE (v15.0 Platinum)
  * Logic: Hybrid Intelligence — Combines Quantitative Risk Weighting with Qualitative AI Analysis.
@@ -263,5 +290,7 @@ export default {
     analyzeWithAI,
     getRiskCalculationMode,
     updateRiskCalculationMode,
+    getHighRiskThreshold,
+    updateHighRiskThreshold,
     screeningService
 };

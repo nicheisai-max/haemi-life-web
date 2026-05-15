@@ -2,7 +2,11 @@ import { Request, Response } from 'express';
 import * as os from 'os';
 import { pool } from '../config/db';
 import { systemSettingsRepository } from '../repositories/system-settings.repository';
-import { invalidateStringConfigCache } from '../utils/config.util';
+import {
+    invalidateStringConfigCache,
+    getPreScreeningHighRiskThreshold,
+    DEFAULT_HIGH_RISK_THRESHOLD,
+} from '../utils/config.util';
 import { socketIO } from '../app';
 import { securityRepository } from '../repositories/security.repository';
 import { analyticsRepository } from '../repositories/analytics.repository';
@@ -556,8 +560,16 @@ export const getRiskCalculationMode = async (_req: Request, res: Response) => {
 /**
  * Updates the platform-wide pre-screening risk-calculation mode. Admin
  * only. Validates the supplied mode against the typed union; rejects
- * anything else as 400. Emits a `RISK_CALCULATION_MODE_CHANGED` audit
- * event with prior + new state so the change is fully auditable.
+ * anything else as 400.
+ *
+ * Post-write side effects:
+ *   1. Invalidate the 5-min config cache so the very next patient
+ *      submission reads the freshly-written row, not a stale cache.
+ *   2. Audit log with prior + new mode, IP, user agent — HIPAA-equivalent
+ *      attribution for clinical configuration changes.
+ *   3. Broadcast `'risk-mode:changed'` to every connected socket so
+ *      patient-side booking forms can re-fetch their mode preview
+ *      instantly (matches the `clinical-copilot:toggled` pattern).
  */
 export const updateRiskCalculationMode = async (req: Request, res: Response) => {
     try {
@@ -576,13 +588,38 @@ export const updateRiskCalculationMode = async (req: Request, res: Response) => 
 
         await systemSettingsRepository.updateSetting(RISK_CALCULATION_MODE_KEY, mode);
 
+        // Drop the cached value so the next call to
+        // `getPreScreeningRiskMode()` reads the freshly-written row
+        // instead of the stale 5-minute cache.
+        invalidateStringConfigCache(RISK_CALCULATION_MODE_KEY);
+
         await auditService.log({
             userId: adminId,
+            actorRole: req.user?.role,
             action: 'RISK_CALCULATION_MODE_CHANGED',
             entityType: 'SYSTEM_SETTINGS',
             entityId: RISK_CALCULATION_MODE_KEY,
             metadata: { priorMode, newMode: mode },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
         });
+
+        // Broadcast globally — patient booking forms read this value
+        // on mount and re-fetch on this event so a mid-session admin
+        // flip never leaves a stale preview on screen. Failure-tolerant:
+        // a missing socketIO logs at debug and continues; the DB write
+        // is the source of truth, the broadcast is a UX accelerator.
+        try {
+            if (socketIO !== undefined) {
+                socketIO.emit('risk-mode:changed', { mode });
+            } else {
+                logger.debug('[RiskMode] socketIO not ready; skipping real-time broadcast');
+            }
+        } catch (broadcastError: unknown) {
+            logger.warn('[RiskMode] Broadcast emit failed; DB write succeeded', {
+                error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+            });
+        }
 
         return sendResponse(res, 200, true, 'Risk calculation mode updated', { mode });
     } catch (error: unknown) {
@@ -590,6 +627,93 @@ export const updateRiskCalculationMode = async (req: Request, res: Response) => 
             error: error instanceof Error ? error.message : String(error),
         });
         return sendError(res, 500, 'Error updating risk calculation mode');
+    }
+};
+
+/**
+ * HAEMI LIFE — PRE-SCREENING HIGH-RISK THRESHOLD (Enterprise Hardening)
+ *
+ * GET — returns the current platform-wide threshold in `[0, 1]` used by
+ * the pre-screening repository to classify submissions as `'high-risk'`
+ * vs `'completed'`. Defaults to `0.7` when no row exists (the prior
+ * hardcoded value, preserved exactly).
+ *
+ * PUT — admin-only update. Validates the body is `{ threshold: number }`
+ * with `0 <= threshold <= 1`. Persists, invalidates the config cache,
+ * audit logs with prior + new + IP + UA, and emits an admin event so
+ * other admin tabs reflect the change immediately.
+ */
+const HIGH_RISK_THRESHOLD_KEY = 'pre_screening_high_risk_threshold' as const;
+
+export const getHighRiskThreshold = async (_req: Request, res: Response) => {
+    try {
+        const threshold: number = await getPreScreeningHighRiskThreshold();
+        return sendResponse(res, 200, true, 'High-risk threshold fetched', { threshold });
+    } catch (error: unknown) {
+        logger.error('Error fetching high-risk threshold', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Error fetching high-risk threshold');
+    }
+};
+
+export const updateHighRiskThreshold = async (req: Request, res: Response) => {
+    try {
+        const adminId = req.user?.id;
+        if (!adminId) return sendError(res, 401, 'Unauthorized');
+
+        const body: unknown = req.body;
+        if (
+            typeof body !== 'object'
+            || body === null
+            || !('threshold' in body)
+            || typeof (body as { threshold: unknown }).threshold !== 'number'
+        ) {
+            return sendError(res, 400, 'Invalid body. Expected { threshold: number }.');
+        }
+        const candidate: number = (body as { threshold: number }).threshold;
+        if (!Number.isFinite(candidate) || candidate < 0 || candidate > 1) {
+            return sendError(res, 400, 'Threshold must be a finite number in [0, 1].');
+        }
+
+        const priorThreshold: number = await getPreScreeningHighRiskThreshold();
+        await systemSettingsRepository.updateSetting(HIGH_RISK_THRESHOLD_KEY, String(candidate));
+        invalidateStringConfigCache(HIGH_RISK_THRESHOLD_KEY);
+
+        const adminRole: string = typeof req.user?.role === 'string' ? req.user.role : 'admin';
+
+        await auditService.log({
+            userId: adminId,
+            actorRole: adminRole,
+            action: 'PRE_SCREENING_HIGH_RISK_THRESHOLD_CHANGED',
+            entityType: 'SYSTEM_SETTINGS',
+            entityId: HIGH_RISK_THRESHOLD_KEY,
+            metadata: { priorThreshold, newThreshold: candidate, defaultThreshold: DEFAULT_HIGH_RISK_THRESHOLD },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        });
+
+        // Admin-room broadcast — every admin tab observing screening
+        // settings re-renders the new threshold without a page reload.
+        // Patients are unaffected (the threshold is server-side; their
+        // UI does not surface it).
+        emitToAdmins({
+            event: 'screening:threshold-changed',
+            payload: {
+                priorThreshold,
+                newThreshold: candidate,
+                actorId: adminId,
+                actorRole: 'admin',
+                timestamp: new Date().toISOString(),
+            },
+        });
+
+        return sendResponse(res, 200, true, 'High-risk threshold updated', { threshold: candidate });
+    } catch (error: unknown) {
+        logger.error('Error updating high-risk threshold', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Error updating high-risk threshold');
     }
 };
 

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical, Undo2, Sparkles, Bot } from 'lucide-react';
+import { Plus, Save, Trash2, AlertCircle, CheckCircle2, Activity, ChevronDown, GripVertical, Undo2, Sparkles, Bot, ShieldAlert } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -16,6 +16,7 @@ import { logger } from '@/utils/logger';
 import screeningService, { ScreeningQuestion, type RiskCalculationMode } from '@/services/screening.service';
 import { updateClinicalCopilotEnabled } from '@/services/clinical-copilot-admin.service';
 import { useClinicalCopilot } from '@/hooks/use-clinical-copilot';
+import { socketService } from '@/services/socket.service';
 import { TransitionItem } from '@/components/layout/page-transition';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -85,6 +86,21 @@ export const ScreeningManager: React.FC = () => {
     const { enabled: copilotEnabled, isHydrated: copilotHydrated } = useClinicalCopilot();
     const [copilotUpdating, setCopilotUpdating] = useState<boolean>(false);
 
+    // Pre-screening high-risk classification threshold (Enterprise
+    // Hardening). Lifted from a previously-hardcoded 0.7 in the
+    // backend repository into an admin-controlled setting. The page
+    // hydrates the canonical value alongside questions + mode on
+    // mount, exposes a numeric input for live edit (0-1), and
+    // re-syncs on the `screening:threshold-changed` socket event
+    // when another admin updates it from a different tab/device.
+    //
+    // `thresholdDraft` is the in-progress edit string (stays editable
+    // even while the canonical value is null during hydration); the
+    // Save button is gated on a hydrated AND modified state.
+    const [highRiskThreshold, setHighRiskThreshold] = useState<number | null>(null);
+    const [thresholdDraft, setThresholdDraft] = useState<string>('');
+    const [thresholdUpdating, setThresholdUpdating] = useState<boolean>(false);
+
     // Cleanup the Undo timer on unmount so a stale closure cannot fire
     // setState after teardown — strict-mode-safe.
     useEffect(() => {
@@ -103,22 +119,35 @@ export const ScreeningManager: React.FC = () => {
     const loadQuestions = async () => {
         try {
             setLoading(true);
-            // Hydrate questions + risk-calculation mode in parallel so the
-            // page lands fully ready in a single network round-trip pair.
-            // Mode-fetch failure is non-fatal — we keep the toggle
-            // disabled-with-fallback-default until the admin retries.
+            // Hydrate questions + risk-calculation mode + high-risk
+            // threshold in parallel so the page lands fully ready in
+            // a single network round-trip set. Mode and threshold
+            // failures are non-fatal — each falls back to a null
+            // hydrated state and the UI keeps that control disabled
+            // until the admin retries.
             const modePromise = screeningService.getRiskCalculationMode().catch((err: unknown) => {
                 logger.warn('[ScreeningManager] Failed to hydrate risk-calculation mode', {
                     error: err instanceof Error ? err.message : String(err),
                 });
                 return null;
             });
-            const [data, mode] = await Promise.all([
+            const thresholdPromise = screeningService.getHighRiskThreshold().catch((err: unknown) => {
+                logger.warn('[ScreeningManager] Failed to hydrate high-risk threshold', {
+                    error: err instanceof Error ? err.message : String(err),
+                });
+                return null;
+            });
+            const [data, mode, threshold] = await Promise.all([
                 screeningService.getAllQuestions(),
                 modePromise,
+                thresholdPromise,
             ]);
             setQuestions(data);
             if (mode !== null) setRiskMode(mode);
+            if (threshold !== null) {
+                setHighRiskThreshold(threshold);
+                setThresholdDraft(threshold.toFixed(2));
+            }
         } catch (error) {
             logger.error('[ScreeningManager] Load failure', error);
         } finally {
@@ -230,6 +259,131 @@ export const ScreeningManager: React.FC = () => {
             setCopilotUpdating(false);
         }
     };
+
+    /**
+     * Persist a flip of the platform-wide high-risk threshold. Validates
+     * the input parses to a finite number in [0, 1] BEFORE the PUT so
+     * an obviously-bad value (e.g. "1.5", "abc") never reaches the
+     * server. Server-side validation re-checks the same bounds; this
+     * client-side gate is purely a UX shortcut.
+     */
+    const handleSaveThreshold = async (): Promise<void> => {
+        if (thresholdUpdating) return;
+        const parsed: number = Number.parseFloat(thresholdDraft);
+        if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+            setGeneralError('Threshold must be a number between 0 and 1 (e.g. 0.70).');
+            return;
+        }
+        if (highRiskThreshold !== null && Math.abs(parsed - highRiskThreshold) < 1e-6) {
+            // No change — surface a friendly hint instead of a no-op request.
+            setSuccess('Threshold is already set to that value.');
+            setTimeout(() => setSuccess(null), 3000);
+            return;
+        }
+
+        const confirmed = await confirm({
+            title: 'Update high-risk threshold?',
+            message:
+                `Submissions scoring at or above ${parsed.toFixed(2)} will be flagged HIGH-RISK. `
+                + `Existing appointments are not re-classified — only FUTURE pre-screening submissions are affected. Continue?`,
+            confirmText: 'Yes, update threshold',
+            cancelText: 'Cancel',
+            type: 'warning',
+        });
+        if (!confirmed) return;
+
+        setThresholdUpdating(true);
+        setGeneralError(null);
+        setSuccess(null);
+        try {
+            const echoed: number = await screeningService.updateHighRiskThreshold(parsed);
+            setHighRiskThreshold(echoed);
+            setThresholdDraft(echoed.toFixed(2));
+            setSuccess(
+                `High-risk threshold updated to ${echoed.toFixed(2)}. All future pre-screening submissions will use this value.`,
+            );
+            setTimeout(() => setSuccess(null), 5000);
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            const errorMessage: string = apiErr.response?.data?.message ?? 'Failed to update high-risk threshold';
+            setGeneralError(errorMessage);
+            logger.error('[ScreeningManager] Threshold update failed', {
+                attempted: parsed,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            setThresholdUpdating(false);
+        }
+    };
+
+    /**
+     * Real-time platform-sync listeners. Three live channels:
+     *
+     *   risk-mode:changed           - another admin (or another tab)
+     *                                  flipped the risk-calculation mode.
+     *                                  Re-sync our local state so the
+     *                                  switch position matches reality.
+     *
+     *   screening:threshold-changed - another admin updated the high-risk
+     *                                  threshold. Pick up the new value
+     *                                  and refresh the draft input unless
+     *                                  the user is mid-edit (avoid
+     *                                  stomping in-progress typing).
+     *
+     *   screening:question-updated  - another admin created/updated/
+     *                                  toggled/deleted a question. Re-fetch
+     *                                  the list (matches the
+     *                                  screening:reordered pattern — re-
+     *                                  fetch is drift-free under
+     *                                  concurrent edits).
+     *
+     * Listeners are scoped to the admin's session; cleanup on unmount
+     * via the returned function. Per existing project pattern,
+     * `socketService.on/off` is a typed contract (see ServerToClientEvents).
+     */
+    useEffect(() => {
+        const onRiskModeChanged = (payload: { readonly mode: 'ai' | 'manual' }): void => {
+            setRiskMode(payload.mode);
+        };
+        const onThresholdChanged = (payload: { readonly newThreshold: number; readonly priorThreshold: number }): void => {
+            setHighRiskThreshold(payload.newThreshold);
+            // Only sync the draft if the user is NOT actively editing.
+            // Heuristic: draft text parses to the *previous* canonical
+            // value (no in-progress changes). If it differs, the user
+            // is mid-edit — leave their work alone, the Save button
+            // will validate at submit time.
+            setThresholdDraft((currentDraft) => {
+                const parsedDraft: number = Number.parseFloat(currentDraft);
+                const prior: number | null = highRiskThreshold;
+                if (prior !== null && Number.isFinite(parsedDraft) && Math.abs(parsedDraft - prior) < 1e-6) {
+                    return payload.newThreshold.toFixed(2);
+                }
+                return currentDraft;
+            });
+        };
+        const onQuestionUpdated = (): void => {
+            // Re-fetch on any CRUD event from another admin. Failure
+            // is silent — the listener is best-effort observability,
+            // not a transactional guarantee.
+            screeningService.getAllQuestions().then((data) => {
+                setQuestions(data);
+            }).catch((err: unknown) => {
+                logger.warn('[ScreeningManager] question-updated re-fetch failed', {
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            });
+        };
+
+        socketService.on('risk-mode:changed', onRiskModeChanged);
+        socketService.on('screening:threshold-changed', onThresholdChanged);
+        socketService.on('screening:question-updated', onQuestionUpdated);
+
+        return () => {
+            socketService.off('risk-mode:changed', onRiskModeChanged);
+            socketService.off('screening:threshold-changed', onThresholdChanged);
+            socketService.off('screening:question-updated', onQuestionUpdated);
+        };
+    }, [highRiskThreshold]);
 
     const handleToggle = async (id: string, currentStatus: boolean) => {
         try {
@@ -631,6 +785,64 @@ export const ScreeningManager: React.FC = () => {
                                 ) : (
                                     'Patient triage responses are scored using the risk weights configured for each question below. No external AI service is consulted, so no API costs are incurred.'
                                 )}
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+
+                {/*
+                  High-risk classification threshold (Enterprise Hardening).
+                  Lifted from a previously-hardcoded 0.7 in the backend
+                  repository into an admin-controlled setting. Submissions
+                  whose normalised risk meets or exceeds this value are
+                  flagged HIGH-RISK; below, the appointment moves to
+                  COMPLETED. Live-syncs across admin tabs via the
+                  `screening:threshold-changed` socket event.
+                */}
+                <Card className="p-6 border-rose-400/30 bg-rose-50/30 dark:bg-rose-950/15 rounded-[var(--card-radius)]">
+                    <div className="flex flex-col sm:flex-row items-start gap-4">
+                        <div className="flex items-center justify-center w-11 h-11 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 flex-shrink-0">
+                            <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0 w-full">
+                            <h2 className="text-base font-bold text-foreground mb-1">High-Risk Threshold</h2>
+                            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                                Normalised risk score (0&ndash;1) at which a pre-screening submission is escalated to
+                                HIGH-RISK status. Existing appointments are not re-classified when this changes;
+                                only future submissions are affected.
+                            </p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    value={thresholdDraft}
+                                    onChange={(e) => setThresholdDraft(e.target.value)}
+                                    disabled={highRiskThreshold === null || thresholdUpdating}
+                                    className="w-28 h-9 text-center border border-border rounded-[var(--card-radius)] focus:border-primary/40 outline-none text-sm font-bold text-foreground bg-secondary/30 transition-all shadow-inner"
+                                    aria-label="High-risk threshold (between 0 and 1)"
+                                />
+                                <Button
+                                    onClick={() => { void handleSaveThreshold(); }}
+                                    disabled={highRiskThreshold === null || thresholdUpdating}
+                                    size="sm"
+                                    className="h-9"
+                                >
+                                    {thresholdUpdating ? 'Saving...' : 'Save threshold'}
+                                </Button>
+                                {highRiskThreshold !== null && (
+                                    <span className="text-xs text-muted-foreground">
+                                        Current: <span className="font-mono font-bold text-foreground">{highRiskThreshold.toFixed(2)}</span>
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                                Default is <span className="font-mono font-bold">0.70</span>. Lowering this value increases sensitivity (more
+                                submissions flagged HIGH-RISK); raising it increases specificity. Changes are audit-logged with
+                                your user ID, prior + new value, IP, and user agent. Re-classification of historic records is
+                                NOT performed &mdash; the change applies only to future submissions, by design (clinical
+                                immutability of prior decisions).
                             </p>
                         </div>
                     </div>

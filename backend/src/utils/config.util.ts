@@ -148,6 +148,128 @@ export async function getClinicalCopilotEnabled(): Promise<boolean> {
 }
 
 /**
+ * HAEMI LIFE — PRE-SCREENING RISK CALCULATION MODE (Enterprise Hardening)
+ *
+ * Returns the platform-wide risk calculation mode (`'ai'` or `'manual'`)
+ * stored under `system_settings.pre_screening_risk_calculation_mode`.
+ * Cached for 5 minutes (matches the established session-timeout /
+ * JWT-expiry pattern) so the patient-submit hot path doesn't pay a
+ * per-request DB round-trip for what is effectively a static admin
+ * decision.
+ *
+ * Cache invalidation hook: the admin PUT endpoint calls
+ * `invalidateStringConfigCache('pre_screening_risk_calculation_mode')`
+ * after a successful write, so the change is observable on the very
+ * next request, never 5 minutes later.
+ *
+ * Defensive cascade (matches `getClinicalCopilotEnabled`):
+ *   * Row absent           -> institutional default `'manual'` (existing
+ *                              behaviour, backward-compatible)
+ *   * Row present but not
+ *     a known mode value   -> institutional default `'manual'`
+ *   * Query failure        -> last-cached value, else institutional default
+ */
+export type RiskCalculationMode = 'ai' | 'manual';
+const DEFAULT_RISK_CALCULATION_MODE: RiskCalculationMode = 'manual';
+
+const isRiskCalculationMode = (value: string): value is RiskCalculationMode => {
+    return value === 'ai' || value === 'manual';
+};
+
+export async function getPreScreeningRiskMode(): Promise<RiskCalculationMode> {
+    const key = 'pre_screening_risk_calculation_mode';
+    const now = Date.now();
+
+    if (stringConfigCache[key] && stringConfigCache[key].expires > now) {
+        const cached: string = stringConfigCache[key].value;
+        return isRiskCalculationMode(cached) ? cached : DEFAULT_RISK_CALCULATION_MODE;
+    }
+
+    try {
+        const result = await pool.query<{ value: string }>(
+            'SELECT value FROM system_settings WHERE key = $1 LIMIT 1',
+            [key]
+        );
+        const raw: string | undefined = result.rows[0]?.value;
+        const candidate: string = typeof raw === 'string' && raw.length > 0
+            ? raw
+            : DEFAULT_RISK_CALCULATION_MODE;
+        const val: RiskCalculationMode = isRiskCalculationMode(candidate)
+            ? candidate
+            : DEFAULT_RISK_CALCULATION_MODE;
+
+        stringConfigCache[key] = { value: val, expires: now + CACHE_TTL };
+        return val;
+    } catch {
+        const fallback: string = stringConfigCache[key]?.value ?? DEFAULT_RISK_CALCULATION_MODE;
+        return isRiskCalculationMode(fallback) ? fallback : DEFAULT_RISK_CALCULATION_MODE;
+    }
+}
+
+/**
+ * HAEMI LIFE — PRE-SCREENING HIGH-RISK THRESHOLD (Enterprise Hardening)
+ *
+ * Returns the platform-wide high-risk classification threshold in
+ * `[0, 1]`. The repository compares `normalisedRisk` against this
+ * value to decide between the `'completed'` and `'high-risk'`
+ * appointment statuses. Previously hardcoded as `0.7` in
+ * `pre-screening.repository.ts`; lifted here so admins can tune the
+ * clinical posture without a deploy.
+ *
+ * Cached for 5 minutes; admin PUT endpoint invalidates on write.
+ *
+ * Defensive cascade:
+ *   * Row absent                  -> institutional default `0.7`
+ *   * Row present but non-numeric -> institutional default `0.7`
+ *   * Value out of `[0, 1]`       -> clamped into range
+ *   * Query failure               -> last-cached value, else default
+ */
+export const DEFAULT_HIGH_RISK_THRESHOLD: number = 0.7;
+
+const clampUnitInterval = (n: number): number => {
+    if (!Number.isFinite(n)) return DEFAULT_HIGH_RISK_THRESHOLD;
+    if (n < 0) return 0;
+    if (n > 1) return 1;
+    return n;
+};
+
+export async function getPreScreeningHighRiskThreshold(): Promise<number> {
+    const key = 'pre_screening_high_risk_threshold';
+    const now = Date.now();
+
+    if (stringConfigCache[key] && stringConfigCache[key].expires > now) {
+        const parsed: number = Number.parseFloat(stringConfigCache[key].value);
+        return Number.isFinite(parsed) ? clampUnitInterval(parsed) : DEFAULT_HIGH_RISK_THRESHOLD;
+    }
+
+    try {
+        const result = await pool.query<{ value: string }>(
+            'SELECT value FROM system_settings WHERE key = $1 LIMIT 1',
+            [key]
+        );
+        const raw: string | undefined = result.rows[0]?.value;
+        if (typeof raw !== 'string' || raw.length === 0) {
+            stringConfigCache[key] = { value: String(DEFAULT_HIGH_RISK_THRESHOLD), expires: now + CACHE_TTL };
+            return DEFAULT_HIGH_RISK_THRESHOLD;
+        }
+        const parsed: number = Number.parseFloat(raw);
+        const val: number = Number.isFinite(parsed)
+            ? clampUnitInterval(parsed)
+            : DEFAULT_HIGH_RISK_THRESHOLD;
+
+        stringConfigCache[key] = { value: String(val), expires: now + CACHE_TTL };
+        return val;
+    } catch {
+        const cachedRaw: string | undefined = stringConfigCache[key]?.value;
+        if (typeof cachedRaw === 'string') {
+            const parsed: number = Number.parseFloat(cachedRaw);
+            return Number.isFinite(parsed) ? clampUnitInterval(parsed) : DEFAULT_HIGH_RISK_THRESHOLD;
+        }
+        return DEFAULT_HIGH_RISK_THRESHOLD;
+    }
+}
+
+/**
  * Phase 5 — Timezone Sovereignty (Platform-Wide).
  *
  * Returns the platform-wide IANA timezone stored under

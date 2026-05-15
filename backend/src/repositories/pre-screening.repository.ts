@@ -2,7 +2,10 @@ import { Pool, PoolClient } from 'pg';
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
-import { systemSettingsRepository } from './system-settings.repository';
+import {
+    getPreScreeningRiskMode,
+    getPreScreeningHighRiskThreshold,
+} from '../utils/config.util';
 import {
     scoreTriageWithAi,
     TriageAiScorerError,
@@ -13,7 +16,10 @@ import {
 /**
  * Storage key for the platform-wide risk-calculation-mode setting.
  * Held alongside other `system_settings` rows; default is `'manual'`
- * (existing behaviour) when no row exists yet.
+ * (existing behaviour) when no row exists yet. Exported so the admin
+ * controller can address the row directly when persisting / auditing
+ * a flip — runtime reads go through the cached
+ * `getPreScreeningRiskMode()` helper in `config.util`.
  */
 export const RISK_CALCULATION_MODE_KEY: string = 'pre_screening_risk_calculation_mode';
 
@@ -27,6 +33,57 @@ export const DEFAULT_RISK_CALCULATION_MODE: RiskCalculationMode = 'manual';
  *  branch. */
 export const isRiskCalculationMode = (value: string | null): value is RiskCalculationMode => {
     return value === 'ai' || value === 'manual';
+};
+
+/**
+ * In-process retry-dedup cache for AI-scored submissions. Keyed by
+ * `${appointmentId}:${responseFingerprint}` so a *network retry* with
+ * the same payload reuses the prior AI result (no duplicate Gemini
+ * billing); a *legitimate resubmission* with different answers
+ * naturally bypasses the cache because its fingerprint differs.
+ *
+ * Bounded by both TTL (60s) and a max-size hard cap (the LRU-ish
+ * eviction is performed lazily during writes — the map never holds
+ * more than RECENT_SCORE_MAX entries, so a flood of one-off
+ * submissions cannot grow it unboundedly). The cache survives only
+ * within a single Node.js process; multi-instance deployments do not
+ * coordinate, which is acceptable because the worst-case behaviour
+ * (a retry hits a different instance and pays one extra Gemini call)
+ * is the SAME as the pre-cache baseline.
+ */
+const RECENT_AI_SCORE_TTL_MS: number = 60_000;
+const RECENT_AI_SCORE_MAX: number = 1024;
+const recentAiScores: Map<string, { readonly score: number; readonly expires: number }> = new Map();
+
+const computeResponseFingerprint = (responses: ReadonlyArray<PreScreeningResponse>): string => {
+    return responses
+        .map((r) => `${r.question_id}:${r.response_value ? '1' : '0'}`)
+        .sort()
+        .join('|');
+};
+
+const rememberAiScore = (appointmentId: number, fingerprint: string, score: number): void => {
+    if (recentAiScores.size >= RECENT_AI_SCORE_MAX) {
+        // Drop the oldest entry. Map preserves insertion order in
+        // ES2015+ so `keys().next()` gives us the LRU candidate.
+        const oldest = recentAiScores.keys().next().value;
+        if (typeof oldest === 'string') recentAiScores.delete(oldest);
+    }
+    recentAiScores.set(`${appointmentId}:${fingerprint}`, {
+        score,
+        expires: Date.now() + RECENT_AI_SCORE_TTL_MS,
+    });
+};
+
+const recallAiScore = (appointmentId: number, fingerprint: string): number | null => {
+    const key: string = `${appointmentId}:${fingerprint}`;
+    const hit = recentAiScores.get(key);
+    if (hit === undefined) return null;
+    if (hit.expires <= Date.now()) {
+        recentAiScores.delete(key);
+        return null;
+    }
+    return hit.score;
 };
 
 export interface PreScreeningDefinition {
@@ -132,37 +189,51 @@ export class PreScreeningRepository {
             throw new Error(`Invalid appointment_id: expected positive integer, received ${String(appointment_id)}`);
         }
 
-        // Resolve the platform-wide risk-calculation mode BEFORE the
-        // transaction opens. The mode is a simple key-value read; no
-        // need to hold a write lock while we wait on it. Failure here
-        // (DB hiccup) collapses to the institutional default — patient
-        // flow continues with deterministic scoring.
-        let configuredMode: RiskCalculationMode = DEFAULT_RISK_CALCULATION_MODE;
-        try {
-            const raw = await systemSettingsRepository.getSetting(RISK_CALCULATION_MODE_KEY);
-            if (isRiskCalculationMode(raw)) {
-                configuredMode = raw;
-            }
-        } catch (modeErr: unknown) {
-            logger.warn('[PreScreening] Could not resolve risk-calculation mode; defaulting to manual', {
-                error: modeErr instanceof Error ? modeErr.message : String(modeErr),
-            });
-        }
+        // Resolve platform-wide configuration BEFORE the transaction opens.
+        // Both lookups are cached in `config.util` (5-min TTL, invalidated
+        // on admin write) so the patient submit hot path is a sub-ms hit
+        // in the steady state. Failure of either falls back to the
+        // institutional default inside the helper itself — patient flow
+        // never blocks on a settings-read hiccup.
+        const configuredMode: RiskCalculationMode = await getPreScreeningRiskMode();
+        const highRiskThreshold: number = await getPreScreeningHighRiskThreshold();
+
+        // Retry-dedup fingerprint computed BEFORE the transaction so a
+        // burst-retry shortcut bypasses both the AI call and the DB
+        // write churn. Only consulted on AI mode — manual mode is free
+        // and idempotent by construction.
+        const responseFingerprint: string = computeResponseFingerprint(responses);
+        const cachedAiScore: number | null = configuredMode === 'ai'
+            ? recallAiScore(appointment_id, responseFingerprint)
+            : null;
 
         const client: PoolClient = await this.db.connect();
         try {
             await client.query('BEGIN');
 
-            // 1. Clear existing responses (if any) for this appointment
+            // 1. Clear existing responses (if any) for this appointment.
+            //    The DELETE+INSERT pattern makes the data write
+            //    idempotent across retries; the AI-billing dedup above
+            //    handles the orthogonal cost concern.
             await client.query('DELETE FROM appointment_pre_screenings WHERE appointment_id = $1', [appointment_id]);
 
             // 2. Hydrate per-question metadata + persist responses with
             //    weighted scores. The `weighted` accumulator path doubles
             //    as the deterministic-mode result AND the AI fallback.
+            //
+            //    The `is_active = true` filter rejects responses whose
+            //    underlying question was deactivated by an admin between
+            //    form-load and submit. Inactive questions are clinically
+            //    out-of-scope, so they contribute zero to the score and
+            //    are NOT persisted to `appointment_pre_screenings`.
+            //    The patient submission as a whole succeeds — we never
+            //    fail a clinical flow because of an admin's mid-form
+            //    edit; the inactive responses simply drop from scoring.
             const aiQuestionInputs: TriageAiQuestionInput[] = [];
             const aiResponseInputs: TriageAiResponseInput[] = [];
             let totalRiskScore = 0;
             let maxPossibleRisk = 0;
+            let inactiveCount = 0;
 
             for (const resp of responses) {
                 // Fetch the weight + text for this specific question.
@@ -173,11 +244,19 @@ export class PreScreeningRepository {
                     disease_tag: string | null;
                     risk_weight: string | number | null;
                 }>(
-                    'SELECT question_text, disease_tag, risk_weight FROM pre_screening_definitions WHERE id = $1',
+                    'SELECT question_text, disease_tag, risk_weight FROM pre_screening_definitions WHERE id = $1 AND is_active = true',
                     [resp.question_id]
                 );
                 const row = qResult.rows[0];
-                const rawWeight = row?.risk_weight;
+                if (row === undefined) {
+                    // Question was deactivated or deleted between form
+                    // hydration and submit. Skip silently — neither
+                    // score nor persist. Counted for audit visibility.
+                    inactiveCount += 1;
+                    continue;
+                }
+
+                const rawWeight = row.risk_weight;
                 const parsedWeight = rawWeight === null || rawWeight === undefined ? 1 : Number(rawWeight);
                 const weight = Number.isFinite(parsedWeight) ? parsedWeight : 1;
 
@@ -186,18 +265,16 @@ export class PreScreeningRepository {
                     totalRiskScore += weight;
                 }
 
-                if (row !== undefined) {
-                    aiQuestionInputs.push({
-                        id: resp.question_id,
-                        text: row.question_text,
-                        weight,
-                        diseaseTag: row.disease_tag ?? undefined,
-                    });
-                    aiResponseInputs.push({
-                        questionId: resp.question_id,
-                        answer: resp.response_value,
-                    });
-                }
+                aiQuestionInputs.push({
+                    id: resp.question_id,
+                    text: row.question_text,
+                    weight,
+                    diseaseTag: row.disease_tag ?? undefined,
+                });
+                aiResponseInputs.push({
+                    questionId: resp.question_id,
+                    answer: resp.response_value,
+                });
 
                 await client.query(`
                     INSERT INTO appointment_pre_screenings (appointment_id, question_id, response_value, additional_notes, risk_score)
@@ -206,44 +283,57 @@ export class PreScreeningRepository {
             }
 
             // 3. Compute the normalised risk score per the resolved mode.
-            //    AI mode tries Gemini and gracefully degrades to the
-            //    deterministic weighted normalisation if the AI scorer
-            //    throws for any reason. The actual mode used is recorded
-            //    in audit metadata so degraded paths are observable.
+            //    AI mode either uses a recent-retry cache hit (no
+            //    duplicate Gemini call) or makes a fresh call, with
+            //    graceful fallback to the deterministic weighted
+            //    normalisation if Gemini throws for any reason. The
+            //    actual code path is recorded in audit metadata so
+            //    degraded / dedup'd paths are observable.
             const deterministicRisk: number = maxPossibleRisk > 0 ? totalRiskScore / maxPossibleRisk : 0;
             let normalizedRisk: number = deterministicRisk;
             let resolvedMode: RiskCalculationMode = configuredMode;
             let aiDegradationReason: string | null = null;
+            let aiCacheHit: boolean = false;
 
             if (configuredMode === 'ai') {
-                try {
-                    const aiResult = await scoreTriageWithAi(aiQuestionInputs, aiResponseInputs);
-                    normalizedRisk = aiResult.normalisedRisk;
-                } catch (aiErr: unknown) {
-                    // Graceful fallback. Patient flow MUST continue; the
-                    // deterministic value is already computed above.
-                    resolvedMode = 'manual';
-                    aiDegradationReason = aiErr instanceof TriageAiScorerError
-                        ? aiErr.message
-                        : aiErr instanceof Error ? aiErr.message : String(aiErr);
-                    logger.warn('[PreScreening] AI scorer failed; falling back to deterministic', {
-                        appointment_id,
-                        reason: aiDegradationReason,
-                    });
+                if (cachedAiScore !== null) {
+                    // Retry-dedup: the same patient resubmitted the
+                    // SAME answers within the 60-second window. Reuse
+                    // the prior AI result instead of paying for a
+                    // duplicate Gemini call.
+                    normalizedRisk = cachedAiScore;
+                    aiCacheHit = true;
+                } else {
+                    try {
+                        const aiResult = await scoreTriageWithAi(aiQuestionInputs, aiResponseInputs);
+                        normalizedRisk = aiResult.normalisedRisk;
+                        rememberAiScore(appointment_id, responseFingerprint, aiResult.normalisedRisk);
+                    } catch (aiErr: unknown) {
+                        // Graceful fallback. Patient flow MUST continue;
+                        // the deterministic value is already computed.
+                        resolvedMode = 'manual';
+                        aiDegradationReason = aiErr instanceof TriageAiScorerError
+                            ? aiErr.message
+                            : aiErr instanceof Error ? aiErr.message : String(aiErr);
+                        logger.warn('[PreScreening] AI scorer failed; falling back to deterministic', {
+                            appointment_id,
+                            reason: aiDegradationReason,
+                        });
+                    }
                 }
             }
 
-            const status = normalizedRisk >= 0.7 ? 'high-risk' : 'completed';
+            const status = normalizedRisk >= highRiskThreshold ? 'high-risk' : 'completed';
             await client.query('UPDATE appointments SET pre_screening_status = $1 WHERE id = $2', [status, appointment_id]);
 
             await client.query('COMMIT');
 
-            // Institutional Logging — capture configured mode, resolved
-            // mode (different when AI degraded), AND degradation reason
-            // so audit consumers can distinguish three states:
-            //   configured=manual + resolved=manual         → normal manual
-            //   configured=ai     + resolved=ai             → normal AI
-            //   configured=ai     + resolved=manual + reason → AI DEGRADED
+            // Institutional Logging — captures every distinguishable
+            // execution path so audit consumers can attribute outcomes:
+            //   configured=manual + resolved=manual                   → normal manual
+            //   configured=ai     + resolved=ai     + cacheHit=true   → AI retry-dedup'd
+            //   configured=ai     + resolved=ai     + cacheHit=false  → normal AI
+            //   configured=ai     + resolved=manual + reason          → AI DEGRADED
             await auditService.log({
                 userId: userId || SYSTEM_ANONYMOUS_ID,
                 action: aiDegradationReason !== null ? 'HEALTH_SCREENING_AI_DEGRADED' : 'HEALTH_SCREENING_SUBMITTED',
@@ -252,9 +342,12 @@ export class PreScreeningRepository {
                 metadata: {
                     normalizedRisk,
                     deterministicRisk,
+                    highRiskThreshold,
                     responseCount: responses.length,
+                    inactiveResponsesSkipped: inactiveCount,
                     configuredMode,
                     resolvedMode,
+                    aiCacheHit,
                     aiDegradationReason: aiDegradationReason ?? undefined,
                 }
             });

@@ -11,6 +11,8 @@ import {
     updateSessionTimeout,
     getRiskCalculationMode,
     updateRiskCalculationMode,
+    getHighRiskThreshold,
+    updateHighRiskThreshold,
     updateClinicalCopilotEnabled,
     getSecurityEvents,
     getActiveSessions,
@@ -35,6 +37,12 @@ router.get('/settings/session-timeout', getSessionTimeout);
 router.put('/settings/session-timeout', updateSessionTimeout);
 router.get('/settings/risk-calculation-mode', getRiskCalculationMode);
 router.put('/settings/risk-calculation-mode', updateRiskCalculationMode);
+// Pre-screening high-risk classification threshold (0-1). Admins can
+// tune the boundary between `'completed'` and `'high-risk'` appointment
+// statuses without a deploy. Reads + writes are both admin-only — the
+// patient flow never surfaces this value, it only uses it internally.
+router.get('/settings/high-risk-threshold', getHighRiskThreshold);
+router.put('/settings/high-risk-threshold', updateHighRiskThreshold);
 // Clinical Copilot kill switch — AI cost-control toggle.
 // Read endpoint lives on `/api/platform/clinical-copilot-enabled`
 // (open to every authenticated role; needed by doctor UI to render
