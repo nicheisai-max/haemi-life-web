@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, GenerativeModel, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import { logger } from '../utils/logger';
+import { createSemaphore } from '../utils/semaphore';
 
 /**
  * 🩺 HAEMI LIFE — TRIAGE AI SCORER (Gemini-backed)
@@ -79,7 +80,28 @@ export class TriageAiScorerError extends Error {
 
 const MODEL_NAME: string = 'gemini-2.5-pro';
 const MAX_RESPONSE_TOKENS: number = 256;
-const RESPONSE_TIMEOUT_MS: number = 8_000;
+/**
+ * Per-call timeout for the Gemini round-trip. Set to 12s based on
+ * observed p99 latency of gemini-2.5-pro under burst load (the prior
+ * 8s ceiling fired frequent false-degradation events, polluting
+ * `HEALTH_SCREENING_AI_DEGRADED` audit logs). The fallback path is
+ * still available if Gemini genuinely hangs longer than 12s — the
+ * deterministic scorer is computed by the caller in parallel.
+ */
+const RESPONSE_TIMEOUT_MS: number = 12_000;
+
+/**
+ * Bound concurrent Gemini calls from this process to prevent a burst
+ * of patient submissions (e.g. a clinic-wide intake event) from
+ * cascading into rate-limit errors and a thundering-herd of
+ * graceful-degradations. 10 is a conservative ceiling that maps to
+ * gemini-2.5-pro's published per-project RPM budget when the rest of
+ * the app is also calling the API; the limit can be lifted by editing
+ * this single constant. Waiters resolve FIFO so tail latency stays
+ * predictable.
+ */
+const MAX_CONCURRENT_AI_CALLS: number = 10;
+const aiCallLimiter = createSemaphore(MAX_CONCURRENT_AI_CALLS);
 
 /** Internal singleton model holder. Lazy-initialised on first call so a
  *  cold start with `manual` mode never pays the SDK boot cost. */
@@ -195,23 +217,30 @@ export const scoreTriageWithAi = async (
     let rawResponseText: string;
     let timeoutHandle: NodeJS.Timeout | null = null;
     try {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutHandle = setTimeout(() => {
-                reject(new TriageAiScorerError('Gemini response exceeded timeout'));
-            }, RESPONSE_TIMEOUT_MS);
+        // Wrap the actual Gemini round-trip in a process-wide semaphore.
+        // Concurrency above MAX_CONCURRENT_AI_CALLS queues here without
+        // burning event-loop cycles; the timeout below applies to the
+        // *generation* phase only — queue time is not penalised because
+        // it represents controlled backpressure, not Gemini being slow.
+        rawResponseText = await aiCallLimiter.run(async () => {
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                timeoutHandle = setTimeout(() => {
+                    reject(new TriageAiScorerError('Gemini response exceeded timeout'));
+                }, RESPONSE_TIMEOUT_MS);
+            });
+            const generation = await Promise.race([
+                model.generateContent({
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        maxOutputTokens: MAX_RESPONSE_TOKENS,
+                        temperature: 0.2,
+                        responseMimeType: 'application/json',
+                    },
+                }),
+                timeoutPromise,
+            ]);
+            return generation.response.text();
         });
-        const generation = await Promise.race([
-            model.generateContent({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                    maxOutputTokens: MAX_RESPONSE_TOKENS,
-                    temperature: 0.2,
-                    responseMimeType: 'application/json',
-                },
-            }),
-            timeoutPromise,
-        ]);
-        rawResponseText = generation.response.text();
     } catch (err: unknown) {
         if (err instanceof TriageAiScorerError) throw err;
         const message: string = err instanceof Error ? err.message : String(err);

@@ -45,6 +45,8 @@ export enum SocketState {
 // `socketService.on('screening:reordered', ...)`.
 import type {
     ScreeningReorderedEvent,
+    ScreeningQuestionUpdatedEvent,
+    ScreeningThresholdChangedEvent,
     AuditLogEvent,
     SecurityEvent as AdminSecurityEvent,
     SessionCreatedEvent,
@@ -85,6 +87,8 @@ export interface ServerToClientEvents {
     'connect_error': (error: Error) => void;
     // ─── Admin observability (typed contract — see shared/schemas/admin-events.schema.ts)
     'screening:reordered': (payload: ScreeningReorderedEvent) => void;
+    'screening:question-updated': (payload: ScreeningQuestionUpdatedEvent) => void;
+    'screening:threshold-changed': (payload: ScreeningThresholdChangedEvent) => void;
     'audit:new': (payload: AuditLogEvent) => void;
     'security:event': (payload: AdminSecurityEvent) => void;
     'session:created': (payload: SessionCreatedEvent) => void;
@@ -104,6 +108,11 @@ export interface ServerToClientEvents {
     // value. Doctors' open tabs disable the chat input and surface a
     // "contact administrator" banner in real time.
     'clinical-copilot:toggled': (payload: { readonly enabled: boolean }) => void;
+    // Pre-screening risk-calculation mode (Enterprise Hardening). Broadcast
+    // when an admin flips `system_settings.pre_screening_risk_calculation_mode`
+    // between `'ai'` and `'manual'`. Patient booking forms re-fetch their
+    // mode preview so a mid-session admin flip never leaves a stale UI.
+    'risk-mode:changed': (payload: { readonly mode: 'ai' | 'manual' }) => void;
 }
 
 export interface ClientToServerEvents {

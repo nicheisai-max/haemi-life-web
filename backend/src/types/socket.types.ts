@@ -137,6 +137,8 @@ import {
 
 import {
     ScreeningReorderedEvent,
+    ScreeningQuestionUpdatedEvent,
+    ScreeningThresholdChangedEvent,
     AuditLogEvent,
     SecurityEvent as AdminSecurityEvent,
     SessionCreatedEvent,
@@ -155,6 +157,8 @@ export type {
     TokenRefreshedEvent,
     ObservabilityBatch,
     ScreeningReorderedEvent,
+    ScreeningQuestionUpdatedEvent,
+    ScreeningThresholdChangedEvent,
     AuditLogEvent,
     AdminSecurityEvent,
     SessionCreatedEvent,
@@ -223,6 +227,8 @@ export interface ServerToClientEvents {
     //     Each event listed here MUST have a matching Zod schema in the
     //     shared schema map so the wire payload is validated at both ends.
     'screening:reordered': (payload: ScreeningReorderedEvent) => void;
+    'screening:question-updated': (payload: ScreeningQuestionUpdatedEvent) => void;
+    'screening:threshold-changed': (payload: ScreeningThresholdChangedEvent) => void;
     'audit:new': (payload: AuditLogEvent) => void;
     'security:event': (payload: AdminSecurityEvent) => void;
     'session:created': (payload: SessionCreatedEvent) => void;
@@ -248,6 +254,15 @@ export interface ServerToClientEvents {
     //     (no `.to()` room scoping) from the admin controller's
     //     `updateClinicalCopilotEnabled` handler.
     'clinical-copilot:toggled': (payload: ClinicalCopilotToggledEvent) => void;
+
+    // Pre-screening risk-calculation mode flip (Enterprise Hardening).
+    //     Broadcast to EVERY connected socket when an admin flips
+    //     `system_settings.pre_screening_risk_calculation_mode` between
+    //     `'ai'` and `'manual'`. Patient booking forms re-fetch their
+    //     mode preview so a mid-session admin flip never leaves a
+    //     stale UI. Emitted via `socketIO.emit(...)` (no `.to()` room
+    //     scoping) from the admin controller's `updateRiskCalculationMode`.
+    'risk-mode:changed': (payload: RiskModeChangedEvent) => void;
 }
 
 /**
@@ -258,6 +273,15 @@ export interface ServerToClientEvents {
  */
 export interface ClinicalCopilotToggledEvent {
     readonly enabled: boolean;
+}
+
+/**
+ * Wire shape for the `risk-mode:changed` broadcast. Carries the new
+ * mode value so listeners can refresh their UI without an extra
+ * round-trip to `/screening/risk-mode`.
+ */
+export interface RiskModeChangedEvent {
+    readonly mode: 'ai' | 'manual';
 }
 
 /**

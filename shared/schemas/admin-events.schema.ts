@@ -39,6 +39,40 @@ export const ScreeningReorderedEventSchema = z.object({
 });
 export type ScreeningReorderedEvent = z.infer<typeof ScreeningReorderedEventSchema>;
 
+// ─── Event: Screening question CRUD (Enterprise Hardening) ───────────────────
+//
+// Emitted after a successful create / update / status-toggle / delete on the
+// `pre_screening_definitions` table. Consumers re-fetch the question list to
+// pick up the authoritative state — the payload's `action` discriminator is
+// only for toast/banner UX, not for client-side state reconstruction. The
+// re-fetch pattern matches `screening:reordered` and keeps multi-admin
+// concurrent edits drift-free.
+export const ScreeningQuestionUpdatedEventSchema = z.object({
+    action: z.enum(['created', 'updated', 'activated', 'deactivated', 'deleted']),
+    questionId: z.string(),
+    actorId: z.string().uuid(),
+    actorRole: z.enum(['admin']),
+    timestamp: z.string().datetime(),
+});
+export type ScreeningQuestionUpdatedEvent = z.infer<typeof ScreeningQuestionUpdatedEventSchema>;
+
+// ─── Event: Pre-screening high-risk threshold changed (Enterprise Hardening) ─
+//
+// Emitted after a successful admin update to the platform-wide
+// `pre_screening_high_risk_threshold` setting. The threshold governs the
+// boundary between `'completed'` and `'high-risk'` appointment statuses and
+// is the most clinically-significant configuration value in the triage flow.
+// Payload carries `priorThreshold` + `newThreshold` so admin observability
+// dashboards can render the diff inline without a follow-up settings fetch.
+export const ScreeningThresholdChangedEventSchema = z.object({
+    priorThreshold: z.number().min(0).max(1),
+    newThreshold: z.number().min(0).max(1),
+    actorId: z.string().uuid(),
+    actorRole: z.enum(['admin']),
+    timestamp: z.string().datetime(),
+});
+export type ScreeningThresholdChangedEvent = z.infer<typeof ScreeningThresholdChangedEventSchema>;
+
 // ─── Event: Audit log row written (Phase 2) ──────────────────────────────────
 //
 // Emitted *after* a successful INSERT into `audit_logs`. Payload is the full
@@ -234,6 +268,8 @@ export type AppointmentOverdueEvent = z.infer<typeof AppointmentOverdueEventSche
 // the doctor-side appointment-lifecycle UX.
 export const AdminEventNameSchema = z.enum([
     'screening:reordered',
+    'screening:question-updated',
+    'screening:threshold-changed',
     'audit:new',
     'security:event',
     'session:created',
@@ -252,6 +288,8 @@ export type AdminEventName = z.infer<typeof AdminEventNameSchema>;
 // so the payload is narrowed without `any` and without manual assertions.
 export interface AdminEventMap {
     'screening:reordered': ScreeningReorderedEvent;
+    'screening:question-updated': ScreeningQuestionUpdatedEvent;
+    'screening:threshold-changed': ScreeningThresholdChangedEvent;
     'audit:new': AuditLogEvent;
     'security:event': SecurityEvent;
     'session:created': SessionCreatedEvent;
@@ -272,6 +310,8 @@ export interface AdminEventMap {
 // error, never a runtime gap.
 export const AdminEventSchemaMap = {
     'screening:reordered': ScreeningReorderedEventSchema,
+    'screening:question-updated': ScreeningQuestionUpdatedEventSchema,
+    'screening:threshold-changed': ScreeningThresholdChangedEventSchema,
     'audit:new': AuditLogEventSchema,
     'security:event': SecurityEventSchema,
     'session:created': SessionCreatedEventSchema,

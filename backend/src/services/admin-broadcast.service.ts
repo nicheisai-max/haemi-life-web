@@ -6,6 +6,8 @@ import {
     AdminEventMap,
     AdminEventSchemaMap,
     ScreeningReorderedEventSchema,
+    ScreeningQuestionUpdatedEventSchema,
+    ScreeningThresholdChangedEventSchema,
     AuditLogEventSchema,
     SecurityEventSchema,
     SessionCreatedEventSchema,
@@ -56,6 +58,8 @@ const ADMIN_OBSERVABILITY_ROOM = 'admin:observability' as const;
  */
 export type AdminEmitArgs =
     | { readonly event: 'screening:reordered'; readonly payload: AdminEventMap['screening:reordered'] }
+    | { readonly event: 'screening:question-updated'; readonly payload: AdminEventMap['screening:question-updated'] }
+    | { readonly event: 'screening:threshold-changed'; readonly payload: AdminEventMap['screening:threshold-changed'] }
     | { readonly event: 'audit:new'; readonly payload: AdminEventMap['audit:new'] }
     | { readonly event: 'security:event'; readonly payload: AdminEventMap['security:event'] }
     | { readonly event: 'session:created'; readonly payload: AdminEventMap['session:created'] }
@@ -111,6 +115,30 @@ export function emitToAdmins(args: AdminEmitArgs): boolean {
                     return false;
                 }
                 socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('screening:reordered', result.data);
+                return true;
+            }
+            case 'screening:question-updated': {
+                const result = ScreeningQuestionUpdatedEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('screening:question-updated', result.data);
+                return true;
+            }
+            case 'screening:threshold-changed': {
+                const result = ScreeningThresholdChangedEventSchema.safeParse(args.payload);
+                if (!result.success) {
+                    logger.error('[AdminBroadcast] Payload validation failed; emit skipped', {
+                        event: args.event,
+                        issues: formatZodIssues(result.error),
+                    });
+                    return false;
+                }
+                socketIO.to(ADMIN_OBSERVABILITY_ROOM).emit('screening:threshold-changed', result.data);
                 return true;
             }
             case 'audit:new': {

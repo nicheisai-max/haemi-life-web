@@ -6,6 +6,8 @@ import {
     AdminEventMap,
     AdminEventSchemaMap,
     ScreeningReorderedEventSchema,
+    ScreeningQuestionUpdatedEventSchema,
+    ScreeningThresholdChangedEventSchema,
     AuditLogEventSchema,
     SecurityEventSchema,
     SessionCreatedEventSchema,
@@ -15,6 +17,8 @@ import {
     UserStatusChangedEventSchema,
     AppointmentOverdueEventSchema,
     type ScreeningReorderedEvent,
+    type ScreeningQuestionUpdatedEvent,
+    type ScreeningThresholdChangedEvent,
     type AuditLogEvent,
     type SecurityEvent,
     type SessionCreatedEvent,
@@ -126,6 +130,8 @@ const subscribeOne = (
     event: AdminEventName,
     handlers: {
         onScreeningReordered: (payload: ScreeningReorderedEvent) => void;
+        onScreeningQuestionUpdated: (payload: ScreeningQuestionUpdatedEvent) => void;
+        onScreeningThresholdChanged: (payload: ScreeningThresholdChangedEvent) => void;
         onAuditNew: (payload: AuditLogEvent) => void;
         onSecurityEvent: (payload: SecurityEvent) => void;
         onSessionCreated: (payload: SessionCreatedEvent) => void;
@@ -140,6 +146,14 @@ const subscribeOne = (
         case 'screening:reordered': {
             socketService.on('screening:reordered', handlers.onScreeningReordered);
             return () => socketService.off('screening:reordered', handlers.onScreeningReordered);
+        }
+        case 'screening:question-updated': {
+            socketService.on('screening:question-updated', handlers.onScreeningQuestionUpdated);
+            return () => socketService.off('screening:question-updated', handlers.onScreeningQuestionUpdated);
+        }
+        case 'screening:threshold-changed': {
+            socketService.on('screening:threshold-changed', handlers.onScreeningThresholdChanged);
+            return () => socketService.off('screening:threshold-changed', handlers.onScreeningThresholdChanged);
         }
         case 'audit:new': {
             socketService.on('audit:new', handlers.onAuditNew);
@@ -285,6 +299,28 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
             dispatchToConsumer('screening:reordered', r.data);
         };
 
+        const onScreeningQuestionUpdated = (payload: ScreeningQuestionUpdatedEvent): void => {
+            const r = ScreeningQuestionUpdatedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] screening:question-updated payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('screening:question-updated', r.data);
+        };
+
+        const onScreeningThresholdChanged = (payload: ScreeningThresholdChangedEvent): void => {
+            const r = ScreeningThresholdChangedEventSchema.safeParse(payload);
+            if (!r.success) {
+                logger.error('[useAdminLiveTable] screening:threshold-changed payload validation failed', {
+                    issues: JSON.stringify(r.error.issues),
+                });
+                return;
+            }
+            dispatchToConsumer('screening:threshold-changed', r.data);
+        };
+
         const onAuditNew = (payload: AuditLogEvent): void => {
             const r = AuditLogEventSchema.safeParse(payload);
             if (!r.success) {
@@ -380,6 +416,8 @@ export function useAdminLiveTable<T extends { id: string }, E extends AdminEvent
         const cleanups: Array<() => void> = subscribeEvents.map((event) =>
             subscribeOne(event, {
                 onScreeningReordered,
+                onScreeningQuestionUpdated,
+                onScreeningThresholdChanged,
                 onAuditNew,
                 onSecurityEvent,
                 onSessionCreated,

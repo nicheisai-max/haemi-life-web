@@ -1087,7 +1087,16 @@ VALUES
     -- backend returns 403 with structured code `COPILOT_DISABLED`
     -- and zero Gemini API calls are dispatched. Default `'true'` for
     -- backward compatibility with existing deployments.
-    ('clinical_copilot_enabled', 'true')
+    ('clinical_copilot_enabled', 'true'),
+    -- Pre-screening high-risk classification threshold (Enterprise
+    -- Hardening). Submissions whose normalised risk meets or exceeds
+    -- this value are flagged HIGH-RISK; below, the appointment moves
+    -- to COMPLETED. Lifted from a previously-hardcoded 0.7 magic
+    -- number into an admin-controlled setting so the clinical posture
+    -- can be tuned without a deploy. Application reads it via
+    -- `getPreScreeningHighRiskThreshold()` in `config.util.ts`
+    -- (cached, 5-min TTL, invalidated on admin write).
+    ('pre_screening_high_risk_threshold', '0.7')
 ON CONFLICT (key) DO NOTHING;
 
 -- Seeding is now managed by setup-db.ts to ensure dynamic hashing of DEMO_PASSWORD

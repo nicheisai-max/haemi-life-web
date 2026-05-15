@@ -101,6 +101,17 @@ export const createQuestion = async (req: Request, res: Response): Promise<void>
             metadata: { questionText: question.question_text }
         });
 
+        emitToAdmins({
+            event: 'screening:question-updated',
+            payload: {
+                action: 'created',
+                questionId: String(question.id),
+                actorId: String(user.id),
+                actorRole: 'admin',
+                timestamp: new Date().toISOString(),
+            },
+        });
+
         sendResponse(res, 201, true, 'Screening question created successfully', question);
     } catch (error: unknown) {
         logger.error('[ScreeningController] Create failure:', { error: error instanceof Error ? error.message : String(error) });
@@ -139,6 +150,17 @@ export const updateQuestion = async (req: Request, res: Response): Promise<void>
             metadata: { changes: data }
         });
 
+        emitToAdmins({
+            event: 'screening:question-updated',
+            payload: {
+                action: 'updated',
+                questionId: String(id),
+                actorId: String(user.id),
+                actorRole: 'admin',
+                timestamp: new Date().toISOString(),
+            },
+        });
+
         sendResponse(res, 200, true, 'Screening question updated successfully', updated);
     } catch (error: unknown) {
         logger.error('[ScreeningController] Update failure:', { error: error instanceof Error ? error.message : String(error) });
@@ -174,6 +196,17 @@ export const toggleQuestionStatus = async (req: Request, res: Response): Promise
             action: is_active ? 'SCREENING_QUESTION_ACTIVATED' : 'SCREENING_QUESTION_DEACTIVATED',
             entityId: String(id),
             entityType: 'SCREENING_DEFINITION'
+        });
+
+        emitToAdmins({
+            event: 'screening:question-updated',
+            payload: {
+                action: is_active ? 'activated' : 'deactivated',
+                questionId: String(id),
+                actorId: String(user.id),
+                actorRole: 'admin',
+                timestamp: new Date().toISOString(),
+            },
         });
 
         sendResponse(res, 200, true, `Question ${is_active ? 'activated' : 'deactivated'} successfully`, updated);
@@ -266,6 +299,17 @@ export const deleteQuestion = async (req: Request, res: Response): Promise<void>
             action: 'SCREENING_QUESTION_DELETED',
             entityId: String(id),
             entityType: 'SCREENING_DEFINITION'
+        });
+
+        emitToAdmins({
+            event: 'screening:question-updated',
+            payload: {
+                action: 'deleted',
+                questionId: String(id),
+                actorId: String(user.id),
+                actorRole: 'admin',
+                timestamp: new Date().toISOString(),
+            },
         });
 
         sendResponse(res, 200, true, 'Screening question deleted successfully');
