@@ -161,7 +161,7 @@ const seed = async () => {
         // --- 4. DOCTORS (10+ Records with Profiles) ---
         console.log('\n--- 4. SEEDING DOCTORS ---');
         // Primary doctor
-        const mainDocId = await safeCreateUser(client, { name: 'Dr. Kobus', email: 'doctor@haemilife.com', phone: '+26774000000', role: 'doctor' }, passwordHash);
+        const mainDocId = await safeCreateUser(client, { name: 'Dr. Mpho Modise', email: 'doctor@haemilife.com', phone: '+26772123456', role: 'doctor' }, passwordHash);
 
         // Ensure profile for main doctor
         const mainProfileCheck = await client.query('SELECT id FROM doctor_profiles WHERE user_id = $1', [mainDocId]);
