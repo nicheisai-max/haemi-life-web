@@ -20,7 +20,7 @@ export const TermsOfService: React.FC = () => {
                 </button>
                 <div>
                     <h1 className="page-heading !mb-0 transition-all duration-300">Terms of Service</h1>
-                    <p className="page-subheading italic">Last updated: February 10, 2026</p>
+                    <p className="page-subheading italic">Last updated: May 18, 2026</p>
                 </div>
             </div>
 
