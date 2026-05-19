@@ -20,8 +20,9 @@ import {
     getPharmacyOrders,
     approvePharmacyOrder,
     getInventoryByCategory,
+    getOrderQueueCounts,
 } from '../../services/pharmacist.service';
-import type { InventoryCategoryStat } from '../../services/pharmacist.service';
+import type { InventoryCategoryStat, OrderQueueCounts } from '../../services/pharmacist.service';
 import { getAllPrescriptions } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
 import type { OrderEntity, DashboardStats } from '../../types/pharmacist.types';
@@ -50,6 +51,20 @@ export const PharmacistDashboard = () => {
     // below. Slice colors come from the chart's default brand-token
     // palette since the backend payload carries only `{ name, value }`.
     const [inventoryByCategory, setInventoryByCategory] = useState<InventoryCategoryStat[]>([]);
+    // Authoritative pending-order counts — sourced from
+    // `GET /pharmacist/order-queue-counts`, which runs an aggregate
+    // query against the unbounded `orders` table. The orders LIST
+    // response is bounded at LIMIT 50 for payload size; deriving
+    // badge counts from `.length` on that list silently capped the
+    // KPI card + tab pills at 50 once a pharmacy crossed the
+    // threshold. These two integers carry the real totals so the
+    // visible badges remain truthful at any queue size. Defaults to
+    // zero on first paint so the cards render `0` instead of NaN
+    // while the fetch is in flight.
+    const [orderQueueCounts, setOrderQueueCounts] = useState<OrderQueueCounts>({
+        pendingDirectTotal: 0,
+        pendingGovTotal: 0,
+    });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     // Tab State: Government vs Direct Orders
@@ -67,16 +82,18 @@ export const PharmacistDashboard = () => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
-            const [statsData, ordersData, prescriptionsData, categoryData] = await Promise.all([
+            const [statsData, ordersData, prescriptionsData, categoryData, queueCounts] = await Promise.all([
                 getPharmacistDashboardStats(),
                 getPharmacyOrders(),
                 getAllPrescriptions(),
                 getInventoryByCategory(),
+                getOrderQueueCounts(),
             ]);
             setStats(statsData);
             setOrders(ordersData);
             setPrescriptions(prescriptionsData);
             setInventoryByCategory(categoryData);
+            setOrderQueueCounts(queueCounts);
         } catch (err: unknown) {
             // Strict error narrowing at the catch boundary — `err` is
             // `unknown`. The API-error shape is structurally typed
@@ -199,7 +216,7 @@ export const PharmacistDashboard = () => {
                         <IconWrapper icon={PackageOpen} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                {pendingOrders.length}
+                                {orderQueueCounts.pendingDirectTotal}
                             </div>
                             <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-primary transition-colors">Pending Orders</div>
                         </div>
@@ -257,14 +274,14 @@ export const PharmacistDashboard = () => {
                     >
                         <ShieldCheck className="h-4 w-4" />
                         Government Subsidized Queue
-                        {govOrders.length > 0 && (
+                        {orderQueueCounts.pendingGovTotal > 0 && (
                             <span className={cn(
                                 'ml-2 px-2 py-0.5 rounded-full text-xs font-bold transition-all duration-200',
                                 activeTab === 'government'
                                     ? 'bg-black/20 text-white'
                                     : 'bg-muted text-muted-foreground'
                             )}>
-                                {govOrders.length}
+                                {orderQueueCounts.pendingGovTotal}
                             </span>
                         )}
                     </button>
@@ -279,14 +296,14 @@ export const PharmacistDashboard = () => {
                     >
                         <ShoppingCart className="h-4 w-4" />
                         Private / Direct Queue
-                        {pendingOrders.length > 0 && (
+                        {orderQueueCounts.pendingDirectTotal > 0 && (
                             <span className={cn(
                                 'ml-2 px-2 py-0.5 rounded-full text-xs font-bold transition-all duration-200',
                                 activeTab === 'direct'
                                     ? 'bg-black/20 text-white'
                                     : 'bg-muted text-muted-foreground'
                             )}>
-                                {pendingOrders.length}
+                                {orderQueueCounts.pendingDirectTotal}
                             </span>
                         )}
                     </button>
