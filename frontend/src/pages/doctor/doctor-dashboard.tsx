@@ -233,7 +233,7 @@ export const DoctorDashboard = () => {
                         <IconWrapper icon={Users} variant="primary" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : todayAppointments.length}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : todayCount}
                             </div>
                             <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-teal-600 transition-colors">Today's Census</div>
                         </div>

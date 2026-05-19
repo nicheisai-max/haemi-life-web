@@ -86,6 +86,91 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
 };
 
 /**
+ * GET /pharmacist/order-queue-counts
+ *
+ * Returns the ACCURATE total counts of pending pharmacy orders broken
+ * down by subsidy stream (direct/private vs government-subsidized).
+ *
+ * RATIONALE
+ *
+ *   The list endpoint at `GET /pharmacist/orders` caps its response
+ *   at `LIMIT 50` for payload size + render-cost reasons. The
+ *   pharmacist dashboard previously computed its KPI card +
+ *   tab-badge counts as `pendingOrders.length` and `govOrders.length`
+ *   on the client — derived from that same limited array. The moment
+ *   a pharmacy accumulated more than 50 pending orders, the visible
+ *   badges silently capped at 50 and the operator lost their
+ *   true-pending signal exactly when it mattered most (peak load).
+ *
+ *   This dedicated counter endpoint runs a single aggregate query
+ *   against the unbounded `orders` table — no LIMIT, no row stream
+ *   back to the client — and returns just two integers. The list
+ *   endpoint stays bounded for display; the counter endpoint is
+ *   authoritative for the badges. Same correctness pattern Google /
+ *   Meta uses to separate "list to show" from "count to surface".
+ *
+ * DEGRADED MODE
+ *
+ *   The `is_government_subsidized` column is conditionally migrated
+ *   in this codebase (`information_schema.columns` lookup at the top
+ *   of the file). When absent, every pending row counts as "direct"
+ *   and the gov queue total is `0` — matches the fallback the list
+ *   endpoint uses at line ~186 of this file, so the two surfaces
+ *   stay coherent under degraded schema.
+ *
+ *   `COUNT(*) FILTER (WHERE …)::int` — the explicit `::int` cast
+ *   stops node-postgres returning bigint as a string. Wire shape is
+ *   honest `number`, no client-side coercion required.
+ */
+export const getOrderQueueCounts = async (_req: Request, res: Response): Promise<void> => {
+    try {
+        const columnsCheck = await pool.query<{ column_name: string }>(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'orders'
+              AND column_name = 'is_government_subsidized'
+        `);
+        const hasSubsidyColumn: boolean = columnsCheck.rows.length > 0;
+
+        const query: string = hasSubsidyColumn
+            ? `
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE status = 'Pending'
+                          AND COALESCE(is_government_subsidized, FALSE) = FALSE
+                    )::int AS pending_direct_total,
+                    COUNT(*) FILTER (
+                        WHERE status = 'Pending'
+                          AND COALESCE(is_government_subsidized, FALSE) = TRUE
+                    )::int AS pending_gov_total
+                FROM orders
+            `
+            : `
+                SELECT
+                    COUNT(*) FILTER (WHERE status = 'Pending')::int AS pending_direct_total,
+                    0::int AS pending_gov_total
+                FROM orders
+            `;
+
+        const result = await pool.query<{
+            pending_direct_total: number;
+            pending_gov_total: number;
+        }>(query);
+
+        const counts = {
+            pendingDirectTotal: result.rows[0]?.pending_direct_total ?? 0,
+            pendingGovTotal: result.rows[0]?.pending_gov_total ?? 0,
+        };
+        return sendResponse(res, 200, true, 'Order queue counts fetched', counts);
+    } catch (error: unknown) {
+        logger.error('[Pharmacist] Error fetching order queue counts:', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Error fetching order queue counts');
+    }
+};
+
+/**
  * GET /pharmacist/inventory-by-category
  *
  * Stock-by-medicine-category aggregate for the pharmacist dashboard's

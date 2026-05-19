@@ -25,6 +25,21 @@ export interface InventoryCategoryStat {
     [key: string]: string | number | undefined;
 }
 
+/**
+ * Authoritative pending-order counts broken down by subsidy stream.
+ * Returned by `GET /pharmacist/order-queue-counts`. The dashboard
+ * uses these for the "Pending Orders" KPI card and the two queue-tab
+ * badge pills — both of which previously derived `.length` from the
+ * LIMIT-50 list payload returned by `GET /pharmacist/orders` and
+ * therefore silently capped at 50 once a pharmacy crossed that
+ * threshold. The counts here run against the unbounded `orders`
+ * table so they remain accurate at any queue size.
+ */
+export interface OrderQueueCounts {
+    pendingDirectTotal: number;
+    pendingGovTotal: number;
+}
+
 export const getPharmacistDashboardStats = async (): Promise<DashboardStats> => {
     const response = await api.get<ApiResponse<DashboardStats>>('/pharmacist/dashboard-stats');
     return normalizeResponse(response);
@@ -32,6 +47,11 @@ export const getPharmacistDashboardStats = async (): Promise<DashboardStats> => 
 
 export const getInventoryByCategory = async (): Promise<InventoryCategoryStat[]> => {
     const response = await api.get<ApiResponse<InventoryCategoryStat[]>>('/pharmacist/inventory-by-category');
+    return normalizeResponse(response);
+};
+
+export const getOrderQueueCounts = async (): Promise<OrderQueueCounts> => {
+    const response = await api.get<ApiResponse<OrderQueueCounts>>('/pharmacist/order-queue-counts');
     return normalizeResponse(response);
 };
 
