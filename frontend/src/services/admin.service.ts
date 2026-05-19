@@ -66,7 +66,6 @@ export interface UserSession {
 export interface RevenueStat {
     name: string;
     revenue: number;
-    expenses: number;
 }
 
 export interface UserListItem {

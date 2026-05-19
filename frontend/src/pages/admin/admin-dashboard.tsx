@@ -52,20 +52,14 @@ import {
  * `'message' handler` work from ~600 ms to <150 ms in measurements.
  *
  * `React.lazy` requires a default export; the chart files use named
- * exports (`PremiumBarChart`, `InstitutionalComposedChart`), so the
- * `.then()` shim re-projects each named export under the `default`
- * key the Suspense loader expects. No casts needed — the dynamic
- * import's promise type already aligns with `LazyExoticComponent`'s
- * generic.
+ * exports (`PremiumBarChart`), so the `.then()` shim re-projects each
+ * named export under the `default` key the Suspense loader expects.
+ * No casts needed — the dynamic import's promise type already aligns
+ * with `LazyExoticComponent`'s generic.
  */
 const PremiumBarChart = lazy(() =>
     import('@/components/charts/premium-bar-chart').then((mod) => ({
         default: mod.PremiumBarChart,
-    }))
-);
-const InstitutionalComposedChart = lazy(() =>
-    import('@/components/charts/institutional-composed-chart').then((mod) => ({
-        default: mod.InstitutionalComposedChart,
     }))
 );
 
@@ -499,15 +493,23 @@ export const AdminDashboard: React.FC = () => {
                     />
                 </Suspense>
                 <Suspense fallback={<ChartLazyFallback />}>
-                    <InstitutionalComposedChart
+                    {/*
+                      Revenue-only single-series chart. The previous composed
+                      chart paired `revenue` against an `expenses` series that
+                      the backend was procedurally generating via `RANDOM()`
+                      — different on every refresh of the same month. The
+                      expenses projection has been removed at the SQL layer
+                      (see `analytics.repository.ts#getRevenueStats`); when a
+                      real cost-ledger surface ships, this can be promoted
+                      back to a composed view with `lineKey="expenses"`.
+                    */}
+                    <PremiumBarChart
                         title="Revenue Analytics"
-                        description="Monthly institutional revenue vs operating expenses"
+                        description="Monthly institutional revenue from completed orders"
                         data={revenueData}
-                        areaKey="revenue"
-                        lineKey="expenses"
+                        dataKey="revenue"
                         categoryKey="name"
-                        areaColor="#148C8B"
-                        lineColor="#2563EB"
+                        color="#148C8B"
                         valueSuffix=" BWP"
                     />
                 </Suspense>

@@ -1,5 +1,6 @@
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
+import { isSuspiciousSecurityEvent } from '../../../shared/schemas/admin-events.schema';
 
 export interface SecurityEvent {
     id: string;
@@ -99,20 +100,53 @@ export const securityRepository = {
             // regardless of which user actually performed the action.
             // Mapping them through here is the single change that
             // restores the correct Actor identity in the admin surface.
-            return result.rows.map(row => ({
-                id: row.id,
-                userId: row.user_id,
-                userName: row.user_name,
-                userEmail: row.user_email,
-                userRole: row.user_role,
-                eventType: row.event_type,
-                ipAddress: row.ip_address,
-                userAgent: row.user_agent,
-                createdAt: row.created_at,
-                eventCategory: 'Audit',
-                eventSeverity: 'Info',
-                isSuspicious: false
-            }));
+            return result.rows.map((row) => {
+                // ────────────────────────────────────────────────────────────
+                // CANONICAL SUSPICIOUS-EVENT CLASSIFICATION (cross-stack)
+                // ────────────────────────────────────────────────────────────
+                // `isSuspiciousSecurityEvent` (defined in
+                // `shared/schemas/admin-events.schema.ts`) is the SINGLE
+                // source of truth for what counts as a suspicious audit
+                // event — regex-pattern-matched against LOGIN_FAIL,
+                // FAILED_LOGIN, FORBIDDEN, UNAUTHORIZED, REVOKE,
+                // INTRUSION, BREACH (word-boundary anchors, case-insensitive,
+                // false-positive-safe against LOGIN_SUCCESS / LOGIN_REFRESH).
+                //
+                // The frontend `security-monitoring.tsx` already routes
+                // every list-render and threat-count badge through this
+                // classifier; the admin dashboard's Security Shield card
+                // does the same in its derived `securityAlerts` count.
+                // Before this fix, this backend mapper hardcoded every
+                // row's `isSuspicious: false` — which collapsed the
+                // dashboard's count to zero regardless of how many genuine
+                // LOGIN_FAILURE / FORBIDDEN / REVOKE events were in the
+                // last 50 audit rows. The backend now computes the same
+                // verdict the frontend would, so the wire value is
+                // truthful end-to-end.
+                //
+                // The classifier signature is
+                // `Pick<SecurityEvent, 'eventType' | 'isSuspicious'>`;
+                // we pass `isSuspicious: false` as the "prior verdict" so
+                // the regex patterns make the call. Any future migration
+                // that persists a real `security_events.is_suspicious`
+                // column can pass that column's value in here instead —
+                // the classifier short-circuits on `true`.
+                const eventType: string = row.event_type;
+                return {
+                    id: row.id,
+                    userId: row.user_id,
+                    userName: row.user_name,
+                    userEmail: row.user_email,
+                    userRole: row.user_role,
+                    eventType,
+                    ipAddress: row.ip_address,
+                    userAgent: row.user_agent,
+                    createdAt: row.created_at,
+                    eventCategory: 'Audit',
+                    eventSeverity: 'Info',
+                    isSuspicious: isSuspiciousSecurityEvent({ eventType, isSuspicious: false }),
+                };
+            });
         } catch (error: unknown) {
             logger.error('Failed to fetch security events', {
                 error: error instanceof Error ? error.message : String(error),

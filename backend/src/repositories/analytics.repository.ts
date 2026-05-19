@@ -11,7 +11,6 @@ export interface GrowthStat {
 export interface RevenueStat {
     name: string;
     revenue: number;
-    expenses: number;
 }
 
 export interface DiagnosisStat {
@@ -55,38 +54,45 @@ export class AnalyticsRepository {
     }
 
     /**
-     * 💰 GET REVENUE STATS: Institutional Real-time Aggregator.
-     * Groups completed orders by month and joins with historic baseline data.
-     * Policy: Live Ledger Priority + Historical Continuity.
+     * 💰 GET REVENUE STATS — institutional real-time aggregator.
+     *
+     * Groups completed pharmacy orders by month and unions with the
+     * static historic baseline. Returns only the `revenue` column —
+     * the previous `expenses` projection was procedurally generated as
+     * `(revenue * 0.6) + ABS(RANDOM()) * 2000`, which produced a
+     * different value on every refresh of the same month. That column
+     * is removed entirely here; restoring it requires a real cost
+     * ledger (`cost_ledger` table or upstream accounting integration),
+     * which is out of scope for this PR. The chart consumer is
+     * simultaneously narrowed to a single-series bar chart — see
+     * `admin-dashboard.tsx`.
      */
     async getRevenueStats(limit: number = 6): Promise<RevenueStat[]> {
         try {
             const query = `
                 WITH dynamic_revenue AS (
-                    SELECT 
+                    SELECT
                         TO_CHAR(created_at, 'Mon YYYY') as name,
                         SUM(total_amount)::numeric(10,2) as revenue,
-                        (SUM(total_amount) * 0.6 + (ABS(RANDOM()) * 2000))::numeric(10,2) as expenses,
                         MAX(created_at) as sort_date
                     FROM orders
                     WHERE status IN ('Completed', 'Filled')
                     GROUP BY TO_CHAR(created_at, 'Mon YYYY')
                 ),
                 historic_baseline AS (
-                    SELECT 
-                        month as name, 
-                        revenue::numeric(10,2), 
-                        expenses::numeric(10,2),
+                    SELECT
+                        month as name,
+                        revenue::numeric(10,2),
                         created_at as sort_date
                     FROM revenue_stats
                     WHERE month NOT IN (SELECT name FROM dynamic_revenue)
                 ),
                 unified_stats AS (
-                    SELECT name, revenue, expenses, sort_date FROM dynamic_revenue
+                    SELECT name, revenue, sort_date FROM dynamic_revenue
                     UNION ALL
-                    SELECT name, revenue, expenses, sort_date FROM historic_baseline
+                    SELECT name, revenue, sort_date FROM historic_baseline
                 )
-                SELECT name, revenue, expenses
+                SELECT name, revenue
                 FROM unified_stats
                 ORDER BY sort_date ASC
                 LIMIT $1

@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getInitials } from '@/utils/avatar.resolver';
 import { getMyAppointments } from '../../services/appointment.service';
 import type { Appointment } from '../../services/appointment.service';
+import { logger } from '@/utils/logger';
 import {
     CalendarCheck, Users, ClipboardCheck, Contact, AlertCircle,
     UserPlus, ClipboardList, Pill, BarChart3, Calendar as CalendarIcon,
@@ -67,7 +68,18 @@ const DOCTOR_INSIGHTS_DATA = [
 export const DoctorDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    // `appointments`: scheduled-upcoming list — drives the "Today's
+    // Census" / "Today's Schedule" panels.
+    // `completedAppointments`: completed history — needed for accurate
+    // "Completed Notes" (productivity) and "Pending Sign-off" (workload)
+    // KPIs. Previously the dashboard fetched only scheduled rows and
+    // then `.filter(status === 'completed')` against the same array,
+    // mathematically guaranteeing zero — the bug visible to the user
+    // as both KPI cards permanently rendering `0`. The two fetches run
+    // in parallel so the dashboard still lands in one network round-trip
+    // pair.
     const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [completedAppointments, setCompletedAppointments] = useState<Appointment[]>([]);
     const [patientCount, setPatientCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -89,18 +101,42 @@ export const DoctorDashboard = () => {
             setLoading(true);
             setError(null);
 
-            // Phase 2: Consolidated Real-Time Data Fetch (Optimized for Upcoming)
-            const apptData = await getMyAppointments({ status: 'scheduled', upcoming: true });
+            // Parallel fetches: the scheduled-upcoming set powers the
+            // census / schedule panels, the completed set powers the
+            // documentation productivity + sign-off-backlog KPIs. Both
+            // payloads are scoped server-side by status so neither pulls
+            // the full appointment history. Errors propagate to the
+            // outer catch — each fetch is independently retryable on
+            // next mount.
+            const [apptData, completedData] = await Promise.all([
+                getMyAppointments({ status: 'scheduled', upcoming: true }),
+                getMyAppointments({ status: 'completed' }),
+            ]);
             setAppointments(apptData);
+            setCompletedAppointments(completedData);
 
-            // Institutional Logic: Derive Stats from Appointments
-            const uniquePatients = new Set(apptData.map(a => a.patientId));
+            // Total Panel = unique patients across the doctor's relevant
+            // appointment surface (upcoming + completed). Counting only
+            // the upcoming set excluded long-term patients with no
+            // current booking — this union restores the historical
+            // panel-size signal without changing the KPI's name or
+            // position.
+            const uniquePatients = new Set<string>();
+            for (const a of apptData) uniquePatients.add(a.patientId);
+            for (const a of completedData) uniquePatients.add(a.patientId);
             setPatientCount(uniquePatients.size);
 
-        } catch (err) {
-            console.error('Dashboard fetch error:', err);
-            // Fail Safe: Return Empty State
+        } catch (err: unknown) {
+            // Strict error narrowing — `err` is `unknown` at the catch
+            // boundary; we structure-log the message via the project
+            // logger (no `console.*`) and degrade to an empty-state
+            // render so the page still mounts.
+            logger.error('[DoctorDashboard] Fetch failure', {
+                error: err instanceof Error ? err.message : String(err),
+            });
+            setError('Failed to load dashboard data. Please refresh.');
             setAppointments([]);
+            setCompletedAppointments([]);
             setPatientCount(0);
         } finally {
             setLoading(false);
@@ -125,13 +161,44 @@ export const DoctorDashboard = () => {
     // so the comparison is free of browser-TZ drift.
     const todayKey: string = todayWallClockDate();
 
-    const todayCount = appointments.filter(a => a.appointmentDate.slice(0, 10) === todayKey).length;
+    // ────────────────────────────────────────────────────────────────
+    // DERIVED KPIs — single source of truth (date + status)
+    // ────────────────────────────────────────────────────────────────
+    // `todayCount` is the union check-in count for the "Daily Rounds /
+    // Check-ins" tile and counts EVERY today appointment regardless of
+    // status (scheduled + completed). The scheduled half lives in
+    // `appointments`, the completed half in `completedAppointments`;
+    // both sets are scoped server-side and joined here so the figure
+    // matches a doctor's physical perception of "patients I had
+    // contact with today".
+    const todayScheduled = appointments.filter(
+        (a) => a.appointmentDate.slice(0, 10) === todayKey && a.status === 'scheduled',
+    );
+    const todayCompleted = completedAppointments.filter(
+        (a) => a.appointmentDate.slice(0, 10) === todayKey,
+    );
+    const todayCount: number = todayScheduled.length + todayCompleted.length;
 
-    const todayAppointments = appointments
-        .filter(a => a.appointmentDate.slice(0, 10) === todayKey && a.status === 'scheduled')
-        .slice(0, 3);
+    // Schedule panel renders the next 3 scheduled slots for today
+    // (existing UX contract — capped for visual density).
+    const todayAppointments = todayScheduled.slice(0, 3);
 
-    const pendingReviews = appointments.filter(a => a.status === 'completed').length;
+    // "Completed Notes" KPI — productivity signal. Counts EVERY
+    // completed appointment for today regardless of documentation
+    // state. Doctors use this to gauge throughput vs. their
+    // historical baseline.
+    const completedTodayCount: number = todayCompleted.length;
+
+    // "Pending Sign-off" KPI — workload signal. Counts today's
+    // completed appointments whose `notes` field is missing or
+    // whitespace-only. This is the canonical "documentation backlog"
+    // metric and is the value the Daily Rounds tile is supposed to
+    // surface. Doctors clear this to zero by writing notes; the
+    // count drops in real time on the next mount/refresh after the
+    // notes save.
+    const pendingSignOffCount: number = todayCompleted.filter(
+        (a) => a.notes === null || a.notes.trim().length === 0,
+    ).length;
 
     usePageLoader(loading, 'Hydrating clinical intelligence...');
     if (loading) return null;
@@ -219,7 +286,7 @@ export const DoctorDashboard = () => {
                         <IconWrapper icon={ClipboardCheck} variant="success" className="h-14 w-14 group-hover:scale-110 transition-transform duration-300" iconClassName="h-7 w-7" />
                         <div className="flex flex-col items-center gap-1.5">
                             <div className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : pendingReviews}
+                                {loading ? <PremiumLoader size="sm" className="justify-start" /> : completedTodayCount}
                             </div>
                             <div className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest group-hover:text-emerald-600 transition-colors">Completed Notes</div>
                         </div>
@@ -338,7 +405,7 @@ export const DoctorDashboard = () => {
                                         <p className="text-xs font-semibold uppercase tracking-wider text-teal-100/70">Check-ins</p>
                                     </div>
                                     <div className="space-y-1 border-l border-teal-500/30 pl-4">
-                                        <p className="text-3xl font-bold text-white tracking-tight">{pendingReviews}</p>
+                                        <p className="text-3xl font-bold text-white tracking-tight">{pendingSignOffCount}</p>
                                         <p className="text-xs font-semibold uppercase tracking-wider text-teal-100/70">Pending Sign-off</p>
                                     </div>
                                 </div>
