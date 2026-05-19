@@ -24,6 +24,7 @@ import {
     CheckCircle2,
     UserX,
     Archive,
+    Stethoscope,
 } from 'lucide-react';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { TablePagination } from '@/components/ui/table-pagination';
@@ -503,6 +504,28 @@ export const Appointments: React.FC = () => {
                                                     </span>
                                                 )}
                                             </h3>
+                                            {/*
+                                              Doctor specialty pill — patient-side orientation cue.
+                                              Hidden for doctor viewers (the "other party" is the
+                                              patient, who has no specialty) and when no
+                                              `specialization` is present (rare: doctor has no
+                                              profile row). Class `appointment-specialty-pill`
+                                              lives in index.css and uses brand tokens
+                                              (`--primary`, `--muted-foreground`) so light/dark
+                                              theme contrast is governed by the design-token
+                                              system, not inline overrides.
+                                            */}
+                                            {isPatient && appointment.specialization && (
+                                                <div
+                                                    className="appointment-specialty-pill"
+                                                    aria-label={`Specialty: ${appointment.specialization}`}
+                                                >
+                                                    <Stethoscope className="appointment-specialty-pill__icon" aria-hidden="true" />
+                                                    <span className="appointment-specialty-pill__label">
+                                                        {appointment.specialization}
+                                                    </span>
+                                                </div>
+                                            )}
                                             <p className="text-muted-foreground">{appointment.reason}</p>
                                         </div>
 
