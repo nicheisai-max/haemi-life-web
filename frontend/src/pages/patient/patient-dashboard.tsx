@@ -15,20 +15,11 @@ import {
 import { PATHS } from '../../routes/paths';
 import { GradientMesh } from '@/components/ui/gradient-mesh';
 import { formatWallClockDate, formatWallClockDay, formatTimeInTz } from '@/utils/platform-timezone-format';
-import { PremiumAreaChart } from '@/components/charts/premium-area-chart';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
 import { IconWrapper } from '@/components/ui/icon-wrapper';
 import { usePageLoader } from '@/hooks/use-page-loader';
-
-// REALISTIC BOTSWANA CONTEXT DATA
-const HEALTH_TRENDS_DATA = [
-    { name: 'Week 1', score: 72, label: 'Initial Vitals' },
-    { name: 'Week 2', score: 75, label: 'Follow-up' },
-    { name: 'Week 3', score: 74, label: 'Routine Check' },
-    { name: 'Week 4', score: 82, label: 'Current Status' },
-];
 
 export const PatientDashboard: React.FC = () => {
     const { user } = useAuth();
@@ -168,19 +159,19 @@ export const PatientDashboard: React.FC = () => {
                         </DashboardCard>
                     </section>
 
-                    {/* Chart Section */}
-                    <section>
-                        <PremiumAreaChart
-                            title="Wellness Trends"
-                            description="Stability score (Gaborone Region)"
-                            data={HEALTH_TRENDS_DATA}
-                            dataKey="score"
-                            categoryKey="name"
-                            color="#0E6B74"
-                            valueSuffix=" pts"
-                            size="sm"
-                        />
-                    </section>
+                    {/*
+                      The previous "Wellness Trends" chart rendered a
+                      4-week "Stability score (Gaborone Region)" curve
+                      sourced from a hardcoded `HEALTH_TRENDS_DATA`
+                      constant — there is no vitals / wellness pipeline
+                      feeding this surface today, so the chart was
+                      showing fabricated clinical numbers under a title
+                      that implied real measurements. Removed entirely
+                      pending a real wellness-aggregation pipeline. A
+                      future PR can wire the same slot to actual
+                      patient vitals / measurements once a `vitals_*`
+                      schema lands.
+                    */}
 
                     <div className="flex-1" />
 

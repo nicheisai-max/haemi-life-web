@@ -10,13 +10,11 @@ import { logger } from '@/utils/logger';
 import {
     CalendarCheck, Users, ClipboardCheck, Contact, AlertCircle,
     UserPlus, ClipboardList, Pill, BarChart3, Calendar as CalendarIcon,
-    ArrowRight, Play, CalendarX, BrainCircuit, Activity, Zap, Stethoscope
+    ArrowRight, Play, CalendarX, BrainCircuit, Stethoscope
 } from 'lucide-react';
 import { GradientMesh } from '@/components/ui/gradient-mesh';
-import { PremiumAreaChart } from '@/components/charts/premium-area-chart';
 import { TransitionItem } from '../../components/layout/page-transition';
 import { PATHS } from '../../routes/paths';
-import { PredictiveInsights } from '@/components/ui/predictive-insights';
 import { AnimatedEmptyState } from '@/components/ui/animated-empty-state';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 import { DashboardCard } from '@/components/ui/dashboard-card';
@@ -25,45 +23,6 @@ import { AnimatedAlert } from '@/components/ui/animated-alert';
 import { usePageLoader } from '@/hooks/use-page-loader';
 import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 import { formatTimeInTz } from '@/utils/platform-timezone-format';
-
-const CLINICAL_VOLUME_DATA = [
-    { name: '08:00', patients: 3 },
-    { name: '10:00', patients: 6 },
-    { name: '12:00', patients: 4 },
-    { name: '14:00', patients: 7 },
-    { name: '16:00', patients: 5 },
-    { name: '18:00', patients: 2 },
-];
-
-const DOCTOR_INSIGHTS_DATA = [
-    {
-        label: 'Retention Rate',
-        value: '94%',
-        description: 'Your patient retention is 12% above Gaborone regional average.',
-        trend: 'up' as const,
-        trendValue: '+2.4%',
-        icon: Users,
-        variant: 'primary' as const
-    },
-    {
-        label: 'Avg. Consult',
-        value: '18m',
-        description: 'Consultation efficiency has improved, opening 2 extra daily slots.',
-        trend: 'down' as const,
-        trendValue: '-15%',
-        icon: Activity,
-        variant: 'accent' as const
-    },
-    {
-        label: 'BHPC Compliance',
-        value: '100%',
-        description: 'All protocols valid. Malpractice insurance renewal due in 45 days.',
-        trend: 'neutral' as const,
-        trendValue: 'Valid',
-        icon: Zap,
-        variant: 'secondary' as const
-    }
-];
 
 export const DoctorDashboard = () => {
     const { user } = useAuth();
@@ -306,24 +265,24 @@ export const DoctorDashboard = () => {
                 </TransitionItem>
             </section>
 
-            {/* Predictive Intelligence Section */}
-            <TransitionItem>
-                <PredictiveInsights insights={DOCTOR_INSIGHTS_DATA} />
-            </TransitionItem>
-
-            {/* Clinical Analytics Visualization */}
-            <TransitionItem>
-                <PremiumAreaChart
-                    title="Clinical Load (Gaborone)"
-                    description="Hourly patient flow vs. Regional Average"
-                    data={CLINICAL_VOLUME_DATA}
-                    dataKey="patients"
-                    categoryKey="name"
-                    color="#0E6B74" // Primary-800
-                    valueSuffix=" pts"
-                    size="md"
-                />
-            </TransitionItem>
+            {/*
+              The previous "Predictive Intelligence" trio (Retention
+              Rate / Avg. Consult / BHPC Compliance) and the
+              "Clinical Load (Gaborone)" hourly chart were sourced
+              from hardcoded `DOCTOR_INSIGHTS_DATA` and
+              `CLINICAL_VOLUME_DATA` constants — there is no
+              retention-analysis service, no consultation-duration
+              field on the appointments schema, no BHPC compliance
+              table, and no hourly-aggregation endpoint feeding these
+              surfaces today. They were rendering fixed-literal
+              numbers that updated on neither time nor underlying
+              data. Removed entirely to avoid showing fabricated
+              clinical / compliance metrics to the doctor. Future
+              PRs can re-introduce each section individually once a
+              real aggregation query exists for it (the schedule
+              + KPI strip above are unaffected — they run off the
+              live `getMyAppointments` calls already in place).
+            */}
 
             {/* Main Content Split */}
             <TransitionItem className="flex flex-col lg:flex-row gap-8 items-stretch min-h-[500px]">
