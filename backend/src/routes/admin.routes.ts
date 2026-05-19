@@ -18,6 +18,7 @@ import {
     getActiveSessions,
     revokeSession,
     getRevenueStats,
+    getMonthlySignups,
     getSystemHealth
 } from '../controllers/admin.controller';
 
@@ -54,6 +55,7 @@ router.get('/security-events', getSecurityEvents);
 router.get('/active-sessions', getActiveSessions);
 router.delete('/sessions/:sessionId', revokeSession);
 router.get('/revenue-stats', getRevenueStats);
+router.get('/monthly-signups', getMonthlySignups);
 router.get('/system-health', getSystemHealth);
 
 export default router;

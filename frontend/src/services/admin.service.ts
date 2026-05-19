@@ -68,6 +68,19 @@ export interface RevenueStat {
     revenue: number;
 }
 
+/**
+ * Wire shape of a single month bucket on the admin dashboard's
+ * "Platform Growth" chart. `name` is the abbreviated month label
+ * ("Jan", "Feb", …) in the platform clinic timezone; `users` is the
+ * count of accounts whose `created_at` fell in that month. Returned by
+ * `GET /admin/monthly-signups`; see backend `analyticsRepository
+ * #getMonthlyUserSignups` for the SQL contract.
+ */
+export interface MonthlyUserSignupStat {
+    name: string;
+    users: number;
+}
+
 export interface UserListItem {
     id: string;
     name: string;
@@ -218,6 +231,11 @@ export const revokeSession = async (sessionId: string): Promise<{ success: boole
 
 export const getRevenueStats = async (): Promise<RevenueStat[]> => {
     const response = await api.get<ApiResponse<RevenueStat[]>>('/admin/revenue-stats');
+    return normalizeResponse(response);
+};
+
+export const getMonthlySignups = async (): Promise<MonthlyUserSignupStat[]> => {
+    const response = await api.get<ApiResponse<MonthlyUserSignupStat[]>>('/admin/monthly-signups');
     return normalizeResponse(response);
 };
 

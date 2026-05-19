@@ -2,8 +2,36 @@ import api, { normalizeResponse } from './api';
 import type { ApiResponse } from '../types/auth.types';
 import type { PharmacyInventoryEntity, OrderEntity, DashboardStats } from '../types/pharmacist.types';
 
+/**
+ * Wire shape of a single slice on the pharmacist dashboard's "Stock
+ * Analysis" pie. `name` is the medicine category label (with
+ * `'Uncategorized'` fallback for NULL rows on the joined `medicines`
+ * row); `value` is the total in-stock units across all
+ * `pharmacy_inventory` lines in that category. Returned by
+ * `GET /pharmacist/inventory-by-category`; see backend
+ * `analyticsRepository#getInventoryByCategory` for the SQL contract.
+ *
+ * The index signature is mandated by `PremiumPieChart`'s
+ * `ChartDataItem` prop contract (which dynamically reads `dataKey` /
+ * `categoryKey` properties off each row). It does NOT weaken the
+ * wire schema — backend serialisation only emits `name` and `value`
+ * — but it lets TS accept this type at the chart's `data` prop
+ * without a cast. Matches the established project pattern used by
+ * the previous in-file `GrowthDataPoint` literal.
+ */
+export interface InventoryCategoryStat {
+    name: string;
+    value: number;
+    [key: string]: string | number | undefined;
+}
+
 export const getPharmacistDashboardStats = async (): Promise<DashboardStats> => {
     const response = await api.get<ApiResponse<DashboardStats>>('/pharmacist/dashboard-stats');
+    return normalizeResponse(response);
+};
+
+export const getInventoryByCategory = async (): Promise<InventoryCategoryStat[]> => {
+    const response = await api.get<ApiResponse<InventoryCategoryStat[]>>('/pharmacist/inventory-by-category');
     return normalizeResponse(response);
 };
 

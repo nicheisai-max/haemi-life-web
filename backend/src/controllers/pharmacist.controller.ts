@@ -3,6 +3,7 @@ import { pool } from '../config/db';
 import { sendResponse, sendError } from '../utils/response';
 import { logger } from '../utils/logger';
 import type { PharmacyInventoryEntity, OrderEntity, DashboardStats } from '../types/pharmacist.types';
+import { analyticsRepository } from '../repositories/analytics.repository';
 
 /**
  * 🛡️ HAEMI LIFE — Botswana Omang PII Masking (Phase 12 P1 Fix)
@@ -81,6 +82,31 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
             stack: error instanceof Error ? error.stack : undefined,
         });
         return sendError(res, 500, 'Error fetching dashboard stats');
+    }
+};
+
+/**
+ * GET /pharmacist/inventory-by-category
+ *
+ * Stock-by-medicine-category aggregate for the pharmacist dashboard's
+ * "Stock Analysis" pie. Each row is `{ name, value }` where `name` is
+ * the category label (with `'Uncategorized'` fallback for NULL
+ * categories on the joined `medicines` row) and `value` is the total
+ * in-stock units across all `pharmacy_inventory` lines in that
+ * category. Categories with zero total stock are omitted; result is
+ * capped at the top 8 categories by stock for chart legibility.
+ *
+ * See `analyticsRepository.getInventoryByCategory` for the SQL.
+ */
+export const getInventoryByCategory = async (_req: Request, res: Response): Promise<void> => {
+    try {
+        const breakdown = await analyticsRepository.getInventoryByCategory();
+        return sendResponse(res, 200, true, 'Inventory category breakdown fetched', breakdown);
+    } catch (error: unknown) {
+        logger.error('[Pharmacist] Error fetching inventory category breakdown:', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Error fetching inventory category breakdown');
     }
 };
 
