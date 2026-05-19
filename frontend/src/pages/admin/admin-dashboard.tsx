@@ -12,12 +12,14 @@ import { GradientMesh } from '@/components/ui/gradient-mesh';
 import {
     getSystemStats,
     getRevenueStats,
+    getMonthlySignups,
     getActiveSessions,
     getSecurityEvents,
     getAuditLogs,
 } from '../../services/admin.service';
 import type {
     RevenueStat,
+    MonthlyUserSignupStat,
     AuditLog,
 } from '../../services/admin.service';
 import { TransitionItem } from '../../components/layout/page-transition';
@@ -95,16 +97,6 @@ const PremiumBarChart = lazy(() =>
 
 const RECENT_ACTIVITY_LIMIT = 10;
 
-interface GrowthDataPoint { name: string; users: number;[key: string]: string | number | undefined; }
-const SYSTEM_GROWTH_DATA: GrowthDataPoint[] = [
-    { name: 'Jan', users: 1200 },
-    { name: 'Feb', users: 1450 },
-    { name: 'Mar', users: 1800 },
-    { name: 'Apr', users: 2400 },
-    { name: 'May', users: 3100 },
-    { name: 'Jun', users: 4200 },
-];
-
 /**
  * Map a CPU / memory percentage into a qualitative band so the "System
  * Load" card description and trend indicator can read accurately
@@ -156,6 +148,15 @@ export const AdminDashboard: React.FC = () => {
 
     const [loading, setLoading] = useState<boolean>(true);
     const [revenueData, setRevenueData] = useState<RevenueStat[]>([]);
+    // Real monthly user-signup aggregate for the "Platform Growth"
+    // chart — previously a hardcoded 6-month literal
+    // (`SYSTEM_GROWTH_DATA`). Sourced from `GET /admin/monthly-signups`
+    // which aggregates `users.created_at` by month in the platform
+    // clinic TZ. Empty array on first paint (chart renders an empty
+    // axis under the Suspense fallback); populated inside the same
+    // `startTransition` block as the revenue chart below so neither
+    // chart's payload blocks the KPI cards on the high-priority lane.
+    const [growthData, setGrowthData] = useState<MonthlyUserSignupStat[]>([]);
     const [activeSessions, setActiveSessions] = useState<number>(0);
     const [securityAlerts, setSecurityAlerts] = useState<number>(0);
     const [pendingVerifications, setPendingVerifications] = useState<number>(0);
@@ -168,9 +169,10 @@ export const AdminDashboard: React.FC = () => {
         const fetchInitial = async (): Promise<void> => {
             try {
                 setLoading(true);
-                const [sysStats, revStats, sessions, events] = await Promise.all([
+                const [sysStats, revStats, growthStats, sessions, events] = await Promise.all([
                     getSystemStats(),
                     getRevenueStats(),
+                    getMonthlySignups(),
                     getActiveSessions(),
                     getSecurityEvents(),
                 ]);
@@ -194,6 +196,7 @@ export const AdminDashboard: React.FC = () => {
                 // previous unbatched fan-out produced on first paint.
                 startTransition(() => {
                     setRevenueData(revStats);
+                    setGrowthData(growthStats);
                     setSecurityAlerts(events.filter(e => e.isSuspicious).length);
                 });
             } catch (error: unknown) {
@@ -482,10 +485,22 @@ export const AdminDashboard: React.FC = () => {
                 while the lazy chunk arrives. */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Suspense fallback={<ChartLazyFallback />}>
+                    {/*
+                      Platform Growth — real monthly user-signup
+                      aggregate sourced from `GET /admin/monthly-signups`
+                      (see `analyticsRepository#getMonthlyUserSignups`).
+                      The previous incarnation rendered a fixed 6-month
+                      literal (`SYSTEM_GROWTH_DATA`) under the same
+                      title, which made the chart immutable regardless
+                      of actual platform adoption. The wire shape is
+                      `{ name, users }[]` so `dataKey="users"` and
+                      `categoryKey="name"` remain unchanged — only the
+                      `data` source flips from constant to fetched.
+                    */}
                     <PremiumBarChart
                         title="Platform Growth"
                         description="New institutional registrations (Last 6 Months)"
-                        data={SYSTEM_GROWTH_DATA}
+                        data={growthData}
                         dataKey="users"
                         categoryKey="name"
                         color="#148C8B"

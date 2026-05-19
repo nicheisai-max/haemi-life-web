@@ -18,11 +18,14 @@ import { TransitionItem } from '../../components/layout/page-transition';
 import {
     getPharmacistDashboardStats,
     getPharmacyOrders,
-    approvePharmacyOrder
+    approvePharmacyOrder,
+    getInventoryByCategory,
 } from '../../services/pharmacist.service';
+import type { InventoryCategoryStat } from '../../services/pharmacist.service';
 import { getAllPrescriptions } from '../../services/prescription.service';
 import type { Prescription } from '../../services/prescription.service';
 import type { OrderEntity, DashboardStats } from '../../types/pharmacist.types';
+import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { DashboardCard } from '@/components/ui/dashboard-card';
@@ -31,19 +34,22 @@ import { IconWrapper } from '@/components/ui/icon-wrapper';
 import { PremiumPieChart } from '../../components/charts/premium-pie-chart';
 import { PremiumLoader } from '@/components/ui/premium-loader';
 
-const INVENTORY_METRICS = [
-    { name: 'Antibiotics', value: 35, color: '#0E6B74' }, // Primary-800
-    { name: 'Analgesics', value: 25, color: '#1BA7A6' }, // Primary-600
-    { name: 'Chronics', value: 30, color: '#3FC2B5' },   // Primary-500
-    { name: 'Topicals', value: 10, color: '#A7E6DB' },   // Primary-300
-];
-
 export const PharmacistDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [orders, setOrders] = useState<OrderEntity[]>([]);
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+    // Real medicine-category stock breakdown for the "Stock Analysis"
+    // pie — previously a hardcoded `INVENTORY_METRICS` literal
+    // (Antibiotics 35 / Analgesics 25 / Chronics 30 / Topicals 10).
+    // Sourced from `GET /pharmacist/inventory-by-category` which sums
+    // `pharmacy_inventory.stock_quantity` grouped by the joined
+    // `medicines.category`. Empty array on first paint (the chart
+    // renders an empty disc gracefully); populated by `fetchDashboardData`
+    // below. Slice colors come from the chart's default brand-token
+    // palette since the backend payload carries only `{ name, value }`.
+    const [inventoryByCategory, setInventoryByCategory] = useState<InventoryCategoryStat[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     // Tab State: Government vs Direct Orders
@@ -61,18 +67,39 @@ export const PharmacistDashboard = () => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
-            const [statsData, ordersData, prescriptionsData] = await Promise.all([
+            const [statsData, ordersData, prescriptionsData, categoryData] = await Promise.all([
                 getPharmacistDashboardStats(),
                 getPharmacyOrders(),
-                getAllPrescriptions()
+                getAllPrescriptions(),
+                getInventoryByCategory(),
             ]);
             setStats(statsData);
             setOrders(ordersData);
             setPrescriptions(prescriptionsData);
-        } catch (err) {
-            const apiError = err as { response?: { data?: { message?: string } } };
-            setError(apiError.response?.data?.message || 'Failed to load dashboard data');
-            console.error('Pharmacist dashboard error:', err);
+            setInventoryByCategory(categoryData);
+        } catch (err: unknown) {
+            // Strict error narrowing at the catch boundary — `err` is
+            // `unknown`. The API-error shape is structurally typed
+            // (`response.data.message`) so we type-guard our way through
+            // it rather than `as` cast. Structured log via the project
+            // logger (no `console.*`).
+            let message = 'Failed to load dashboard data';
+            if (err instanceof Error) {
+                message = err.message;
+            } else if (
+                typeof err === 'object'
+                && err !== null
+                && 'response' in err
+            ) {
+                const apiErr = err as { response?: { data?: { message?: string } } };
+                if (typeof apiErr.response?.data?.message === 'string') {
+                    message = apiErr.response.data.message;
+                }
+            }
+            setError(message);
+            logger.error('[PharmacistDashboard] Fetch failure', {
+                error: err instanceof Error ? err.message : String(err),
+            });
         } finally {
             setLoading(false);
         }
@@ -98,8 +125,10 @@ export const PharmacistDashboard = () => {
             setDispensingStep('success');
             // Refresh stats in background
             fetchDashboardData();
-        } catch (err) {
-            console.error('Dispensing error:', err);
+        } catch (err: unknown) {
+            logger.error('[PharmacistDashboard] Dispensing failure', {
+                error: err instanceof Error ? err.message : String(err),
+            });
             toast.error('Dispensing failed. Please check network connectivity.');
             setDispensingStep('confirm');
         }
@@ -415,9 +444,21 @@ export const PharmacistDashboard = () => {
                         <h2 className="text-xl font-bold text-foreground">Stock Analysis</h2>
                     </div>
                     <DashboardCard className="flex-1 h-full flex flex-col justify-center p-6 overflow-hidden transition-all duration-300 hover:border-primary-500/50 hover:shadow-lg hover:-translate-y-1">
+                        {/*
+                          Stock Analysis — real category breakdown sourced
+                          from `GET /pharmacist/inventory-by-category` (see
+                          `analyticsRepository#getInventoryByCategory`).
+                          Previously rendered a fixed
+                          (Antibiotics 35 / Analgesics 25 / Chronics 30 /
+                           Topicals 10) `INVENTORY_METRICS` literal that
+                          never updated regardless of actual stock state.
+                          Slice colors fall through to the chart's default
+                          brand-token palette since the wire payload
+                          carries only `{ name, value }`.
+                        */}
                         <PremiumPieChart
                             title="Stock Analysis"
-                            data={INVENTORY_METRICS}
+                            data={inventoryByCategory}
                             dataKey="value"
                             categoryKey="name"
                             noCard={true}

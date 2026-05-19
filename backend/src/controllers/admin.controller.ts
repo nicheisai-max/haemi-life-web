@@ -886,6 +886,27 @@ export const revokeSession = async (req: Request, res: Response) => {
     }
 };
 
+/**
+ * GET /admin/monthly-signups
+ *
+ * Trailing-6-month aggregate of `users.created_at` for the admin
+ * "Platform Growth" chart. The aggregation runs in the platform
+ * clinic timezone so month boundaries match the admin's wall-clock
+ * intuition; soft-deleted accounts are excluded. See
+ * `analyticsRepository.getMonthlyUserSignups` for the SQL.
+ */
+export const getMonthlySignups = async (_req: Request, res: Response) => {
+    try {
+        const stats = await analyticsRepository.getMonthlyUserSignups();
+        return sendResponse(res, 200, true, 'Monthly signups fetched', stats);
+    } catch (error: unknown) {
+        logger.error('Error fetching monthly signups:', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return sendError(res, 500, 'Error fetching monthly signups');
+    }
+};
+
 export const getRevenueStats = async (_req: Request, res: Response) => {
     try {
         const stats = await analyticsRepository.getRevenueStats();
