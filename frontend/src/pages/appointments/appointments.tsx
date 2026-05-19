@@ -33,6 +33,7 @@ import {
     formatWallClockDay,
     formatTimeInTz,
 } from '@/utils/platform-timezone-format';
+import { usePlatformTimezoneFormat } from '@/hooks/use-platform-timezone';
 
 import { TransitionItem } from '../../components/layout/page-transition';
 import { getErrorMessage } from '../../lib/error';
@@ -86,6 +87,67 @@ function minutesLateOf(apt: Appointment, nowMs: number): number {
     return Math.max(0, Math.floor((nowMs - startMs) / 60_000));
 }
 
+/**
+ * 🎯 CANONICAL APPOINTMENT CLASSIFIER (single source of truth)
+ *
+ * Returns whether an appointment belongs to the "upcoming" or "past"
+ * bucket. Both the tab-label counters AND the visible-list filter
+ * MUST route through this function — drift between the two
+ * implementations was the root cause of the embarrassing
+ * `Upcoming (0)` counter while 2 upcoming cards were visible on
+ * screen.
+ *
+ * SEMANTICS
+ *
+ *   * `'completed' | 'cancelled' | 'no-show'`  → ALWAYS past
+ *     (terminal clinical state — date is irrelevant for bucketing)
+ *
+ *   * `'scheduled'` + date ≥ today  → upcoming
+ *   * `'scheduled'` + date < today  → past
+ *     (scheduled-but-passed rows are forgotten/abandoned — they
+ *      belong in the historical view, never the upcoming planner)
+ *
+ * COMPARISON DISCIPLINE — why this avoids the original bug
+ *
+ *   We compare `appointmentDate` (a wall-clock `YYYY-MM-DD` string
+ *   in platform-clinic TZ) against `todayWallClock` (same format,
+ *   same TZ) using JavaScript's native lexicographic string
+ *   comparison. Because `YYYY-MM-DD` is sortable as a string in
+ *   chronological order, `apt.appointmentDate >= todayWallClock`
+ *   IS the date comparison — no `new Date()`, no `setHours()`, no
+ *   timezone projection. Browser-TZ-independent by construction.
+ *
+ *   The original bug was `new Date(apt.appointmentDate) >= new Date()`,
+ *   which compared UTC-midnight (parsed from the date-only string,
+ *   per ECMAScript spec) against the current instant — so any
+ *   appointment scheduled for "today" failed the check the moment
+ *   the clock passed the date's UTC midnight. With a UTC server it
+ *   merely shifted the boundary by hours; with an IST viewer the
+ *   shift was a full day backward.
+ *
+ * STRICT-TS POSTURE
+ *
+ *   * Pure function — zero side effects, no `Date.now()` inside.
+ *     Caller passes `todayWallClock` so the helper can be safely
+ *     memoised, tested, and reused across day-rollover boundaries
+ *     without staleness.
+ *   * No `any`, no `as unknown as`, no `@ts-ignore`.
+ */
+type AppointmentBucket = 'upcoming' | 'past';
+
+const classifyAppointment = (apt: Appointment, todayWallClock: string): AppointmentBucket => {
+    if (apt.status === 'completed' || apt.status === 'cancelled' || apt.status === 'no-show') {
+        return 'past';
+    }
+    return apt.appointmentDate >= todayWallClock ? 'upcoming' : 'past';
+};
+
+const isUpcomingAppointment = (apt: Appointment, todayWallClock: string): boolean =>
+    classifyAppointment(apt, todayWallClock) === 'upcoming';
+
+const isPastAppointment = (apt: Appointment, todayWallClock: string): boolean =>
+    classifyAppointment(apt, todayWallClock) === 'past';
+
 export const Appointments: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -97,28 +159,53 @@ export const Appointments: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
+    // Wall-clock tick — declared up-front because both the overdue-pill
+    // refresh (further down) AND the platform-TZ `todayWallClock`
+    // (immediately below) depend on it. 30 s cadence matches the
+    // minute-granularity precision of the "Nm late" pill text and
+    // guarantees the upcoming/past boundary rolls over within a minute
+    // of platform-local midnight without a page reload.
+    const [nowMs, setNowMs] = useState<number>(() => Date.now());
+    useEffect(() => {
+        const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+        return () => window.clearInterval(id);
+    }, []);
+
+    // "Today" lives in the platform clinic timezone, not the browser TZ —
+    // matches the established pattern in `doctor-dashboard.tsx`. Wrapped
+    // in `useMemo` keyed on the `nowMs` tick (30 s cadence) so the
+    // boundary automatically rolls over at platform-local midnight
+    // without a page reload, and so re-renders that don't cross the
+    // boundary don't churn the downstream memos.
+    const { todayWallClockDate } = usePlatformTimezoneFormat();
+    const todayWallClock: string = useMemo(
+        () => todayWallClockDate(new Date(nowMs)),
+        [todayWallClockDate, nowMs],
+    );
+
     const applyFilter = useCallback(() => {
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
         let filtered = appointments;
-
         if (filter === 'upcoming') {
-            filtered = appointments.filter(apt => {
-                const aptDate = new Date(apt.appointmentDate);
-                aptDate.setHours(0, 0, 0, 0);
-                return aptDate >= now && apt.status !== 'cancelled';
-            });
+            filtered = appointments.filter((apt) => isUpcomingAppointment(apt, todayWallClock));
         } else if (filter === 'past') {
-            filtered = appointments.filter(apt => {
-                const aptDate = new Date(apt.appointmentDate);
-                aptDate.setHours(0, 0, 0, 0);
-                return aptDate < now || apt.status === 'completed' || apt.status === 'cancelled';
-            });
+            filtered = appointments.filter((apt) => isPastAppointment(apt, todayWallClock));
         }
-
         setFilteredAppointments(filtered);
         setCurrentPage(1); // Reset to first page on filter change
-    }, [appointments, filter]);
+    }, [appointments, filter, todayWallClock]);
+
+    // Tab-label counters — same classifier as `applyFilter`, so the
+    // numbers in the tabs ALWAYS match the rows shown when that tab is
+    // selected. Memoised so a chat tick or unrelated state update does
+    // not re-iterate the appointments array on every render.
+    const tabCounts = useMemo<{ readonly all: number; readonly upcoming: number; readonly past: number }>(
+        () => ({
+            all: appointments.length,
+            upcoming: appointments.filter((apt) => isUpcomingAppointment(apt, todayWallClock)).length,
+            past: appointments.filter((apt) => isPastAppointment(apt, todayWallClock)).length,
+        }),
+        [appointments, todayWallClock],
+    );
 
     useEffect(() => {
         fetchAppointments();
@@ -233,22 +320,17 @@ export const Appointments: React.FC = () => {
         }
     };
 
-    const isPastAppointment = (apt: Appointment) => {
-        const aptDate = new Date(apt.appointmentDate);
-        aptDate.setHours(0, 0, 0, 0);
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        return aptDate < now || apt.status === 'completed' || apt.status === 'cancelled';
-    };
-
-    // Tick once per minute so the "Nm late" pill text refreshes without a
-    // re-fetch. The minute granularity matches the precision of the pill
-    // itself — sub-minute ticks would just churn the render tree.
-    const [nowMs, setNowMs] = useState<number>(() => Date.now());
-    useEffect(() => {
-        const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
-        return () => window.clearInterval(id);
-    }, []);
+    // `nowMs` + tick are hoisted to the top of the component (see the
+    // declaration block beside the other state) because the platform-TZ
+    // `todayWallClock` depends on them. Keeping the tick in one place
+    // avoids two intervals competing for the same render cadence.
+    //
+    // `isPastAppointment` was previously a local closure here with its
+    // own (buggy) instant comparison. It now lives at module scope as a
+    // pure function (`isPastAppointment(apt, todayWallClock)`) so the
+    // tab-counter and the visible-list filter share a single
+    // implementation — the original cause of the `Upcoming (0)`
+    // discrepancy was two divergent copies of the same predicate.
 
     // Doctor-only: subscribe to backend `appointment:overdue` events. The
     // backend cron stamps `overdue_notified_at` once per row, so each row
@@ -355,7 +437,7 @@ export const Appointments: React.FC = () => {
                         }`}
                     onClick={() => setFilter('all')}
                 >
-                    All ({appointments.length})
+                    All ({tabCounts.all})
                 </button>
                 <button
                     className={`px-4 py-2 text-sm font-medium rounded-[var(--card-radius)] transition-all ${filter === 'upcoming'
@@ -364,7 +446,7 @@ export const Appointments: React.FC = () => {
                         }`}
                     onClick={() => setFilter('upcoming')}
                 >
-                    Upcoming ({appointments.filter(a => new Date(a.appointmentDate) >= new Date() && a.status !== 'cancelled').length})
+                    Upcoming ({tabCounts.upcoming})
                 </button>
                 <button
                     className={`px-4 py-2 text-sm font-medium rounded-[var(--card-radius)] transition-all ${filter === 'past'
@@ -373,7 +455,7 @@ export const Appointments: React.FC = () => {
                         }`}
                     onClick={() => setFilter('past')}
                 >
-                    Past ({appointments.filter(a => new Date(a.appointmentDate) < new Date() || a.status === 'completed' || a.status === 'cancelled').length})
+                    Past ({tabCounts.past})
                 </button>
             </TransitionItem>
 
@@ -595,7 +677,7 @@ export const Appointments: React.FC = () => {
                                             )}
 
                                             {/* Patient: Delete (past/completed/cancelled only) */}
-                                            {isPatient && isPastAppointment(appointment) && (
+                                            {isPatient && isPastAppointment(appointment, todayWallClock) && (
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
