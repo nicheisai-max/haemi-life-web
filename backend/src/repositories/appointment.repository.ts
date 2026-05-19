@@ -237,10 +237,20 @@ export class AppointmentRepository {
                     CASE
                         WHEN a.patient_id = $1 THEN 'patient'
                         ELSE 'doctor'
-                    END as user_role
+                    END as user_role,
+                    -- Doctor specialization (e.g. "General Practitioner",
+                    -- "Cardiology"). Joined from the canonical
+                    -- doctor_profiles row and surfaced in the list response
+                    -- so patient-side cards can render the specialty pill
+                    -- inline without an N+1 lookup. NULL is preserved
+                    -- (returned as JSON null) for the rare case where
+                    -- a doctor has no profile row yet — the frontend
+                    -- conditionally suppresses the pill in that state.
+                    dp.specialization
                 FROM appointments a
                 LEFT JOIN users u_doctor ON a.doctor_id = u_doctor.id
                 LEFT JOIN users u_patient ON a.patient_id = u_patient.id
+                LEFT JOIN doctor_profiles dp ON a.doctor_id = dp.user_id
                 WHERE (a.patient_id = $1 OR a.doctor_id = $1) AND a.deleted_at IS NULL
             `;
 

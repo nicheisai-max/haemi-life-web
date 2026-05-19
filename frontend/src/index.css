@@ -3081,6 +3081,64 @@
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
+   APPOINTMENT — SPECIALTY PILL (patient-side doctor-orientation cue)
+   ────────────────────────────────────────────────────────────────────────────
+   Rendered under the doctor's name on every appointment card in the patient's
+   "My Appointments" list. Surfaces the doctor's specialty (e.g. "General
+   Practitioner", "Cardiology") so a patient scanning a long list never has
+   to open the card to remember WHO this doctor is professionally — the
+   information density matches Apple Health and Google Health appointment
+   summaries.
+
+   Design posture
+   --------------
+     * Subtle by design — must not visually compete with the status pill
+       beside it (which carries clinical state: scheduled / completed /
+       cancelled / no-show). Specialty is supporting context, not state.
+     * Colour: a soft tint of `--primary` for the icon + brand continuity,
+       with `--foreground` text against a low-alpha primary bg so the pill
+       reads as "informational" rather than "actionable".
+     * Both light and dark themes inherit the same `--primary` /
+       `--foreground` semantics; the `color-mix()` derivations keep
+       contrast safe in either theme without per-mode overrides.
+     * Pure rem units. Zero pixels. Zero hex literals. Token-governed.
+     * Responsive: `inline-flex` + `flex-wrap` on the parent header lets
+       this pill drop to a new visual line on narrow viewports without
+       overflowing the card. */
+.appointment-specialty-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--foreground);
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  white-space: nowrap;
+  max-width: 100%;
+  transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.appointment-specialty-pill__icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.appointment-specialty-pill__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
    PUBLIC PAGE SHELL (Help / Support / Privacy / Terms / Style-Guide)
    ────────────────────────────────────────────────────────────────────────────
    Provides the same outer breathing space that authenticated pages inherit
