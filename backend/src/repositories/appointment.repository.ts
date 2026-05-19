@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { pool } from '../config/db';
 import { logger } from '../utils/logger';
 import { auditService, SYSTEM_ANONYMOUS_ID } from '../services/audit.service';
+import { getPlatformTimezone } from '../utils/config.util';
 
 export interface Appointment {
     id: number;
@@ -268,13 +269,73 @@ export class AppointmentRepository {
             }
 
             if (upcoming) {
-                // Phase 2: prefer the UTC anchor for the upcoming filter so
-                // the comparison is timezone-correct regardless of the
-                // server's `timezone` setting. The COALESCE fallback keeps
-                // legacy rows (those with NULL anchor — should not exist in
-                // production after migration 20260508120000 backfill, but
-                // defensive) included rather than silently dropped.
-                query += ` AND COALESCE(a.appointment_start_utc, (a.appointment_date + a.appointment_time)) >= CURRENT_TIMESTAMP`;
+                // ────────────────────────────────────────────────────────────
+                // CROSS-STACK CANONICAL "UPCOMING" SEMANTICS
+                // ────────────────────────────────────────────────────────────
+                // The canonical frontend classifier (PR #153,
+                // `pages/appointments/appointments.tsx#classifyAppointment`)
+                // defines an appointment as `'upcoming'` iff:
+                //
+                //   1. `status NOT IN ('completed', 'cancelled', 'no-show')`
+                //      — terminal clinical states are NEVER upcoming
+                //      (a cancelled future appointment is past for UX).
+                //
+                //   2. `appointment_date >= today` where `today` is the
+                //      wall-clock calendar date in the platform clinic
+                //      timezone — NOT the doctor's browser, NOT the patient's
+                //      browser, NOT the API server's local TZ. Comparison is
+                //      DATE-based, not instant-based: an appointment scheduled
+                //      for TODAY at 9 AM is still "upcoming" at 2 PM the same
+                //      day (the doctor has not marked it complete yet — only
+                //      the patient or the doctor can transition it out of
+                //      `scheduled`, not the wall clock).
+                //
+                // The PREVIOUS implementation used
+                //   `COALESCE(start_utc, date + time) >= CURRENT_TIMESTAMP`
+                // — an INSTANT comparison that silently dropped today's
+                // scheduled appointments the moment their start time passed
+                // in real-world clock. Patient + doctor dashboards displayed
+                // `BOOKINGS: 0` while the visible appointment list at
+                // /appointments correctly showed the exact same rows
+                // (because /appointments fetches with no `upcoming` filter
+                // and classifies client-side via the canonical helper).
+                //
+                // This branch now mirrors the canonical classifier exactly,
+                // so /dashboard and /appointments agree on every row's
+                // bucket. Sourced TZ flows through the cached
+                // `getPlatformTimezone()` helper (5-min TTL, invalidated
+                // on admin write — see `utils/config.util.ts`).
+                //
+                // SQL POSTURE
+                //
+                //   * Timezone passes as a parameterized bind ($N), never
+                //     string-interpolated. The helper validates against
+                //     `isValidIanaTimezone()` before returning, so the
+                //     value is structurally safe — the parameterization
+                //     is defense-in-depth, not the primary check.
+                //
+                //   * `CURRENT_TIMESTAMP AT TIME ZONE $tz` shifts the
+                //     `timestamptz` to a naive timestamp in the target
+                //     zone, and `::date` truncates to the wall-clock
+                //     calendar date. Both operators are core PostgreSQL,
+                //     no extension required.
+                //
+                //   * `appointment_date` is `DATE NOT NULL` in the schema.
+                //     The DATE comparison is a single index probe — no
+                //     row-by-row coercion, no full scan even on large
+                //     appointment tables. The existing index on
+                //     `(patient_id, appointment_date)` / `(doctor_id,
+                //     appointment_date)` continues to apply.
+                //
+                //   * Status NOT IN list is inlined (not parameterized)
+                //     because the values are compile-time constants
+                //     literal to the canonical classifier contract.
+                //     Adding/removing terminal states is a deliberate
+                //     code-level change, not a runtime input.
+                const platformTimezone: string = await getPlatformTimezone();
+                params.push(platformTimezone);
+                query += ` AND a.appointment_date >= (CURRENT_TIMESTAMP AT TIME ZONE $${params.length})::date`;
+                query += ` AND a.status NOT IN ('completed', 'cancelled', 'no-show')`;
                 query += ' ORDER BY a.appointment_date ASC, a.appointment_time ASC';
             } else {
                 query += ' ORDER BY a.appointment_date DESC, a.appointment_time DESC';
