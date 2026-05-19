@@ -79,6 +79,65 @@ types.setTypeParser(TIMESTAMP_OID, (raw: string): Date | null => {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
 });
 
+/**
+ * 🛡️ HAEMI LIFE — pg DATE Wall-Clock Parser (Off-by-One Regression Fix)
+ *
+ * Problem
+ * -------
+ * The schema's `appointment_date`, `prescription_date`, `date_of_service`,
+ * `date_of_birth`, and similar DATE columns store CALENDAR dates with no
+ * time component — they represent a wall-clock day in the clinic's local
+ * frame (e.g. `2026-05-19` = "May 19 on the wall calendar").
+ *
+ * By default, `node-postgres` parses a `DATE '2026-05-19'` by calling
+ * `new Date('2026-05-19')` in the Node process's LOCAL timezone. On a
+ * Node process running in IST (UTC+05:30) or any eastward timezone, this
+ * produces a JS Date whose UTC equivalent falls on the PREVIOUS calendar
+ * day:
+ *
+ *   pg: DATE '2026-05-19'  →  JS: Date('2026-05-19 00:00:00 IST')
+ *                          →  UTC: 2026-05-18T18:30:00.000Z
+ *                          →  JSON: "2026-05-18T18:30:00.000Z"
+ *                          →  Frontend `formatWallClockDate` extracts YMD
+ *                             → DISPLAYS "May 18"  ❌
+ *
+ * Production servers on UTC mask this bug. Any dev machine east of UTC
+ * (India, SAST production, etc.) reveals it as an off-by-one regression
+ * on every appointments list, prescription card, and medical record.
+ *
+ * Fix
+ * ---
+ * Register a parser for OID 1082 that PASSES THROUGH the raw `YYYY-MM-DD`
+ * string from pg's wire format. A DATE column has no time component, so
+ * the only correct cross-process representation is the calendar string
+ * itself — converting to a Date object necessarily injects a timezone,
+ * which is exactly the bug. Consumers that need a Date can construct one
+ * locally with explicit timezone semantics.
+ *
+ * Audit confirmed every existing DATE-column read site already treats the
+ * value as a string (`.slice(0, 10)`, direct assignment to `string`-typed
+ * fields, or defensive `instanceof Date ?` branches). The two long-form
+ * Date-typed declarations in `doctor.controller.ts` (`date_of_birth: Date`,
+ * `prescription_date: Date`) are pre-existing aspirational types — their
+ * underlying SQL already uses `::text` casts, so the runtime values were
+ * already strings; the type annotations were a latent TS lie that this
+ * parser change does not introduce or worsen.
+ *
+ * Boundary
+ * --------
+ * This parser only affects column OID 1082 (DATE). TIMESTAMP (1114),
+ * TIMESTAMPTZ (1184), and TIME (1083) are untouched and continue to
+ * yield Date objects as before. The `appointment_start_utc` TIMESTAMP
+ * column on the appointments table is unaffected; the `appointment_date`
+ * DATE column now correctly round-trips its calendar value end-to-end.
+ */
+const DATE_OID = 1082;
+types.setTypeParser(DATE_OID, (raw: string): string | null => {
+    // pg already gives us the calendar string in `YYYY-MM-DD` form;
+    // return verbatim so no timezone interpretation can corrupt it.
+    return raw ?? null;
+});
+
 export const pool = new Pool({
     user: process.env.DB_USER || 'postgres',
     host: process.env.DB_HOST || 'localhost',
